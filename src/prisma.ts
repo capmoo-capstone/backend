@@ -1,5 +1,4 @@
-// lib/prisma.js
-import { PrismaClient } from '../generated/prisma/client.js';
+import { PrismaClient } from '../generated/prisma/client.ts';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { env } from '@prisma/config';
 import pg from 'pg';
