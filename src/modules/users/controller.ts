@@ -1,20 +1,21 @@
 import { Request, Response } from 'express';
 import * as userService from './service';
-import { CreateUserSchema } from './model';
 
 export const signup = async (req: Request, res: Response) => {
-  const validation = CreateUserSchema.safeParse(req.body);
-
-  if (!validation.success) {
-    return res.status(400).json({ errors: validation.error });
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/UserSignUp' } }
+  try {
+    const user = await userService.createUser(req.body);
+    res.status(201).json(user);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
   }
-
-  const user = await userService.createUser(validation.data);
-
-  res.status(201).json(user);
 };
 
-export const list = async (_req: Request, res: Response) => {
-  const users = await userService.getAllUsers();
-  res.json(users);
+export const list = async (req: Request, res: Response) => {
+  try {
+    const users = await userService.listUsers();
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 };
