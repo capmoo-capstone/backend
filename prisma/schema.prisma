@@ -13,17 +13,180 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  posts Post[]
+// --- ENUMS ---
+enum ProjectStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
 }
 
-model Post {
-  id        Int     @id @default(autoincrement())
-  title     String
-  content   String?
-  author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
+enum ProcurementType {
+  LT100K
+  LT500K
+  MT500K
+  SELECTION
+  EBIDDING
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+// --- MODELS ---
+
+model Department {
+  id    String @id @default(uuid())
+  name  String
+  code  String
+  units Unit[]
+
+  @@map("departments")
+}
+
+model Unit {
+  id        String     @id @default(uuid())
+  dept_id   String
+  name      String
+  type      String
+  dept      Department @relation(fields: [dept_id], references: [id])
+  users     User[]
+
+  @@map("units")
+}
+
+model User {
+  id               String   @id @default(uuid())
+  unit_id          String?
+  username         String   @unique
+  email            String   @unique
+  full_name        String
+  role             String
+  is_delegate      Boolean  @default(false)
+  delegate_user_id String?
+  created_at       DateTime @default(now())
+
+  unit             Unit?    @relation(fields: [unit_id], references: [id])
+  
+  // Self-relation for delegation
+  delegate_to      User?    @relation("UserDelegation", fields: [delegate_user_id], references: [id])
+  delegated_from   User[]   @relation("UserDelegation")
+
+  // Relations to Projects
+  created_projects      Project[] @relation("ProjectCreator")
+  procurement_projects  Project[] @relation("ProcurementAssignee")
+  contract_projects     Project[] @relation("ContractAssignee")
+
+  @@map("users")
+}
+
+model Project {
+  id                      String            @id @default(uuid())
+  receive_no              String
+  title                   String
+  budget                  Decimal           @db.Decimal(18, 2)
+  pr_no                   String?
+  po_no                   String?
+  status                  ProjectStatus
+  request_unit_id         String?
+  procurement_type        ProcurementType
+  current_templates_id    String
+  current_step_id         String?
+  assignee_procurement_id String?
+  assignee_contract_id    String?
+  contract_no             String?
+  migo_no                 String?
+  vendor_name             String?
+  vendor_tax_id           String?
+  vendor_email            String?
+  is_urgent               Boolean           @default(false)
+  created_by              String
+  created_at              DateTime          @default(now())
+  updated_at              DateTime          @updatedAt
+
+  // Relations
+  template              WorkflowTemplate   @relation(fields: [current_templates_id], references: [id])
+  current_step          WorkflowStep?      @relation(fields: [current_step_id], references: [id])
+  creator               User               @relation("ProjectCreator", fields: [created_by], references: [id])
+  assignee_procurement  User?              @relation("ProcurementAssignee", fields: [assignee_procurement_id], references: [id])
+  assignee_contract     User?              @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
+  
+  vendor_submissions    VendorSubmission[]
+  project_submissions   ProjectSubmission[]
+
+  @@map("projects")
+}
+
+model ProjectSubmission {
+  id                String            @id @default(uuid())
+  project_id        String
+  step_id           String
+  submission_round  String
+  status            SubmissionStatus
+  submitted_by      String
+  submitted_at      DateTime          @default(now())
+  officer_comment   String?
+  officer_action_by String?
+  officer_action_at DateTime?
+  meta_data         Json?
+
+  project           Project           @relation(fields: [project_id], references: [id])
+  documents         ProjectDocument[]
+
+  @@map("project_submissions")
+}
+
+model ProjectDocument {
+  id                    String            @id @default(uuid())
+  project_submission_id String
+  file_name             String
+  file_path             String
+
+  submission            ProjectSubmission @relation(fields: [project_submission_id], references: [id])
+
+  @@map("project_documents")
+}
+
+model VendorSubmission {
+  id             String           @id @default(uuid())
+  po_number_ref  String
+  project_id     String
+  file_path      String
+  submitted_at   DateTime         @default(now())
+  status         SubmissionStatus
+  reviewed_by    String?
+  review_note    String?
+
+  project        Project          @relation(fields: [project_id], references: [id])
+
+  @@map("vendor_submissions")
+}
+
+model WorkflowTemplate {
+  id          String         @id @default(uuid())
+  name        String
+  type        String
+  description String?
+  steps       WorkflowStep[]
+  projects    Project[]
+
+  @@map("workflow_templates")
+}
+
+model WorkflowStep {
+  id                 String           @id @default(uuid())
+  template_id        String
+  order              Int
+  name               String
+  description        String
+  required_step      Int[]            // Kept as Int as it likely refers to 'order'
+  required_documents Json
+
+  template           WorkflowTemplate @relation(fields: [template_id], references: [id])
+  projects           Project[]
+
+  @@map("workflow_steps")
 }
