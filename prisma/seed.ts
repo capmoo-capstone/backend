@@ -4,8 +4,7 @@ import {
   SubmissionStatus,
 } from '../generated/prisma/client';
 
-import { prisma } from '../src/lib/prisma';
-
+import { prisma } from '../src/config/prisma';
 
 async function main() {
   console.log('--- Start Seeding ---');
@@ -82,7 +81,7 @@ async function main() {
       title: 'New Server Purchase 2026',
       receive_no: 'REC-9988',
       budget: 150000.0,
-      status: ProjectStatus.PENDING,
+      status: ProjectStatus.WAITING_TO_BE_ASSIGNED,
       procurement_type: ProcurementType.LT500K,
       current_templates_id: template.id,
       current_step_id: template.steps[0].id,
