@@ -1,13 +1,6 @@
 import { prisma } from '../config/prisma';
 import { Project } from '../../generated/prisma/client';
-
-type ProjectListResponse = {
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  data: Project[];
-};
+import { ProjectListResponse } from '../models/Project';
 
 export const listProjects = async (
   page: number,
@@ -29,6 +22,9 @@ export const listProjects = async (
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: projects,
+    data: projects.map((project) => ({
+      ...project,
+      budget: project.budget.toNumber(),
+    })),
   };
 };
