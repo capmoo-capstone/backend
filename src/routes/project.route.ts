@@ -4,6 +4,7 @@ import * as projectController from '../controllers/project.controller';
 const router = Router();
 
 router.get('/', projectController.getAll);
+router.get('/:projectId', projectController.getById);
 router.get('/unassigned', projectController.getUnassigned);
 router.post('/create', projectController.createProject);
 router.post('/:projectId/assign', projectController.assignProject);
