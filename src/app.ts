@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import apiV1Routes from './modules/index';
+import apiV1Routes from './routes/index';
 import swaggerUi from 'swagger-ui-express';
 import swaggerDocument from '../swagger-output.json';
 

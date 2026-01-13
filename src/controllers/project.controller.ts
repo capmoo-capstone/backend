@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as projectService from './service';
+import * as projectService from '../service/project.service';
 
 export const getAll = async (req: Request, res: Response) => {
   try {

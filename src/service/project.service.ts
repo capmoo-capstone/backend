@@ -1,5 +1,5 @@
-import { prisma } from '../../lib/prisma';
-import { Project } from '../../../generated/prisma/client';
+import { prisma } from '../config/prisma';
+import { Project } from '../../generated/prisma/client';
 
 type ProjectListResponse = {
   total: number;
