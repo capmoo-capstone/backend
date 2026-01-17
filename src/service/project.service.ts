@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Project } from '../../generated/prisma/client';
+import { Project, ProjectStatus } from '../../generated/prisma/client';
 import { CreateProjectDto } from '../models/Project';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 
@@ -55,14 +55,20 @@ export const getById = async (id: string): Promise<Project | null> => {
   return project;
 };
 
-export const getUnassignedProjects = async (): Promise<Project[]> => {
+export const getUnassignedProjects = async (
+  projectType: 'procurement' | 'contract'
+): Promise<Project[]> => {
+  const where: any = {
+    status: ProjectStatus.UNASSIGNED,
+    assignee_contract_id: null,
+  };
+
+  if (projectType === 'procurement') {
+    where.assignee_procurement_id = null;
+  }
+
   const projects = await prisma.project.findMany({
-    where: {
-      OR: [
-        { assignee_procurement_id: null },
-        { status: 'WAITING_TO_BE_ASSIGNED' },
-      ],
-    },
+    where: where,
     orderBy: [{ is_urgent: 'desc' }, { created_at: 'asc' }],
   });
 
@@ -74,23 +80,20 @@ export const assignProjectToUser = async (
   projectId: string,
   userId: string
 ) => {
-  if (type === 'contract') {
-    return await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        assignee_contract_id: userId,
-        status: 'WAITING_FOR_ACCEPTANCE',
-      },
-    });
-  } else if (type === 'procurement') {
-    return await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        assignee_procurement_id: userId,
-        status: 'WAITING_FOR_ACCEPTANCE',
-      },
-    });
+  const project = await getById(projectId);
+  const assigneeField =
+    type === 'contract' ? 'assignee_contract_id' : 'assignee_procurement_id';
+
+  if (project?.[assigneeField] !== null) {
+    throw new BadRequestError('Project is already assigned');
   }
+  return await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      [assigneeField]: userId,
+      status: 'WAITING_FOR_ACCEPTANCE',
+    },
+  });
 };
 
 export const acceptProject = async (
@@ -111,7 +114,7 @@ export const acceptProject = async (
     ? 'IN_PROGRESS_OF_CONTRACT'
     : 'IN_PROGRESS_OF_PROCUREMENT';
 
-  if (action === 'CLAIM' && project?.status === 'WAITING_TO_BE_ASSIGNED') {
+  if (action === 'CLAIM' && project?.status === 'UNASSIGNED') {
     return await prisma.project.update({
       where: { id: projectId },
       data: {
@@ -136,22 +139,24 @@ export const acceptProject = async (
   } else throw new BadRequestError('This project cannot be accepted right now');
 };
 
-export const rejectProject = async (projectId: string, userId: string) => {
+export const rejectProject = async (
+  projectType: 'procurement' | 'contract',
+  projectId: string,
+  userId: string
+) => {
   const project = await getById(projectId);
-  if (
-    project?.assignee_procurement_id !== userId &&
-    project?.assignee_contract_id !== userId
-  ) {
-    throw new BadRequestError(
-      'Project not assigned to this user or does not exist'
-    );
+  const assigneeField =
+    projectType === 'contract'
+      ? 'assignee_contract_id'
+      : 'assignee_procurement_id';
+  if (project?.[assigneeField] !== userId) {
+    throw new BadRequestError('Project not assigned to this user');
   }
   return await prisma.project.update({
     where: { id: projectId },
     data: {
-      assignee_procurement_id: null,
-      assignee_contract_id: null,
-      status: 'WAITING_TO_BE_ASSIGNED',
+      [assigneeField]: null,
+      status: 'UNASSIGNED',
     },
   });
 };
@@ -160,10 +165,11 @@ export const updateProjectData = async (
   projectId: string,
   updateData: Partial<CreateProjectDto>
 ) => {
+  if (!updateData || Object.keys(updateData).length === 0) {
+    throw new BadRequestError('No data provided for update');
+  }
   return await prisma.project.update({
     where: { id: projectId },
-    data: {
-      ...updateData,
-    },
+    data: { ...updateData },
   });
 };

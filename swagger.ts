@@ -12,7 +12,6 @@ const doc = {
       $full_name: 'John Doe',
       email: 'john@example.com',
       role: 'GUEST',
-      unit_id: 'test-unit-uuid',
     },
   },
 };

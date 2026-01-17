@@ -47,6 +47,16 @@ async function main() {
     },
   });
 
+  const staff2User = await prisma.user.create({
+    data: {
+      username: 'staff_alice',
+      email: 'alice.jones@company.com',
+      full_name: 'Alice Jones',
+      role: 'STAFF',
+      unit_id: unitSoftware.id,
+    },
+  });
+
   // 4. Create Workflow Template & Steps
   const template = await prisma.workflowTemplate.create({
     data: {
@@ -76,27 +86,61 @@ async function main() {
   });
 
   // 5. Create a Project
-  const project = await prisma.project.create({
-    data: {
+  const projectData = [
+    {
       title: 'New Server Purchase 2026',
-      receive_no: 'REC-9988',
+      receive_no: '1',
       budget: 150000.0,
-      status: ProjectStatus.WAITING_TO_BE_ASSIGNED,
+      status: ProjectStatus.UNASSIGNED,
       procurement_type: ProcurementType.LT500K,
       current_templates_id: template.id,
       current_step_id: template.steps[0].id,
       created_by: adminUser.id,
-      assignee_procurement_id: staffUser.id,
       is_urgent: true,
       vendor_name: 'TechCorp Solutions',
       vendor_email: 'sales@techcorp.com',
     },
+    {
+      title: 'New Server Purchase 2026/2',
+      receive_no: '2',
+      budget: 750000.0,
+      status: ProjectStatus.WAITING_FOR_ACCEPTANCE,
+      procurement_type: ProcurementType.MT500K,
+      current_templates_id: template.id,
+      current_step_id: template.steps[0].id,
+      created_by: adminUser.id,
+      assignee_procurement_id: staffUser.id,
+      is_urgent: false,
+      vendor_name: 'Spectra Tech Inc.',
+      vendor_email: 'sales@spectratech.com',
+    },
+    {
+      title: 'Cloud Purchase 2026',
+      receive_no: '3',
+      budget: 300000.0,
+      status: ProjectStatus.IN_PROGRESS_OF_PROCUREMENT,
+      procurement_type: ProcurementType.LT500K,
+      current_templates_id: template.id,
+      current_step_id: template.steps[0].id,
+      created_by: adminUser.id,
+      assignee_procurement_id: staff2User.id,
+      is_urgent: false,
+      vendor_name: 'ProCloud Services',
+      vendor_email: 'sales@procloudservices.com',
+    },
+  ];
+
+  await prisma.project.createMany({ data: projectData });
+
+  const projects = await prisma.project.findMany({
+    where: { created_by: adminUser.id },
+    orderBy: { id: 'asc' },
   });
 
   // 6. Create Project Submission & Document
   await prisma.projectSubmission.create({
     data: {
-      project_id: project.id,
+      project_id: projects[0].id,
       step_id: template.steps[0].id,
       submission_round: '1',
       status: SubmissionStatus.SUBMITTED,

@@ -33,19 +33,16 @@
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "500": {
-            "description": "Internal Server Error"
           }
         }
       }
     },
-    "/api/v1/users/{username}": {
+    "/api/v1/users/{id}": {
       "get": {
         "description": "",
         "parameters": [
           {
-            "name": "username",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -56,12 +53,6 @@
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
           }
         }
       }
@@ -75,9 +66,6 @@
           },
           "400": {
             "description": "Bad Request"
-          },
-          "409": {
-            "description": "Conflict"
           }
         },
         "requestBody": {
@@ -122,14 +110,13 @@
         }
       }
     },
-    "/api/v1/projects/{projectId}": {
+    "/api/v1/projects/unassigned": {
       "get": {
         "description": "",
         "parameters": [
           {
-            "name": "projectId",
-            "in": "path",
-            "required": true,
+            "name": "projectType",
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -138,16 +125,9 @@
         "responses": {
           "200": {
             "description": "OK"
-          }
-        }
-      }
-    },
-    "/api/v1/projects/unassigned": {
-      "get": {
-        "description": "",
-        "responses": {
-          "200": {
-            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
           }
         }
       }
@@ -176,8 +156,62 @@
         }
       }
     },
+    "/api/v1/projects/{projectId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/update": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectDto"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectDto"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{projectId}/assign": {
-      "post": {
+      "patch": {
         "description": "",
         "parameters": [
           {
@@ -217,7 +251,7 @@
       }
     },
     "/api/v1/projects/{projectId}/accept": {
-      "post": {
+      "patch": {
         "description": "",
         "parameters": [
           {
@@ -260,7 +294,7 @@
       }
     },
     "/api/v1/projects/{projectId}/reject": {
-      "post": {
+      "patch": {
         "description": "",
         "parameters": [
           {
@@ -283,6 +317,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "projectType": {
+                    "example": "any"
+                  },
                   "userId": {
                     "example": "any"
                   }
@@ -314,10 +351,6 @@
           "role": {
             "type": "string",
             "example": "GUEST"
-          },
-          "unit_id": {
-            "type": "string",
-            "example": "test-unit-uuid"
           }
         },
         "required": [
