@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { User } from '../../generated/prisma/client';
+import { User, UserRole } from '../../generated/prisma/client';
 import { CreateUserDto } from '../models/User';
 import { AppError, NotFoundError } from '../lib/errors';
 
@@ -52,6 +52,46 @@ export const getById = async (id: string): Promise<User | null> => {
     throw new NotFoundError('User not found');
   }
   return user;
+};
+
+export const updateRole = async (id: string, role: UserRole): Promise<User> => {
+  await getById(id);
+  return await prisma.user.update({
+    where: { id },
+    data: { role },
+  });
+};
+
+export const setUserDelegate = async (
+  userId: string,
+  delegateUserId: string
+): Promise<User> => {
+  await Promise.all([getById(userId), getById(delegateUserId)]);
+  return await prisma.user.update({
+    where: { id: userId },
+    data: {
+      is_delegate: true,
+      delegate_user_id: delegateUserId,
+    },
+  });
+};
+
+export const revokeDelegate = async (id: string): Promise<User> => {
+  await getById(id);
+  return await prisma.user.update({
+    where: { id },
+    data: {
+      is_delegate: false,
+      delegate_user_id: null,
+    },
+  });
+};
+
+export const deleteUser = async (id: string): Promise<void> => {
+  await getById(id);
+  await prisma.user.delete({
+    where: { id },
+  });
 };
 
 export const updateUser = async (

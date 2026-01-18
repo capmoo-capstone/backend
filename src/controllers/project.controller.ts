@@ -1,10 +1,10 @@
-import e, { Request, Response } from 'express';
-import * as projectService from '../service/project.service';
-import { da } from 'zod/locales';
+import { Request, Response } from 'express';
+import * as ProjectService from '../service/project.service';
 
 export const getAll = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { page, limit } = req.query;
-  const data = await projectService.listProjects(
+  const data = await ProjectService.listProjects(
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10
   );
@@ -12,12 +12,14 @@ export const getAll = async (req: Request, res: Response) => {
 };
 
 export const getById = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { projectId } = req.params;
-  const project = await projectService.getById(projectId);
+  const project = await ProjectService.getById(projectId);
   res.status(200).json(project);
 };
 
 export const getUnassigned = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { page, limit, projectType } = req.query;
   if (!['procurement', 'contract'].includes(projectType as string)) {
     return res
@@ -25,7 +27,7 @@ export const getUnassigned = async (req: Request, res: Response) => {
       .json({ status: 'error', message: 'Invalid project type' });
   }
 
-  const projects = await projectService.getUnassignedProjects(
+  const projects = await ProjectService.getUnassignedProjects(
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10,
     projectType as 'procurement' | 'contract'
@@ -34,51 +36,64 @@ export const getUnassigned = async (req: Request, res: Response) => {
 };
 
 export const createProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
-  const project = await projectService.createProject(req.body);
+  const project = await ProjectService.createProject(req.body);
   res.status(201).json(project);
 };
 
 export const assignProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { projectId } = req.params;
   const { projectType, assigneeId } = req.body;
 
   const data = { projectType, projectId, userId: assigneeId };
-  const project = await projectService.assignProjectToUser(data);
+  const project = await ProjectService.assignProjectToUser(data);
   res.status(200).json(project);
 };
 
 export const acceptProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { projectId } = req.params;
   const { projectType, userId } = req.body;
 
   const data = { projectType, projectId, userId };
-  const project = await projectService.acceptProject(data);
+  const project = await ProjectService.acceptProject(data);
   res.status(200).json(project);
 };
 
 export const claimProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { projectId } = req.params;
   const { projectType, userId } = req.body;
 
   const data = { projectType, projectId, userId };
-  const project = await projectService.claimProject(data);
+  const project = await ProjectService.claimProject(data);
   res.status(200).json(project);
 };
 
-export const rejectProject = async (req: Request, res: Response) => {
+// export const rejectProject = async (req: Request, res: Response) => {
+//   // #swagger.tags = ['Project']
+//   const { projectId } = req.params;
+//   const { projectType, userId } = req.body;
+
+//   const data = { projectType, projectId, userId };
+//   const project = await projectService.rejectProject(data);
+//   res.status(200).json(project);
+// };
+
+export const cancelProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   const { projectId } = req.params;
-  const { projectType, userId } = req.body;
-
-  const data = { projectType, projectId, userId };
-  const project = await projectService.rejectProject(data);
+  const project = await ProjectService.cancelProject(projectId);
   res.status(200).json(project);
-};
+}
 
 export const updateProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
   const { projectId } = req.params;
-  const updatedProject = await projectService.updateProjectData(
+  const updatedProject = await ProjectService.updateProjectData(
     projectId,
     req.body
   );

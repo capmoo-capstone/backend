@@ -6,7 +6,6 @@ import {
   UpdateStatusProjectDto,
 } from '../models/Project';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
-import { get } from 'node:http';
 
 export const listProjects = async (
   page: number,
@@ -166,24 +165,34 @@ export const acceptProject = async (data: UpdateStatusProjectDto) => {
   throw new BadRequestError('This project cannot be accepted right now');
 };
 
-export const rejectProject = async (data: UpdateStatusProjectDto) => {
-  const { projectType, projectId, userId } = data;
-  const project = await getById(projectId);
-  const assigneeField =
-    projectType === 'contract'
-      ? 'assignee_contract_id'
-      : 'assignee_procurement_id';
-  if (project?.[assigneeField] !== userId) {
-    throw new BadRequestError('Project not assigned to this user');
-  }
+// export const rejectProject = async (data: UpdateStatusProjectDto) => {
+//   const { projectType, projectId, userId } = data;
+//   const project = await getById(projectId);
+//   const assigneeField =
+//     projectType === 'contract'
+//       ? 'assignee_contract_id'
+//       : 'assignee_procurement_id';
+//   if (project?.[assigneeField] !== userId) {
+//     throw new BadRequestError('Project not assigned to this user');
+//   }
+//   return await prisma.project.update({
+//     where: { id: projectId },
+//     data: {
+//       [assigneeField]: null,
+//       status: 'UNASSIGNED',
+//     },
+//   });
+// };
+
+export const cancelProject = async (projectId: string) => {
+  await getById(projectId);
   return await prisma.project.update({
     where: { id: projectId },
     data: {
-      [assigneeField]: null,
-      status: 'UNASSIGNED',
+      status: ProjectStatus.REJECTED,
     },
   });
-};
+}
 
 export const updateProjectData = async (
   projectId: string,
