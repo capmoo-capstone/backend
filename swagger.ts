@@ -6,17 +6,20 @@ const doc = {
     description: 'Automatically generated documentation',
   },
   host: 'localhost:3000',
-  definitions: {
-    UserSignUp: {
-      $username: 'johndoe',
-      $full_name: 'John Doe',
-      email: 'john@example.com',
-      role: 'GUEST',
+  schemes: ['http'],
+  basePath: '/api/v1',
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
     },
   },
 };
 
 const outputFile = './swagger-output.json';
-const routes = ['./src/app.ts'];
+const routes = ['./src/routes/index.ts'];
 
 swaggerAutogen(outputFile, routes, doc);

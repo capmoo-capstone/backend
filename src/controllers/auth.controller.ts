@@ -1,0 +1,31 @@
+import { Request, Response } from 'express';
+import * as AuthService from '../service/auth.service';
+
+export const login = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Auth']
+  const { username, full_name } = req.body;
+  const data = await AuthService.login(username, full_name);
+  res.status(200).json({ data });
+};
+
+export const getMe = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Auth']
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+  const token = authHeader.split(' ')[1];
+  const data = await AuthService.getMe(token);
+  res.status(200).json({ data });
+};
+
+export const logout = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Auth']
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+  const token = authHeader.split(' ')[1];
+  await AuthService.logout(token);
+  res.status(200).json({ message: 'Logged out successfully' });
+};

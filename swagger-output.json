@@ -7,12 +7,100 @@
   },
   "servers": [
     {
-      "url": "http://localhost:3000/"
+      "url": "http://localhost:3000/api/v1"
     }
   ],
   "paths": {
-    "/api/v1/user/": {
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "example": "any"
+                  },
+                  "full_name": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
       "get": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/": {
+      "get": {
+        "tags": [
+          "User"
+        ],
         "description": "",
         "parameters": [
           {
@@ -37,8 +125,88 @@
         }
       }
     },
-    "/api/v1/user/{id}": {
+    "/user/{id}": {
       "get": {
+        "tags": [
+          "User"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "User"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/user/signup": {
+      "post": {
+        "tags": [
+          "User"
+        ],
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "example": "any"
+                  },
+                  "full_name": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/{id}/update": {
+      "patch": {
+        "tags": [
+          "User"
+        ],
         "description": "",
         "parameters": [
           {
@@ -57,35 +225,108 @@
         }
       }
     },
-    "/api/v1/user/signup": {
-      "post": {
+    "/user/{id}/role": {
+      "patch": {
+        "tags": [
+          "User"
+        ],
         "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
+          "200": {
+            "description": "OK"
           }
         },
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserSignUp"
-              }
-            },
-            "application/xml": {
-              "schema": {
-                "$ref": "#/components/schemas/UserSignUp"
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "example": "any"
+                  }
+                }
               }
             }
           }
         }
       }
     },
-    "/api/v1/project/": {
+    "/user/{id}/delegate": {
+      "patch": {
+        "tags": [
+          "User"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "delegateId": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/{id}/revoke-delegate": {
+      "patch": {
+        "tags": [
+          "User"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/project/": {
       "get": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -110,8 +351,11 @@
         }
       }
     },
-    "/api/v1/project/unassigned": {
+    "/project/unassigned": {
       "get": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -146,8 +390,11 @@
         }
       }
     },
-    "/api/v1/project/create": {
+    "/project/create": {
       "post": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "responses": {
           "201": {
@@ -170,8 +417,11 @@
         }
       }
     },
-    "/api/v1/project/{projectId}": {
+    "/project/{projectId}": {
       "get": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -190,8 +440,11 @@
         }
       }
     },
-    "/api/v1/project/{projectId}/update": {
+    "/project/{projectId}/update": {
       "patch": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -224,8 +477,11 @@
         }
       }
     },
-    "/api/v1/project/{projectId}/assign": {
+    "/project/{projectId}/assign": {
       "patch": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -261,8 +517,11 @@
         }
       }
     },
-    "/api/v1/project/{projectId}/accept": {
+    "/project/{projectId}/claim": {
       "patch": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -298,8 +557,11 @@
         }
       }
     },
-    "/api/v1/project/{projectId}/reject": {
+    "/project/{projectId}/accept": {
       "patch": {
+        "tags": [
+          "Project"
+        ],
         "description": "",
         "parameters": [
           {
@@ -334,37 +596,37 @@
           }
         }
       }
+    },
+    "/project/{projectId}/cancel": {
+      "patch": {
+        "tags": [
+          "Project"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
     }
   },
   "components": {
-    "schemas": {
-      "UserSignUp": {
-        "type": "object",
-        "properties": {
-          "username": {
-            "type": "string",
-            "example": "johndoe"
-          },
-          "full_name": {
-            "type": "string",
-            "example": "John Doe"
-          },
-          "email": {
-            "type": "string",
-            "example": "john@example.com"
-          },
-          "role": {
-            "type": "string",
-            "example": "GUEST"
-          }
-        },
-        "required": [
-          "username",
-          "full_name"
-        ],
-        "xml": {
-          "name": "UserSignUp"
-        }
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
     }
   }
