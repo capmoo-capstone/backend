@@ -5,7 +5,7 @@ import projectRoutes from './project.route';
 
 const router = Router();
 
-router.use('/users', userRoutes);
-router.use('/projects', projectRoutes);
+router.use('/user', userRoutes);
+router.use('/project', projectRoutes);
 
 export default router;

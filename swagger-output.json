@@ -11,7 +11,7 @@
     }
   ],
   "paths": {
-    "/api/v1/users/": {
+    "/api/v1/user/": {
       "get": {
         "description": "",
         "parameters": [
@@ -37,7 +37,7 @@
         }
       }
     },
-    "/api/v1/users/{id}": {
+    "/api/v1/user/{id}": {
       "get": {
         "description": "",
         "parameters": [
@@ -57,7 +57,7 @@
         }
       }
     },
-    "/api/v1/users/signup": {
+    "/api/v1/user/signup": {
       "post": {
         "description": "",
         "responses": {
@@ -84,7 +84,7 @@
         }
       }
     },
-    "/api/v1/projects/": {
+    "/api/v1/project/": {
       "get": {
         "description": "",
         "parameters": [
@@ -110,7 +110,7 @@
         }
       }
     },
-    "/api/v1/projects/unassigned": {
+    "/api/v1/project/unassigned": {
       "get": {
         "description": "",
         "parameters": [
@@ -146,7 +146,7 @@
         }
       }
     },
-    "/api/v1/projects/create": {
+    "/api/v1/project/create": {
       "post": {
         "description": "",
         "responses": {
@@ -170,7 +170,7 @@
         }
       }
     },
-    "/api/v1/projects/{projectId}": {
+    "/api/v1/project/{projectId}": {
       "get": {
         "description": "",
         "parameters": [
@@ -190,7 +190,7 @@
         }
       }
     },
-    "/api/v1/projects/{projectId}/update": {
+    "/api/v1/project/{projectId}/update": {
       "patch": {
         "description": "",
         "parameters": [
@@ -224,7 +224,7 @@
         }
       }
     },
-    "/api/v1/projects/{projectId}/assign": {
+    "/api/v1/project/{projectId}/assign": {
       "patch": {
         "description": "",
         "parameters": [
@@ -261,7 +261,7 @@
         }
       }
     },
-    "/api/v1/projects/{projectId}/accept": {
+    "/api/v1/project/{projectId}/accept": {
       "patch": {
         "description": "",
         "parameters": [
@@ -298,7 +298,7 @@
         }
       }
     },
-    "/api/v1/projects/{projectId}/reject": {
+    "/api/v1/project/{projectId}/reject": {
       "patch": {
         "description": "",
         "parameters": [
