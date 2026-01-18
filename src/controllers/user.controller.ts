@@ -23,6 +23,6 @@ export const getAll = async (req: Request, res: Response) => {
 
 export const getById = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const user = await userService.findUserById(id);
+  const user = await userService.getById(id);
   res.status(200).json(user);
 };

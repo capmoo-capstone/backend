@@ -1,7 +1,12 @@
 import { prisma } from '../config/prisma';
 import { Project, ProjectStatus } from '../../generated/prisma/client';
-import { CreateProjectDto } from '../models/Project';
-import { BadRequestError, NotFoundError } from '../lib/errors';
+import {
+  CreateProjectDto,
+  PaginatedProjects,
+  UpdateStatusProjectDto,
+} from '../models/Project';
+import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
+import { get } from 'node:http';
 
 export const listProjects = async (
   page: number,
@@ -23,14 +28,11 @@ export const listProjects = async (
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: projects.map((project) => ({
-      ...project,
-      budget: project.budget.toNumber(),
-    })),
+    data: projects,
   };
 };
 
-export const getReceiveNumber = async (): Promise<number> => {
+const getReceiveNumber = async (): Promise<number> => {
   const count = await prisma.project.count();
   return count + 1;
 };
@@ -38,11 +40,16 @@ export const getReceiveNumber = async (): Promise<number> => {
 export const createProject = async (
   projectData: CreateProjectDto
 ): Promise<Project> => {
-  return await prisma.project.create({
+  const project = await prisma.project.create({
     data: {
+      receive_no: await getReceiveNumber().then((num) => num.toString()),
       ...projectData,
     },
   });
+  if (!project) {
+    throw new AppError('Failed to create project', 500);
+  }
+  return project;
 };
 
 export const getById = async (id: string): Promise<Project | null> => {
@@ -56,33 +63,46 @@ export const getById = async (id: string): Promise<Project | null> => {
 };
 
 export const getUnassignedProjects = async (
+  page: number,
+  limit: number,
   projectType: 'procurement' | 'contract'
-): Promise<Project[]> => {
+): Promise<PaginatedProjects> => {
   const where: any = {
     status: ProjectStatus.UNASSIGNED,
     assignee_contract_id: null,
+    assignee_procurement_id: { not: null },
   };
 
   if (projectType === 'procurement') {
     where.assignee_procurement_id = null;
   }
 
-  const projects = await prisma.project.findMany({
-    where: where,
-    orderBy: [{ is_urgent: 'desc' }, { created_at: 'asc' }],
-  });
+  const [projects, total] = await prisma.$transaction([
+    prisma.project.findMany({
+      where: where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: [{ is_urgent: 'desc' }, { created_at: 'asc' }],
+    }),
+    prisma.project.count({ where }),
+  ]);
 
-  return projects;
+  return {
+    total,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
+    data: projects,
+  };
 };
 
-export const assignProjectToUser = async (
-  type: 'procurement' | 'contract',
-  projectId: string,
-  userId: string
-) => {
+export const assignProjectToUser = async (data: UpdateStatusProjectDto) => {
+  const { projectType, projectId, userId } = data;
   const project = await getById(projectId);
   const assigneeField =
-    type === 'contract' ? 'assignee_contract_id' : 'assignee_procurement_id';
+    projectType === 'contract'
+      ? 'assignee_contract_id'
+      : 'assignee_procurement_id';
 
   if (project?.[assigneeField] !== null) {
     throw new BadRequestError('Project is already assigned');
@@ -96,14 +116,8 @@ export const assignProjectToUser = async (
   });
 };
 
-export const acceptProject = async (
-  // 'CONFIRM' = responding to a direct assignment
-  // 'CLAIM' = picking up an unassigned project from the pool
-  action: 'CONFIRM' | 'CLAIM',
-  projectType: 'procurement' | 'contract',
-  projectId: string,
-  userId: string
-) => {
+export const claimProject = async (data: UpdateStatusProjectDto) => {
+  const { projectType, projectId, userId } = data;
   const project = await getById(projectId);
 
   const isContract = projectType === 'contract';
@@ -114,7 +128,7 @@ export const acceptProject = async (
     ? 'IN_PROGRESS_OF_CONTRACT'
     : 'IN_PROGRESS_OF_PROCUREMENT';
 
-  if (action === 'CLAIM' && project?.status === 'UNASSIGNED') {
+  if (project?.status === 'UNASSIGNED') {
     return await prisma.project.update({
       where: { id: projectId },
       data: {
@@ -122,10 +136,23 @@ export const acceptProject = async (
         status: nextStatus,
       },
     });
-  } else if (
-    action === 'CONFIRM' &&
-    project?.status === 'WAITING_FOR_ACCEPTANCE'
-  ) {
+  }
+  throw new BadRequestError('This project cannot be claimed right now');
+};
+
+export const acceptProject = async (data: UpdateStatusProjectDto) => {
+  const { projectType, projectId, userId } = data;
+  const project = await getById(projectId);
+
+  const isContract = projectType === 'contract';
+  const assigneeField = isContract
+    ? 'assignee_contract_id'
+    : 'assignee_procurement_id';
+  const nextStatus = isContract
+    ? 'IN_PROGRESS_OF_CONTRACT'
+    : 'IN_PROGRESS_OF_PROCUREMENT';
+
+  if (project?.status === 'WAITING_FOR_ACCEPTANCE') {
     if (project[assigneeField] === userId) {
       return await prisma.project.update({
         where: { id: projectId },
@@ -133,17 +160,14 @@ export const acceptProject = async (
           status: nextStatus,
         },
       });
-    } else {
-      throw new BadRequestError('Project not assigned to this user');
     }
-  } else throw new BadRequestError('This project cannot be accepted right now');
+    throw new BadRequestError('Project is not assigned to this user');
+  }
+  throw new BadRequestError('This project cannot be accepted right now');
 };
 
-export const rejectProject = async (
-  projectType: 'procurement' | 'contract',
-  projectId: string,
-  userId: string
-) => {
+export const rejectProject = async (data: UpdateStatusProjectDto) => {
+  const { projectType, projectId, userId } = data;
   const project = await getById(projectId);
   const assigneeField =
     projectType === 'contract'
@@ -168,6 +192,7 @@ export const updateProjectData = async (
   if (!updateData || Object.keys(updateData).length === 0) {
     throw new BadRequestError('No data provided for update');
   }
+  await getById(projectId);
   return await prisma.project.update({
     where: { id: projectId },
     data: { ...updateData },
