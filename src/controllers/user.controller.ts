@@ -15,6 +15,7 @@ export const signup = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
   const pageNum = parseInt(page as string) || 1;
   const limitNum = parseInt(limit as string) || 10;
@@ -24,6 +25,7 @@ export const getAll = async (req: Request, res: Response) => {
 
 export const getById = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { id } = req.params;
   const user = await UserService.getById(id);
   res.status(200).json(user);
@@ -31,6 +33,7 @@ export const getById = async (req: Request, res: Response) => {
 
 export const updateRole = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { id } = req.params;
   const { role } = req.body;
   const updatedUser = await UserService.updateRole(id, role);
@@ -39,6 +42,7 @@ export const updateRole = async (req: Request, res: Response) => {
 
 export const setUserDelegate = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { id } = req.params;
   const { delegateId } = req.body;
   const updatedUser = await UserService.setUserDelegate(id, delegateId);
@@ -47,6 +51,7 @@ export const setUserDelegate = async (req: Request, res: Response) => {
 
 export const revokeDelegate = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { id } = req.params;
   const updatedUser = await UserService.revokeDelegate(id);
   res.status(200).json(updatedUser);
@@ -54,6 +59,7 @@ export const revokeDelegate = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { id } = req.params;
   const updatedUser = await UserService.updateUser(id, req.body);
   res.status(200).json(updatedUser);
@@ -61,6 +67,7 @@ export const updateUser = async (req: Request, res: Response) => {
 
 export const removeUser = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { id } = req.params;
   await UserService.deleteUser(id);
   res.status(204).send();

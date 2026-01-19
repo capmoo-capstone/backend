@@ -3,6 +3,7 @@ import * as ProjectService from '../service/project.service';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
   const data = await ProjectService.listProjects(
     parseInt(page as string) || 1,
@@ -13,6 +14,7 @@ export const getAll = async (req: Request, res: Response) => {
 
 export const getById = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { projectId } = req.params;
   const project = await ProjectService.getById(projectId);
   res.status(200).json(project);
@@ -20,6 +22,7 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getUnassigned = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit, projectType } = req.query;
   if (!['procurement', 'contract'].includes(projectType as string)) {
     return res
@@ -37,6 +40,7 @@ export const getUnassigned = async (req: Request, res: Response) => {
 
 export const createProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
   const project = await ProjectService.createProject(req.body);
   res.status(201).json(project);
@@ -44,6 +48,7 @@ export const createProject = async (req: Request, res: Response) => {
 
 export const assignProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { projectId } = req.params;
   const { projectType, assigneeId } = req.body;
 
@@ -54,6 +59,7 @@ export const assignProject = async (req: Request, res: Response) => {
 
 export const acceptProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { projectId } = req.params;
   const { projectType, userId } = req.body;
 
@@ -64,6 +70,7 @@ export const acceptProject = async (req: Request, res: Response) => {
 
 export const claimProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { projectId } = req.params;
   const { projectType, userId } = req.body;
 
@@ -84,13 +91,15 @@ export const claimProject = async (req: Request, res: Response) => {
 
 export const cancelProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { projectId } = req.params;
   const project = await ProjectService.cancelProject(projectId);
   res.status(200).json(project);
-}
+};
 
 export const updateProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
   const { projectId } = req.params;
   const updatedProject = await ProjectService.updateProjectData(
