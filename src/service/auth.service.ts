@@ -1,5 +1,6 @@
+import { UserRole } from '../../generated/prisma/client';
 import { prisma } from '../config/prisma';
-import { UnauthorizedError } from '../lib/errors';
+import { AppError, UnauthorizedError } from '../lib/errors';
 import jwt from 'jsonwebtoken';
 
 export const login = async (
@@ -25,6 +26,28 @@ export const login = async (
     user_id: user.id,
     token,
   };
+};
+
+export const register = async (
+  username: string,
+  full_name: string,
+  role: UserRole
+): Promise<any> => {
+  const existingUser = await prisma.user.findUnique({
+    where: { username },
+  });
+  if (existingUser) {
+    throw new AppError('User already exists', 409);
+  }
+
+  const newUser = await prisma.user.create({
+    data: {
+      username,
+      full_name,
+      role: role ?? UserRole.GUEST,
+    },
+  });
+  return newUser;
 };
 
 const verifyToken = (token: string): any => {

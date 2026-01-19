@@ -5,7 +5,6 @@ const router = Router();
 
 router.get('/', userController.getAll);
 router.get('/:id', userController.getById);
-router.post('/signup', userController.signup);
 router.patch('/:id/update', userController.updateUser);
 router.patch('/:id/role', userController.updateRole);
 router.patch('/:id/delegate', userController.setUserDelegate);

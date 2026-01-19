@@ -3,20 +3,6 @@ import { User, UserRole } from '../../generated/prisma/client';
 import { CreateUserDto } from '../models/User';
 import { AppError, NotFoundError } from '../lib/errors';
 
-export const createUser = async (userData: CreateUserDto): Promise<User> => {
-  const existingUser = await getByUsername(userData.username);
-  if (existingUser) {
-    throw new AppError('Username already exists', 409);
-  }
-  const user = await prisma.user.create({
-    data: userData,
-  });
-  if (!user) {
-    throw new AppError('Failed to create user', 500);
-  }
-  return user;
-};
-
 export const listUsers = async (page: number, limit: number): Promise<any> => {
   const skip = (page - 1) * limit;
 

@@ -1,18 +1,6 @@
 import { Request, Response } from 'express';
 import * as UserService from '../service/user.service';
 
-export const signup = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
-  const { username, full_name } = req.body;
-  if (!username || !full_name) {
-    return res
-      .status(400)
-      .json({ error: 'Username and full name are required' });
-  }
-  const user = await UserService.createUser(req.body);
-  res.status(201).json(user);
-};
-
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
