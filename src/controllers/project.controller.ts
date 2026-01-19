@@ -79,16 +79,6 @@ export const claimProject = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-// export const rejectProject = async (req: Request, res: Response) => {
-//   // #swagger.tags = ['Project']
-//   const { projectId } = req.params;
-//   const { projectType, userId } = req.body;
-
-//   const data = { projectType, projectId, userId };
-//   const project = await projectService.rejectProject(data);
-//   res.status(200).json(project);
-// };
-
 export const cancelProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
@@ -108,3 +98,11 @@ export const updateProject = async (req: Request, res: Response) => {
   );
   res.status(200).json(updatedProject);
 };
+
+export const removeProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { projectId } = req.params;
+  await ProjectService.deleteProject(projectId);
+  res.status(204).send();
+}

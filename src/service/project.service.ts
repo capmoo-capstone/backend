@@ -10,7 +10,7 @@ import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
 export const listProjects = async (
   page: number,
   limit: number
-): Promise<any> => {
+): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
 
   const [projects, total] = await prisma.$transaction([
@@ -165,25 +165,6 @@ export const acceptProject = async (data: UpdateStatusProjectDto) => {
   throw new BadRequestError('This project cannot be accepted right now');
 };
 
-// export const rejectProject = async (data: UpdateStatusProjectDto) => {
-//   const { projectType, projectId, userId } = data;
-//   const project = await getById(projectId);
-//   const assigneeField =
-//     projectType === 'contract'
-//       ? 'assignee_contract_id'
-//       : 'assignee_procurement_id';
-//   if (project?.[assigneeField] !== userId) {
-//     throw new BadRequestError('Project not assigned to this user');
-//   }
-//   return await prisma.project.update({
-//     where: { id: projectId },
-//     data: {
-//       [assigneeField]: null,
-//       status: 'UNASSIGNED',
-//     },
-//   });
-// };
-
 export const cancelProject = async (projectId: string) => {
   await getById(projectId);
   return await prisma.project.update({
@@ -192,7 +173,7 @@ export const cancelProject = async (projectId: string) => {
       status: ProjectStatus.REJECTED,
     },
   });
-}
+};
 
 export const updateProjectData = async (
   projectId: string,
@@ -205,5 +186,12 @@ export const updateProjectData = async (
   return await prisma.project.update({
     where: { id: projectId },
     data: { ...updateData },
+  });
+};
+
+export const deleteProject = async (id: string): Promise<void> => {
+  await getById(id);
+  await prisma.project.delete({
+    where: { id },
   });
 };

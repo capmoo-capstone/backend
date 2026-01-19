@@ -12,5 +12,6 @@ router.patch('/:projectId/assign', projectController.assignProject);
 router.patch('/:projectId/claim', projectController.claimProject);
 router.patch('/:projectId/accept', projectController.acceptProject);
 router.patch('/:projectId/cancel', projectController.cancelProject);
+router.delete('/:projectId', projectController.removeProject);
 
 export default router;
