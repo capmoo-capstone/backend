@@ -31,6 +31,15 @@ enum ProjectStatus {
   REJECTED
 }
 
+enum UnitResponsibleType {
+  LT100K
+  LT500K
+  MT500K
+  SELECTION
+  EBIDDING
+  CONTRACT
+}
+
 enum ProcurementType {
   LT100K
   LT500K
@@ -61,7 +70,7 @@ model Unit {
   id        String     @id @default(uuid())
   dept_id   String
   name      String
-  type      String
+  type      UnitResponsibleType[]
   dept      Department @relation(fields: [dept_id], references: [id])
   users     User[]
 
