@@ -225,7 +225,7 @@ model VendorSubmission {
 model WorkflowTemplate {
   id          String         @id @default(uuid())
   name        String
-  type        String
+  type        UnitResponsibleType
   description String?
   steps       WorkflowStep[]
   projects    Project[]

@@ -35,7 +35,7 @@ export interface PaginatedProjects {
 }
 
 const updateStatusProjectSchema = z.object({
-  projectType: ProjectTypeEnum,
+  projectType: ProjectTypeEnum.optional(),
   projectId: z.string(),
   userId: z.string(),
 });

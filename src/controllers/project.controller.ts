@@ -23,17 +23,18 @@ export const getById = async (req: Request, res: Response) => {
 export const getUnassigned = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, projectType } = req.query;
-  if (!['procurement', 'contract'].includes(projectType as string)) {
+  const { unitId } = req.params;
+  const { page, limit } = req.query;
+  if (!unitId) {
     return res
       .status(400)
-      .json({ status: 'error', message: 'Invalid project type' });
+      .json({ status: 'error', message: 'Unit ID is required' });
   }
 
-  const projects = await ProjectService.getUnassignedProjects(
+  const projects = await ProjectService.getUnassignedProjectsByUnit(
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10,
-    projectType as 'procurement' | 'contract'
+    unitId
   );
   res.status(200).json(projects);
 };
@@ -49,11 +50,9 @@ export const createProject = async (req: Request, res: Response) => {
 export const assignProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { projectId } = req.params;
-  const { projectType, assigneeId } = req.body;
-
-  const data = { projectType, projectId, userId: assigneeId };
-  const project = await ProjectService.assignProjectToUser(data);
+  const { data } = req.body;
+  console.log(data);
+  const project = await ProjectService.assignProjectsToUser(data);
   res.status(200).json(project);
 };
 
@@ -105,4 +104,4 @@ export const removeProject = async (req: Request, res: Response) => {
   const { projectId } = req.params;
   await ProjectService.deleteProject(projectId);
   res.status(204).send();
-}
+};

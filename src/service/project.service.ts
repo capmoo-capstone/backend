@@ -1,5 +1,9 @@
 import { prisma } from '../config/prisma';
-import { Project, ProjectStatus } from '../../generated/prisma/client';
+import {
+  Project,
+  ProjectStatus,
+  UnitResponsibleType,
+} from '../../generated/prisma/client';
 import {
   CreateProjectDto,
   PaginatedProjects,
@@ -8,6 +12,8 @@ import {
 } from '../models/Project';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
+import * as UnitService from './unit.service';
+import { get } from 'node:http';
 
 export const listProjects = async (
   page: number,
@@ -56,6 +62,23 @@ export const createProject = async (
 export const getById = async (id: string): Promise<Project | null> => {
   const project = await prisma.project.findUnique({
     where: { id },
+    include: {
+      template: {
+        select: {
+          type: true,
+        },
+      },
+      assignee_procurement: {
+        select: {
+          full_name: true,
+        },
+      },
+      assignee_contract: {
+        select: {
+          full_name: true,
+        },
+      },
+    },
   });
   if (!project) {
     throw new NotFoundError('Project not found');
@@ -63,20 +86,25 @@ export const getById = async (id: string): Promise<Project | null> => {
   return project;
 };
 
-export const getUnassignedProjects = async (
+export const getUnassignedProjectsByUnit = async (
   page: number,
   limit: number,
-  projectType: 'procurement' | 'contract'
+  unitId: string
 ): Promise<PaginatedProjects> => {
+  const unit = await UnitService.getById(unitId);
   const where: any = {
-    status: ProjectStatus.UNASSIGNED,
-    assignee_contract_id: null,
-    assignee_procurement_id: { not: null },
+    status: {
+      in: [
+        ProjectStatus.PROCUREMENT_UNASSIGNED,
+        ProjectStatus.CONTRACT_UNASSIGNED,
+      ],
+    },
+    template: {
+      type: {
+        in: unit.type,
+      },
+    },
   };
-
-  if (projectType === 'procurement') {
-    where.assignee_procurement_id = null;
-  }
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
@@ -98,33 +126,69 @@ export const getUnassignedProjects = async (
 };
 
 export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
-  data.forEach(async (item) => {
-    const { projectType, projectId, userId } = item;
-    const assigneeField =
-      projectType === 'contract'
+  return await prisma.$transaction(async (tx) => {
+    const updatedProjects = [];
+
+    for (const item of data) {
+      const { projectId, userId } = item;
+
+      // NOTE: Use 'tx' instead of 'prisma' or 'getById' inside the loop
+      // to ensure lookups happen within the same transaction context
+      const project = await getById(projectId);
+
+      if (!project) {
+        throw new BadRequestError(`Project ${projectId} not found`);
+      }
+
+      await UserService.getById(userId); // Ensure user exists
+
+      const isContract =
+        project.template?.type === UnitResponsibleType.CONTRACT;
+      const assigneeField = isContract
         ? 'assignee_contract_id'
         : 'assignee_procurement_id';
 
-    const project = await getById(projectId);
-    await UserService.getById(userId);
+      // Validation
+      if (
+        project.status !== ProjectStatus.PROCUREMENT_UNASSIGNED &&
+        project.status !== ProjectStatus.CONTRACT_UNASSIGNED
+      ) {
+        throw new BadRequestError(`Project ${projectId} is not unassigned`);
+      }
 
-    if (project?.status !== ProjectStatus.UNASSIGNED) {
-      throw new BadRequestError('Project is not unassigned');
+      if (project[assigneeField] !== null) {
+        throw new BadRequestError(`Project ${projectId} is already assigned`);
+      }
+
+      const nextStatus = isContract
+        ? [
+            ProjectStatus.CONTRACT_UNASSIGNED,
+            ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
+          ]
+        : [
+            ProjectStatus.PROCUREMENT_UNASSIGNED,
+            ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
+          ];
+
+      // 2. Perform the update using the transaction client 'tx'
+      const updated = await tx.project.update({
+        where: {
+          id: projectId,
+          status: nextStatus[0],
+          [assigneeField]: null,
+        },
+        data: {
+          [assigneeField]: userId,
+          status: nextStatus[1],
+        },
+      });
+
+      updatedProjects.push(updated);
     }
-    if (project?.[assigneeField] !== null) {
-      throw new BadRequestError('Project is already assigned');
-    }
-    return await prisma.project.update({
-      where: {
-        id: projectId,
-        status: ProjectStatus.UNASSIGNED,
-        [assigneeField]: null,
-      },
-      data: {
-        [assigneeField]: userId,
-        status: 'WAITING_FOR_ACCEPTANCE',
-      },
-    });
+
+    return updatedProjects;
+    // If the loop finishes, Prisma commits everything.
+    // If any error is thrown here, Prisma rolls back everything automatically.
   });
 };
 

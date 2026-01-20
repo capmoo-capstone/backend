@@ -10,24 +10,9 @@ import unitRoutes from './unit.route';
 const router = Router();
 
 router.use('/auth', authRoutes);
-router.use('/user', protect, userRoutes);
-router.use(
-  '/project',
-  protect,
-  authorize(['ADMIN', 'STAFF', 'MANAGER']),
-  projectRoutes
-);
-router.use(
-  '/department',
-  protect,
-  authorize(['ADMIN', 'STAFF', 'MANAGER']),
-  departmentRoutes
-);
-router.use(
-  '/unit',
-  protect,
-  authorize(['ADMIN', 'STAFF', 'MANAGER']),
-  unitRoutes
-);
+router.use('/user', userRoutes);
+router.use('/project', projectRoutes);
+router.use('/department', departmentRoutes);
+router.use('/unit', unitRoutes);
 
 export default router;

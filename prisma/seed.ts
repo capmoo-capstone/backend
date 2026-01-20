@@ -100,7 +100,7 @@ async function main() {
   const procurement1 = await prisma.workflowTemplate.create({
     data: {
       name: 'LT500K Procurement',
-      type: 'PROCUREMENT',
+      type: UnitResponsibleType.LT500K,
       description: 'Default flow for purchasing equipment',
       steps: {
         create: [
@@ -127,7 +127,7 @@ async function main() {
   const procurement2 = await prisma.workflowTemplate.create({
     data: {
       name: 'MT500K Procurement',
-      type: 'PROCUREMENT',
+      type: UnitResponsibleType.MT500K,
       description: 'Default flow for purchasing equipment',
       steps: {
         create: [
@@ -154,7 +154,7 @@ async function main() {
   const contract = await prisma.workflowTemplate.create({
     data: {
       name: 'Contract Workflow',
-      type: 'CONTRACT',
+      type: UnitResponsibleType.CONTRACT,
       description: 'Default flow for purchasing equipment',
       steps: {
         create: [
@@ -200,7 +200,6 @@ async function main() {
       status: ProjectStatus.PROCUREMENT_UNASSIGNED,
       procurement_type: ProcurementType.MT500K,
       current_templates_id: procurement2.id,
-      current_step_id: procurement2.steps[0].id,
       created_by: adminUser.id,
       is_urgent: false,
       vendor_name: 'Spectra Tech Inc.',
