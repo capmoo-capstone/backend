@@ -4,8 +4,10 @@ import {
   CreateProjectDto,
   PaginatedProjects,
   UpdateStatusProjectDto,
+  UpdateStatusProjectsDto,
 } from '../models/Project';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
+import * as UserService from './user.service';
 
 export const listProjects = async (
   page: number,
@@ -95,23 +97,34 @@ export const getUnassignedProjects = async (
   };
 };
 
-export const assignProjectToUser = async (data: UpdateStatusProjectDto) => {
-  const { projectType, projectId, userId } = data;
-  const project = await getById(projectId);
-  const assigneeField =
-    projectType === 'contract'
-      ? 'assignee_contract_id'
-      : 'assignee_procurement_id';
+export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
+  data.forEach(async (item) => {
+    const { projectType, projectId, userId } = item;
+    const assigneeField =
+      projectType === 'contract'
+        ? 'assignee_contract_id'
+        : 'assignee_procurement_id';
 
-  if (project?.[assigneeField] !== null) {
-    throw new BadRequestError('Project is already assigned');
-  }
-  return await prisma.project.update({
-    where: { id: projectId },
-    data: {
-      [assigneeField]: userId,
-      status: 'WAITING_FOR_ACCEPTANCE',
-    },
+    const project = await getById(projectId);
+    await UserService.getById(userId);
+
+    if (project?.status !== ProjectStatus.UNASSIGNED) {
+      throw new BadRequestError('Project is not unassigned');
+    }
+    if (project?.[assigneeField] !== null) {
+      throw new BadRequestError('Project is already assigned');
+    }
+    return await prisma.project.update({
+      where: {
+        id: projectId,
+        status: ProjectStatus.UNASSIGNED,
+        [assigneeField]: null,
+      },
+      data: {
+        [assigneeField]: userId,
+        status: 'WAITING_FOR_ACCEPTANCE',
+      },
+    });
   });
 };
 
@@ -139,30 +152,41 @@ export const claimProject = async (data: UpdateStatusProjectDto) => {
   throw new BadRequestError('This project cannot be claimed right now');
 };
 
-export const acceptProject = async (data: UpdateStatusProjectDto) => {
-  const { projectType, projectId, userId } = data;
-  const project = await getById(projectId);
+export const acceptProjects = async (data: UpdateStatusProjectsDto) => {
+  data.forEach(async (item) => {
+    const { projectType, projectId, userId } = item;
+    const project = await getById(projectId);
 
-  const isContract = projectType === 'contract';
-  const assigneeField = isContract
-    ? 'assignee_contract_id'
-    : 'assignee_procurement_id';
-  const nextStatus = isContract
-    ? 'IN_PROGRESS_OF_CONTRACT'
-    : 'IN_PROGRESS_OF_PROCUREMENT';
+    const isContract = projectType === 'contract';
+    const assigneeField = isContract
+      ? 'assignee_contract_id'
+      : 'assignee_procurement_id';
+    const nextStatus = isContract
+      ? 'IN_PROGRESS_OF_CONTRACT'
+      : 'IN_PROGRESS_OF_PROCUREMENT';
 
-  if (project?.status === 'WAITING_FOR_ACCEPTANCE') {
-    if (project[assigneeField] === userId) {
-      return await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          status: nextStatus,
-        },
-      });
+    if (project?.status !== ProjectStatus.WAITING_FOR_ACCEPTANCE) {
+      throw new BadRequestError('Project is not waiting for acceptance');
     }
-    throw new BadRequestError('Project is not assigned to this user');
-  }
-  throw new BadRequestError('This project cannot be accepted right now');
+    if (project?.[assigneeField] !== userId) {
+      throw new BadRequestError('You are not assigned to this project');
+    }
+
+    const updated = await prisma.project.update({
+      where: {
+        id: projectId,
+        status: ProjectStatus.WAITING_FOR_ACCEPTANCE,
+        [assigneeField]: userId,
+      },
+      data: {
+        status: nextStatus,
+      },
+    });
+
+    if (!updated) {
+      throw new AppError('Project cannot be accepted at this time', 500);
+    }
+  });
 };
 
 export const cancelProject = async (projectId: string) => {
