@@ -46,6 +46,15 @@ enum UnitResponsibleType {
   CONTRACT
 }
 
+enum UnitResponsibleType {
+  LT100K
+  LT500K
+  MT500K
+  SELECTION
+  EBIDDING
+  CONTRACT
+}
+
 enum ProcurementType {
   LT100K
   LT500K
