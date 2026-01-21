@@ -28,7 +28,7 @@ export const createUnit = async (req: Request, res: Response) => {
   res.status(201).json(unit);
 };
 
-export const addUsersToUnit = async (req: Request, res: Response) => {
+export const addUsers = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.params;
@@ -48,6 +48,28 @@ export const addUsersToUnit = async (req: Request, res: Response) => {
 
   const data = { ...req.body, unit_id: unitId };
   const updatedUser = await UnitService.addUsersToUnit(data);
+  res.status(200).json(updatedUser);
+};
+
+export const addRepresentative = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Unit']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId, userId } = req.params;
+
+  if (!unitId) {
+    return res
+      .status(400)
+      .json({ status: 'error', message: 'Unit ID is required' });
+  }
+
+  if (!userId) {
+    return res
+      .status(400)
+      .json({ status: 'error', message: 'User ID is required' });
+  }
+
+  const data = { unit_id: unitId, user_id: userId };
+  const updatedUser = await UnitService.addRepresentativeToUnit(data);
   res.status(200).json(updatedUser);
 };
 

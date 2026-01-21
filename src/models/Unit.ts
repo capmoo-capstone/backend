@@ -22,6 +22,14 @@ const UpdateUserUnitSchema = z.object({
 });
 export type UpdateUserUnitDto = z.infer<typeof UpdateUserUnitSchema>;
 
+const UpdateRepresentativeUnitSchema = z.object({
+  unit_id: z.uuid(),
+  user_id: z.uuid(),
+});
+export type UpdateRepresentativeUnitDto = z.infer<
+  typeof UpdateRepresentativeUnitSchema
+>;
+
 export interface PaginatedUnits {
   total: number;
   page: number;
