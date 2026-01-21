@@ -389,13 +389,21 @@
         ]
       }
     },
-    "/project/unassigned": {
+    "/project/unassigned/{unitId}": {
       "get": {
         "tags": [
           "Project"
         ],
         "description": "",
         "parameters": [
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "page",
             "in": "query",
@@ -405,13 +413,6 @@
           },
           {
             "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "projectType",
             "in": "query",
             "schema": {
               "type": "string"
@@ -561,22 +562,12 @@
         }
       }
     },
-    "/project/{projectId}/assign": {
+    "/project/assign": {
       "patch": {
         "tags": [
           "Project"
         ],
         "description": "",
-        "parameters": [
-          {
-            "name": "projectId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -593,10 +584,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "projectType": {
-                    "example": "any"
-                  },
-                  "assigneeId": {
+                  "data": {
                     "example": "any"
                   }
                 }

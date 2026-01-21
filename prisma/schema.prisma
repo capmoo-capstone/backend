@@ -22,13 +22,28 @@ enum UserRole {
 }
 
 enum ProjectStatus {
-  DRAFT
-  UNASSIGNED
-  WAITING_FOR_ACCEPTANCE
-  IN_PROGRESS_OF_PROCUREMENT
-  IN_PROGRESS_OF_CONTRACT
+// Phase 1: Procurement
+  PROCUREMENT_UNASSIGNED
+  PROCUREMENT_WAITING_ACCEPTANCE
+  PROCUREMENT_IN_PROGRESS
+  
+  // Phase 2: Contract
+  CONTRACT_UNASSIGNED
+  CONTRACT_WAITING_ACCEPTANCE
+  CONTRACT_IN_PROGRESS
+  
+  // Final
   APPROVED
-  REJECTED
+  CANCELLED
+}
+
+enum UnitResponsibleType {
+  LT100K
+  LT500K
+  MT500K
+  SELECTION
+  EBIDDING
+  CONTRACT
 }
 
 enum UnitResponsibleType {
@@ -122,9 +137,11 @@ model Project {
   vendor_tax_id           String?
   vendor_email            String?
   is_urgent               Boolean           @default(false)
+  expect_approved_date    DateTime?
   created_by              String
   created_at              DateTime          @default(now())
-  updated_at              DateTime          @updatedAt
+  update_by               String?
+  updated_at              DateTime?         @updatedAt
 
   // Relations
   template              WorkflowTemplate   @relation(fields: [current_templates_id], references: [id])
@@ -133,10 +150,40 @@ model Project {
   assignee_procurement  User?              @relation("ProcurementAssignee", fields: [assignee_procurement_id], references: [id])
   assignee_contract     User?              @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
   
+  project_cancellation  ProjectCancellation[]
+  project_histories     ProjectStatusHistory[]
   vendor_submissions    VendorSubmission[]
   project_submissions   ProjectSubmission[]
 
   @@map("projects")
+}
+
+model ProjectCancellation {
+  id          String    @id @default(uuid())
+  project_id  String
+  reason      String
+  cancelled_by String
+  cancelled_at DateTime @default(now())
+
+  project     Project   @relation(fields: [project_id], references: [id])
+
+  @@map("project_cancellations")
+}
+
+model ProjectStatusHistory {
+  id          String    @id @default(uuid())
+  project_id  String
+  user_id     String
+  action      String
+  old_value   String?
+  new_value   String?
+  comment     String?
+  changed_by  String
+  changed_at  DateTime  @default(now())
+
+  project     Project   @relation(fields: [project_id], references: [id])
+
+  @@map("project_histories")
 }
 
 model ProjectSubmission {
@@ -187,7 +234,7 @@ model VendorSubmission {
 model WorkflowTemplate {
   id          String         @id @default(uuid())
   name        String
-  type        String
+  type        UnitResponsibleType
   description String?
   steps       WorkflowStep[]
   projects    Project[]
