@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { Department } from '../../generated/prisma/client';
+import { Department, UserRole } from '../../generated/prisma/client';
 
 const CreateDepartmentSchema = z.object({
   name: z.string(),
   code: z.string(),
+  allowed_role: z.array(z.enum(UserRole)).optional(),
 });
 export type CreateDepartmentDto = z.infer<typeof CreateDepartmentSchema>;
 
