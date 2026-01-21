@@ -28,6 +28,29 @@ export const createUnit = async (req: Request, res: Response) => {
   res.status(201).json(unit);
 };
 
+export const addUsersToUnit = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Unit']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId } = req.params;
+
+  if (!unitId) {
+    return res
+      .status(400)
+      .json({ status: 'error', message: 'Unit ID is required' });
+  }
+
+  if (!req.body.user_id || !Array.isArray(req.body.user_id)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'User ID is required and should be an array of UUIDs',
+    });
+  }
+
+  const data = { ...req.body, unit_id: unitId };
+  const updatedUser = await UnitService.addUsersToUnit(data);
+  res.status(200).json(updatedUser);
+};
+
 export const updateUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]

@@ -1,7 +1,7 @@
 import { prisma } from '../config/prisma';
 import { Unit } from '../../generated/prisma/client';
 import { AppError, NotFoundError } from '../lib/errors';
-import { CreateUnitDto, PaginatedUnits, UpdateUnitDto } from '../models/Unit';
+import { CreateUnitDto, UpdateUserUnitDto,PaginatedUnits, UpdateUnitDto } from '../models/Unit';
 
 export const listUnits = async (
   page: number,
@@ -49,6 +49,37 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
     throw new AppError('Failed to create unit', 500);
   }
   return unit;
+};
+
+export const addUsersToUnit = async (data: UpdateUserUnitDto): Promise<any> => {
+  const unitId = data.unit_id;
+  let count = 0;
+  return await prisma.$transaction(async (tx) => {
+    const users = await tx.user.findMany({
+      where: {
+        id: {
+          in: data.user_id,
+        },
+      },
+    });
+
+    if (users.length !== data.user_id.length) {
+      throw new NotFoundError('User not found');
+    }
+
+    const result = await tx.user.updateMany({
+      where: {
+        id: {
+          in: data.user_id,
+        },
+      },
+      data: { unit_id: unitId },
+    });
+
+    count = result.count;
+
+    return { count: `${count} users added to the unit successfully.` };
+  });
 };
 
 export const updateUnit = async (data: UpdateUnitDto): Promise<Unit> => {
