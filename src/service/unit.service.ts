@@ -59,7 +59,6 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
 
 export const addUsersToUnit = async (data: UpdateUserUnitDto): Promise<any> => {
   const unitId = data.unit_id;
-  let count = 0;
   return await prisma.$transaction(async (tx) => {
     const users = await tx.user.findMany({
       where: {
@@ -82,9 +81,7 @@ export const addUsersToUnit = async (data: UpdateUserUnitDto): Promise<any> => {
       data: { unit_id: unitId },
     });
 
-    count = result.count;
-
-    return { count: `${count} users added to the unit successfully.` };
+    return { count: `${result.count} users added to the unit successfully.` };
   });
 };
 
