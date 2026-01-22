@@ -15,35 +15,31 @@ datasource db {
 
 // --- ENUMS ---
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
-  STAFF
-  MANAGER
+  HEAD_OF_DEPARTMENT
+  HEAD_OF_UNIT
+  REPRESENTATIVE
+  DOCUMENT_STAFF
+  FINANCE_STAFF
+  GENERAL_STAFF
   GUEST
 }
 
 enum ProjectStatus {
-// Phase 1: Procurement
+  // Phase 1: Procurement
   PROCUREMENT_UNASSIGNED
   PROCUREMENT_WAITING_ACCEPTANCE
   PROCUREMENT_IN_PROGRESS
-  
+
   // Phase 2: Contract
   CONTRACT_UNASSIGNED
   CONTRACT_WAITING_ACCEPTANCE
   CONTRACT_IN_PROGRESS
-  
+
   // Final
   APPROVED
   CANCELLED
-}
-
-enum UnitResponsibleType {
-  LT100K
-  LT500K
-  MT500K
-  SELECTION
-  EBIDDING
-  CONTRACT
 }
 
 enum UnitResponsibleType {
@@ -73,55 +69,70 @@ enum SubmissionStatus {
 // --- MODELS ---
 
 model Department {
-  id    String @id @default(uuid())
-  name  String
-  code  String
-  units Unit[]
+  id           String        @id @default(uuid())
+  name         String
+  code         String
+  units        Unit[]
+  allowed_role AllowedRole[]
+  users        User[]
 
   @@map("departments")
 }
 
 model Unit {
-  id        String     @id @default(uuid())
-  dept_id   String
-  name      String
-  type      UnitResponsibleType[]
-  dept      Department @relation(fields: [dept_id], references: [id])
-  users     User[]
+  id      String                @id @default(uuid())
+  dept_id String
+  name    String
+  type    UnitResponsibleType[]
+  dept    Department            @relation(fields: [dept_id], references: [id])
+  users   User[]
 
   @@map("units")
 }
 
 model User {
-  id               String   @id @default(uuid())
-  unit_id          String?
-  username         String   @unique
-  email            String?  @unique
-  full_name        String
-  role             UserRole?
-  is_delegate      Boolean  @default(false)
-  delegate_user_id String?
-  created_at       DateTime @default(now())
+  id                String    @id @default(uuid())
+  dept_id           String?
+  unit_id           String?
+  username          String    @unique
+  email             String?   @unique
+  full_name         String
+  role              UserRole?
+  is_delegating     Boolean   @default(false)
+  delegated_user_id String?
+  created_at        DateTime  @default(now())
 
-  unit             Unit?    @relation(fields: [unit_id], references: [id])
-  
+  department Department? @relation(fields: [dept_id], references: [id])
+  unit       Unit?       @relation(fields: [unit_id], references: [id])
+
   // Self-relation for delegation
-  delegate_to      User?    @relation("UserDelegation", fields: [delegate_user_id], references: [id])
-  delegated_from   User[]   @relation("UserDelegation")
+  delegate_to    User?  @relation("UserDelegation", fields: [delegated_user_id], references: [id])
+  delegated_from User[] @relation("UserDelegation")
 
   // Relations to Projects
-  created_projects      Project[] @relation("ProjectCreator")
-  procurement_projects  Project[] @relation("ProcurementAssignee")
-  contract_projects     Project[] @relation("ContractAssignee")
+  created_projects     Project[] @relation("ProjectCreator")
+  procurement_projects Project[] @relation("ProcurementAssignee")
+  contract_projects    Project[] @relation("ContractAssignee")
 
   @@map("users")
 }
 
+model AllowedRole {
+  id      String   @id @default(uuid())
+  dept_id String
+  role    UserRole
+
+  department Department @relation(fields: [dept_id], references: [id])
+
+  @@unique([dept_id, role])
+  @@map("allowed_roles")
+}
+
 model Project {
-  id                      String            @id @default(uuid())
+  id                      String          @id @default(uuid())
   receive_no              String
   title                   String
-  budget                  Decimal           @db.Decimal(18, 2)
+  budget                  Decimal         @db.Decimal(18, 2)
   pr_no                   String?
   po_no                   String?
   status                  ProjectStatus
@@ -136,103 +147,103 @@ model Project {
   vendor_name             String?
   vendor_tax_id           String?
   vendor_email            String?
-  is_urgent               Boolean           @default(false)
+  is_urgent               Boolean         @default(false)
   expect_approved_date    DateTime?
   created_by              String
-  created_at              DateTime          @default(now())
+  created_at              DateTime        @default(now())
   update_by               String?
-  updated_at              DateTime?         @updatedAt
+  updated_at              DateTime?       @updatedAt
 
   // Relations
-  template              WorkflowTemplate   @relation(fields: [current_templates_id], references: [id])
-  current_step          WorkflowStep?      @relation(fields: [current_step_id], references: [id])
-  creator               User               @relation("ProjectCreator", fields: [created_by], references: [id])
-  assignee_procurement  User?              @relation("ProcurementAssignee", fields: [assignee_procurement_id], references: [id])
-  assignee_contract     User?              @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
-  
-  project_cancellation  ProjectCancellation[]
-  project_histories     ProjectStatusHistory[]
-  vendor_submissions    VendorSubmission[]
-  project_submissions   ProjectSubmission[]
+  template             WorkflowTemplate @relation(fields: [current_templates_id], references: [id])
+  current_step         WorkflowStep?    @relation(fields: [current_step_id], references: [id])
+  creator              User             @relation("ProjectCreator", fields: [created_by], references: [id])
+  assignee_procurement User?            @relation("ProcurementAssignee", fields: [assignee_procurement_id], references: [id])
+  assignee_contract    User?            @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
+
+  project_cancellation ProjectCancellation[]
+  project_histories    ProjectStatusHistory[]
+  vendor_submissions   VendorSubmission[]
+  project_submissions  ProjectSubmission[]
 
   @@map("projects")
 }
 
 model ProjectCancellation {
-  id          String    @id @default(uuid())
-  project_id  String
-  reason      String
+  id           String   @id @default(uuid())
+  project_id   String
+  reason       String
   cancelled_by String
   cancelled_at DateTime @default(now())
 
-  project     Project   @relation(fields: [project_id], references: [id])
+  project Project @relation(fields: [project_id], references: [id])
 
   @@map("project_cancellations")
 }
 
 model ProjectStatusHistory {
-  id          String    @id @default(uuid())
-  project_id  String
-  user_id     String
-  action      String
-  old_value   String?
-  new_value   String?
-  comment     String?
-  changed_by  String
-  changed_at  DateTime  @default(now())
+  id         String   @id @default(uuid())
+  project_id String
+  user_id    String
+  action     String
+  old_value  String?
+  new_value  String?
+  comment    String?
+  changed_by String
+  changed_at DateTime @default(now())
 
-  project     Project   @relation(fields: [project_id], references: [id])
+  project Project @relation(fields: [project_id], references: [id])
 
   @@map("project_histories")
 }
 
 model ProjectSubmission {
-  id                String            @id @default(uuid())
+  id                String           @id @default(uuid())
   project_id        String
   step_id           String
   submission_round  String
   status            SubmissionStatus
   submitted_by      String
-  submitted_at      DateTime          @default(now())
+  submitted_at      DateTime         @default(now())
   officer_comment   String?
   officer_action_by String?
   officer_action_at DateTime?
   meta_data         Json?
 
-  project           Project           @relation(fields: [project_id], references: [id])
-  documents         ProjectDocument[]
+  project   Project           @relation(fields: [project_id], references: [id])
+  documents ProjectDocument[]
 
   @@map("project_submissions")
 }
 
 model ProjectDocument {
-  id                    String            @id @default(uuid())
+  id                    String @id @default(uuid())
   project_submission_id String
   file_name             String
   file_path             String
 
-  submission            ProjectSubmission @relation(fields: [project_submission_id], references: [id])
+  submission ProjectSubmission @relation(fields: [project_submission_id], references: [id])
 
   @@map("project_documents")
 }
 
 model VendorSubmission {
-  id             String           @id @default(uuid())
-  po_number_ref  String
-  project_id     String
-  file_path      String
-  submitted_at   DateTime         @default(now())
-  status         SubmissionStatus
-  reviewed_by    String?
-  review_note    String?
+  id            String           @id @default(uuid())
+  po_number_ref String
+  project_id    String
+  file_path     String
+  submitted_at  DateTime         @default(now())
+  status        SubmissionStatus
+  reviewed_by   String?
+  review_note   String?
 
-  project        Project          @relation(fields: [project_id], references: [id])
+  project Project @relation(fields: [project_id], references: [id])
 
   @@map("vendor_submissions")
 }
 
 model WorkflowTemplate {
-  id          String         @id @default(uuid())
+  id          String              @id @default(uuid())
   name        String
   type        UnitResponsibleType
   description String?
@@ -243,16 +254,16 @@ model WorkflowTemplate {
 }
 
 model WorkflowStep {
-  id                 String           @id @default(uuid())
+  id                 String @id @default(uuid())
   template_id        String
   order              Int
   name               String
   description        String
-  required_step      Int[]            // Kept as Int as it likely refers to 'order'
+  required_step      Int[] // Kept as Int as it likely refers to 'order'
   required_documents Json
 
-  template           WorkflowTemplate @relation(fields: [template_id], references: [id])
-  projects           Project[]
+  template WorkflowTemplate @relation(fields: [template_id], references: [id])
+  projects Project[]
 
   @@map("workflow_steps")
 }

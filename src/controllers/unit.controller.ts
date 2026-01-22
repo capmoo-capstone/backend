@@ -28,6 +28,26 @@ export const createUnit = async (req: Request, res: Response) => {
   res.status(201).json(unit);
 };
 
+export const addUsers = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Unit']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId } = req.params;
+
+  const data = { ...req.body, unit_id: unitId };
+  const result = await UnitService.addUsersToUnit(data);
+  res.status(200).json(result);
+};
+
+export const addRepresentative = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Unit']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId, userId } = req.params;
+
+  const data = { unit_id: unitId, user_id: userId };
+  const updatedUser = await UnitService.addRepresentativeToUnit(data);
+  res.status(200).json(updatedUser);
+};
+
 export const updateUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]

@@ -3,6 +3,7 @@ import {
   ProcurementType,
   SubmissionStatus,
   UnitResponsibleType,
+  UserRole,
 } from '../generated/prisma/client';
 
 import { prisma } from '../src/config/prisma';
@@ -11,10 +12,51 @@ async function main() {
   console.log('--- Start Seeding ---');
 
   // 1. Create Department
-  const dept = await prisma.department.create({
+  const deptPCM = await prisma.department.create({
     data: {
-      name: 'Office of Supply',
-      code: '001',
+      name: 'Office of Procurement',
+      code: 'PROCUREMENT',
+      allowed_role: {
+        create: [
+          { role: UserRole.ADMIN },
+          { role: UserRole.HEAD_OF_DEPARTMENT },
+          { role: UserRole.HEAD_OF_UNIT },
+          { role: UserRole.DOCUMENT_STAFF },
+          { role: UserRole.FINANCE_STAFF },
+          { role: UserRole.GENERAL_STAFF },
+        ],
+      },
+    },
+  });
+
+  const deptREG = await prisma.department.create({
+    data: {
+      name: 'Office of Registration',
+      code: 'REGISTRATION',
+      allowed_role: {
+        create: [
+          { role: UserRole.ADMIN },
+          { role: UserRole.HEAD_OF_DEPARTMENT },
+          { role: UserRole.HEAD_OF_UNIT },
+          { role: UserRole.GENERAL_STAFF },
+        ],
+      },
+    },
+  });
+
+  const deptENG = await prisma.department.create({
+    data: {
+      name: 'Faculty of Engineering',
+      code: 'ENGINEERING',
+      allowed_role: {
+        create: [
+          { role: UserRole.ADMIN },
+          { role: UserRole.HEAD_OF_DEPARTMENT },
+          { role: UserRole.HEAD_OF_UNIT },
+          { role: UserRole.REPRESENTATIVE },
+          { role: UserRole.GENERAL_STAFF },
+        ],
+      },
     },
   });
 
@@ -23,7 +65,7 @@ async function main() {
     data: {
       name: 'Procurement 1',
       type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
-      dept_id: dept.id,
+      dept_id: deptPCM.id,
     },
   });
   const unit2 = await prisma.unit.create({
@@ -34,34 +76,50 @@ async function main() {
         UnitResponsibleType.SELECTION,
         UnitResponsibleType.EBIDDING,
       ],
-      dept_id: dept.id,
+      dept_id: deptPCM.id,
     },
   });
   const unit3 = await prisma.unit.create({
     data: {
       name: 'Contract',
       type: [UnitResponsibleType.CONTRACT],
-      dept_id: dept.id,
+      dept_id: deptPCM.id,
+    },
+  });
+  const engineeringUnit = await prisma.unit.create({
+    data: {
+      name: 'Engineering Unit',
+      type: [],
+      dept_id: deptENG.id,
     },
   });
 
   // 3. Create Users
+  const superAdmin = await prisma.user.create({
+    data: {
+      username: 'super',
+      full_name: 'Super Admin',
+      role: UserRole.SUPER_ADMIN,
+    },
+  });
+
   const adminUser = await prisma.user.create({
     data: {
       username: 'admin_jane',
       email: 'jane.doe@company.com',
       full_name: 'Jane Doe',
-      role: 'ADMIN',
+      role: UserRole.ADMIN,
+      dept_id: deptPCM.id,
       unit_id: unit1.id,
     },
   });
 
-  const managerUser = await prisma.user.create({
+  const headOfUnitUser = await prisma.user.create({
     data: {
-      username: 'manager_mike',
-      email: 'mike.manager@company.com',
-      full_name: 'Mike Manager',
-      role: 'MANAGER',
+      username: 'HeadUnit1_mike',
+      full_name: 'Mike HeadUnit',
+      role: UserRole.HEAD_OF_UNIT,
+      dept_id: deptPCM.id,
       unit_id: unit1.id,
     },
   });
@@ -69,9 +127,9 @@ async function main() {
   const staffUser = await prisma.user.create({
     data: {
       username: 'staff_bob',
-      email: 'bob.smith@company.com',
       full_name: 'Bob Smith',
-      role: 'STAFF',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: deptPCM.id,
       unit_id: unit1.id,
     },
   });
@@ -79,9 +137,9 @@ async function main() {
   const staff2User = await prisma.user.create({
     data: {
       username: 'staff_alice',
-      email: 'alice.jones@company.com',
       full_name: 'Alice Jones',
-      role: 'STAFF',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: deptPCM.id,
       unit_id: unit2.id,
     },
   });
@@ -89,10 +147,29 @@ async function main() {
   const staff3User = await prisma.user.create({
     data: {
       username: 'staff_cathy',
-      email: 'cathy.williams@company.com',
       full_name: 'Cathy Williams',
-      role: 'STAFF',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: deptPCM.id,
       unit_id: unit3.id,
+    },
+  });
+
+  const regUser = await prisma.user.create({
+    data: {
+      username: 'reg_sam',
+      full_name: 'Sam Registration',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: deptREG.id,
+    },
+  });
+
+  const representativeUser = await prisma.user.create({
+    data: {
+      username: 'rep_charlie',
+      full_name: 'Charlie Rep',
+      role: UserRole.REPRESENTATIVE,
+      dept_id: deptENG.id,
+      unit_id: engineeringUnit.id,
     },
   });
 
