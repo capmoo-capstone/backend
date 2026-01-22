@@ -3,7 +3,7 @@ import { Unit, UnitResponsibleType } from '../../generated/prisma/client';
 
 const CreateUnitSchema = z.object({
   name: z.string(),
-  type: z.array(z.enum(UnitResponsibleType)),
+  type: z.array(z.enum(UnitResponsibleType)).optional(),
   dept_id: z.uuid(),
 });
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;

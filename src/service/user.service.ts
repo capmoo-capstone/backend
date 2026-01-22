@@ -3,16 +3,22 @@ import { User, UserRole } from '../../generated/prisma/client';
 import { CreateUserDto } from '../models/User';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 
-export const listUsers = async (page: number, limit: number): Promise<any> => {
+export const listUsers = async (
+  page: number,
+  limit: number,
+  deptId?: string,
+  unitId?: string
+): Promise<any> => {
   const skip = (page - 1) * limit;
 
   const [users, total] = await prisma.$transaction([
     prisma.user.findMany({
+      where: { dept_id: deptId, unit_id: unitId },
       skip: skip,
       take: limit,
       orderBy: { id: 'desc' },
     }),
-    prisma.user.count(),
+    prisma.user.count({ where: { dept_id: deptId, unit_id: unitId } }),
   ]);
 
   return {

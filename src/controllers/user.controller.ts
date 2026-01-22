@@ -4,10 +4,13 @@ import * as UserService from '../service/user.service';
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit } = req.query;
-  const pageNum = parseInt(page as string) || 1;
-  const limitNum = parseInt(limit as string) || 10;
-  const data = await UserService.listUsers(pageNum, limitNum);
+  const { page, limit, deptId, unitId } = req.query;
+  const data = await UserService.listUsers(
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    deptId as string,
+    unitId as string
+  );
   res.status(200).json(data);
 };
 
