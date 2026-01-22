@@ -55,9 +55,11 @@ export const updateRole = async (id: string, role: UserRole): Promise<User> => {
         dept_id: true,
       },
     });
-
-    if (!user || !user.dept_id) {
-      throw new NotFoundError('User or department not found');
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+    if (!user.dept_id) {
+      throw new NotFoundError('User has no department assigned');
     }
 
     const allowedRole = await tx.allowedRole.findFirst({

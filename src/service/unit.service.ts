@@ -58,9 +58,8 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
 };
 
 export const addUsersToUnit = async (data: UpdateUserUnitDto): Promise<any> => {
-  const unitId = data.unit_id;
-  let count = 0;
   return await prisma.$transaction(async (tx) => {
+    await getById(data.unit_id);
     const users = await tx.user.findMany({
       where: {
         id: {
@@ -69,8 +68,12 @@ export const addUsersToUnit = async (data: UpdateUserUnitDto): Promise<any> => {
       },
     });
 
-    if (users.length !== data.user_id.length) {
-      throw new NotFoundError('User not found');
+    const foundUserIds = new Set(users.map((user) => user.id));
+    const missingUserIds = data.user_id.filter((id) => !foundUserIds.has(id));
+    if (missingUserIds.length > 0) {
+      throw new NotFoundError(
+        `One or more users not found: ${missingUserIds.join(', ')}`
+      );
     }
 
     const result = await tx.user.updateMany({
@@ -79,12 +82,15 @@ export const addUsersToUnit = async (data: UpdateUserUnitDto): Promise<any> => {
           in: data.user_id,
         },
       },
-      data: { unit_id: unitId },
+      data: { unit_id: data.unit_id },
     });
 
-    count = result.count;
+    const count = result.count;
 
-    return { count: `${count} users added to the unit successfully.` };
+    return {
+      count,
+      message: `${count} users added to the unit successfully.`,
+    };
   });
 };
 
@@ -92,6 +98,7 @@ export const addRepresentativeToUnit = async (
   data: UpdateRepresentativeUnitDto
 ): Promise<User> => {
   return await prisma.$transaction(async (tx) => {
+    await getById(data.unit_id);
     const user = await tx.user.findUnique({
       where: { id: data.user_id },
       select: {
@@ -119,7 +126,10 @@ export const addRepresentativeToUnit = async (
 
     return await tx.user.update({
       where: { id: data.user_id },
-      data: { role: UserRole.REPRESENTATIVE },
+      data: {
+        role: UserRole.REPRESENTATIVE,
+        unit_id: data.unit_id,
+      },
     });
   });
 };

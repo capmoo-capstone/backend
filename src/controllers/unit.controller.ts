@@ -33,40 +33,15 @@ export const addUsers = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.params;
 
-  if (!unitId) {
-    return res
-      .status(400)
-      .json({ status: 'error', message: 'Unit ID is required' });
-  }
-
-  if (!req.body.user_id || !Array.isArray(req.body.user_id)) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'User ID is required and should be an array of UUIDs',
-    });
-  }
-
   const data = { ...req.body, unit_id: unitId };
-  const updatedUser = await UnitService.addUsersToUnit(data);
-  res.status(200).json(updatedUser);
+  const result = await UnitService.addUsersToUnit(data);
+  res.status(200).json(result);
 };
 
 export const addRepresentative = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId, userId } = req.params;
-
-  if (!unitId) {
-    return res
-      .status(400)
-      .json({ status: 'error', message: 'Unit ID is required' });
-  }
-
-  if (!userId) {
-    return res
-      .status(400)
-      .json({ status: 'error', message: 'User ID is required' });
-  }
 
   const data = { unit_id: unitId, user_id: userId };
   const updatedUser = await UnitService.addRepresentativeToUnit(data);

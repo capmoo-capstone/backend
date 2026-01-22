@@ -74,6 +74,7 @@ model Department {
   code         String
   units        Unit[]
   allowed_role AllowedRole[]
+  users        User[]
 
   @@map("departments")
 }
@@ -101,7 +102,8 @@ model User {
   delegated_user_id String?
   created_at        DateTime  @default(now())
 
-  unit Unit? @relation(fields: [unit_id], references: [id])
+  department Department? @relation(fields: [dept_id], references: [id])
+  unit       Unit?       @relation(fields: [unit_id], references: [id])
 
   // Self-relation for delegation
   delegate_to    User?  @relation("UserDelegation", fields: [delegated_user_id], references: [id])

@@ -44,7 +44,7 @@ export const getById = async (id: string): Promise<Department> => {
 export const createDepartment = async (
   data: CreateDepartmentDto
 ): Promise<Department> => {
-  let roles: UserRole[] = [
+  let defaultRoles: UserRole[] = [
     UserRole.HEAD_OF_DEPARTMENT,
     UserRole.HEAD_OF_UNIT,
     UserRole.ADMIN,
@@ -52,18 +52,14 @@ export const createDepartment = async (
   ];
 
   if (data.allowed_role && data.allowed_role.length > 0) {
-    data.allowed_role.map((role) => {
-      if (!roles.includes(role)) {
-        roles.push(role);
-      }
-    });
+    defaultRoles = Array.from(new Set([...defaultRoles, ...data.allowed_role]));
   }
   const department = await prisma.department.create({
     data: {
       name: data.name,
       code: data.code,
       allowed_role: {
-        create: roles.map((role) => ({ role })),
+        create: defaultRoles.map((role) => ({ role })),
       },
     },
   });
