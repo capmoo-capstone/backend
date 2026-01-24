@@ -51,6 +51,13 @@ enum UnitResponsibleType {
   CONTRACT
 }
 
+enum LogActionType {
+  INFORMATION_UPDATE
+  STATUS_UPDATE
+  ASSIGNEE_UPDATE
+  STEP_UPDATE
+}
+
 enum ProcurementType {
   LT100K
   LT500K
@@ -148,7 +155,7 @@ model Project {
   vendor_tax_id           String?
   vendor_email            String?
   is_urgent               Boolean         @default(false)
-  expect_approved_date    DateTime?
+  expected_approval_date  DateTime?
   created_by              String
   created_at              DateTime        @default(now())
   update_by               String?
@@ -162,7 +169,7 @@ model Project {
   assignee_contract    User?            @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
 
   project_cancellation ProjectCancellation[]
-  project_histories    ProjectStatusHistory[]
+  project_histories    ProjectHistory[]
   vendor_submissions   VendorSubmission[]
   project_submissions  ProjectSubmission[]
 
@@ -181,13 +188,12 @@ model ProjectCancellation {
   @@map("project_cancellations")
 }
 
-model ProjectStatusHistory {
+model ProjectHistory {
   id         String   @id @default(uuid())
   project_id String
-  user_id    String
-  action     String
-  old_value  String?
-  new_value  String?
+  action     LogActionType
+  old_value  Json
+  new_value  Json
   comment    String?
   changed_by String
   changed_at DateTime @default(now())
