@@ -155,7 +155,7 @@ model Project {
   vendor_tax_id           String?
   vendor_email            String?
   is_urgent               Boolean         @default(false)
-  expect_approved_date    DateTime?
+  expected_approval_date  DateTime?
   created_by              String
   created_at              DateTime        @default(now())
   update_by               String?

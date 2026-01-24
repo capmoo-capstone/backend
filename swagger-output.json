@@ -448,6 +448,55 @@
         ]
       }
     },
+    "/project/assigned/{unitId}": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "description": "",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/project/create": {
       "post": {
         "tags": [
@@ -480,7 +529,7 @@
         }
       }
     },
-    "/project/{projectId}": {
+    "/project/{id}": {
       "get": {
         "tags": [
           "Project"
@@ -488,7 +537,7 @@
         "description": "",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -514,7 +563,7 @@
         "description": "",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -534,7 +583,7 @@
         ]
       }
     },
-    "/project/{projectId}/update": {
+    "/project/{id}/update": {
       "patch": {
         "tags": [
           "Project"
@@ -542,7 +591,7 @@
         "description": "",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -608,7 +657,39 @@
         }
       }
     },
-    "/project/{projectId}/claim": {
+    "/project/accept": {
+      "patch": {
+        "tags": [
+          "Project"
+        ],
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/project/{id}/claim": {
       "patch": {
         "tags": [
           "Project"
@@ -616,7 +697,7 @@
         "description": "",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -640,9 +721,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "projectType": {
-                    "example": "any"
-                  },
                   "userId": {
                     "example": "any"
                   }
@@ -653,7 +731,7 @@
         }
       }
     },
-    "/project/{projectId}/accept": {
+    "/project/{id}/cancel": {
       "patch": {
         "tags": [
           "Project"
@@ -661,7 +739,7 @@
         "description": "",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -685,10 +763,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "projectType": {
-                    "example": "any"
-                  },
-                  "userId": {
+                  "reason": {
                     "example": "any"
                   }
                 }
@@ -696,34 +771,6 @@
             }
           }
         }
-      }
-    },
-    "/project/{projectId}/cancel": {
-      "patch": {
-        "tags": [
-          "Project"
-        ],
-        "description": "",
-        "parameters": [
-          {
-            "name": "projectId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
       }
     },
     "/department/": {
@@ -1027,30 +1074,13 @@
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
           }
         },
         "security": [
           {
             "bearerAuth": []
           }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "user_id": {
-                    "example": "any"
-                  }
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/unit/{unitId}/representative/{userId}": {
@@ -1080,9 +1110,6 @@
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
           }
         },
         "security": [
