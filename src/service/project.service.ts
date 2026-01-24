@@ -421,11 +421,12 @@ export const cancelProject = async (data: CancelProjectDto) => {
       throw new NotFoundError('Project not found');
     }
 
-    await tx.project.update({
+    const updated = await tx.project.update({
       where: { id: data.id },
       data: {
         status: ProjectStatus.CANCELLED,
       },
+      select: { id: true, status: true },
     });
 
     await tx.projectHistory.create({
@@ -438,18 +439,25 @@ export const cancelProject = async (data: CancelProjectDto) => {
       },
     });
 
-    await tx.projectCancellation.create({
+    const cancelled = await tx.projectCancellation.create({
       data: {
         project_id: data.id,
         reason: data.reason,
         cancelled_by: 'system',
       },
+      select: { reason: true },
     });
+
+    return {
+      id: updated.id,
+      status: updated.status,
+      reason: cancelled.reason,
+    };
   });
 };
 
 export const updateProjectData = async (data: UpdateProjectDto) => {
-  if (!data || Object.keys(data).length === 0) {
+  if (!data || !data.updateData || Object.keys(data.updateData).length === 0) {
     throw new BadRequestError('No data provided for update');
   }
   await getById(data.id);

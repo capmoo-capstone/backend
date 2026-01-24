@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import {
-  LogActionType,
-  ProcurementType,
-  ProjectStatus,
-} from '../../generated/prisma/enums';
+import { ProcurementType, ProjectStatus } from '../../generated/prisma/enums';
 import { Project } from '../../generated/prisma/client';
 
 const CreateProjectSchema = z.object({
