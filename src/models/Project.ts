@@ -2,8 +2,6 @@ import { z } from 'zod';
 import { ProcurementType, ProjectStatus } from '../../generated/prisma/enums';
 import { Project } from '../../generated/prisma/client';
 
-export const ProjectTypeEnum = z.enum(['contract', 'procurement']);
-
 const CreateProjectSchema = z.object({
   id: z.string(),
   status: z.enum(ProjectStatus),
@@ -35,7 +33,6 @@ export interface PaginatedProjects {
 }
 
 const updateStatusProjectSchema = z.object({
-  projectType: ProjectTypeEnum.optional(),
   projectId: z.string(),
   userId: z.string(),
 });
@@ -44,4 +41,16 @@ export type UpdateStatusProjectDto = z.infer<typeof updateStatusProjectSchema>;
 const updateStatusProjectsSchema = z.array(updateStatusProjectSchema);
 export type UpdateStatusProjectsDto = z.infer<
   typeof updateStatusProjectsSchema
+>;
+
+const logProjectStatusChangeSchema = z.object({
+  projectId: z.string(),
+  action: z.string(),
+  oldValue: z.string(),
+  newValue: z.string(),
+  comment: z.string().nullish(),
+  changeBy: z.string(),
+});
+export type LogProjectStatusChangeDto = z.infer<
+  typeof logProjectStatusChangeSchema
 >;

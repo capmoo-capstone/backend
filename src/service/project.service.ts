@@ -6,6 +6,7 @@ import {
 } from '../../generated/prisma/client';
 import {
   CreateProjectDto,
+  LogProjectStatusChangeDto,
   PaginatedProjects,
   UpdateStatusProjectDto,
   UpdateStatusProjectsDto,
@@ -125,6 +126,28 @@ export const getUnassignedProjectsByUnit = async (
   };
 };
 
+const checkProjectStatusToAssign = (
+  project: Project & { template: { type: UnitResponsibleType } }
+) => {
+  const assigneeField =
+    project.template.type === UnitResponsibleType.CONTRACT
+      ? 'assignee_contract_id'
+      : 'assignee_procurement_id';
+  const nextStatus =
+    project.template.type === UnitResponsibleType.CONTRACT
+      ? [
+          ProjectStatus.CONTRACT_UNASSIGNED,
+          ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
+          ProjectStatus.CONTRACT_IN_PROGRESS,
+        ]
+      : [
+          ProjectStatus.PROCUREMENT_UNASSIGNED,
+          ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
+          ProjectStatus.PROCUREMENT_IN_PROGRESS,
+        ];
+  return { assigneeField, nextStatus };
+};
+
 export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
   return await prisma.$transaction(async (tx) => {
     const updatedProjects = [];
@@ -132,45 +155,26 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
     for (const item of data) {
       const { projectId, userId } = item;
 
-      // NOTE: Use 'tx' instead of 'prisma' or 'getById' inside the loop
-      // to ensure lookups happen within the same transaction context
-      const project = await getById(projectId);
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        include: {
+          template: true,
+        },
+      });
 
       if (!project) {
         throw new BadRequestError(`Project ${projectId} not found`);
       }
+      const { assigneeField, nextStatus } = checkProjectStatusToAssign(project);
+      await UserService.getById(userId);
 
-      await UserService.getById(userId); // Ensure user exists
-
-      const isContract =
-        project.template?.type === UnitResponsibleType.CONTRACT;
-      const assigneeField = isContract
-        ? 'assignee_contract_id'
-        : 'assignee_procurement_id';
-
-      // Validation
-      if (
-        project.status !== ProjectStatus.PROCUREMENT_UNASSIGNED &&
-        project.status !== ProjectStatus.CONTRACT_UNASSIGNED
-      ) {
+      if (project.status !== nextStatus[0]) {
         throw new BadRequestError(`Project ${projectId} is not unassigned`);
       }
-
-      if (project[assigneeField] !== null) {
+      if ((project as any)[assigneeField] !== null) {
         throw new BadRequestError(`Project ${projectId} is already assigned`);
       }
 
-      const nextStatus = isContract
-        ? [
-            ProjectStatus.CONTRACT_UNASSIGNED,
-            ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
-          ]
-        : [
-            ProjectStatus.PROCUREMENT_UNASSIGNED,
-            ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
-          ];
-
-      // 2. Perform the update using the transaction client 'tx'
       const updated = await tx.project.update({
         where: {
           id: projectId,
@@ -181,84 +185,98 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
           [assigneeField]: userId,
           status: nextStatus[1],
         },
+        select: { id: true, status: true, [assigneeField]: true },
       });
 
       updatedProjects.push(updated);
     }
 
-    return updatedProjects;
-    // If the loop finishes, Prisma commits everything.
-    // If any error is thrown here, Prisma rolls back everything automatically.
+    return { data: updatedProjects };
   });
 };
 
 export const claimProject = async (data: UpdateStatusProjectDto) => {
-  const { projectType, projectId, userId } = data;
-  const project = await getById(projectId);
+  const { projectId, userId } = data;
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      template: true,
+    },
+  });
 
-  const isContract = projectType === 'contract';
-  const assigneeField = isContract
-    ? 'assignee_contract_id'
-    : 'assignee_procurement_id';
-  const nextStatus = isContract
-    ? 'IN_PROGRESS_OF_CONTRACT'
-    : 'IN_PROGRESS_OF_PROCUREMENT';
-
-  if (project?.status === 'UNASSIGNED') {
-    return await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        [assigneeField]: userId,
-        status: nextStatus,
-      },
-    });
+  if (!project) {
+    throw new NotFoundError('Project not found');
   }
-  throw new BadRequestError('This project cannot be claimed right now');
+  const { assigneeField, nextStatus } = checkProjectStatusToAssign(project);
+
+  if (project.status !== nextStatus[0]) {
+    throw new BadRequestError('This project cannot be claimed');
+  }
+
+  const updated = await prisma.project.update({
+    where: {
+      id: projectId,
+      status: nextStatus[0],
+      [assigneeField]: null,
+    },
+    data: {
+      [assigneeField]: userId,
+      status: nextStatus[2],
+    },
+    select: { id: true, status: true, [assigneeField]: true },
+  });
+
+  return { data: updated };
 };
 
 export const acceptProjects = async (data: UpdateStatusProjectsDto) => {
-  data.forEach(async (item) => {
-    const { projectType, projectId, userId } = item;
-    const project = await getById(projectId);
-
-    const isContract = projectType === 'contract';
-    const assigneeField = isContract
-      ? 'assignee_contract_id'
-      : 'assignee_procurement_id';
-    const nextStatus = isContract
-      ? 'IN_PROGRESS_OF_CONTRACT'
-      : 'IN_PROGRESS_OF_PROCUREMENT';
-
-    if (project?.status !== ProjectStatus.WAITING_FOR_ACCEPTANCE) {
-      throw new BadRequestError('Project is not waiting for acceptance');
+  return await prisma.$transaction(async (tx) => {
+    const updatedProjects = [];
+    for (const item of data) {
+      const { projectId, userId } = item;
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        include: {
+          template: true,
+        },
+      });
+      if (!project) {
+        throw new NotFoundError(`Project ${projectId} not found`);
+      }
+      const { assigneeField, nextStatus } = checkProjectStatusToAssign(project);
+      if (project?.status !== nextStatus[1]) {
+        throw new BadRequestError(
+          `Project ${projectId} is not waiting for acceptance`
+        );
+      }
+      if ((project as any)[assigneeField] !== userId) {
+        throw new BadRequestError(
+          `You are not assigned to project ${projectId}`
+        );
+      }
+      const updated = await tx.project.update({
+        where: {
+          id: projectId,
+          status: nextStatus[1],
+          [assigneeField]: userId,
+        },
+        data: {
+          status: nextStatus[2],
+        },
+        select: { id: true, status: true, [assigneeField]: true },
+      });
+      updatedProjects.push(updated);
     }
-    if (project?.[assigneeField] !== userId) {
-      throw new BadRequestError('You are not assigned to this project');
-    }
-
-    const updated = await prisma.project.update({
-      where: {
-        id: projectId,
-        status: ProjectStatus.WAITING_FOR_ACCEPTANCE,
-        [assigneeField]: userId,
-      },
-      data: {
-        status: nextStatus,
-      },
-    });
-
-    if (!updated) {
-      throw new AppError('Project cannot be accepted at this time', 500);
-    }
+    return { data: updatedProjects };
   });
 };
 
-export const cancelProject = async (projectId: string) => {
-  await getById(projectId);
+export const cancelProject = async (id: string) => {
+  await getById(id);
   return await prisma.project.update({
-    where: { id: projectId },
+    where: { id },
     data: {
-      status: ProjectStatus.REJECTED,
+      status: ProjectStatus.CANCELLED,
     },
   });
 };
