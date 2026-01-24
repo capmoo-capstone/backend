@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { ProcurementType, ProjectStatus } from '../../generated/prisma/enums';
+import {
+  LogActionType,
+  ProcurementType,
+  ProjectStatus,
+} from '../../generated/prisma/enums';
 import { Project } from '../../generated/prisma/client';
 
 const CreateProjectSchema = z.object({
@@ -41,16 +45,4 @@ export type UpdateStatusProjectDto = z.infer<typeof updateStatusProjectSchema>;
 const updateStatusProjectsSchema = z.array(updateStatusProjectSchema);
 export type UpdateStatusProjectsDto = z.infer<
   typeof updateStatusProjectsSchema
->;
-
-const logProjectStatusChangeSchema = z.object({
-  projectId: z.string(),
-  action: z.string(),
-  oldValue: z.string(),
-  newValue: z.string(),
-  comment: z.string().nullish(),
-  changeBy: z.string(),
-});
-export type LogProjectStatusChangeDto = z.infer<
-  typeof logProjectStatusChangeSchema
 >;
