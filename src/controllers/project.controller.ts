@@ -15,8 +15,8 @@ export const getAll = async (req: Request, res: Response) => {
 export const getById = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { projectId } = req.params;
-  const project = await ProjectService.getById(projectId);
+  const { id } = req.params;
+  const project = await ProjectService.getById(id);
   res.status(200).json(project);
 };
 
@@ -104,7 +104,7 @@ export const updateProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
   const { id } = req.params;
-  const data = { id, ...req.body };
+  const data = { id, updateData: req.body };
   const updatedProject = await ProjectService.updateProjectData(data);
   res.status(200).json(updatedProject);
 };
@@ -112,7 +112,7 @@ export const updateProject = async (req: Request, res: Response) => {
 export const removeProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { projectId } = req.params;
-  await ProjectService.deleteProject(projectId);
+  const { id } = req.params;
+  await ProjectService.deleteProject(id);
   res.status(204).send();
 };
