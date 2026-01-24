@@ -39,6 +39,24 @@ export const getUnassigned = async (req: Request, res: Response) => {
   res.status(200).json(projects);
 };
 
+export const getAssignedProjectsByUnit = async (
+  req: Request,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId } = req.params;
+  const { page, limit, date } = req.query;
+  const targetDate = date ? new Date(date as string) : new Date();
+  const projects = await ProjectService.getAssignedProjectsByUnitAndDate(
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    unitId,
+    targetDate
+  );
+  res.status(200).json(projects);
+};
+
 export const createProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]

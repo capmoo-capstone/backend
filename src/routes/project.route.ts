@@ -5,6 +5,7 @@ const router = Router();
 
 router.get('/', projectController.getAll);
 router.get('/unassigned/:unitId', projectController.getUnassigned);
+router.get('/assigned/:unitId', projectController.getAssignedProjectsByUnit);
 router.post('/create', projectController.createProject);
 router.get('/:projectId', projectController.getById);
 router.patch('/:projectId/update', projectController.updateProject);
