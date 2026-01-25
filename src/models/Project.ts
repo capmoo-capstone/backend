@@ -31,7 +31,7 @@ export interface PaginatedProjects {
   page: number;
   pageSize: number;
   totalPages: number;
-  data: Array<Project>;
+  data: Array<Partial<Project>>;
 }
 
 const updateStatusProjectSchema = z.object({

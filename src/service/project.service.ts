@@ -221,6 +221,18 @@ export const getAssignedProjects = async (
         { created_at: 'asc' },
         { status: 'asc' },
       ],
+      select: {
+        id: true,
+        receive_no: true,
+        title: true,
+        status: true,
+        request_unit_id: true,
+        template: { select: { name: true, type: true } },
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
+        is_urgent: true,
+        created_at: true,
+      },
     }),
     prisma.project.count({ where }),
   ]);
