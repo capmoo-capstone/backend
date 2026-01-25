@@ -121,108 +121,106 @@ export const getUnassignedProjectsByUnit = async (
   };
 };
 
-export const getAssignedProjectsByUnitAndDate = async (
+export const getAssignedProjects = async (
   page: number,
   limit: number,
-  unitId: string,
-  targetDate: Date
+  targetDate: Date,
+  options: { unitId?: string; userId?: string }
 ): Promise<PaginatedProjects> => {
-  const unit = await UnitService.getById(unitId);
+  if (!options?.unitId && !options?.userId) {
+    throw new BadRequestError('Either unitId or userId must be provided');
+  }
 
   const startOfDay = new Date(targetDate);
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(targetDate);
   endOfDay.setHours(23, 59, 59, 999);
 
-  const acceptedProjectIds = await prisma.projectHistory.findMany({
-    where: {
-      AND: [
-        {
-          OR: [
-            {
-              action: LogActionType.STATUS_UPDATE,
+  let where: any = {
+    AND: [
+      {
+        OR: [
+          {
+            status: {
+              in: [
+                ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
+                ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
+              ],
             },
-            {
-              action: LogActionType.ASSIGNEE_UPDATE,
-            },
-          ],
-        },
-        {
-          changed_at: {
-            gte: startOfDay,
-            lte: endOfDay,
           },
-        },
-        {
-          OR: [
-            {
-              new_value: {
-                path: ['status'],
-                equals: ProjectStatus.PROCUREMENT_IN_PROGRESS,
+          {
+            project_histories: {
+              some: {
+                AND: [
+                  {
+                    OR: [
+                      { action: LogActionType.STATUS_UPDATE },
+                      { action: LogActionType.ASSIGNEE_UPDATE },
+                    ],
+                  },
+                  { changed_at: { gte: startOfDay, lte: endOfDay } },
+                  {
+                    OR: [
+                      {
+                        new_value: {
+                          path: ['status'],
+                          equals: ProjectStatus.PROCUREMENT_IN_PROGRESS,
+                        },
+                      },
+                      {
+                        new_value: {
+                          path: ['status'],
+                          equals: ProjectStatus.CONTRACT_IN_PROGRESS,
+                        },
+                      },
+                    ],
+                  },
+                ],
               },
             },
-            {
-              new_value: {
-                path: ['status'],
-                equals: ProjectStatus.CONTRACT_IN_PROGRESS,
-              },
-            },
-          ],
-        },
-      ],
-    },
-    select: { project_id: true },
-    distinct: ['project_id'],
-  });
-
-  const cancelledProjectIds = await prisma.projectCancellation.findMany({
-    where: {
-      cancelled_at: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
-    },
-    select: { project_id: true },
-    distinct: ['project_id'],
-  });
-
-  const acceptedIds = acceptedProjectIds.map((h) => h.project_id);
-  const cancelledIds = cancelledProjectIds.map((h) => h.project_id);
-
-  const where: any = {
-    template: {
-      type: {
-        in: unit.type,
-      },
-    },
-    OR: [
-      {
-        id: {
-          in: acceptedIds,
-        },
-      },
-      {
-        status: {
-          in: [
-            ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
-            ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
-          ],
-        },
-      },
-      {
-        id: {
-          in: cancelledIds,
-        },
+          },
+        ],
       },
     ],
   };
+
+  if (options.unitId) {
+    // Unit-based query
+    const unit = await prisma.unit.findUnique({
+      where: { id: options.unitId },
+      select: { type: true },
+    });
+
+    if (!unit) {
+      throw new NotFoundError('Unit not found');
+    }
+    where.AND.push({
+      template: {
+        type: {
+          in: unit.type,
+        },
+      },
+    });
+  } else if (options.userId) {
+    // User-based query
+    where.AND.push({
+      OR: [
+        { assignee_procurement_id: options.userId },
+        { assignee_contract_id: options.userId },
+      ],
+    });
+  }
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where: where,
       skip: (page - 1) * limit,
       take: limit,
-      orderBy: [{ is_urgent: 'desc' }, { created_at: 'asc' }],
+      orderBy: [
+        { is_urgent: 'desc' },
+        { created_at: 'asc' },
+        { status: 'asc' },
+      ],
     }),
     prisma.project.count({ where }),
   ]);
