@@ -323,6 +323,56 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
   });
 };
 
+export const changeAssignee = async (data: UpdateStatusProjectDto) => {
+  const { id, userId } = data;
+  if (!userId) {
+    throw new BadRequestError('No new assignee ID provided for update');
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: {
+      template: {
+        select: {
+          type: true,
+        },
+      },
+    },
+  });
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+
+  if (project.status !== ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE &&
+      project.status !== ProjectStatus.CONTRACT_WAITING_ACCEPTANCE) {
+    throw new BadRequestError('Assignee can only be changed when project is in WAITING_ACCEPTANCE status');
+  }
+  const { assigneeField } = checkProjectStatusToAssign(project);
+
+  return await prisma.$transaction(async (tx) => {
+    const oldAssignee = (project as any)[assigneeField];
+    await UserService.getById(userId);
+
+    const updated = await tx.project.update({
+      where: { id },
+      data: {
+        [assigneeField]: userId,
+      },
+      select: { id: true, status: true, [assigneeField]: true },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: id,
+        action: LogActionType.ASSIGNEE_UPDATE,
+        old_value: { assignee: oldAssignee },
+        new_value: { assignee: userId },
+        changed_by: 'system',
+      },
+    });
+    return { data: updated };
+  });
+};
+
 export const claimProject = async (data: UpdateStatusProjectDto) => {
   const { id, userId } = data;
   const project = await prisma.project.findUnique({

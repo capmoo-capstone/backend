@@ -69,6 +69,15 @@ export const assignProjects = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
+export const changeAssignee = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = req.params;
+  const data = { id, userId: req.body.userId };
+  const project = await ProjectService.changeAssignee(data);
+  res.status(200).json(project);
+};
+
 export const acceptProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
