@@ -34,6 +34,11 @@ export interface PaginatedProjects {
   data: Array<Partial<Project>>;
 }
 
+export interface ProjectsListResponse {
+  total: number;
+  data: Array<Partial<Project>>;
+}
+
 const updateStatusProjectSchema = z.object({
   id: z.uuid(),
   userId: z.string(),

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as ProjectService from '../service/project.service';
+import { open } from 'node:fs';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
@@ -24,32 +25,19 @@ export const getUnassignedByUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.params;
-  const { page, limit } = req.query;
-  if (!unitId) {
-    return res
-      .status(400)
-      .json({ status: 'error', message: 'Unit ID is required' });
-  }
-
-  const projects = await ProjectService.getUnassignedProjectsByUnit(
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10,
-    unitId
-  );
+  const projects = await ProjectService.getUnassignedProjectsByUnit(unitId);
   res.status(200).json(projects);
 };
 
 export const getAssignedProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, date, userId, unitId } = req.query;
+  const { date, userId, unitId } = req.query;
   const targetDate = date ? new Date(date as string) : new Date();
-  const projects = await ProjectService.getAssignedProjects(
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10,
-    targetDate,
-    { userId: userId as string, unitId: unitId as string }
-  );
+  const projects = await ProjectService.getAssignedProjects(targetDate, {
+    userId: userId as string,
+    unitId: unitId as string,
+  });
   res.status(200).json(projects);
 };
 

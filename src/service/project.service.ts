@@ -9,6 +9,7 @@ import {
   CancelProjectDto,
   CreateProjectDto,
   PaginatedProjects,
+  ProjectsListResponse,
   UpdateProjectDto,
   UpdateStatusProjectDto,
   UpdateStatusProjectsDto,
@@ -83,10 +84,8 @@ export const getById = async (id: string): Promise<Project> => {
 };
 
 export const getUnassignedProjectsByUnit = async (
-  page: number,
-  limit: number,
   unitId: string
-): Promise<PaginatedProjects> => {
+): Promise<ProjectsListResponse> => {
   const unit = await UnitService.getById(unitId);
   const where: any = {
     status: {
@@ -105,28 +104,40 @@ export const getUnassignedProjectsByUnit = async (
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where: where,
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: [{ is_urgent: 'desc' }, { created_at: 'asc' }],
+      orderBy: [{ status: 'asc' }, { receive_no: 'desc' }],
+      select: {
+        id: true,
+        receive_no: true,
+        title: true,
+        status: true,
+        request_unit_id: true,
+        budget: true,
+        procurement_type: true,
+        template: { select: { type: true } },
+        is_urgent: true,
+        expected_approval_date: true,
+        created_at: true,
+      },
     }),
     prisma.project.count({ where }),
   ]);
 
   return {
     total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
-    data: projects,
+    data: projects.map((project) => {
+      return {
+        ...project,
+        template_type: project.template.type,
+        template: undefined,
+      };
+    }),
   };
 };
 
 export const getAssignedProjects = async (
-  page: number,
-  limit: number,
   targetDate: Date,
   options: { unitId?: string; userId?: string }
-): Promise<PaginatedProjects> => {
+): Promise<ProjectsListResponse> => {
   if (!options?.unitId && !options?.userId) {
     throw new BadRequestError('Either unitId or userId must be provided');
   }
@@ -214,23 +225,23 @@ export const getAssignedProjects = async (
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where: where,
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: [
-        { is_urgent: 'desc' },
-        { created_at: 'asc' },
-        { status: 'asc' },
-      ],
+      orderBy: [{ status: 'asc' }, { receive_no: 'desc' }],
       select: {
         id: true,
         receive_no: true,
         title: true,
         status: true,
         request_unit_id: true,
-        template: { select: { name: true, type: true } },
+        budget: true,
+        procurement_type: true,
+        template: { select: { type: true } },
+        current_step: {
+          select: { name: true, order: true },
+        },
         assignee_procurement: { select: { id: true, full_name: true } },
         assignee_contract: { select: { id: true, full_name: true } },
         is_urgent: true,
+        expected_approval_date: true,
         created_at: true,
       },
     }),
@@ -239,10 +250,26 @@ export const getAssignedProjects = async (
 
   return {
     total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
-    data: projects,
+    data: projects.map((project) => {
+      return {
+        ...project,
+        template_type: project.template.type,
+        current_step_name: project.current_step?.name || null,
+        current_step_order: project.current_step?.order || null,
+        assignee_id:
+          project.template.type === UnitResponsibleType.CONTRACT
+            ? project.assignee_contract?.id || null
+            : project.assignee_procurement?.id || null,
+        assignee_full_name:
+          project.template.type === UnitResponsibleType.CONTRACT
+            ? project.assignee_contract?.full_name || null
+            : project.assignee_procurement?.full_name || null,
+        template: undefined,
+        current_step: undefined,
+        assignee_procurement: undefined,
+        assignee_contract: undefined,
+      };
+    }),
   };
 };
 
@@ -343,9 +370,13 @@ export const changeAssignee = async (data: UpdateStatusProjectDto) => {
     throw new NotFoundError('Project not found');
   }
 
-  if (project.status !== ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE &&
-      project.status !== ProjectStatus.CONTRACT_WAITING_ACCEPTANCE) {
-    throw new BadRequestError('Assignee can only be changed when project is in WAITING_ACCEPTANCE status');
+  if (
+    project.status !== ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE &&
+    project.status !== ProjectStatus.CONTRACT_WAITING_ACCEPTANCE
+  ) {
+    throw new BadRequestError(
+      'Assignee can only be changed when project is in WAITING_ACCEPTANCE status'
+    );
   }
   const { assigneeField } = checkProjectStatusToAssign(project);
 
