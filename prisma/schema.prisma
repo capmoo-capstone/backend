@@ -27,19 +27,15 @@ enum UserRole {
 }
 
 enum ProjectStatus {
-  // Phase 1: Procurement
-  PROCUREMENT_UNASSIGNED
-  PROCUREMENT_WAITING_ACCEPTANCE
-  PROCUREMENT_IN_PROGRESS
-
-  // Phase 2: Contract
-  CONTRACT_UNASSIGNED
-  CONTRACT_WAITING_ACCEPTANCE
-  CONTRACT_IN_PROGRESS
-
-  // Final
-  APPROVED
+  UNASSIGNED
+  WAITING_ACCEPT
+  IN_PROGRESS
+  WAITING_CANCEL
   CANCELLED
+  NOT_EXPORT
+  EXPORTED
+  CLOSED
+  REQUEST_EDIT
 }
 
 enum UnitResponsibleType {
@@ -68,7 +64,6 @@ enum ProcurementType {
 
 enum SubmissionStatus {
   SUBMITTED
-  UNDER_REVIEW
   ACCEPTED
   REJECTED
 }
@@ -87,12 +82,14 @@ model Department {
 }
 
 model Unit {
-  id      String                @id @default(uuid())
-  dept_id String
-  name    String
-  type    UnitResponsibleType[]
-  dept    Department            @relation(fields: [dept_id], references: [id])
-  users   User[]
+  id       String                @id @default(uuid())
+  dept_id  String
+  name     String
+  type     UnitResponsibleType[]
+  
+  dept     Department            @relation(fields: [dept_id], references: [id])
+  users    User[]
+  projects Project[]
 
   @@map("units")
 }
@@ -109,7 +106,7 @@ model User {
   delegated_user_id String?
   created_at        DateTime  @default(now())
 
-  department Department? @relation(fields: [dept_id], references: [id])
+  dept Department? @relation(fields: [dept_id], references: [id])
   unit       Unit?       @relation(fields: [unit_id], references: [id])
 
   // Self-relation for delegation
@@ -129,7 +126,7 @@ model AllowedRole {
   dept_id String
   role    UserRole
 
-  department Department @relation(fields: [dept_id], references: [id])
+  dept Department @relation(fields: [dept_id], references: [id])
 
   @@unique([dept_id, role])
   @@map("allowed_roles")
@@ -139,13 +136,15 @@ model Project {
   id                      String          @id @default(uuid())
   receive_no              String
   title                   String
+  description             String?
   budget                  Decimal         @db.Decimal(18, 2)
   pr_no                   String?
   po_no                   String?
+  less_no                 String?
   status                  ProjectStatus
-  request_unit_id         String?
+  requesting_unit_id      String?
   procurement_type        ProcurementType
-  current_templates_id    String
+  current_template_id     String
   current_step_id         String?
   assignee_procurement_id String?
   assignee_contract_id    String?
@@ -162,11 +161,12 @@ model Project {
   updated_at              DateTime?       @updatedAt
 
   // Relations
-  template             WorkflowTemplate @relation(fields: [current_templates_id], references: [id])
+  current_template     WorkflowTemplate @relation(fields: [current_template_id], references: [id])
   current_step         WorkflowStep?    @relation(fields: [current_step_id], references: [id])
   creator              User             @relation("ProjectCreator", fields: [created_by], references: [id])
   assignee_procurement User?            @relation("ProcurementAssignee", fields: [assignee_procurement_id], references: [id])
   assignee_contract    User?            @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
+  requesting_unit      Unit?            @relation(fields: [requesting_unit_id], references: [id])
 
   project_cancellation ProjectCancellation[]
   project_histories    ProjectHistory[]
@@ -180,6 +180,7 @@ model ProjectCancellation {
   id           String   @id @default(uuid())
   project_id   String
   reason       String
+  is_cancelled  Boolean  @default(false)
   cancelled_by String
   cancelled_at DateTime @default(now())
 
@@ -189,14 +190,14 @@ model ProjectCancellation {
 }
 
 model ProjectHistory {
-  id         String   @id @default(uuid())
+  id         String        @id @default(uuid())
   project_id String
   action     LogActionType
   old_value  Json
   new_value  Json
   comment    String?
   changed_by String
-  changed_at DateTime @default(now())
+  changed_at DateTime      @default(now())
 
   project Project @relation(fields: [project_id], references: [id])
 

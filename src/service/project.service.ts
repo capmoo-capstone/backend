@@ -28,7 +28,7 @@ export const listProjects = async (
     prisma.project.findMany({
       skip: skip,
       take: limit,
-      orderBy: { id: 'desc' },
+      orderBy: [{ receive_no: 'desc' }],
     }),
     prisma.project.count(),
   ]);
@@ -42,15 +42,26 @@ export const listProjects = async (
   };
 };
 
-export const createProject = async (
-  data: CreateProjectDto
-): Promise<Project> => {
+export const createProject = async (data: CreateProjectDto): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const receiveNumber = ((await tx.project.count()) + 1).toString();
+    const template = await tx.workflowTemplate.findFirst({
+      where: { type: data.procurement_type as UnitResponsibleType },
+      select: { id: true },
+    });
+    if (!template) {
+      throw new BadRequestError(
+        `No workflow template found for procurement type ${data.procurement_type}`
+      );
+    }
+
     return await tx.project.create({
       data: {
-        receive_no: receiveNumber.toString(),
         ...data,
+        status: ProjectStatus.UNASSIGNED,
+        current_template_id: template?.id || '',
+        receive_no: receiveNumber,
+        created_by: '',
       },
     });
   });
@@ -60,7 +71,7 @@ export const getById = async (id: string): Promise<Project> => {
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
-      template: {
+      current_template: {
         select: {
           type: true,
         },
@@ -88,13 +99,8 @@ export const getUnassignedProjectsByUnit = async (
 ): Promise<ProjectsListResponse> => {
   const unit = await UnitService.getById(unitId);
   const where: any = {
-    status: {
-      in: [
-        ProjectStatus.PROCUREMENT_UNASSIGNED,
-        ProjectStatus.CONTRACT_UNASSIGNED,
-      ],
-    },
-    template: {
+    status: { in: [ProjectStatus.UNASSIGNED] },
+    current_template: {
       type: {
         in: unit.type,
       },
@@ -110,10 +116,12 @@ export const getUnassignedProjectsByUnit = async (
         receive_no: true,
         title: true,
         status: true,
-        request_unit_id: true,
+        requesting_unit: {
+          select: { name: true, dept: { select: { name: true } } },
+        },
         budget: true,
         procurement_type: true,
-        template: { select: { type: true } },
+        current_template: { select: { type: true } },
         is_urgent: true,
         expected_approval_date: true,
         created_at: true,
@@ -127,8 +135,8 @@ export const getUnassignedProjectsByUnit = async (
     data: projects.map((project) => {
       return {
         ...project,
-        template_type: project.template.type,
-        template: undefined,
+        template_type: project.current_template.type,
+        current_template: undefined,
       };
     }),
   };
@@ -153,10 +161,7 @@ export const getAssignedProjects = async (
         OR: [
           {
             status: {
-              in: [
-                ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
-                ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
-              ],
+              in: [ProjectStatus.WAITING_ACCEPT],
             },
           },
           {
@@ -171,20 +176,10 @@ export const getAssignedProjects = async (
                   },
                   { changed_at: { gte: startOfDay, lte: endOfDay } },
                   {
-                    OR: [
-                      {
-                        new_value: {
-                          path: ['status'],
-                          equals: ProjectStatus.PROCUREMENT_IN_PROGRESS,
-                        },
-                      },
-                      {
-                        new_value: {
-                          path: ['status'],
-                          equals: ProjectStatus.CONTRACT_IN_PROGRESS,
-                        },
-                      },
-                    ],
+                    new_value: {
+                      path: ['status'],
+                      equals: ProjectStatus.IN_PROGRESS,
+                    },
                   },
                 ],
               },
@@ -231,10 +226,12 @@ export const getAssignedProjects = async (
         receive_no: true,
         title: true,
         status: true,
-        request_unit_id: true,
+        requesting_unit: {
+          select: { name: true, dept: { select: { name: true } } },
+        },
         budget: true,
         procurement_type: true,
-        template: { select: { type: true } },
+        current_template: { select: { type: true } },
         current_step: {
           select: { name: true, order: true },
         },
@@ -251,19 +248,17 @@ export const getAssignedProjects = async (
   return {
     total,
     data: projects.map((project) => {
+      const assigneeField =
+        project.current_template.type === UnitResponsibleType.CONTRACT
+          ? 'assignee_contract'
+          : 'assignee_procurement';
       return {
         ...project,
-        template_type: project.template.type,
+        template_type: project.current_template.type,
         current_step_name: project.current_step?.name || null,
         current_step_order: project.current_step?.order || null,
-        assignee_id:
-          project.template.type === UnitResponsibleType.CONTRACT
-            ? project.assignee_contract?.id || null
-            : project.assignee_procurement?.id || null,
-        assignee_full_name:
-          project.template.type === UnitResponsibleType.CONTRACT
-            ? project.assignee_contract?.full_name || null
-            : project.assignee_procurement?.full_name || null,
+        assignee_id: (project as any)[assigneeField].id || null,
+        assignee_full_name: (project as any)[assigneeField].full_name || null,
         template: undefined,
         current_step: undefined,
         assignee_procurement: undefined,
@@ -271,28 +266,6 @@ export const getAssignedProjects = async (
       };
     }),
   };
-};
-
-const checkProjectStatusToAssign = (
-  project: Project & { template: { type: UnitResponsibleType } }
-) => {
-  const assigneeField =
-    project.template.type === UnitResponsibleType.CONTRACT
-      ? 'assignee_contract_id'
-      : 'assignee_procurement_id';
-  const nextStatus =
-    project.template.type === UnitResponsibleType.CONTRACT
-      ? [
-          ProjectStatus.CONTRACT_UNASSIGNED,
-          ProjectStatus.CONTRACT_WAITING_ACCEPTANCE,
-          ProjectStatus.CONTRACT_IN_PROGRESS,
-        ]
-      : [
-          ProjectStatus.PROCUREMENT_UNASSIGNED,
-          ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE,
-          ProjectStatus.PROCUREMENT_IN_PROGRESS,
-        ];
-  return { assigneeField, nextStatus };
 };
 
 export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
@@ -304,17 +277,20 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
       const project = await tx.project.findUnique({
         where: { id },
         include: {
-          template: true,
+          current_template: true,
         },
       });
 
       if (!project) {
         throw new BadRequestError(`Project ${id} not found`);
       }
-      const { assigneeField, nextStatus } = checkProjectStatusToAssign(project);
+      const assigneeField =
+        project.current_template?.type === UnitResponsibleType.CONTRACT
+          ? 'assignee_contract_id'
+          : 'assignee_procurement_id';
       await UserService.getById(userId);
 
-      if (project.status !== nextStatus[0]) {
+      if (project.status !== ProjectStatus.UNASSIGNED) {
         throw new BadRequestError(`Project ${id} is not unassigned`);
       }
       if ((project as any)[assigneeField] !== null) {
@@ -324,12 +300,12 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
       const updated = await tx.project.update({
         where: {
           id,
-          status: nextStatus[0],
+          status: ProjectStatus.UNASSIGNED,
           [assigneeField]: null,
         },
         data: {
           [assigneeField]: userId,
-          status: nextStatus[1],
+          status: ProjectStatus.WAITING_ACCEPT,
         },
         select: { id: true, status: true, [assigneeField]: true },
       });
@@ -359,7 +335,7 @@ export const changeAssignee = async (data: UpdateStatusProjectDto) => {
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
-      template: {
+      current_template: {
         select: {
           type: true,
         },
@@ -370,15 +346,15 @@ export const changeAssignee = async (data: UpdateStatusProjectDto) => {
     throw new NotFoundError('Project not found');
   }
 
-  if (
-    project.status !== ProjectStatus.PROCUREMENT_WAITING_ACCEPTANCE &&
-    project.status !== ProjectStatus.CONTRACT_WAITING_ACCEPTANCE
-  ) {
+  if (project.status !== ProjectStatus.WAITING_ACCEPT) {
     throw new BadRequestError(
       'Assignee can only be changed when project is in WAITING_ACCEPTANCE status'
     );
   }
-  const { assigneeField } = checkProjectStatusToAssign(project);
+  const assigneeField =
+    project.current_template?.type === UnitResponsibleType.CONTRACT
+      ? 'assignee_contract_id'
+      : 'assignee_procurement_id';
 
   return await prisma.$transaction(async (tx) => {
     const oldAssignee = (project as any)[assigneeField];
@@ -409,16 +385,19 @@ export const claimProject = async (data: UpdateStatusProjectDto) => {
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
-      template: true,
+      current_template: true,
     },
   });
 
   if (!project) {
     throw new NotFoundError('Project not found');
   }
-  const { assigneeField, nextStatus } = checkProjectStatusToAssign(project);
+  const assigneeField =
+    project.current_template?.type === UnitResponsibleType.CONTRACT
+      ? 'assignee_contract_id'
+      : 'assignee_procurement_id';
 
-  if (project.status !== nextStatus[0]) {
+  if (project.status !== ProjectStatus.UNASSIGNED) {
     throw new BadRequestError('This project cannot be claimed');
   }
 
@@ -426,12 +405,12 @@ export const claimProject = async (data: UpdateStatusProjectDto) => {
     const updated = await tx.project.update({
       where: {
         id,
-        status: nextStatus[0],
+        status: ProjectStatus.UNASSIGNED,
         [assigneeField]: null,
       },
       data: {
         [assigneeField]: userId,
-        status: nextStatus[2],
+        status: ProjectStatus.IN_PROGRESS,
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
@@ -458,14 +437,17 @@ export const acceptProjects = async (data: UpdateStatusProjectsDto) => {
       const project = await tx.project.findUnique({
         where: { id },
         include: {
-          template: true,
+          current_template: true,
         },
       });
       if (!project) {
         throw new NotFoundError(`Project ${id} not found`);
       }
-      const { assigneeField, nextStatus } = checkProjectStatusToAssign(project);
-      if (project.status !== nextStatus[1]) {
+      const assigneeField =
+        project.current_template?.type === UnitResponsibleType.CONTRACT
+          ? 'assignee_contract_id'
+          : 'assignee_procurement_id';
+      if (project.status !== ProjectStatus.WAITING_ACCEPT) {
         throw new BadRequestError(
           `Project ${id} cannot be accepted at this status`
         );
@@ -476,11 +458,11 @@ export const acceptProjects = async (data: UpdateStatusProjectsDto) => {
       const updated = await tx.project.update({
         where: {
           id,
-          status: nextStatus[1],
+          status: ProjectStatus.WAITING_ACCEPT,
           [assigneeField]: userId,
         },
         data: {
-          status: nextStatus[2],
+          status: ProjectStatus.IN_PROGRESS,
         },
         select: { id: true, status: true, [assigneeField]: true },
       });

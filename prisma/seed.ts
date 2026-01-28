@@ -14,8 +14,8 @@ async function main() {
   // 1. Create Department
   const deptPCM = await prisma.department.create({
     data: {
-      name: 'Office of Procurement',
-      code: 'PROCUREMENT',
+      name: 'Office of Supply',
+      code: 'SUPPLY',
       allowed_role: {
         create: [
           { role: UserRole.ADMIN },
@@ -35,7 +35,6 @@ async function main() {
       code: 'REGISTRATION',
       allowed_role: {
         create: [
-          { role: UserRole.ADMIN },
           { role: UserRole.HEAD_OF_DEPARTMENT },
           { role: UserRole.HEAD_OF_UNIT },
           { role: UserRole.GENERAL_STAFF },
@@ -50,7 +49,6 @@ async function main() {
       code: 'ENGINEERING',
       allowed_role: {
         create: [
-          { role: UserRole.ADMIN },
           { role: UserRole.HEAD_OF_DEPARTMENT },
           { role: UserRole.HEAD_OF_UNIT },
           { role: UserRole.REPRESENTATIVE },
@@ -261,40 +259,34 @@ async function main() {
       title: 'New Server Purchase 2026',
       receive_no: '1',
       budget: 150000.0,
-      status: ProjectStatus.PROCUREMENT_UNASSIGNED,
+      status: ProjectStatus.UNASSIGNED,
       procurement_type: ProcurementType.LT500K,
-      current_templates_id: procurement1.id,
+      current_template_id: procurement1.id,
       created_by: adminUser.id,
       is_urgent: true,
-      expect_approved_date: new Date('2026-02-15'),
-      vendor_name: 'TechCorp Solutions',
-      vendor_email: 'sales@techcorp.com',
+      expected_approval_date: new Date('2026-02-15'),
     },
     {
       title: 'New Server Purchase 2026/2',
       receive_no: '2',
       budget: 750000.0,
-      status: ProjectStatus.PROCUREMENT_UNASSIGNED,
+      status: ProjectStatus.UNASSIGNED,
       procurement_type: ProcurementType.MT500K,
-      current_templates_id: procurement2.id,
+      current_template_id: procurement2.id,
       created_by: adminUser.id,
       is_urgent: false,
-      vendor_name: 'Spectra Tech Inc.',
-      vendor_email: 'sales@spectratech.com',
     },
     {
       title: 'Cloud Purchase 2026',
       receive_no: '3',
       budget: 300000.0,
-      status: ProjectStatus.PROCUREMENT_IN_PROGRESS,
+      status: ProjectStatus.IN_PROGRESS,
       procurement_type: ProcurementType.LT500K,
-      current_templates_id: procurement1.id,
+      current_template_id: procurement1.id,
       current_step_id: procurement1.steps[1].id,
       created_by: adminUser.id,
       assignee_procurement_id: staffUser.id,
       is_urgent: false,
-      vendor_name: 'ProCloud Services',
-      vendor_email: 'sales@procloudservices.com',
     },
   ];
 
@@ -311,7 +303,7 @@ async function main() {
       project_id: projects[0].id,
       step_id: procurement1.steps[0].id,
       submission_round: '1',
-      status: SubmissionStatus.SUBMITTED,
+      status: SubmissionStatus.ACCEPTED,
       submitted_by: adminUser.id,
       meta_data: { browser: 'Chrome', ip: '192.168.1.1' },
       documents: {
