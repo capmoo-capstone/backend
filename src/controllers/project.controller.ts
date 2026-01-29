@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import * as ProjectService from '../service/project.service';
-import { open } from 'node:fs';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']

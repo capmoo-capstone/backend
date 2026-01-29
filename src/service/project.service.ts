@@ -46,7 +46,7 @@ export const createProject = async (data: CreateProjectDto): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const receiveNumber = ((await tx.project.count()) + 1).toString();
     const template = await tx.workflowTemplate.findFirst({
-      where: { type: data.procurement_type as UnitResponsibleType },
+      where: { type: data.procurement_type },
       select: { id: true },
     });
     if (!template) {
@@ -59,7 +59,7 @@ export const createProject = async (data: CreateProjectDto): Promise<any> => {
       data: {
         ...data,
         status: ProjectStatus.UNASSIGNED,
-        current_template_id: template?.id || '',
+        current_template_id: template.id,
         receive_no: receiveNumber,
         created_by: '',
       },
@@ -201,7 +201,7 @@ export const getAssignedProjects = async (
       throw new NotFoundError('Unit not found');
     }
     where.AND.push({
-      template: {
+      current_template: {
         type: {
           in: unit.type,
         },
@@ -252,14 +252,15 @@ export const getAssignedProjects = async (
         project.current_template.type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
+      const assignee = (project as any)[assigneeField];
       return {
         ...project,
         template_type: project.current_template.type,
         current_step_name: project.current_step?.name || null,
         current_step_order: project.current_step?.order || null,
-        assignee_id: (project as any)[assigneeField].id || null,
-        assignee_full_name: (project as any)[assigneeField].full_name || null,
-        template: undefined,
+        assignee_id: assignee?.id || null,
+        assignee_full_name: assignee?.full_name || null,
+        current_template: undefined,
         current_step: undefined,
         assignee_procurement: undefined,
         assignee_contract: undefined,
@@ -348,7 +349,7 @@ export const changeAssignee = async (data: UpdateStatusProjectDto) => {
 
   if (project.status !== ProjectStatus.WAITING_ACCEPT) {
     throw new BadRequestError(
-      'Assignee can only be changed when project is in WAITING_ACCEPTANCE status'
+      'Assignee can only be changed when project is in WAITING_ACCEPT status'
     );
   }
   const assigneeField =

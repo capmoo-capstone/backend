@@ -8,7 +8,7 @@ const CreateProjectSchema = z.object({
   budget: z.number(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),
-  request_unit_id: z.string().optional(),
+  requesting_unit_id: z.string().optional(),
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.boolean().default(false),
   expected_approval_date: z.date().optional(),
