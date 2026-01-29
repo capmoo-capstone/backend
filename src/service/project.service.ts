@@ -4,6 +4,7 @@ import {
   Project,
   ProjectStatus,
   UnitResponsibleType,
+  UserRole,
 } from '../../generated/prisma/client';
 import {
   CancelProjectDto,
@@ -17,20 +18,23 @@ import {
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
 import * as UnitService from './unit.service';
+import { ProjectWhereInput } from '../../generated/prisma/models';
 
 export const listProjects = async (
   page: number,
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
+  const where: ProjectWhereInput = {};
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
+      where,
       skip: skip,
       take: limit,
       orderBy: [{ receive_no: 'desc' }],
     }),
-    prisma.project.count(),
+    prisma.project.count({ where }),
   ]);
 
   return {
@@ -42,7 +46,10 @@ export const listProjects = async (
   };
 };
 
-export const createProject = async (data: CreateProjectDto): Promise<any> => {
+export const createProject = async (
+  userId: string,
+  data: CreateProjectDto
+): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const receiveNumber = ((await tx.project.count()) + 1).toString();
     const template = await tx.workflowTemplate.findFirst({
@@ -61,7 +68,7 @@ export const createProject = async (data: CreateProjectDto): Promise<any> => {
         status: ProjectStatus.UNASSIGNED,
         current_template_id: template.id,
         receive_no: receiveNumber,
-        created_by: '',
+        created_by: userId,
       },
     });
   });
@@ -143,13 +150,9 @@ export const getUnassignedProjectsByUnit = async (
 };
 
 export const getAssignedProjects = async (
-  targetDate: Date,
-  options: { unitId?: string; userId?: string }
+  user: any,
+  targetDate: Date
 ): Promise<ProjectsListResponse> => {
-  if (!options?.unitId && !options?.userId) {
-    throw new BadRequestError('Either unitId or userId must be provided');
-  }
-
   const startOfDay = new Date(targetDate);
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(targetDate);
@@ -190,10 +193,10 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (options.unitId) {
+  if (user.role === UserRole.HEAD_OF_UNIT) {
     // Unit-based query
     const unit = await prisma.unit.findUnique({
-      where: { id: options.unitId },
+      where: { id: user.unit.id },
       select: { type: true },
     });
 
@@ -207,12 +210,12 @@ export const getAssignedProjects = async (
         },
       },
     });
-  } else if (options.userId) {
+  } else if (user.role === UserRole.GENERAL_STAFF) {
     // User-based query
     where.AND.push({
       OR: [
-        { assignee_procurement_id: options.userId },
-        { assignee_contract_id: options.userId },
+        { assignee_procurement_id: user.id },
+        { assignee_contract_id: user.id },
       ],
     });
   }

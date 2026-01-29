@@ -23,20 +23,23 @@ export const getById = async (req: Request, res: Response) => {
 export const getUnassignedByUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId } = req.params;
-  const projects = await ProjectService.getUnassignedProjectsByUnit(unitId);
+  const { unit } = (req as any).user;
+  const projects = await ProjectService.getUnassignedProjectsByUnit(
+    unit.id as string
+  );
   res.status(200).json(projects);
 };
 
 export const getAssignedProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { date, userId, unitId } = req.query;
+  const { date } = req.query;
+  const { id, role, unit, dept } = (req as any).user;
   const targetDate = date ? new Date(date as string) : new Date();
-  const projects = await ProjectService.getAssignedProjects(targetDate, {
-    userId: userId as string,
-    unitId: unitId as string,
-  });
+  const projects = await ProjectService.getAssignedProjects(
+    { id, role, unit, dept },
+    targetDate
+  );
   res.status(200).json(projects);
 };
 
@@ -44,7 +47,11 @@ export const createProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
-  const project = await ProjectService.createProject(req.body);
+  const user = (req as any).user;
+  const project = await ProjectService.createProject(
+    user.id as string,
+    req.body
+  );
   res.status(201).json(project);
 };
 

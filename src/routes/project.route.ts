@@ -4,7 +4,7 @@ import * as projectController from '../controllers/project.controller';
 const router = Router();
 
 router.get('/', projectController.getAll);
-router.get('/unassigned/:unitId', projectController.getUnassignedByUnit);
+router.get('/unassigned', projectController.getUnassignedByUnit);
 router.get('/assigned', projectController.getAssignedProjects);
 router.post('/create', projectController.createProject);
 router.patch('/assign', projectController.assignProjects);
