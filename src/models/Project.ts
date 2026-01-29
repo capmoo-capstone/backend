@@ -3,26 +3,15 @@ import { ProcurementType, ProjectStatus } from '../../generated/prisma/enums';
 import { Project } from '../../generated/prisma/client';
 
 const CreateProjectSchema = z.object({
-  id: z.string(),
-  status: z.enum(ProjectStatus),
   title: z.string(),
+  description: z.string().optional(),
   budget: z.number(),
   pr_no: z.string().optional(),
-  po_no: z.string().optional(),
-  request_unit_id: z.string().optional(),
+  less_no: z.string().optional(),
+  requesting_unit_id: z.string().optional(),
   procurement_type: z.enum(ProcurementType),
-  current_templates_id: z.string(),
-  contract_no: z.string().optional(),
-  migo_no: z.string().optional(),
-  vendor_name: z.string().optional(),
-  vendor_tax_id: z.string().optional(),
-  vendor_email: z.string().optional(),
   is_urgent: z.boolean().default(false),
   expected_approval_date: z.date().optional(),
-  created_by: z.string(),
-  created_at: z.date(),
-  update_by: z.string().optional(),
-  updated_at: z.date(),
 });
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 
@@ -31,7 +20,12 @@ export interface PaginatedProjects {
   page: number;
   pageSize: number;
   totalPages: number;
-  data: Array<Project>;
+  data: Array<Partial<Project>>;
+}
+
+export interface ProjectsListResponse {
+  total: number;
+  data: Array<Partial<Project>>;
 }
 
 const updateStatusProjectSchema = z.object({

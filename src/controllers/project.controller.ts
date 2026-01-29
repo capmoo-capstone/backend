@@ -24,36 +24,19 @@ export const getUnassignedByUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.params;
-  const { page, limit } = req.query;
-  if (!unitId) {
-    return res
-      .status(400)
-      .json({ status: 'error', message: 'Unit ID is required' });
-  }
-
-  const projects = await ProjectService.getUnassignedProjectsByUnit(
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10,
-    unitId
-  );
+  const projects = await ProjectService.getUnassignedProjectsByUnit(unitId);
   res.status(200).json(projects);
 };
 
-export const getAssignedProjectsByUnit = async (
-  req: Request,
-  res: Response
-) => {
+export const getAssignedProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId } = req.params;
-  const { page, limit, date } = req.query;
+  const { date, userId, unitId } = req.query;
   const targetDate = date ? new Date(date as string) : new Date();
-  const projects = await ProjectService.getAssignedProjectsByUnitAndDate(
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10,
-    unitId,
-    targetDate
-  );
+  const projects = await ProjectService.getAssignedProjects(targetDate, {
+    userId: userId as string,
+    unitId: unitId as string,
+  });
   res.status(200).json(projects);
 };
 
@@ -70,6 +53,15 @@ export const assignProjects = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const { data } = req.body;
   const project = await ProjectService.assignProjectsToUser(data);
+  res.status(200).json(project);
+};
+
+export const changeAssignee = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = req.params;
+  const data = { id, userId: req.body.userId };
+  const project = await ProjectService.changeAssignee(data);
   res.status(200).json(project);
 };
 
