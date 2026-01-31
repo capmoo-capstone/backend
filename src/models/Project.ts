@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ProcurementType, ProjectStatus } from '../../generated/prisma/enums';
+import { ProcurementType } from '../../generated/prisma/enums';
 import { Project } from '../../generated/prisma/client';
 
-const CreateProjectSchema = z.object({
+export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   budget: z.number(),
@@ -28,25 +28,45 @@ export interface ProjectsListResponse {
   data: Array<Partial<Project>>;
 }
 
-const updateStatusProjectSchema = z.object({
+export const UpdateStatusProjectSchema = z.object({
   id: z.uuid(),
-  userId: z.string(),
+  userId: z.uuid(),
 });
-export type UpdateStatusProjectDto = z.infer<typeof updateStatusProjectSchema>;
+export type UpdateStatusProjectDto = z.infer<typeof UpdateStatusProjectSchema>;
 
-const updateStatusProjectsSchema = z.array(updateStatusProjectSchema);
+export const UpdateStatusProjectsSchema = z.array(UpdateStatusProjectSchema);
 export type UpdateStatusProjectsDto = z.infer<
-  typeof updateStatusProjectsSchema
+  typeof UpdateStatusProjectsSchema
 >;
 
-const cancelProjectSchema = z.object({
+export const AcceptProjectsSchema = z.object({
+  id: z.array(z.uuid()),
+  userId: z.uuid(),
+});
+export type AcceptProjectsDto = z.infer<typeof AcceptProjectsSchema>;
+
+export const CancelProjectSchema = z.object({
   id: z.uuid(),
   reason: z.string(),
 });
-export type CancelProjectDto = z.infer<typeof cancelProjectSchema>;
+export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
 
-const updateProjectSchema = z.object({
-  id: z.string(),
-  updateData: z.object(CreateProjectSchema.partial().shape),
+export const UpdateProjectSchema = z.object({
+  id: z.uuid(),
+  updateData: z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    budget: z.number().optional(),
+    pr_no: z.string().optional(),
+    po_no: z.string().optional(),
+    less_no: z.string().optional(),
+    requesting_unit_id: z.string().optional(),
+    procurement_type: z.enum(ProcurementType).optional(),
+    is_urgent: z.boolean().optional(),
+    expected_approval_date: z.date().optional(),
+    vendor_name: z.string().optional(),
+    vendor_email: z.string().optional(),
+    vendor_tax_id: z.string().optional(),
+  }),
 });
-export type UpdateProjectDto = z.infer<typeof updateProjectSchema>;
+export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
