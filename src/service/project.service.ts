@@ -1,9 +1,8 @@
 import { prisma } from '../config/prisma';
 import {
   LogActionType,
-  Project,
   ProjectStatus,
-  SubmissionStatus,
+  SubmissionType,
   UnitResponsibleType,
 } from '../../generated/prisma/client';
 import {
@@ -18,9 +17,6 @@ import {
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
 import * as UnitService from './unit.service';
-import { tr } from 'zod/locales';
-import { email } from 'zod';
-import { meta } from 'zod/v4/core';
 
 export const listProjects = async (
   page: number,
@@ -194,7 +190,7 @@ export const getById = async (id: string): Promise<any> => {
     }
 
     const submissionData = await prisma.projectSubmission.findMany({
-      where: { project_id: id },
+      where: { project_id: id, submission_type: SubmissionType.STAFF },
       orderBy: [{ submission_round: 'asc' }],
       include: {
         documents: {
@@ -211,8 +207,10 @@ export const getById = async (id: string): Promise<any> => {
       step_order: submission.step!.order,
       submission_round: submission.submission_round,
       status: submission.status,
+      type: submission.submission_type,
       submitted_by: submission.submit_user?.full_name ?? null,
       submitted_at: submission.submitted_at,
+      comment: submission.comment ?? null,
       action_by: submission.action?.full_name ?? null,
       action_at: submission.action_at,
       documents: submission.documents,
