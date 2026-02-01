@@ -453,11 +453,26 @@ export const acceptProjects = async (
     for (const id of data.id) {
       const project = await tx.project.findUnique({
         where: { id },
-        select: { id: true, status: true },
+        select: {
+          id: true,
+          status: true,
+          assignee_procurement_id: true,
+          assignee_contract_id: true,
+          current_template: true,
+        },
       });
 
       if (!project) {
         throw new NotFoundError(`Project ${id} not found`);
+      }
+
+      const assigneeField =
+        project.current_template?.type === UnitResponsibleType.CONTRACT
+          ? 'assignee_contract_id'
+          : 'assignee_procurement_id';
+
+      if (user.id !== project[assigneeField]) {
+        throw new BadRequestError(`You are not the assignee of project ${id}`);
       }
 
       if (project.status !== ProjectStatus.WAITING_ACCEPT) {
@@ -568,6 +583,8 @@ export const updateProjectData = async (
         changed_by: user.id,
       },
     });
+
+    return { data: updated };
   });
 };
 

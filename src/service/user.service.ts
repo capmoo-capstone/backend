@@ -16,7 +16,7 @@ export const listUsers = async (
   let data: Partial<UsersListResponse> = {};
 
   if (unitId) {
-    const unit = await prisma.unit.findUnique({
+    const unit = await prisma.unit.findFirst({
       where: { id: unitId, dept_id: deptId },
       select: { id: true, name: true },
     });

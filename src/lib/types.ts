@@ -1,6 +1,8 @@
+import { UserRole } from '../../generated/prisma/client';
+
 export interface UserPayload {
   id: string;
-  role?: string;
+  role?: UserRole | null;
   unit?: {
     id: string;
     name: string;

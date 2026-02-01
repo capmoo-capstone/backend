@@ -93,7 +93,7 @@ export const authorize = (roles: UserRole[] = []) => {
       if (!req.user) {
         throw new UnauthorizedError('Not authenticated');
       }
-      if (roles.length > 0 && req.user.role) {
+      if (roles.length > 0 && req.user!.role) {
         if (req.user.role === UserRole.SUPER_ADMIN) {
           return next();
         }
@@ -115,7 +115,6 @@ export const authorizeForSupply = (roles: UserRole[] = []) => {
         throw new ForbiddenError('Access restricted to Supply department');
       }
       authorize(roles)(req, _res, next);
-      next();
     } catch (err) {
       next(err);
     }

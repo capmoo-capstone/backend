@@ -105,7 +105,6 @@ export const acceptProjects = async (req: Request, res: Response) => {
 
   const validatedData = AcceptProjectsSchema.parse({
     id: data.map((item: any) => item.id),
-    userId: id,
   });
   const project = await ProjectService.acceptProjects({ id }, validatedData);
   res.status(200).json(project);

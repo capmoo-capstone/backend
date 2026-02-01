@@ -11,7 +11,7 @@ export const CreateProjectSchema = z.object({
   requesting_unit_id: z.string().optional(),
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.boolean().default(false),
-  expected_approval_date: z.date().optional(),
+  expected_approval_date: z.coerce.date().optional(),
 });
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 
@@ -41,7 +41,6 @@ export type UpdateStatusProjectsDto = z.infer<
 
 export const AcceptProjectsSchema = z.object({
   id: z.array(z.uuid()),
-  userId: z.uuid(),
 });
 export type AcceptProjectsDto = z.infer<typeof AcceptProjectsSchema>;
 
@@ -63,7 +62,7 @@ export const UpdateProjectSchema = z.object({
     requesting_unit_id: z.string().optional(),
     procurement_type: z.enum(ProcurementType).optional(),
     is_urgent: z.boolean().optional(),
-    expected_approval_date: z.date().optional(),
+    expected_approval_date: z.coerce.date().optional(),
     vendor_name: z.string().optional(),
     vendor_email: z.string().optional(),
     vendor_tax_id: z.string().optional(),
