@@ -373,6 +373,7 @@ export const getAssignedProjects = async (
         is_urgent: true,
         expected_approval_date: true,
         created_at: true,
+        updated_at: true,
       },
     }),
     prisma.project.count({ where }),
@@ -415,6 +416,8 @@ export const assignProjectsToUser = async (
         select: {
           status: true,
           current_template: true,
+          assignee_contract_id: true,
+          assignee_procurement_id: true,
         },
       });
 
