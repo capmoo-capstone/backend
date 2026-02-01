@@ -9,7 +9,9 @@ type AuthUser = {
   username: string;
   role: UserRole | null;
   full_name: string;
-  unit_id: string | null;
+  unit: any;
+  dept: any;
+  delegate_to: string | null;
 };
 
 type AuthenticatedRequest = Request & { user?: AuthUser };
@@ -40,14 +42,37 @@ export const protect = async (
       username: string;
       role: UserRole | null;
       full_name: string;
+      unit_id: string | null;
+      dept_id: string | null;
     };
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: {
-        full_name: true,
+        id: true,
+        username: true,
         role: true,
-        unit_id: true,
+        full_name: true,
+        unit: {
+          select: { id: true, name: true },
+        },
+        dept: {
+          select: { id: true, name: true, code: true },
+        },
+        delegate_to: {
+          select: {
+            id: true,
+            username: true,
+            role: true,
+            full_name: true,
+            unit: {
+              select: { id: true, name: true },
+            },
+            dept: {
+              select: { id: true, name: true, code: true },
+            },
+          },
+        },
       },
     });
 
@@ -68,13 +93,14 @@ export const authorize = (roles: UserRole[] = []) => {
       if (!req.user) {
         throw new UnauthorizedError('Not authenticated');
       }
-
-      if (roles.length > 0) {
-        if (!req.user.role || !roles.includes(req.user.role)) {
+      if (roles.length > 0 && req.user!.role) {
+        if (req.user.role === UserRole.SUPER_ADMIN) {
+          return next();
+        }
+        if (!roles.includes(req.user.role)) {
           throw new ForbiddenError('Insufficient permissions');
         }
       }
-
       next();
     } catch (err) {
       next(err);
@@ -82,4 +108,18 @@ export const authorize = (roles: UserRole[] = []) => {
   };
 };
 
+export const authorizeForSupply = (roles: UserRole[] = []) => {
+  return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+    try {
+      if (req.user?.dept.code !== 'SUPPLY') {
+        throw new ForbiddenError('Access restricted to Supply department');
+      }
+      authorize(roles)(req, _res, next);
+    } catch (err) {
+      next(err);
+    }
+  };
+};
+
 export const requireRoles = authorize;
+export const requireSupplyRoles = authorizeForSupply;

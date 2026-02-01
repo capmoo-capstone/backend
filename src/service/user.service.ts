@@ -1,31 +1,66 @@
 import { prisma } from '../config/prisma';
-import { User, UserRole } from '../../generated/prisma/client';
-import { CreateUserDto } from '../models/User';
+import { Prisma, User, UserRole } from '../../generated/prisma/client';
+import {
+  CreateUserDto,
+  UsersListFilters,
+  UsersListResponse,
+} from '../models/User';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 
 export const listUsers = async (
-  page: number,
-  limit: number,
-  deptId?: string,
-  unitId?: string
-): Promise<any> => {
-  const skip = (page - 1) * limit;
+  filters: UsersListFilters
+): Promise<Partial<UsersListResponse>> => {
+  const { unitId, deptId } = filters;
+
+  const where: Prisma.UserWhereInput = {};
+  let data: Partial<UsersListResponse> = {};
+
+  if (unitId) {
+    const unit = await prisma.unit.findFirst({
+      where: { id: unitId, dept_id: deptId },
+      select: { id: true, name: true },
+    });
+    if (!unit) {
+      throw new NotFoundError('Unit not found');
+    }
+    where.unit_id = unitId;
+    data = {
+      id: unit.id,
+      entity_type: 'unit',
+      name: unit.name,
+    };
+  } else if (deptId) {
+    const department = await prisma.department.findUnique({
+      where: { id: deptId },
+      select: { id: true, name: true },
+    });
+    if (!department) {
+      throw new NotFoundError('Department not found');
+    }
+    where.dept_id = deptId;
+    data = {
+      id: department.id,
+      entity_type: 'department',
+      name: department.name,
+    };
+  }
 
   const [users, total] = await prisma.$transaction([
     prisma.user.findMany({
-      where: { dept_id: deptId, unit_id: unitId },
-      skip: skip,
-      take: limit,
       orderBy: { id: 'desc' },
+      where,
+      select: {
+        id: true,
+        full_name: true,
+        role: true,
+      },
     }),
-    prisma.user.count({ where: { dept_id: deptId, unit_id: unitId } }),
+    prisma.user.count({ where }),
   ]);
 
   return {
+    ...data,
     total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
     data: users,
   };
 };

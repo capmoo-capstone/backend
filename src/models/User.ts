@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UserRole } from '../../generated/prisma/client'; // Use the actual enum from Prisma
+import { User, UserRole } from '../../generated/prisma/client'; // Use the actual enum from Prisma
 
 const CreateUserSchema = z.object({
   username: z.string().min(3).max(30),
@@ -9,3 +9,16 @@ const CreateUserSchema = z.object({
   unit_id: z.uuid().nullish(),
 });
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;
+
+export interface UsersListFilters {
+  unitId?: string;
+  deptId?: string;
+}
+
+export interface UsersListResponse {
+  id: string;
+  entity_type: string;
+  name: string;
+  total: number;
+  data: Array<Partial<User>>;
+}
