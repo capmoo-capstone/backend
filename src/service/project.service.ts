@@ -77,16 +77,47 @@ export const createProject = async (
   });
 };
 
-export const getById = async (
-  user: UserPayload,
-  id: string
-): Promise<Project> => {
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      current_template: {
-        select: {
-          type: true,
+export const getById = async (user: UserPayload, id: string): Promise<any> => {
+  return await prisma.$transaction(async (tx) => {
+    const projectData = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        current_template: {
+          select: {
+            type: true,
+          },
+        },
+        current_step: {
+          select: {
+            name: true,
+            order: true,
+          },
+        },
+        requesting_unit: {
+          include: {
+            dept: { select: { id: true, name: true } },
+          },
+        },
+        assignee_procurement: {
+          include: {
+            unit: { select: { id: true, name: true } },
+          },
+        },
+        assignee_contract: {
+          include: {
+            unit: { select: { id: true, name: true } },
+          },
+        },
+        creator: {
+          include: {
+            unit: {
+              select: {
+                id: true,
+                name: true,
+                dept: { select: { id: true, name: true } },
+              },
+            },
+          },
         },
       },
     });
