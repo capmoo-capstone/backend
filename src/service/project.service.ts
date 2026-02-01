@@ -1,8 +1,8 @@
 import { prisma } from '../config/prisma';
 import {
   LogActionType,
-  Project,
   ProjectStatus,
+  SubmissionType,
   UnitResponsibleType,
   UserRole,
 } from '../../generated/prisma/client';
@@ -77,34 +77,158 @@ export const createProject = async (
   });
 };
 
-export const getById = async (
-  user: UserPayload,
-  id: string
-): Promise<Project> => {
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      current_template: {
-        select: {
-          type: true,
+export const getById = async (user: UserPayload, id: string): Promise<any> => {
+  return await prisma.$transaction(async (tx) => {
+    const projectData = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        current_template: {
+          select: {
+            type: true,
+          },
         },
+        current_step: {
+          select: {
+            name: true,
+            order: true,
+          },
+        },
+        requesting_unit: {
+          include: {
+            dept: { select: { id: true, name: true } },
+          },
+        },
+        assignee_procurement: {
+          include: {
+            unit: { select: { id: true, name: true } },
+          },
+        },
+        assignee_contract: {
+          include: {
+            unit: { select: { id: true, name: true } },
+          },
+        },
+        creator: {
+          include: {
+            unit: {
+              select: {
+                id: true,
+                name: true,
+                dept: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!projectData) {
+      throw new NotFoundError('Project not found');
+    }
+
+    const project = {
+      id: projectData.id,
+      procurement_type: projectData.procurement_type,
+      current_template_type: projectData.current_template.type,
+      is_urgent: projectData.is_urgent,
+      title: projectData.title,
+      description: projectData.description,
+      budget: projectData.budget,
+      status: projectData.status,
+      receive_no: projectData.receive_no,
+      less_no: projectData.less_no,
+      pr_no: projectData.pr_no,
+      po_no: projectData.po_no,
+      contract_no: projectData.contract_no,
+      migo_no: projectData.migo_no,
+      expected_approval_date: projectData.expected_approval_date,
+      created_at: projectData.created_at,
+      updated_at: projectData.updated_at,
+      vendor: {
+        name: projectData.vendor_name,
+        tax_id: projectData.vendor_tax_id,
+        email: projectData.vendor_email,
+      },
+      requester: {
+        unit_name: projectData.requesting_unit?.name ?? null,
+        unit_id: projectData.requesting_unit?.id ?? null,
+        dept_name: projectData.requesting_unit?.dept?.name ?? null,
+        dept_id: projectData.requesting_unit?.dept?.id ?? null,
+      },
+      creator: {
+        full_name: projectData.creator.full_name,
+        role: projectData.creator.role,
+        unit_name: projectData.creator.unit?.name ?? null,
+        unit_id: projectData.creator.unit?.id ?? null,
+        dept_name: projectData.creator.unit?.dept?.name ?? null,
+        dept_id: projectData.creator.unit?.dept?.id ?? null,
       },
       assignee_procurement: {
-        select: {
-          full_name: true,
-        },
+        id: projectData.assignee_procurement?.id ?? null,
+        full_name: projectData.assignee_procurement?.full_name ?? null,
+        role: projectData.assignee_procurement?.role ?? null,
+        unit_name: projectData.assignee_procurement?.unit?.name ?? null,
+        unit_id: projectData.assignee_procurement?.unit?.id ?? null,
       },
       assignee_contract: {
-        select: {
-          full_name: true,
+        id: projectData.assignee_contract?.id ?? null,
+        full_name: projectData.assignee_contract?.full_name ?? null,
+        role: projectData.assignee_contract?.role ?? null,
+        unit_name: projectData.assignee_contract?.unit?.name ?? null,
+        unit_id: projectData.assignee_contract?.unit?.id ?? null,
+      },
+      current_step: projectData.current_step,
+    };
+
+    const workflow = await tx.workflowTemplate.findUnique({
+      where: { id: projectData.current_template_id },
+      select: {
+        type: true,
+        steps: {
+          orderBy: { order: 'asc' },
+          select: {
+            name: true,
+            order: true,
+            required_step: true,
+            required_documents: true,
+          },
         },
       },
-    },
+    });
+
+    if (!workflow) {
+      throw new NotFoundError('Workflow template not found for this project');
+    }
+
+    const submissionData = await prisma.projectSubmission.findMany({
+      where: { project_id: id, submission_type: SubmissionType.STAFF },
+      orderBy: [{ submission_round: 'asc' }],
+      include: {
+        documents: {
+          select: { field_key: true, file_name: true, file_path: true },
+        },
+        step: true,
+        submit_user: true,
+        action: true,
+      },
+    });
+
+    const submissions = submissionData.map((submission) => ({
+      step_name: submission.step!.name,
+      step_order: submission.step!.order,
+      submission_round: submission.submission_round,
+      status: submission.status,
+      type: submission.submission_type,
+      submitted_by: submission.submit_user?.full_name ?? null,
+      submitted_at: submission.submitted_at,
+      comment: submission.comment ?? null,
+      action_by: submission.action?.full_name ?? null,
+      action_at: submission.action_at,
+      documents: submission.documents,
+      meta_data: submission.meta_data ?? null,
+    }));
+
+    return { ...project, workflow, submissions };
   });
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  return project;
 };
 
 export const getUnassignedProjectsByUnit = async (
@@ -288,7 +412,8 @@ export const assignProjectsToUser = async (
       const { id, userId: assigneeId } = item;
       const project = await tx.project.findUnique({
         where: { id },
-        include: {
+        select: {
+          status: true,
           current_template: true,
         },
       });
@@ -349,7 +474,8 @@ export const changeAssignee = async (
 
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
+    select: {
+      status: true,
       current_template: {
         select: {
           type: true,

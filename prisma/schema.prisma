@@ -32,8 +32,6 @@ enum ProjectStatus {
   IN_PROGRESS
   WAITING_CANCEL
   CANCELLED
-  NOT_EXPORT
-  EXPORTED
   CLOSED
   REQUEST_EDIT
 }
@@ -64,8 +62,14 @@ enum ProcurementType {
 
 enum SubmissionStatus {
   SUBMITTED
-  ACCEPTED
+  WAITING_SIGN
+  COMPLETED
   REJECTED
+}
+
+enum SubmissionType {
+  STAFF
+  VENDOR
 }
 
 // --- MODELS ---
@@ -82,12 +86,12 @@ model Department {
 }
 
 model Unit {
-  id       String                @id @default(uuid())
-  dept_id  String
-  name     String
-  type     UnitResponsibleType[]
-  
-  dept     Department            @relation(fields: [dept_id], references: [id])
+  id      String                @id @default(uuid())
+  dept_id String
+  name    String
+  type    UnitResponsibleType[]
+
+  dept     Department @relation(fields: [dept_id], references: [id])
   users    User[]
   projects Project[]
 
@@ -107,16 +111,18 @@ model User {
   created_at        DateTime  @default(now())
 
   dept Department? @relation(fields: [dept_id], references: [id])
-  unit       Unit?       @relation(fields: [unit_id], references: [id])
+  unit Unit?       @relation(fields: [unit_id], references: [id])
 
   // Self-relation for delegation
   delegate_to    User?  @relation("UserDelegation", fields: [delegated_user_id], references: [id])
   delegated_from User[] @relation("UserDelegation")
 
   // Relations to Projects
-  created_projects     Project[] @relation("ProjectCreator")
-  procurement_projects Project[] @relation("ProcurementAssignee")
-  contract_projects    Project[] @relation("ContractAssignee")
+  created_projects     Project[]           @relation("ProjectCreator")
+  procurement_projects Project[]           @relation("ProcurementAssignee")
+  contract_projects    Project[]           @relation("ContractAssignee")
+  submitted_submissions ProjectSubmission[] @relation("SubmitBy")
+  actioned_submissions  ProjectSubmission[] @relation("ActionBy")
 
   @@map("users")
 }
@@ -157,7 +163,6 @@ model Project {
   expected_approval_date  DateTime?
   created_by              String
   created_at              DateTime        @default(now())
-  update_by               String?
   updated_at              DateTime?       @updatedAt
 
   // Relations
@@ -170,8 +175,7 @@ model Project {
 
   project_cancellation ProjectCancellation[]
   project_histories    ProjectHistory[]
-  vendor_submissions   VendorSubmission[]
-  project_submissions  ProjectSubmission[]
+  submissions          ProjectSubmission[]
 
   @@map("projects")
 }
@@ -180,7 +184,7 @@ model ProjectCancellation {
   id           String   @id @default(uuid())
   project_id   String
   reason       String
-  is_cancelled  Boolean  @default(false)
+  is_cancelled Boolean  @default(false)
   cancelled_by String
   cancelled_at DateTime @default(now())
 
@@ -205,48 +209,39 @@ model ProjectHistory {
 }
 
 model ProjectSubmission {
-  id                String           @id @default(uuid())
-  project_id        String
-  step_id           String
-  submission_round  String
-  status            SubmissionStatus
-  submitted_by      String
-  submitted_at      DateTime         @default(now())
-  officer_comment   String?
-  officer_action_by String?
-  officer_action_at DateTime?
-  meta_data         Json?
+  id               String           @id @default(uuid())
+  project_id       String
+  step_id          String?
+  submission_type  SubmissionType   @default(STAFF)
+  submission_round Int              @default(1)
+  po_no            String?
+  status           SubmissionStatus
+  submitted_by     String?
+  submitted_at     DateTime         @default(now())
+  action_by        String?
+  action_at        DateTime?        @updatedAt
+  comment          String?
+  meta_data        Json?
 
-  project   Project           @relation(fields: [project_id], references: [id])
-  documents ProjectDocument[]
+  project     Project           @relation(fields: [project_id], references: [id])
+  step        WorkflowStep?     @relation(fields: [step_id], references: [id])
+  submit_user User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
+  action      User?             @relation("ActionBy", fields: [action_by], references: [id])
+  documents   ProjectDocument[]
 
   @@map("project_submissions")
 }
 
 model ProjectDocument {
-  id                    String @id @default(uuid())
-  project_submission_id String
-  file_name             String
-  file_path             String
+  id            String @id @default(uuid())
+  submission_id String
+  field_key     String?
+  file_name     String
+  file_path     String
 
-  submission ProjectSubmission @relation(fields: [project_submission_id], references: [id])
+  submission ProjectSubmission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
 
   @@map("project_documents")
-}
-
-model VendorSubmission {
-  id            String           @id @default(uuid())
-  po_number_ref String
-  project_id    String
-  file_path     String
-  submitted_at  DateTime         @default(now())
-  status        SubmissionStatus
-  reviewed_by   String?
-  review_note   String?
-
-  project Project @relation(fields: [project_id], references: [id])
-
-  @@map("vendor_submissions")
 }
 
 model WorkflowTemplate {
@@ -266,11 +261,12 @@ model WorkflowStep {
   order              Int
   name               String
   description        String
-  required_step      Int[] // Kept as Int as it likely refers to 'order'
-  required_documents Json
+  required_step      Int[]
+  required_documents Json[]
 
-  template WorkflowTemplate @relation(fields: [template_id], references: [id])
-  projects Project[]
+  template    WorkflowTemplate    @relation(fields: [template_id], references: [id])
+  projects    Project[]
+  submissions ProjectSubmission[]
 
   @@map("workflow_steps")
 }
