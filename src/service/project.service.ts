@@ -4,8 +4,10 @@ import {
   ProjectStatus,
   SubmissionType,
   UnitResponsibleType,
+  UserRole,
 } from '../../generated/prisma/client';
 import {
+  AcceptProjectsDto,
   CancelProjectDto,
   CreateProjectDto,
   PaginatedProjects,
@@ -17,20 +19,25 @@ import {
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
 import * as UnitService from './unit.service';
+import { ProjectWhereInput } from '../../generated/prisma/models';
+import { UserPayload } from '../lib/types';
 
 export const listProjects = async (
+  user: UserPayload,
   page: number,
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
+  const where: ProjectWhereInput = {};
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
+      where,
       skip: skip,
       take: limit,
       orderBy: [{ receive_no: 'desc' }],
     }),
-    prisma.project.count(),
+    prisma.project.count({ where }),
   ]);
 
   return {
@@ -42,7 +49,10 @@ export const listProjects = async (
   };
 };
 
-export const createProject = async (data: CreateProjectDto): Promise<any> => {
+export const createProject = async (
+  user: UserPayload,
+  data: CreateProjectDto
+): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const receiveNumber = ((await tx.project.count()) + 1).toString();
     const template = await tx.workflowTemplate.findFirst({
@@ -61,53 +71,22 @@ export const createProject = async (data: CreateProjectDto): Promise<any> => {
         status: ProjectStatus.UNASSIGNED,
         current_template_id: template.id,
         receive_no: receiveNumber,
-        created_by: '',
+        created_by: user.id,
       },
     });
   });
 };
 
-export const getById = async (id: string): Promise<any> => {
-  return await prisma.$transaction(async (tx) => {
-    const projectData = await prisma.project.findUnique({
-      where: { id },
-      include: {
-        current_template: {
-          select: {
-            type: true,
-          },
-        },
-        current_step: {
-          select: {
-            name: true,
-            order: true,
-          },
-        },
-        requesting_unit: {
-          include: {
-            dept: { select: { id: true, name: true } },
-          },
-        },
-        assignee_procurement: {
-          include: {
-            unit: { select: { id: true, name: true } },
-          },
-        },
-        assignee_contract: {
-          include: {
-            unit: { select: { id: true, name: true } },
-          },
-        },
-        creator: {
-          include: {
-            unit: {
-              select: {
-                id: true,
-                name: true,
-                dept: { select: { id: true, name: true } },
-              },
-            },
-          },
+export const getById = async (
+  user: UserPayload,
+  id: string
+): Promise<Project> => {
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: {
+      current_template: {
+        select: {
+          type: true,
         },
       },
     });
@@ -222,9 +201,9 @@ export const getById = async (id: string): Promise<any> => {
 };
 
 export const getUnassignedProjectsByUnit = async (
-  unitId: string
+  user: UserPayload
 ): Promise<ProjectsListResponse> => {
-  const unit = await UnitService.getById(unitId);
+  const unit = await UnitService.getById(user.unit!.id);
   const where: any = {
     status: { in: [ProjectStatus.UNASSIGNED] },
     current_template: {
@@ -270,13 +249,9 @@ export const getUnassignedProjectsByUnit = async (
 };
 
 export const getAssignedProjects = async (
-  targetDate: Date,
-  options: { unitId?: string; userId?: string }
+  user: UserPayload,
+  targetDate: Date
 ): Promise<ProjectsListResponse> => {
-  if (!options?.unitId && !options?.userId) {
-    throw new BadRequestError('Either unitId or userId must be provided');
-  }
-
   const startOfDay = new Date(targetDate);
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(targetDate);
@@ -317,10 +292,10 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (options.unitId) {
+  if (user.role === UserRole.HEAD_OF_UNIT) {
     // Unit-based query
     const unit = await prisma.unit.findUnique({
-      where: { id: options.unitId },
+      where: { id: user.unit!.id },
       select: { type: true },
     });
 
@@ -334,12 +309,12 @@ export const getAssignedProjects = async (
         },
       },
     });
-  } else if (options.userId) {
+  } else if (user.role === UserRole.GENERAL_STAFF) {
     // User-based query
     where.AND.push({
       OR: [
-        { assignee_procurement_id: options.userId },
-        { assignee_contract_id: options.userId },
+        { assignee_procurement_id: user.id },
+        { assignee_contract_id: user.id },
       ],
     });
   }
@@ -396,12 +371,14 @@ export const getAssignedProjects = async (
   };
 };
 
-export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
+export const assignProjectsToUser = async (
+  user: UserPayload,
+  data: UpdateStatusProjectsDto
+) => {
   return await prisma.$transaction(async (tx) => {
     const updatedProjects = [];
     for (const item of data) {
-      const { id, userId } = item;
-
+      const { id, userId: assigneeId } = item;
       const project = await tx.project.findUnique({
         where: { id },
         select: {
@@ -417,7 +394,7 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
         project.current_template?.type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract_id'
           : 'assignee_procurement_id';
-      await UserService.getById(userId);
+      await UserService.getById(assigneeId);
 
       if (project.status !== ProjectStatus.UNASSIGNED) {
         throw new BadRequestError(`Project ${id} is not unassigned`);
@@ -433,8 +410,8 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
           [assigneeField]: null,
         },
         data: {
-          [assigneeField]: userId,
           status: ProjectStatus.WAITING_ACCEPT,
+          [assigneeField]: assigneeId,
         },
         select: { id: true, status: true, [assigneeField]: true },
       });
@@ -446,8 +423,8 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
           project_id: id,
           action: LogActionType.ASSIGNEE_UPDATE,
           old_value: { status: project.status, assignee: null },
-          new_value: { status: updated.status, assignee: userId },
-          changed_by: 'system',
+          new_value: { status: updated.status, assignee: assigneeId },
+          changed_by: user.id,
         },
       });
     }
@@ -455,9 +432,12 @@ export const assignProjectsToUser = async (data: UpdateStatusProjectsDto) => {
   });
 };
 
-export const changeAssignee = async (data: UpdateStatusProjectDto) => {
-  const { id, userId } = data;
-  if (!userId) {
+export const changeAssignee = async (
+  user: UserPayload,
+  data: UpdateStatusProjectDto
+) => {
+  const { id, userId: newAssigneeId } = data;
+  if (!newAssigneeId) {
     throw new BadRequestError('No new assignee ID provided for update');
   }
 
@@ -487,13 +467,13 @@ export const changeAssignee = async (data: UpdateStatusProjectDto) => {
       : 'assignee_procurement_id';
 
   return await prisma.$transaction(async (tx) => {
-    const oldAssignee = (project as any)[assigneeField];
-    await UserService.getById(userId);
+    const oldAssigneeId = (project as any)[assigneeField];
+    await UserService.getById(newAssigneeId);
 
     const updated = await tx.project.update({
       where: { id },
       data: {
-        [assigneeField]: userId,
+        [assigneeField]: newAssigneeId,
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
@@ -501,21 +481,19 @@ export const changeAssignee = async (data: UpdateStatusProjectDto) => {
       data: {
         project_id: id,
         action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { assignee: oldAssignee },
-        new_value: { assignee: userId },
-        changed_by: 'system',
+        old_value: { assignee: oldAssigneeId },
+        new_value: { assignee: newAssigneeId },
+        changed_by: user.id,
       },
     });
     return { data: updated };
   });
 };
 
-export const claimProject = async (data: UpdateStatusProjectDto) => {
-  const { id, userId } = data;
+export const claimProject = async (user: UserPayload, projectId: string) => {
   const project = await prisma.project.findUnique({
-    where: { id },
-    select: {
-      status: true,
+    where: { id: projectId },
+    include: {
       current_template: true,
     },
   });
@@ -535,24 +513,24 @@ export const claimProject = async (data: UpdateStatusProjectDto) => {
   return await prisma.$transaction(async (tx) => {
     const updated = await tx.project.update({
       where: {
-        id,
+        id: projectId,
         status: ProjectStatus.UNASSIGNED,
         [assigneeField]: null,
       },
       data: {
-        [assigneeField]: userId,
         status: ProjectStatus.IN_PROGRESS,
+        [assigneeField]: user.id,
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
 
     await tx.projectHistory.create({
       data: {
-        project_id: id,
+        project_id: projectId,
         action: LogActionType.ASSIGNEE_UPDATE,
         old_value: { status: project.status, assignee: null },
-        new_value: { status: updated.status, assignee: userId },
-        changed_by: 'system',
+        new_value: { status: updated.status, assignee: updated[assigneeField] },
+        changed_by: user.id,
       },
     });
 
@@ -560,62 +538,73 @@ export const claimProject = async (data: UpdateStatusProjectDto) => {
   });
 };
 
-export const acceptProjects = async (data: UpdateStatusProjectsDto) => {
+export const acceptProjects = async (
+  user: UserPayload,
+  data: AcceptProjectsDto
+) => {
   return await prisma.$transaction(async (tx) => {
     const updatedProjects = [];
-    for (const item of data) {
-      const { id, userId } = item;
+
+    for (const id of data.id) {
       const project = await tx.project.findUnique({
         where: { id },
         select: {
+          id: true,
           status: true,
+          assignee_procurement_id: true,
+          assignee_contract_id: true,
           current_template: true,
         },
       });
+
       if (!project) {
         throw new NotFoundError(`Project ${id} not found`);
       }
+
       const assigneeField =
         project.current_template?.type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract_id'
           : 'assignee_procurement_id';
+
+      if (user.id !== project[assigneeField]) {
+        throw new BadRequestError(`You are not the assignee of project ${id}`);
+      }
+
       if (project.status !== ProjectStatus.WAITING_ACCEPT) {
         throw new BadRequestError(
-          `Project ${id} cannot be accepted at this status`
+          `Project ${id} is not in WAITING_ACCEPT status`
         );
       }
-      if ((project as any)[assigneeField] !== userId) {
-        throw new BadRequestError(`You are not assigned to project ${id}`);
-      }
+
       const updated = await tx.project.update({
-        where: {
-          id,
-          status: ProjectStatus.WAITING_ACCEPT,
-          [assigneeField]: userId,
-        },
+        where: { id },
         data: {
           status: ProjectStatus.IN_PROGRESS,
         },
-        select: { id: true, status: true, [assigneeField]: true },
+        select: { id: true, status: true },
       });
-      updatedProjects.push(updated);
 
       await tx.projectHistory.create({
         data: {
           project_id: id,
           action: LogActionType.STATUS_UPDATE,
-          old_value: { status: project.status },
-          new_value: { status: updated.status },
-          changed_by: 'system',
+          old_value: { status: ProjectStatus.WAITING_ACCEPT },
+          new_value: { status: ProjectStatus.IN_PROGRESS },
+          changed_by: user.id,
         },
       });
+
+      updatedProjects.push(updated);
     }
 
     return { data: updatedProjects };
   });
 };
 
-export const cancelProject = async (data: CancelProjectDto) => {
+export const cancelProject = async (
+  user: UserPayload,
+  data: CancelProjectDto
+) => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
@@ -640,7 +629,7 @@ export const cancelProject = async (data: CancelProjectDto) => {
         action: LogActionType.STATUS_UPDATE,
         old_value: { status: project.status },
         new_value: { status: ProjectStatus.CANCELLED },
-        changed_by: 'system',
+        changed_by: user.id,
       },
     });
 
@@ -648,7 +637,7 @@ export const cancelProject = async (data: CancelProjectDto) => {
       data: {
         project_id: data.id,
         reason: data.reason,
-        cancelled_by: 'system',
+        cancelled_by: user.id,
       },
       select: { reason: true },
     });
@@ -661,13 +650,21 @@ export const cancelProject = async (data: CancelProjectDto) => {
   });
 };
 
-export const updateProjectData = async (data: UpdateProjectDto) => {
+export const updateProjectData = async (
+  user: UserPayload,
+  data: UpdateProjectDto
+) => {
   if (!data || !data.updateData || Object.keys(data.updateData).length === 0) {
     throw new BadRequestError('No data provided for update');
   }
-  await getById(data.id);
+  const current = await getById(user, data.id);
   return await prisma.$transaction(async (tx) => {
-    await tx.project.update({
+    const oldValue: any = {};
+    Object.keys(data.updateData).forEach((key) => {
+      oldValue[key] = (current as any)[key];
+    });
+
+    const updated = await tx.project.update({
       where: { id: data.id },
       data: { ...data.updateData },
     });
@@ -676,16 +673,21 @@ export const updateProjectData = async (data: UpdateProjectDto) => {
       data: {
         project_id: data.id,
         action: LogActionType.INFORMATION_UPDATE,
-        old_value: {},
+        old_value: { ...oldValue },
         new_value: { ...data.updateData },
-        changed_by: 'system',
+        changed_by: user.id,
       },
     });
+
+    return { data: updated };
   });
 };
 
-export const deleteProject = async (id: string): Promise<void> => {
-  await getById(id);
+export const deleteProject = async (
+  user: UserPayload,
+  id: string
+): Promise<void> => {
+  await getById(user, id);
   await prisma.project.delete({
     where: { id },
   });
