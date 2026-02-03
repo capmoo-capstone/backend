@@ -75,9 +75,8 @@ export const assignProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { data } = req.body;
 
-  const validatedData = UpdateStatusProjectsSchema.parse(data);
+  const validatedData = UpdateStatusProjectsSchema.parse(req.body);
   const project = await ProjectService.assignProjectsToUser(
     { id },
     validatedData
@@ -101,8 +100,7 @@ export const acceptProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { data } = req.body;
-
+  const data = req.body;
   const validatedData = AcceptProjectsSchema.parse({
     id: data.map((item: any) => item.id),
   });
