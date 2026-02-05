@@ -4,7 +4,7 @@ import { SubmissionType } from '../../generated/prisma/enums';
 export const CreateSubmissionSchema = z.object({
   project_id: z.uuid(),
   type: z.enum(SubmissionType),
-  step_id: z.uuid().optional(),
+  step_id: z.uuid(),
   po_no: z.string().optional(),
   meta_data: z
     .array(
@@ -28,8 +28,7 @@ export type CreateSubmissionDto = z.infer<typeof CreateSubmissionSchema>;
 
 export const StatusSubmissionSchema = z.object({
   id: z.uuid(),
-  project_id: z.uuid(),
-  step_id: z.uuid(),
+  step_id: z.uuid().optional(),
 });
 export type StatusSubmissionDto = z.infer<typeof StatusSubmissionSchema>;
 

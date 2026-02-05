@@ -124,6 +124,8 @@ model User {
   contract_projects     Project[]           @relation("ContractAssignee")
   submitted_submissions ProjectSubmission[] @relation("SubmitBy")
   approved_submissions  ProjectSubmission[] @relation("ApprovedBy")
+  proposed_submissions  ProjectSubmission[] @relation("ProposedBy")
+  completed_submissions ProjectSubmission[] @relation("CompletedBy")
 
   @@map("users")
 }
@@ -232,6 +234,8 @@ model ProjectSubmission {
   step      WorkflowStep?     @relation(fields: [step_id], references: [id])
   submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
   approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id])
+  proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id])
+  completer User?             @relation("CompletedBy", fields: [completed_by], references: [id])
   documents ProjectDocument[]
 
   @@map("project_submissions")

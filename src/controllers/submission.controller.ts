@@ -23,8 +23,12 @@ export const approveSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
+  const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse(req.body);
+  const validateData = StatusSubmissionSchema.parse({
+    id: submissionId,
+    step_id: req.body.stepId,
+  });
   const submission = await SubmissionService.approveSubmission(
     { id },
     validateData
@@ -36,8 +40,11 @@ export const proposeSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
+  const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse(req.body);
+  const validateData = StatusSubmissionSchema.parse({
+    id: submissionId,
+  });
   const submission = await SubmissionService.proposeSubmission(
     { id },
     validateData
@@ -49,8 +56,11 @@ export const finishProposedSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
+  const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse(req.body);
+  const validateData = StatusSubmissionSchema.parse({
+    id: submissionId,
+  });
   const submission = await SubmissionService.finishProposedSubmission(
     { id },
     validateData
@@ -62,8 +72,12 @@ export const rejectSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
+  const { id: submissionId } = req.params;
 
-  const validateData = RejectSubmissionSchema.parse(req.body);
+  const validateData = RejectSubmissionSchema.parse({
+    id: submissionId,
+    comment: req.body.comment,
+  });
   const submission = await SubmissionService.rejectSubmission(
     { id },
     validateData
