@@ -1,6 +1,14 @@
 import { z } from 'zod';
-import { ProcurementType } from '../../generated/prisma/enums';
-import { Project } from '../../generated/prisma/client';
+import {
+  Project,
+  ProjectPhaseStatus,
+  ProcurementType,
+} from '../../generated/prisma/client';
+
+export interface PhaseStatusResult {
+  status: ProjectPhaseStatus;
+  step?: number;
+}
 
 export const CreateProjectSchema = z.object({
   title: z.string(),

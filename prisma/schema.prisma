@@ -36,6 +36,16 @@ enum ProjectStatus {
   REQUEST_EDIT
 }
 
+enum ProjectPhaseStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  WAITING_APPROVAL
+  PENDING_PROPOSAL
+  PROPOSING
+  REJECTED
+  COMPLETED
+}
+
 enum UnitResponsibleType {
   LT100K
   LT500K
@@ -118,9 +128,9 @@ model User {
   delegated_from User[] @relation("UserDelegation")
 
   // Relations to Projects
-  created_projects     Project[]           @relation("ProjectCreator")
-  procurement_projects Project[]           @relation("ProcurementAssignee")
-  contract_projects    Project[]           @relation("ContractAssignee")
+  created_projects      Project[]           @relation("ProjectCreator")
+  procurement_projects  Project[]           @relation("ProcurementAssignee")
+  contract_projects     Project[]           @relation("ContractAssignee")
   submitted_submissions ProjectSubmission[] @relation("SubmitBy")
   actioned_submissions  ProjectSubmission[] @relation("ActionBy")
 
@@ -144,23 +154,25 @@ model Project {
   title                   String
   description             String?
   budget                  Decimal         @db.Decimal(18, 2)
-  pr_no                   String?
-  po_no                   String?
-  less_no                 String?
   status                  ProjectStatus
-  requesting_unit_id      String?
   procurement_type        ProcurementType
   current_template_id     String
   current_step_id         String?
+  procurement_status      Json?
+  contract_status         Json?
   assignee_procurement_id String?
   assignee_contract_id    String?
+  requesting_unit_id      String?
+  is_urgent               Boolean         @default(false)
+  expected_approval_date  DateTime?
+  pr_no                   String?
+  po_no                   String?
+  less_no                 String?
   contract_no             String?
   migo_no                 String?
   vendor_name             String?
   vendor_tax_id           String?
   vendor_email            String?
-  is_urgent               Boolean         @default(false)
-  expected_approval_date  DateTime?
   created_by              String
   created_at              DateTime        @default(now())
   updated_at              DateTime?       @updatedAt
@@ -233,7 +245,7 @@ model ProjectSubmission {
 }
 
 model ProjectDocument {
-  id            String @id @default(uuid())
+  id            String  @id @default(uuid())
   submission_id String
   field_key     String?
   file_name     String

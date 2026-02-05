@@ -2,6 +2,8 @@ import { prisma } from '../config/prisma';
 import {
   LogActionType,
   ProjectStatus,
+  ProjectPhaseStatus,
+  SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
   UserRole,
@@ -11,6 +13,7 @@ import {
   CancelProjectDto,
   CreateProjectDto,
   PaginatedProjects,
+  PhaseStatusResult,
   ProjectsListResponse,
   UpdateProjectDto,
   UpdateStatusProjectDto,
@@ -21,6 +24,126 @@ import * as UserService from './user.service';
 import * as UnitService from './unit.service';
 import { ProjectWhereInput } from '../../generated/prisma/models';
 import { UserPayload } from '../lib/types';
+
+const mapSubmissionToPhaseStatus = (
+  status: SubmissionStatus
+): ProjectPhaseStatus => {
+  switch (status) {
+    case SubmissionStatus.SUBMITTED:
+      return ProjectPhaseStatus.WAITING_APPROVAL;
+    case SubmissionStatus.PENDING_PROPOSAL:
+      return ProjectPhaseStatus.PENDING_PROPOSAL;
+    case SubmissionStatus.PROPOSING:
+      return ProjectPhaseStatus.PROPOSING;
+    case SubmissionStatus.REJECTED:
+      return ProjectPhaseStatus.REJECTED;
+    case SubmissionStatus.COMPLETED:
+      return ProjectPhaseStatus.COMPLETED;
+    default:
+      return ProjectPhaseStatus.IN_PROGRESS;
+  }
+};
+
+const computePhaseStatus = async (
+  projectId: string,
+  templateType: UnitResponsibleType
+): Promise<PhaseStatusResult> => {
+  const template = await prisma.workflowTemplate.findFirst({
+    where: { type: templateType },
+    select: {
+      id: true,
+      steps: { orderBy: { order: 'asc' }, select: { id: true, order: true } },
+    },
+  });
+
+  if (!template)
+    throw new Error(`Template not found for type: ${templateType}`);
+
+  const submissions = await prisma.projectSubmission.findMany({
+    where: {
+      project_id: projectId,
+      submission_type: SubmissionType.STAFF,
+      step: { template_id: template.id },
+    },
+    orderBy: { submission_round: 'desc' },
+    select: { step_id: true, status: true },
+  });
+
+  const latestByStep = new Map<string, SubmissionStatus>();
+  for (const s of submissions) {
+    if (s.step_id && !latestByStep.has(s.step_id)) {
+      latestByStep.set(s.step_id, s.status as SubmissionStatus);
+    }
+  }
+
+  for (const step of template.steps) {
+    if (latestByStep.get(step.id) === SubmissionStatus.REJECTED) {
+      return { status: ProjectPhaseStatus.REJECTED, step: step.order };
+    }
+  }
+
+  for (const step of template.steps) {
+    if (!latestByStep.has(step.id)) {
+      return { status: ProjectPhaseStatus.IN_PROGRESS, step: step.order };
+    }
+  }
+
+  for (const step of template.steps) {
+    const currentStatus = latestByStep.get(step.id);
+    if (currentStatus !== SubmissionStatus.COMPLETED) {
+      return {
+        status: mapSubmissionToPhaseStatus(currentStatus as SubmissionStatus),
+        step: step.order,
+      };
+    }
+  }
+
+  return { status: ProjectPhaseStatus.COMPLETED };
+};
+
+export const getWorkflowStatus = async (projectId: string) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      procurement_type: true,
+      current_template: { select: { type: true } },
+      assignee_procurement_id: true,
+      assignee_contract_id: true,
+    },
+  });
+
+  if (!project) throw new Error('Project not found');
+
+  let procurement: PhaseStatusResult;
+  let contract: PhaseStatusResult;
+
+  if (!project.assignee_procurement_id) {
+    procurement = { status: ProjectPhaseStatus.NOT_STARTED };
+  } else
+    procurement = await computePhaseStatus(projectId, project.procurement_type);
+
+  if (
+    procurement.status !== ProjectPhaseStatus.COMPLETED ||
+    project.current_template.type !== UnitResponsibleType.CONTRACT ||
+    !project.assignee_contract_id
+  ) {
+    contract = { status: ProjectPhaseStatus.NOT_STARTED };
+  } else
+    contract = await computePhaseStatus(
+      projectId,
+      UnitResponsibleType.CONTRACT
+    );
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      procurement_status: { ...procurement },
+      contract_status: { ...contract },
+    },
+  });
+
+  return { procurement, contract };
+};
 
 export const listProjects = async (
   user: UserPayload,
@@ -227,7 +350,18 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
       meta_data: submission.meta_data ?? null,
     }));
 
-    return { ...project, workflow, submissions };
+    const [procurementPhase, contractPhase] = await Promise.all([
+      computePhaseStatus(id, projectData.procurement_type),
+      computePhaseStatus(id, UnitResponsibleType.CONTRACT),
+    ]);
+
+    return {
+      ...project,
+      workflow,
+      submissions,
+      procurement_phase: procurementPhase,
+      contract_phase: contractPhase,
+    };
   });
 };
 
