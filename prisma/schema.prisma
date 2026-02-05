@@ -62,7 +62,8 @@ enum ProcurementType {
 
 enum SubmissionStatus {
   SUBMITTED
-  WAITING_SIGN
+  PENDING_PROPOSAL
+  PROPOSING
   COMPLETED
   REJECTED
 }
@@ -118,11 +119,13 @@ model User {
   delegated_from User[] @relation("UserDelegation")
 
   // Relations to Projects
-  created_projects     Project[]           @relation("ProjectCreator")
-  procurement_projects Project[]           @relation("ProcurementAssignee")
-  contract_projects    Project[]           @relation("ContractAssignee")
+  created_projects      Project[]           @relation("ProjectCreator")
+  procurement_projects  Project[]           @relation("ProcurementAssignee")
+  contract_projects     Project[]           @relation("ContractAssignee")
   submitted_submissions ProjectSubmission[] @relation("SubmitBy")
-  actioned_submissions  ProjectSubmission[] @relation("ActionBy")
+  approved_submissions  ProjectSubmission[] @relation("ApprovedBy")
+  proposed_submissions  ProjectSubmission[] @relation("ProposedBy")
+  completed_submissions ProjectSubmission[] @relation("CompletedBy")
 
   @@map("users")
 }
@@ -213,27 +216,33 @@ model ProjectSubmission {
   project_id       String
   step_id          String?
   submission_type  SubmissionType   @default(STAFF)
-  submission_round Int              @default(1)
+  submission_round Int?
   po_no            String?
   status           SubmissionStatus
   submitted_by     String?
   submitted_at     DateTime         @default(now())
-  action_by        String?
-  action_at        DateTime?        @updatedAt
+  approved_by      String?
+  approved_at      DateTime?
+  proposing_by     String?
+  proposing_at     DateTime?
+  completed_by     String?
+  completed_at     DateTime?
   comment          String?
-  meta_data        Json?
+  meta_data        Json[]
 
-  project     Project           @relation(fields: [project_id], references: [id])
-  step        WorkflowStep?     @relation(fields: [step_id], references: [id])
-  submit_user User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
-  action      User?             @relation("ActionBy", fields: [action_by], references: [id])
-  documents   ProjectDocument[]
+  project   Project           @relation(fields: [project_id], references: [id])
+  step      WorkflowStep?     @relation(fields: [step_id], references: [id])
+  submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
+  approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id])
+  proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id])
+  completer User?             @relation("CompletedBy", fields: [completed_by], references: [id])
+  documents ProjectDocument[]
 
   @@map("project_submissions")
 }
 
 model ProjectDocument {
-  id            String @id @default(uuid())
+  id            String  @id @default(uuid())
   submission_id String
   field_key     String?
   file_name     String
@@ -256,13 +265,14 @@ model WorkflowTemplate {
 }
 
 model WorkflowStep {
-  id                 String @id @default(uuid())
+  id                 String  @id @default(uuid())
   template_id        String
   order              Int
   name               String
   description        String
   required_step      Int[]
   required_documents Json[]
+  requires_signature Boolean @default(false)
 
   template    WorkflowTemplate    @relation(fields: [template_id], references: [id])
   projects    Project[]
