@@ -687,6 +687,61 @@ export const acceptProjects = async (
   });
 };
 
+export const addAssignee = async (
+  user: UserPayload,
+  projectId: string,
+  assigneeId: string
+) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      assignee_contract: true,
+      assignee_procurement: true,
+      current_workflow_type: true,
+    },
+  });
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+  const assigneeField =
+    project.current_workflow_type === UnitResponsibleType.CONTRACT
+      ? 'assignee_contract'
+      : 'assignee_procurement';
+
+  if (project[assigneeField].length >= 2) {
+    throw new BadRequestError(
+      'Maximum number of assignees reached for this project'
+    );
+  }
+
+  if (project[assigneeField].some((u) => u.id === assigneeId)) {
+    throw new BadRequestError('User is already an assignee of this project');
+  }
+  await UserService.getById(assigneeId);
+
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: {
+        [assigneeField]: {
+          connect: { id: assigneeId },
+        },
+      },
+      select: { id: true, status: true, [assigneeField]: true },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: projectId,
+        action: LogActionType.ASSIGNEE_UPDATE,
+        old_value: { assignee: project[assigneeField].map((u) => u.id) },
+        new_value: { assignee: updated[assigneeField].map((u) => u.id) },
+        changed_by: user.id,
+      },
+    });
+    return { data: updated };
+  });
+};
+
 export const cancelProject = async (
   user: UserPayload,
   data: CancelProjectDto
