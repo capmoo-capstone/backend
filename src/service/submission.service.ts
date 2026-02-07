@@ -46,34 +46,17 @@ export const getProjectSubmissions = async (user: UserPayload, projectId: string
     where: { project_id: projectId },
     orderBy: { submitted_at: 'desc' },
     include: {
-      step: {
-        select: {
-          name: true,
-          order: true,
-          template: { select: { type: true } },
-        },
-      },
       documents: true,
     },
   });
 
-  const formatSubmissions = submissionData.map((submission) => {
-    return {
-      step_name: submission.step!.name,
-      step_order: submission.step!.order,
-      template_type: submission.step!.template.type,
-      ...submission,
-      step: undefined,
-    };
-  });
-
-  const contractSubmissions = formatSubmissions.filter(
+  const contractSubmissions = submissionData.filter(
     (submission) =>
-      submission.template_type === UnitResponsibleType.CONTRACT
+      submission.workflow_type === UnitResponsibleType.CONTRACT
   );
 
-  const procurementSubmissions = formatSubmissions.filter(
-    (submission) => submission.template_type === project?.procurement_type
+  const procurementSubmissions = submissionData.filter(
+    (submission) => submission.workflow_type === project?.procurement_type
   );
 
   return {
@@ -93,13 +76,19 @@ export const createStaffSubmissionsProject = async (
   const submission = await prisma.$transaction(async (tx) => {
     const submission_round = await getSubmissionRound(data, tx);
 
+    let nextStatus: SubmissionStatus = data.require_approval
+      ? SubmissionStatus.WAITING_APPROVAL
+      : SubmissionStatus.COMPLETED;
+
     return tx.projectSubmission.create({
       data: {
         project_id: data.project_id,
         submitted_by: user.id,
+        step_order: data.step_order,
+        workflow_type: data.workflow_type,
         submission_round,
         submission_type: SubmissionType.STAFF,
-        status: SubmissionStatus.WAITING_APPROVAL,
+        status: nextStatus,
         meta_data: data.meta_data,
         documents: {
           create: data.files?.map((file) => ({

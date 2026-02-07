@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import * as SubmissionService from '../service/submission.service';
 import {
   CreateSubmissionSchema,
-  StatusSubmissionSchema,
+  ApproveSubmissionSchema,
   RejectSubmissionSchema,
 } from '../models/Submission';
 
@@ -38,9 +38,11 @@ export const approveSubmission = async (req: Request, res: Response) => {
   const { id } = (req as any).user;
   const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse({
+  const validateData = ApproveSubmissionSchema.parse({
     id: submissionId,
-    step_id: req.body.stepId,
+    step_order: req.body.stepOrder,
+    workflow_type: req.body.workflowType,
+    required_signature: req.body.requiredSignature,
   });
   const submission = await SubmissionService.approveSubmission(
     { id },
@@ -55,28 +57,25 @@ export const proposeSubmission = async (req: Request, res: Response) => {
   const { id } = (req as any).user;
   const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse({
-    id: submissionId,
-  });
   const submission = await SubmissionService.proposeSubmission(
     { id },
-    validateData
+    submissionId
   );
   res.status(200).json(submission);
 };
 
-export const finishProposedSubmission = async (req: Request, res: Response) => {
+export const signAndCompleteSubmission = async (
+  req: Request,
+  res: Response
+) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
   const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse({
-    id: submissionId,
-  });
-  const submission = await SubmissionService.finishProposedSubmission(
+  const submission = await SubmissionService.signAndCompleteSubmission(
     { id },
-    validateData
+    submissionId
   );
   res.status(200).json(submission);
 };

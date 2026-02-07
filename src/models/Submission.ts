@@ -1,10 +1,15 @@
 import { z } from 'zod';
-import { SubmissionType } from '../../generated/prisma/enums';
+import {
+  ProcurementType,
+  SubmissionType,
+  UnitResponsibleType,
+} from '../../generated/prisma/enums';
 
 export const CreateSubmissionSchema = z.object({
   project_id: z.uuid(),
   type: z.enum(SubmissionType),
   step_order: z.number(),
+  workflow_type: z.enum(ProcurementType).and(z.enum(UnitResponsibleType)),
   require_approval: z.boolean(),
   meta_data: z
     .array(
@@ -26,11 +31,11 @@ export const CreateSubmissionSchema = z.object({
 });
 export type CreateSubmissionDto = z.infer<typeof CreateSubmissionSchema>;
 
-export const approveSubmissionSchema = z.object({
+export const ApproveSubmissionSchema = z.object({
   id: z.uuid(),
   required_signature: z.boolean(),
 });
-export type ApproveSubmissionDto = z.infer<typeof approveSubmissionSchema>;
+export type ApproveSubmissionDto = z.infer<typeof ApproveSubmissionSchema>;
 
 export const RejectSubmissionSchema = z.object({
   id: z.uuid(),

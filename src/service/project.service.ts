@@ -45,57 +45,61 @@ const mapSubmissionToPhaseStatus = (
   }
 };
 
+const makeStepRange = (start: number, end: number): number[] => {
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+};
+
+const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
+  [UnitResponsibleType.LT100K]: makeStepRange(1, 4),
+  [UnitResponsibleType.LT500K]: makeStepRange(1, 4),
+  [UnitResponsibleType.MT500K]: makeStepRange(1, 6),
+  [UnitResponsibleType.SELECTION]: makeStepRange(1, 7),
+  [UnitResponsibleType.EBIDDING]: makeStepRange(1, 10),
+  [UnitResponsibleType.CONTRACT]: makeStepRange(1, 7),
+};
+
 const computePhaseStatus = async (
   projectId: string,
-  templateType: UnitResponsibleType,
+  workflowType: UnitResponsibleType,
   tx: Prisma.TransactionClient
 ): Promise<PhaseStatusResult> => {
-  const template = await tx.workflowTemplate.findFirst({
-    where: { type: templateType },
-    select: {
-      id: true,
-      steps: { orderBy: { order: 'asc' }, select: { id: true, order: true } },
-    },
-  });
-
-  if (!template)
-    throw new Error(`Template not found for type: ${templateType}`);
-
+  const stepOrders = WORKFLOW_STEP_ORDERS[workflowType] ?? [];
   const submissions = await tx.projectSubmission.findMany({
     where: {
       project_id: projectId,
       submission_type: SubmissionType.STAFF,
-      step: { template_id: template.id },
+      workflow_type: workflowType,
     },
-    orderBy: { submission_round: 'desc' },
-    select: { step_id: true, status: true },
+    orderBy: { step_order: 'asc', submission_round: 'desc' },
+    select: { step_order: true, status: true },
   });
 
-  const latestByStep = new Map<string, SubmissionStatus>();
+  const latestByStep = new Map<number, SubmissionStatus>();
+
   for (const s of submissions) {
-    if (s.step_id && !latestByStep.has(s.step_id)) {
-      latestByStep.set(s.step_id, s.status as SubmissionStatus);
+    if (s.step_order !== null && !latestByStep.has(s.step_order)) {
+      latestByStep.set(s.step_order, s.status as SubmissionStatus);
     }
   }
 
-  for (const step of template.steps) {
-    if (latestByStep.get(step.id) === SubmissionStatus.REJECTED) {
-      return { status: ProjectPhaseStatus.REJECTED, step: step.order };
+  for (const stepOrder of stepOrders) {
+    if (latestByStep.get(stepOrder) === SubmissionStatus.REJECTED) {
+      return { status: ProjectPhaseStatus.REJECTED, step: stepOrder };
     }
   }
 
-  for (const step of template.steps) {
-    if (!latestByStep.has(step.id)) {
-      return { status: ProjectPhaseStatus.IN_PROGRESS, step: step.order };
+  for (const stepOrder of stepOrders) {
+    if (!latestByStep.has(stepOrder)) {
+      return { status: ProjectPhaseStatus.IN_PROGRESS, step: stepOrder };
     }
   }
 
-  for (const step of template.steps) {
-    const currentStatus = latestByStep.get(step.id);
+  for (const stepOrder of stepOrders) {
+    const currentStatus = latestByStep.get(stepOrder);
     if (currentStatus !== SubmissionStatus.COMPLETED) {
       return {
         status: mapSubmissionToPhaseStatus(currentStatus as SubmissionStatus),
-        step: step.order,
+        step: stepOrder,
       };
     }
   }
@@ -111,7 +115,7 @@ export const getWorkflowStatus = async (
     where: { id: projectId },
     select: {
       procurement_type: true,
-      current_template: { select: { type: true } },
+      current_workflow_type: true,
       assignee_procurement: true,
       assignee_contract: true,
     },
@@ -133,7 +137,7 @@ export const getWorkflowStatus = async (
 
   if (
     procurement.status !== ProjectPhaseStatus.COMPLETED ||
-    project.current_template.type !== UnitResponsibleType.CONTRACT ||
+    project.current_workflow_type !== UnitResponsibleType.CONTRACT ||
     !project.assignee_contract
   ) {
     contract = { status: ProjectPhaseStatus.NOT_STARTED };
@@ -180,21 +184,12 @@ export const createProject = async (
 ): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const receiveNumber = ((await tx.project.count()) + 1).toString();
-    const template = await tx.workflowTemplate.findFirst({
-      where: { type: data.procurement_type },
-      select: { id: true },
-    });
-    if (!template) {
-      throw new BadRequestError(
-        `No workflow template found for procurement type ${data.procurement_type}`
-      );
-    }
 
     return await tx.project.create({
       data: {
         ...data,
         status: ProjectStatus.UNASSIGNED,
-        current_template_id: template.id,
+        current_workflow_type: data.procurement_type,
         receive_no: receiveNumber,
         created_by: user.id,
       },
@@ -207,17 +202,6 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
     const projectData = await tx.project.findUnique({
       where: { id },
       include: {
-        current_template: {
-          select: {
-            type: true,
-          },
-        },
-        current_step: {
-          select: {
-            name: true,
-            order: true,
-          },
-        },
         requesting_unit: {
           include: {
             dept: { select: { id: true, name: true } },
@@ -253,7 +237,7 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
     const project = {
       id: projectData.id,
       procurement_type: projectData.procurement_type,
-      current_template_type: projectData.current_template.type,
+      current_workflow_type: projectData.current_workflow_type,
       is_urgent: projectData.is_urgent,
       title: projectData.title,
       description: projectData.description,
@@ -301,7 +285,6 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
         unit_name: u.unit?.name ?? null,
         unit_id: u.unit?.id ?? null,
       })),
-      current_step: projectData.current_step,
     };
 
     const { procurement, contract } = await getWorkflowStatus(id, tx);
@@ -320,11 +303,7 @@ export const getUnassignedProjectsByUnit = async (
   const unit = await UnitService.getById(user.unit!.id);
   const where: any = {
     status: { in: [ProjectStatus.UNASSIGNED] },
-    current_template: {
-      type: {
-        in: unit.type,
-      },
-    },
+    current_workflow_type: unit.type,
   };
 
   const [projects, total] = await prisma.$transaction([
@@ -341,7 +320,7 @@ export const getUnassignedProjectsByUnit = async (
         },
         budget: true,
         procurement_type: true,
-        current_template: { select: { type: true } },
+        current_workflow_type: true,
         is_urgent: true,
         expected_approval_date: true,
         created_at: true,
@@ -352,13 +331,7 @@ export const getUnassignedProjectsByUnit = async (
 
   return {
     total,
-    data: projects.map((project) => {
-      return {
-        ...project,
-        template_type: project.current_template.type,
-        current_template: undefined,
-      };
-    }),
+    data: projects,
   };
 };
 
@@ -447,10 +420,7 @@ export const getAssignedProjects = async (
         },
         budget: true,
         procurement_type: true,
-        current_template: { select: { type: true } },
-        current_step: {
-          select: { name: true, order: true },
-        },
+        current_workflow_type: true,
         assignee_procurement: { select: { id: true, full_name: true } },
         assignee_contract: { select: { id: true, full_name: true } },
         is_urgent: true,
@@ -466,19 +436,16 @@ export const getAssignedProjects = async (
     total,
     data: projects.map((project) => {
       const assigneeField =
-        project.current_template.type === UnitResponsibleType.CONTRACT
+        project.current_workflow_type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
       const assignee = (project as any)[assigneeField];
       return {
         ...project,
-        template_type: project.current_template.type,
-        current_step_name: project.current_step?.name || null,
-        current_step_order: project.current_step?.order || null,
-        assignee_id: assignee?.id || null,
-        assignee_full_name: assignee?.full_name || null,
-        current_template: undefined,
-        current_step: undefined,
+        assignee: assignee.map((u: any) => ({
+          id: u.id,
+          full_name: u.full_name,
+        })),
         assignee_procurement: undefined,
         assignee_contract: undefined,
       };
@@ -498,7 +465,7 @@ export const assignProjectsToUser = async (
         where: { id },
         select: {
           status: true,
-          current_template: true,
+          current_workflow_type: true,
           assignee_contract: true,
           assignee_procurement: true,
         },
@@ -508,7 +475,7 @@ export const assignProjectsToUser = async (
         throw new BadRequestError(`Project ${id} not found`);
       }
       const assigneeField =
-        project.current_template?.type === UnitResponsibleType.CONTRACT
+        project.current_workflow_type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
       await UserService.getById(assigneeId);
@@ -564,11 +531,7 @@ export const changeAssignee = async (
     where: { id },
     select: {
       status: true,
-      current_template: {
-        select: {
-          type: true,
-        },
-      },
+      current_workflow_type: true,
     },
   });
   if (!project) {
@@ -581,7 +544,7 @@ export const changeAssignee = async (
     );
   }
   const assigneeField =
-    project.current_template?.type === UnitResponsibleType.CONTRACT
+    project.current_workflow_type === UnitResponsibleType.CONTRACT
       ? 'assignee_contract'
       : 'assignee_procurement';
 
@@ -615,8 +578,9 @@ export const changeAssignee = async (
 export const claimProject = async (user: UserPayload, projectId: string) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: {
-      current_template: true,
+    select: {
+      status: true,
+      current_workflow_type: true,
     },
   });
 
@@ -624,7 +588,7 @@ export const claimProject = async (user: UserPayload, projectId: string) => {
     throw new NotFoundError('Project not found');
   }
   const assigneeField =
-    project.current_template?.type === UnitResponsibleType.CONTRACT
+    project.current_workflow_type === UnitResponsibleType.CONTRACT
       ? 'assignee_contract'
       : 'assignee_procurement';
 
@@ -675,7 +639,7 @@ export const acceptProjects = async (
           status: true,
           assignee_procurement: true,
           assignee_contract: true,
-          current_template: true,
+          current_workflow_type: true,
         },
       });
 
@@ -684,7 +648,7 @@ export const acceptProjects = async (
       }
 
       const assigneeField =
-        project.current_template?.type === UnitResponsibleType.CONTRACT
+        project.current_workflow_type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
 
