@@ -6,6 +6,19 @@ import {
   RejectSubmissionSchema,
 } from '../models/Submission';
 
+export const getProjectSubmissions = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Submission']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = (req as any).user;
+  const { projectId } = req.params;
+
+  const submissions = await SubmissionService.getProjectSubmissions(
+    { id },
+    projectId
+  );
+  res.status(200).json(submissions);
+};
+
 export const createSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]

@@ -1,5 +1,9 @@
 import { Prisma } from '../../generated/prisma/client';
-import { SubmissionStatus, SubmissionType } from '../../generated/prisma/enums';
+import {
+  SubmissionStatus,
+  SubmissionType,
+  UnitResponsibleType,
+} from '../../generated/prisma/enums';
 import { prisma } from '../config/prisma';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { UserPayload } from '../lib/types';
@@ -26,6 +30,56 @@ const getSubmissionRound = async (
     select: { submission_round: true },
   });
   return lastSubmission ? (lastSubmission.submission_round || 0) + 1 : 1;
+};
+
+export const getProjectSubmissions = async (user: UserPayload, projectId: string) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { procurement_type: true },
+  });
+
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+
+  const submissionData = await prisma.projectSubmission.findMany({
+    where: { project_id: projectId },
+    orderBy: { submitted_at: 'desc' },
+    include: {
+      step: {
+        select: {
+          name: true,
+          order: true,
+          template: { select: { type: true } },
+        },
+      },
+      documents: true,
+    },
+  });
+
+  const formatSubmissions = submissionData.map((submission) => {
+    return {
+      step_name: submission.step!.name,
+      step_order: submission.step!.order,
+      template_type: submission.step!.template.type,
+      ...submission,
+      step: undefined,
+    };
+  });
+
+  const contractSubmissions = formatSubmissions.filter(
+    (submission) =>
+      submission.template_type === UnitResponsibleType.CONTRACT
+  );
+
+  const procurementSubmissions = formatSubmissions.filter(
+    (submission) => submission.template_type === project?.procurement_type
+  );
+
+  return {
+    procurement: procurementSubmissions,
+    contract: contractSubmissions,
+  };
 };
 
 export const createStaffSubmissionsProject = async (
