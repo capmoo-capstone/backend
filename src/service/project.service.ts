@@ -7,6 +7,7 @@ import {
   SubmissionType,
   UnitResponsibleType,
   UserRole,
+  Prisma,
 } from '../../generated/prisma/client';
 import {
   AcceptProjectsDto,
@@ -46,9 +47,10 @@ const mapSubmissionToPhaseStatus = (
 
 const computePhaseStatus = async (
   projectId: string,
-  templateType: UnitResponsibleType
+  templateType: UnitResponsibleType,
+  tx: Prisma.TransactionClient
 ): Promise<PhaseStatusResult> => {
-  const template = await prisma.workflowTemplate.findFirst({
+  const template = await tx.workflowTemplate.findFirst({
     where: { type: templateType },
     select: {
       id: true,
@@ -59,7 +61,7 @@ const computePhaseStatus = async (
   if (!template)
     throw new Error(`Template not found for type: ${templateType}`);
 
-  const submissions = await prisma.projectSubmission.findMany({
+  const submissions = await tx.projectSubmission.findMany({
     where: {
       project_id: projectId,
       submission_type: SubmissionType.STAFF,
@@ -101,8 +103,11 @@ const computePhaseStatus = async (
   return { status: ProjectPhaseStatus.COMPLETED };
 };
 
-export const getWorkflowStatus = async (projectId: string) => {
-  const project = await prisma.project.findUnique({
+export const getWorkflowStatus = async (
+  projectId: string,
+  tx: Prisma.TransactionClient
+) => {
+  const project = await tx.project.findUnique({
     where: { id: projectId },
     select: {
       procurement_type: true,
@@ -120,7 +125,11 @@ export const getWorkflowStatus = async (projectId: string) => {
   if (!project.assignee_procurement_id) {
     procurement = { status: ProjectPhaseStatus.NOT_STARTED };
   } else
-    procurement = await computePhaseStatus(projectId, project.procurement_type);
+    procurement = await computePhaseStatus(
+      projectId,
+      project.procurement_type,
+      tx
+    );
 
   if (
     procurement.status !== ProjectPhaseStatus.COMPLETED ||
@@ -131,16 +140,9 @@ export const getWorkflowStatus = async (projectId: string) => {
   } else
     contract = await computePhaseStatus(
       projectId,
-      UnitResponsibleType.CONTRACT
+      UnitResponsibleType.CONTRACT,
+      tx
     );
-
-  await prisma.project.update({
-    where: { id: projectId },
-    data: {
-      procurement_status: { ...procurement },
-      contract_status: { ...contract },
-    },
-  });
 
   return { procurement, contract };
 };
@@ -202,7 +204,7 @@ export const createProject = async (
 
 export const getById = async (user: UserPayload, id: string): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
-    const projectData = await prisma.project.findUnique({
+    const projectData = await tx.project.findUnique({
       where: { id },
       include: {
         current_template: {
@@ -302,71 +304,12 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
       current_step: projectData.current_step,
     };
 
-    const workflow = await tx.workflowTemplate.findUnique({
-      where: { id: projectData.current_template_id },
-      select: {
-        type: true,
-        steps: {
-          orderBy: { order: 'asc' },
-          select: {
-            name: true,
-            order: true,
-            required_step: true,
-            required_documents: true,
-          },
-        },
-      },
-    });
-
-    if (!workflow) {
-      throw new NotFoundError('Workflow template not found for this project');
-    }
-
-    const submissionData = await prisma.projectSubmission.findMany({
-      where: { project_id: id, submission_type: SubmissionType.STAFF },
-      orderBy: [{ submission_round: 'asc' }],
-      include: {
-        documents: {
-          select: { field_key: true, file_name: true, file_path: true },
-        },
-        step: true,
-        submitter: { select: { full_name: true } },
-        approver: { select: { full_name: true } },
-        proposer: { select: { full_name: true } },
-        completer: { select: { full_name: true } },
-      },
-    });
-
-    const submissions = submissionData.map((submission) => ({
-      step_name: submission.step!.name,
-      step_order: submission.step!.order,
-      submission_round: submission.submission_round,
-      status: submission.status,
-      type: submission.submission_type,
-      submitted_by: submission.submitter?.full_name ?? null,
-      submitted_at: submission.submitted_at,
-      comment: submission.comment ?? null,
-      approved_by: submission.approver?.full_name ?? null,
-      approved_at: submission.approved_at,
-      proposing_by: submission.proposer?.full_name ?? null,
-      proposing_at: submission.proposing_at,
-      completed_by: submission.completer?.full_name ?? null,
-      completed_at: submission.completed_at,
-      documents: submission.documents,
-      meta_data: submission.meta_data ?? null,
-    }));
-
-    const [procurementPhase, contractPhase] = await Promise.all([
-      computePhaseStatus(id, projectData.procurement_type),
-      computePhaseStatus(id, UnitResponsibleType.CONTRACT),
-    ]);
+    const { procurement, contract } = await getWorkflowStatus(id, tx);
 
     return {
       ...project,
-      workflow,
-      submissions,
-      procurement_phase: procurementPhase,
-      contract_phase: contractPhase,
+      procurement_status: procurement,
+      contract_status: contract,
     };
   });
 };
