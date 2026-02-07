@@ -83,6 +83,12 @@ enum SubmissionType {
   VENDOR
 }
 
+enum UrgentType {
+  NORMAL
+  URGENT
+  VERY_URGENT
+}
+
 // --- MODELS ---
 
 model Department {
@@ -124,14 +130,13 @@ model User {
   dept Department? @relation(fields: [dept_id], references: [id])
   unit Unit?       @relation(fields: [unit_id], references: [id])
 
-  // Self-relation for delegation
   delegate_to    User?  @relation("UserDelegation", fields: [delegated_user_id], references: [id])
   delegated_from User[] @relation("UserDelegation")
 
-  // Relations to Projects
-  created_projects      Project[]           @relation("ProjectCreator")
-  procurement_projects  Project[]           @relation("ProcurementAssignee")
-  contract_projects     Project[]           @relation("ContractAssignee")
+  procurement_projects Project[] @relation("ProcurementProjects")
+  contract_projects    Project[] @relation("ContractProjects")
+  created_projects     Project[] @relation("ProjectCreator")
+
   submitted_submissions ProjectSubmission[] @relation("SubmitBy")
   approved_submissions  ProjectSubmission[] @relation("ApprovedBy")
   proposed_submissions  ProjectSubmission[] @relation("ProposedBy")
@@ -152,42 +157,38 @@ model AllowedRole {
 }
 
 model Project {
-  id                      String          @id @default(uuid())
-  receive_no              String
-  title                   String
-  description             String?
-  budget                  Decimal         @db.Decimal(18, 2)
-  status                  ProjectStatus
-  procurement_type        ProcurementType
-  current_template_id     String
-  current_step_id         String?
-  procurement_status      Json?
-  contract_status         Json?
-  assignee_procurement_id String?
-  assignee_contract_id    String?
-  requesting_unit_id      String?
-  is_urgent               Boolean         @default(false)
-  expected_approval_date  DateTime?
-  pr_no                   String?
-  po_no                   String?
-  less_no                 String?
-  contract_no             String?
-  migo_no                 String?
-  vendor_name             String?
-  vendor_tax_id           String?
-  vendor_email            String?
-  created_by              String
-  created_at              DateTime        @default(now())
-  updated_at              DateTime?       @updatedAt
+  id                     String          @id @default(uuid())
+  receive_no             String
+  title                  String
+  description            String?
+  budget                 Decimal         @db.Decimal(18, 2)
+  status                 ProjectStatus
+  procurement_type       ProcurementType
+  current_template_id    String
+  current_step_id        String?
+  requesting_unit_id     String?
+  is_urgent              UrgentType      @default(NORMAL)
+  expected_approval_date DateTime?
+  pr_no                  String?
+  po_no                  String?
+  less_no                String?
+  contract_no            String?
+  migo_no                String?
+  vendor_name            String?
+  vendor_tax_id          String?
+  vendor_email           String?
+  created_by             String
+  created_at             DateTime        @default(now())
+  updated_at             DateTime?       @updatedAt
 
   // Relations
-  current_template     WorkflowTemplate @relation(fields: [current_template_id], references: [id])
-  current_step         WorkflowStep?    @relation(fields: [current_step_id], references: [id])
-  creator              User             @relation("ProjectCreator", fields: [created_by], references: [id])
-  assignee_procurement User?            @relation("ProcurementAssignee", fields: [assignee_procurement_id], references: [id])
-  assignee_contract    User?            @relation("ContractAssignee", fields: [assignee_contract_id], references: [id])
-  requesting_unit      Unit?            @relation(fields: [requesting_unit_id], references: [id])
+  current_template WorkflowTemplate @relation(fields: [current_template_id], references: [id])
+  current_step     WorkflowStep?    @relation(fields: [current_step_id], references: [id])
+  creator          User             @relation("ProjectCreator", fields: [created_by], references: [id])
+  requesting_unit  Unit?            @relation(fields: [requesting_unit_id], references: [id])
 
+  assignee_procurement User[]                @relation("ProcurementProjects")
+  assignee_contract    User[]                @relation("ContractProjects")
   project_cancellation ProjectCancellation[]
   project_histories    ProjectHistory[]
   submissions          ProjectSubmission[]
