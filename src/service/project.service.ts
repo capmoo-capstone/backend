@@ -30,12 +30,12 @@ const mapSubmissionToPhaseStatus = (
   status: SubmissionStatus
 ): ProjectPhaseStatus => {
   switch (status) {
-    case SubmissionStatus.SUBMITTED:
+    case SubmissionStatus.WAITING_APPROVAL:
       return ProjectPhaseStatus.WAITING_APPROVAL;
-    case SubmissionStatus.PENDING_PROPOSAL:
-      return ProjectPhaseStatus.PENDING_PROPOSAL;
-    case SubmissionStatus.PROPOSING:
-      return ProjectPhaseStatus.PROPOSING;
+    case SubmissionStatus.WAITING_PROPOSAL:
+      return ProjectPhaseStatus.WAITING_PROPOSAL;
+    case SubmissionStatus.WAITING_SIGNATURE:
+      return ProjectPhaseStatus.WAITING_SIGNATURE;
     case SubmissionStatus.REJECTED:
       return ProjectPhaseStatus.REJECTED;
     case SubmissionStatus.COMPLETED:
