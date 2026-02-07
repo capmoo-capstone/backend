@@ -112,8 +112,8 @@ export const getWorkflowStatus = async (
     select: {
       procurement_type: true,
       current_template: { select: { type: true } },
-      assignee_procurement_id: true,
-      assignee_contract_id: true,
+      assignee_procurement: true,
+      assignee_contract: true,
     },
   });
 
@@ -122,7 +122,7 @@ export const getWorkflowStatus = async (
   let procurement: PhaseStatusResult;
   let contract: PhaseStatusResult;
 
-  if (!project.assignee_procurement_id) {
+  if (!project.assignee_procurement) {
     procurement = { status: ProjectPhaseStatus.NOT_STARTED };
   } else
     procurement = await computePhaseStatus(
@@ -134,7 +134,7 @@ export const getWorkflowStatus = async (
   if (
     procurement.status !== ProjectPhaseStatus.COMPLETED ||
     project.current_template.type !== UnitResponsibleType.CONTRACT ||
-    !project.assignee_contract_id
+    !project.assignee_contract
   ) {
     contract = { status: ProjectPhaseStatus.NOT_STARTED };
   } else
@@ -287,20 +287,20 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
         dept_name: projectData.creator.unit?.dept?.name ?? null,
         dept_id: projectData.creator.unit?.dept?.id ?? null,
       },
-      assignee_procurement: {
-        id: projectData.assignee_procurement?.id ?? null,
-        full_name: projectData.assignee_procurement?.full_name ?? null,
-        role: projectData.assignee_procurement?.role ?? null,
-        unit_name: projectData.assignee_procurement?.unit?.name ?? null,
-        unit_id: projectData.assignee_procurement?.unit?.id ?? null,
-      },
-      assignee_contract: {
-        id: projectData.assignee_contract?.id ?? null,
-        full_name: projectData.assignee_contract?.full_name ?? null,
-        role: projectData.assignee_contract?.role ?? null,
-        unit_name: projectData.assignee_contract?.unit?.name ?? null,
-        unit_id: projectData.assignee_contract?.unit?.id ?? null,
-      },
+      assignee_procurement: projectData.assignee_procurement.map((u) => ({
+        id: u.id,
+        full_name: u.full_name,
+        role: u.role,
+        unit_name: u.unit?.name ?? null,
+        unit_id: u.unit?.id ?? null,
+      })),
+      assignee_contract: projectData.assignee_contract.map((u) => ({
+        id: u.id,
+        full_name: u.full_name,
+        role: u.role,
+        unit_name: u.unit?.name ?? null,
+        unit_id: u.unit?.id ?? null,
+      })),
       current_step: projectData.current_step,
     };
 
@@ -499,8 +499,8 @@ export const assignProjectsToUser = async (
         select: {
           status: true,
           current_template: true,
-          assignee_contract_id: true,
-          assignee_procurement_id: true,
+          assignee_contract: true,
+          assignee_procurement: true,
         },
       });
 
@@ -509,8 +509,8 @@ export const assignProjectsToUser = async (
       }
       const assigneeField =
         project.current_template?.type === UnitResponsibleType.CONTRACT
-          ? 'assignee_contract_id'
-          : 'assignee_procurement_id';
+          ? 'assignee_contract'
+          : 'assignee_procurement';
       await UserService.getById(assigneeId);
 
       if (project.status !== ProjectStatus.UNASSIGNED) {
@@ -524,11 +524,13 @@ export const assignProjectsToUser = async (
         where: {
           id,
           status: ProjectStatus.UNASSIGNED,
-          [assigneeField]: null,
+          [assigneeField]: { none: {} },
         },
         data: {
           status: ProjectStatus.WAITING_ACCEPT,
-          [assigneeField]: assigneeId,
+          [assigneeField]: {
+            connect: { id: assigneeId },
+          },
         },
         select: { id: true, status: true, [assigneeField]: true },
       });
@@ -539,8 +541,8 @@ export const assignProjectsToUser = async (
         data: {
           project_id: id,
           action: LogActionType.ASSIGNEE_UPDATE,
-          old_value: { status: project.status, assignee: null },
-          new_value: { status: updated.status, assignee: assigneeId },
+          old_value: { status: project.status, assignee: [] },
+          new_value: { status: updated.status, assignee: [assigneeId] },
           changed_by: user.id,
         },
       });
@@ -580,17 +582,20 @@ export const changeAssignee = async (
   }
   const assigneeField =
     project.current_template?.type === UnitResponsibleType.CONTRACT
-      ? 'assignee_contract_id'
-      : 'assignee_procurement_id';
+      ? 'assignee_contract'
+      : 'assignee_procurement';
 
   return await prisma.$transaction(async (tx) => {
-    const oldAssigneeId = (project as any)[assigneeField];
+    const oldAssigneeId = (project as any)[assigneeField]?.id;
     await UserService.getById(newAssigneeId);
 
     const updated = await tx.project.update({
       where: { id },
       data: {
-        [assigneeField]: newAssigneeId,
+        [assigneeField]: {
+          disconnect: { id: oldAssigneeId },
+          connect: { id: newAssigneeId },
+        },
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
@@ -598,8 +603,8 @@ export const changeAssignee = async (
       data: {
         project_id: id,
         action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { assignee: oldAssigneeId },
-        new_value: { assignee: newAssigneeId },
+        old_value: { assignee: [oldAssigneeId] },
+        new_value: { assignee: [newAssigneeId] },
         changed_by: user.id,
       },
     });
@@ -620,8 +625,8 @@ export const claimProject = async (user: UserPayload, projectId: string) => {
   }
   const assigneeField =
     project.current_template?.type === UnitResponsibleType.CONTRACT
-      ? 'assignee_contract_id'
-      : 'assignee_procurement_id';
+      ? 'assignee_contract'
+      : 'assignee_procurement';
 
   if (project.status !== ProjectStatus.UNASSIGNED) {
     throw new BadRequestError('This project cannot be claimed');
@@ -632,11 +637,11 @@ export const claimProject = async (user: UserPayload, projectId: string) => {
       where: {
         id: projectId,
         status: ProjectStatus.UNASSIGNED,
-        [assigneeField]: null,
+        [assigneeField]: { none: {} },
       },
       data: {
         status: ProjectStatus.IN_PROGRESS,
-        [assigneeField]: user.id,
+        [assigneeField]: { connect: { id: user.id } },
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
@@ -645,8 +650,8 @@ export const claimProject = async (user: UserPayload, projectId: string) => {
       data: {
         project_id: projectId,
         action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { status: project.status, assignee: null },
-        new_value: { status: updated.status, assignee: updated[assigneeField] },
+        old_value: { status: project.status, assignee: [] },
+        new_value: { status: updated.status, assignee: [user.id] },
         changed_by: user.id,
       },
     });
@@ -668,8 +673,8 @@ export const acceptProjects = async (
         select: {
           id: true,
           status: true,
-          assignee_procurement_id: true,
-          assignee_contract_id: true,
+          assignee_procurement: true,
+          assignee_contract: true,
           current_template: true,
         },
       });
@@ -680,10 +685,10 @@ export const acceptProjects = async (
 
       const assigneeField =
         project.current_template?.type === UnitResponsibleType.CONTRACT
-          ? 'assignee_contract_id'
-          : 'assignee_procurement_id';
+          ? 'assignee_contract'
+          : 'assignee_procurement';
 
-      if (user.id !== project[assigneeField]) {
+      if (project[assigneeField]?.some((u) => u.id === user.id) === false) {
         throw new BadRequestError(`You are not the assignee of project ${id}`);
       }
 
@@ -694,7 +699,7 @@ export const acceptProjects = async (
       }
 
       const updated = await tx.project.update({
-        where: { id },
+        where: { id, status: ProjectStatus.WAITING_ACCEPT },
         data: {
           status: ProjectStatus.IN_PROGRESS,
         },
