@@ -756,12 +756,54 @@ export const cancelProject = async (
       throw new NotFoundError('Project not found');
     }
 
-    const updated = await tx.project.update({
+    const isHead =
+      user.role === UserRole.HEAD_OF_UNIT ||
+      user.role === UserRole.HEAD_OF_DEPARTMENT;
+
+    if (!isHead) {
+      if (project.status === ProjectStatus.CANCELLED) {
+        throw new BadRequestError('Project is already cancelled');
+      }
+      if (project.status === ProjectStatus.WAITING_CANCEL) {
+        throw new BadRequestError('Cancellation is already requested');
+      }
+
+      const updated = await tx.project.update({
+        where: { id: data.id },
+        data: {
+          status: ProjectStatus.WAITING_CANCEL,
+        },
+        select: { id: true, status: true },
+      });
+
+      await tx.projectHistory.create({
+        data: {
+          project_id: data.id,
+          action: LogActionType.STATUS_UPDATE,
+          old_value: { status: project.status },
+          new_value: { status: updated.status },
+          changed_by: user.id,
+        },
+      });
+
+      const cancelled = await tx.projectCancellation.create({
+        data: {
+          project_id: data.id,
+          reason: data.reason,
+          is_cancelled: false,
+          cancelled_by: user.id,
+        },
+        select: { project_id: true, reason: true, is_cancelled: true },
+      });
+
+      return { data: cancelled };
+    }
+
+    await tx.project.update({
       where: { id: data.id },
       data: {
         status: ProjectStatus.CANCELLED,
       },
-      select: { id: true, status: true },
     });
 
     await tx.projectHistory.create({
@@ -778,17 +820,92 @@ export const cancelProject = async (
       data: {
         project_id: data.id,
         reason: data.reason,
+        is_cancelled: true,
         cancelled_by: user.id,
       },
-      select: { reason: true },
+      select: { project_id: true, reason: true, is_cancelled: true },
     });
 
-    return {
-      id: updated.id,
-      status: updated.status,
-      reason: cancelled.reason,
-    };
+    return { data: cancelled };
   });
+};
+
+export const approveCancellation = async (
+  user: UserPayload,
+  projectId: string
+) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { status: true },
+  });
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+  if (project.status !== ProjectStatus.WAITING_CANCEL) {
+    throw new BadRequestError('Project is not in WAITING_CANCEL status');
+  }
+  const updated = await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      status: ProjectStatus.CANCELLED,
+    },
+    select: { id: true, status: true },
+  });
+
+  await prisma.projectCancellation.updateMany({
+    where: { project_id: projectId },
+    data: { is_cancelled: true },
+  });
+
+  await prisma.projectHistory.create({
+    data: {
+      project_id: projectId,
+      action: LogActionType.STATUS_UPDATE,
+      old_value: { status: project.status },
+      new_value: { status: updated.status },
+      changed_by: user.id,
+    },
+  });
+  return { data: updated };
+};
+
+export const rejectCancellation = async (
+  user: UserPayload,
+  projectId: string
+) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { status: true },
+  });
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+  if (project.status !== ProjectStatus.WAITING_CANCEL) {
+    throw new BadRequestError('Project is not in WAITING_CANCEL status');
+  }
+  const updated = await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      status: ProjectStatus.IN_PROGRESS,
+    },
+    select: { id: true, status: true },
+  });
+
+  await prisma.projectCancellation.deleteMany({
+    where: { project_id: projectId },
+  });
+
+  await prisma.projectHistory.create({
+    data: {
+      project_id: projectId,
+      action: LogActionType.STATUS_UPDATE,
+      old_value: { status: project.status },
+      new_value: { status: updated.status },
+      changed_by: user.id,
+    },
+  });
+
+  return { data: updated };
 };
 
 export const updateProjectData = async (
