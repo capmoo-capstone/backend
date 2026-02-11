@@ -15,8 +15,8 @@ export const getAll = async (req: Request, res: Response) => {
 export const getById = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { departmentId } = req.params;
-  const department = await DepartmentService.getById(departmentId);
+  const id = req.params.id as string;
+  const department = await DepartmentService.getById(id);
   res.status(200).json(department);
 };
 
@@ -24,7 +24,7 @@ export const createDepartment = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateDepartmentDto' } }
-  const { data } = req.body;
+  const data = req.body;
   const department = await DepartmentService.createDepartment(data);
   res.status(201).json(department);
 };
@@ -33,8 +33,8 @@ export const updateDepartment = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateDepartmentDto' } }
-  const { departmentId } = req.params;
-  const data = { ...req.body, id: departmentId };
+  const id = req.params.id as string;
+  const data = { ...req.body, id };
   const updatedDepartment = await DepartmentService.updateDepartment(data);
   res.status(200).json(updatedDepartment);
 };
@@ -42,7 +42,7 @@ export const updateDepartment = async (req: Request, res: Response) => {
 export const removeDepartment = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { departmentId } = req.params;
-  await DepartmentService.deleteDepartment(departmentId);
+  const id = req.params.id as string;
+  await DepartmentService.deleteDepartment(id);
   res.status(204).send();
 };

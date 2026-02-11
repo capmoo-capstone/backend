@@ -23,5 +23,7 @@ export const errorHandler = (
     });
   }
 
-  res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  res
+    .status(500)
+    .json({ status: 'error', message: err.message || 'Internal Server Error' });
 };

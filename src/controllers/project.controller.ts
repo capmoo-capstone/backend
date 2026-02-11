@@ -25,7 +25,7 @@ export const getAll = async (req: Request, res: Response) => {
 export const getById = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id: projectId } = req.params;
+  const projectId = req.params.id as string;
   const { id, role, unit, dept } = (req as any).user;
   const project = await ProjectService.getById(
     { id, role, unit, dept },
@@ -88,7 +88,7 @@ export const changeAssignee = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: projectId } = req.params;
+  const projectId = req.params.id as string;
   const data = { id: projectId, userId: req.body.userId };
 
   const validatedData = UpdateStatusProjectSchema.parse(data);
@@ -112,7 +112,7 @@ export const claimProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: projectId } = req.params;
+  const projectId = req.params.id as string;
   const project = await ProjectService.claimProject({ id }, projectId);
   res.status(200).json(project);
 };
@@ -121,7 +121,7 @@ export const cancelProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: projectId } = req.params;
+  const projectId = req.params.id as string;
   const data = { id: projectId, reason: req.body.reason };
 
   const validatedData = CancelProjectSchema.parse(data);
@@ -134,7 +134,7 @@ export const updateProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/UpdateProjectDto' } }
   const { id } = (req as any).user;
-  const { id: projectId } = req.params;
+  const projectId = req.params.id as string;
   const data = { id: projectId, updateData: req.body };
 
   const validatedData = UpdateProjectSchema.parse(data);
@@ -148,7 +148,7 @@ export const updateProject = async (req: Request, res: Response) => {
 export const removeProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id: projectId } = req.params;
+  const projectId = req.params.id as string;
   const { id, role, unit, dept } = (req as any).user;
   await ProjectService.deleteProject({ id, role, unit, dept }, projectId);
   res.status(204).send();

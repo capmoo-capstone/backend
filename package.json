@@ -5,12 +5,13 @@
   "main": "index.js",
   "scripts": {
     "swagger": "tsx swagger.ts",
-    "dev": "npm run swagger && tsx --env-file=.env src/app.ts",
+    "dev": "npm run swagger && tsx --env-file=.env src/local.ts",
+    "postinstall": "prisma generate",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
-    "migrate:reset": "prisma migrate reset && prisma db seed",
+    "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
-    "gen": "tsx generate.ts"
+    "filegen": "tsx filegen.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -38,6 +39,7 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "pg": "^8.16.3",
+    "serverless-http": "^4.0.0",
     "swagger-ui-express": "^5.0.1",
     "zod": "^4.3.5"
   },

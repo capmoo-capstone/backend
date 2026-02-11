@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Department, UserRole } from '../../generated/prisma/client';
+import { Department, UserRole } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,

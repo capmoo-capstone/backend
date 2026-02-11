@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import {
-  ProcurementType,
-  SubmissionType,
-  UnitResponsibleType,
-} from '../../generated/prisma/enums';
+import { SubmissionType, UnitResponsibleType } from '@prisma/client';
 
 export const CreateSubmissionSchema = z.object({
   project_id: z.uuid(),

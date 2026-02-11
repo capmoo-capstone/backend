@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Prisma, User, UserRole } from '../../generated/prisma/client';
+import { Prisma, User, UserRole } from '@prisma/client';
 import {
   CreateUserDto,
   UsersListFilters,

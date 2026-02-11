@@ -10,7 +10,7 @@ export const getProjectSubmissions = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { projectId } = req.params;
+  const projectId = req.params.projectId as string;
 
   const submissions = await SubmissionService.getProjectSubmissions(
     { id },
@@ -36,7 +36,7 @@ export const approveSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: submissionId } = req.params;
+  const submissionId = req.params.id as string;
 
   const validateData = ApproveSubmissionSchema.parse({
     id: submissionId,
@@ -53,7 +53,7 @@ export const proposeSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: submissionId } = req.params;
+  const submissionId = req.params.id as string;
 
   const submission = await SubmissionService.proposeSubmission(
     { id },
@@ -69,7 +69,7 @@ export const signAndCompleteSubmission = async (
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: submissionId } = req.params;
+  const submissionId = req.params.id as string;
 
   const submission = await SubmissionService.signAndCompleteSubmission(
     { id },
@@ -82,7 +82,7 @@ export const rejectSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
-  const { id: submissionId } = req.params;
+  const submissionId = req.params.id as string;
 
   const validateData = RejectSubmissionSchema.parse({
     id: submissionId,

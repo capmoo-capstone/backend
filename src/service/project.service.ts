@@ -8,7 +8,7 @@ import {
   UnitResponsibleType,
   UserRole,
   Prisma,
-} from '../../generated/prisma/client';
+} from '@prisma/client';
 import {
   AcceptProjectsDto,
   CancelProjectDto,
@@ -23,9 +23,7 @@ import {
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
 import * as UnitService from './unit.service';
-import { ProjectWhereInput } from '../../generated/prisma/models';
 import { UserPayload } from '../lib/types';
-import { gte, lte } from 'zod';
 
 const mapSubmissionToPhaseStatus = (
   status: SubmissionStatus
@@ -71,7 +69,7 @@ const computePhaseStatus = async (
       submission_type: SubmissionType.STAFF,
       workflow_type: workflowType,
     },
-    orderBy: { step_order: 'asc', submission_round: 'desc' },
+    orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
     select: { step_order: true, status: true },
   });
 
@@ -158,7 +156,7 @@ export const listProjects = async (
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
-  const where: ProjectWhereInput = {};
+  const where: Prisma.ProjectWhereInput = {};
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({

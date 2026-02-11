@@ -1,4 +1,4 @@
-import { UserRole } from '../../generated/prisma/client';
+import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AppError, UnauthorizedError } from '../lib/errors';
 import jwt from 'jsonwebtoken';

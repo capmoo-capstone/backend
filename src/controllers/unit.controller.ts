@@ -15,7 +15,7 @@ export const getAll = async (req: Request, res: Response) => {
 export const getById = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId } = req.params;
+  const unitId = req.params.unitId as string;
   const unit = await UnitService.getById(unitId);
   res.status(200).json(unit);
 };
@@ -31,7 +31,7 @@ export const createUnit = async (req: Request, res: Response) => {
 export const addUsers = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId } = req.params;
+  const unitId = req.params.unitId as string;
 
   const data = { ...req.body, unit_id: unitId };
   const result = await UnitService.addUsersToUnit(data);
@@ -41,7 +41,8 @@ export const addUsers = async (req: Request, res: Response) => {
 export const addRepresentative = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId, userId } = req.params;
+  const unitId = req.params.unitId as string;
+  const userId = req.params.userId as string;
 
   const data = { unit_id: unitId, user_id: userId };
   const updatedUser = await UnitService.addRepresentativeToUnit(data);
@@ -52,7 +53,7 @@ export const updateUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateUnitDto' } }
-  const { unitId } = req.params;
+  const unitId = req.params.unitId as string;
   const data = { ...req.body, id: unitId };
   const updatedUnit = await UnitService.updateUnit(data);
   res.status(200).json(updatedUnit);
@@ -61,7 +62,7 @@ export const updateUnit = async (req: Request, res: Response) => {
 export const removeUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId } = req.params;
+  const unitId = req.params.unitId as string;
   await UnitService.deleteUnit(unitId);
   res.status(204).send();
 };

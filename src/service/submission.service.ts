@@ -1,9 +1,9 @@
-import { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
-} from '../../generated/prisma/enums';
+} from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { UserPayload } from '../lib/types';
@@ -32,7 +32,10 @@ const getSubmissionRound = async (
   return lastSubmission ? (lastSubmission.submission_round || 0) + 1 : 1;
 };
 
-export const getProjectSubmissions = async (user: UserPayload, projectId: string) => {
+export const getProjectSubmissions = async (
+  user: UserPayload,
+  projectId: string
+) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { procurement_type: true },
@@ -51,8 +54,7 @@ export const getProjectSubmissions = async (user: UserPayload, projectId: string
   });
 
   const contractSubmissions = submissionData.filter(
-    (submission) =>
-      submission.workflow_type === UnitResponsibleType.CONTRACT
+    (submission) => submission.workflow_type === UnitResponsibleType.CONTRACT
   );
 
   const procurementSubmissions = submissionData.filter(
@@ -162,10 +164,7 @@ export const approveSubmission = async (
   return { data: updated };
 };
 
-export const proposeSubmission = async (
-  user: UserPayload,
-  id: string
-) => {
+export const proposeSubmission = async (user: UserPayload, id: string) => {
   const submission = await prisma.projectSubmission.findUnique({
     where: { id },
     select: { status: true },

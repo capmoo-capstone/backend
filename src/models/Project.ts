@@ -4,7 +4,7 @@ import {
   ProjectPhaseStatus,
   ProcurementType,
   UrgentType,
-} from '../../generated/prisma/client';
+} from '@prisma/client';
 
 export interface PhaseStatusResult {
   status: ProjectPhaseStatus;

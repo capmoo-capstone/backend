@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Department, UserRole } from '../../generated/prisma/client';
+import { Department, UserRole } from '@prisma/client';
 
 const CreateDepartmentSchema = z.object({
   name: z.string(),

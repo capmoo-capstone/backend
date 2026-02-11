@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
-import { UserRole } from '../../generated/prisma/client';
+import { UserRole } from '@prisma/client';
 
 type AuthUser = {
   id: string;

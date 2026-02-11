@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { User, UserRole } from '../../generated/prisma/client'; // Use the actual enum from Prisma
+import { User, UserRole } from '@prisma/client'; // Use the actual enum from Prisma
 
 const CreateUserSchema = z.object({
   username: z.string().min(3).max(30),

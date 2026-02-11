@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Unit, User, UserRole } from '../../generated/prisma/client';
+import { Unit, User, UserRole } from '@prisma/client';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
 import {
   CreateUnitDto,
