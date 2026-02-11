@@ -9,7 +9,7 @@ export const CreateSubmissionSchema = z.object({
   project_id: z.uuid(),
   type: z.enum(SubmissionType),
   step_order: z.number(),
-  workflow_type: z.enum(ProcurementType).and(z.enum(UnitResponsibleType)),
+  workflow_type: z.enum(UnitResponsibleType),
   require_approval: z.boolean(),
   meta_data: z
     .array(

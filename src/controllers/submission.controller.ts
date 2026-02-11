@@ -40,8 +40,6 @@ export const approveSubmission = async (req: Request, res: Response) => {
 
   const validateData = ApproveSubmissionSchema.parse({
     id: submissionId,
-    step_order: req.body.stepOrder,
-    workflow_type: req.body.workflowType,
     required_signature: req.body.requiredSignature,
   });
   const submission = await SubmissionService.approveSubmission(

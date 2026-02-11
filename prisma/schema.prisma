@@ -164,7 +164,7 @@ model Project {
   budget                 Decimal         @db.Decimal(18, 2)
   status                 ProjectStatus
   procurement_type       ProcurementType
-  current_workflow_type  String
+  current_workflow_type  UnitResponsibleType
   requesting_unit_id     String?
   is_urgent              UrgentType      @default(NORMAL)
   expected_approval_date DateTime?
