@@ -3,6 +3,7 @@ import {
   Project,
   ProjectPhaseStatus,
   ProcurementType,
+  UrgentType,
 } from '../../generated/prisma/client';
 
 export interface PhaseStatusResult {
@@ -18,7 +19,7 @@ export const CreateProjectSchema = z.object({
   less_no: z.string().optional(),
   requesting_unit_id: z.string().optional(),
   procurement_type: z.enum(ProcurementType),
-  is_urgent: z.boolean().default(false),
+  is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
   expected_approval_date: z.coerce.date().optional(),
 });
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
@@ -69,7 +70,7 @@ export const UpdateProjectSchema = z.object({
     less_no: z.string().optional(),
     requesting_unit_id: z.string().optional(),
     procurement_type: z.enum(ProcurementType).optional(),
-    is_urgent: z.boolean().optional(),
+    is_urgent: z.enum(UrgentType).optional(),
     expected_approval_date: z.coerce.date().optional(),
     vendor_name: z.string().optional(),
     vendor_email: z.string().optional(),

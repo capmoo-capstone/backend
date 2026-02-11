@@ -2,9 +2,22 @@ import { Request, Response } from 'express';
 import * as SubmissionService from '../service/submission.service';
 import {
   CreateSubmissionSchema,
-  StatusSubmissionSchema,
+  ApproveSubmissionSchema,
   RejectSubmissionSchema,
 } from '../models/Submission';
+
+export const getProjectSubmissions = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Submission']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = (req as any).user;
+  const { projectId } = req.params;
+
+  const submissions = await SubmissionService.getProjectSubmissions(
+    { id },
+    projectId
+  );
+  res.status(200).json(submissions);
+};
 
 export const createSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
@@ -25,9 +38,9 @@ export const approveSubmission = async (req: Request, res: Response) => {
   const { id } = (req as any).user;
   const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse({
+  const validateData = ApproveSubmissionSchema.parse({
     id: submissionId,
-    step_id: req.body.stepId,
+    required_signature: req.body.requiredSignature,
   });
   const submission = await SubmissionService.approveSubmission(
     { id },
@@ -42,28 +55,25 @@ export const proposeSubmission = async (req: Request, res: Response) => {
   const { id } = (req as any).user;
   const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse({
-    id: submissionId,
-  });
   const submission = await SubmissionService.proposeSubmission(
     { id },
-    validateData
+    submissionId
   );
   res.status(200).json(submission);
 };
 
-export const finishProposedSubmission = async (req: Request, res: Response) => {
+export const signAndCompleteSubmission = async (
+  req: Request,
+  res: Response
+) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const { id } = (req as any).user;
   const { id: submissionId } = req.params;
 
-  const validateData = StatusSubmissionSchema.parse({
-    id: submissionId,
-  });
-  const submission = await SubmissionService.finishProposedSubmission(
+  const submission = await SubmissionService.signAndCompleteSubmission(
     { id },
-    validateData
+    submissionId
   );
   res.status(200).json(submission);
 };
