@@ -227,6 +227,13 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
             },
           },
         },
+        project_cancellation: {
+          where: { is_active: true },
+          include: {
+            requester: { select: { id: true, full_name: true, role: true } },
+            approver: { select: { id: true, full_name: true, role: true } },
+          },
+        },
       },
     });
     if (!projectData) {
@@ -284,6 +291,16 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
         unit_name: u.unit?.name ?? null,
         unit_id: u.unit?.id ?? null,
       })),
+      cancellation: projectData.project_cancellation
+        ? projectData.project_cancellation.map((c) => ({
+            reason: c.reason,
+            is_cancelled: c.is_cancelled,
+            requester: c.requester,
+            approver: c.approver,
+            requested_at: c.requested_at,
+            approved_at: c.approved_at,
+          }))
+        : null,
     };
 
     const { procurement, contract } = await getWorkflowStatus(id, tx);
@@ -507,8 +524,8 @@ export const assignProjectsToUser = async (
         data: {
           project_id: id,
           action: LogActionType.ASSIGNEE_UPDATE,
-          old_value: { status: project.status, assignee: [] },
-          new_value: { status: updated.status, assignee: [assigneeId] },
+          old_value: { status: project.status, [assigneeField]: [] },
+          new_value: { status: updated.status, [assigneeField]: [assigneeId] },
           changed_by: user.id,
         },
       });
@@ -567,8 +584,10 @@ export const changeAssignee = async (
       data: {
         project_id: id,
         action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { assignee: [(project as any)[assigneeField]?.[0]?.id] },
-        new_value: { assignee: [newAssigneeId] },
+        old_value: {
+          [assigneeField]: [(project as any)[assigneeField]?.[0]?.id],
+        },
+        new_value: { [assigneeField]: [newAssigneeId] },
         changed_by: user.id,
       },
     });
@@ -615,8 +634,8 @@ export const claimProject = async (user: UserPayload, projectId: string) => {
       data: {
         project_id: projectId,
         action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { status: project.status, assignee: [] },
-        new_value: { status: updated.status, assignee: [user.id] },
+        old_value: { status: project.status, [assigneeField]: [] },
+        new_value: { status: updated.status, [assigneeField]: [user.id] },
         changed_by: user.id,
       },
     });
@@ -737,8 +756,66 @@ export const addAssignee = async (
       data: {
         project_id: projectId,
         action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { assignee: project[assigneeField].map((u) => u.id) },
-        new_value: { assignee: updated[assigneeField].map((u) => u.id) },
+        old_value: { [assigneeField]: project[assigneeField].map((u) => u.id) },
+        new_value: { [assigneeField]: updated[assigneeField].map((u) => u.id) },
+        changed_by: user.id,
+      },
+    });
+    return { data: updated };
+  });
+};
+
+export const returnProject = async (user: UserPayload, projectId: string) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      status: true,
+      current_workflow_type: true,
+      _count: {
+        select: {
+          submissions: true,
+        },
+      },
+    },
+  });
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+  if (project.status !== ProjectStatus.IN_PROGRESS) {
+    throw new BadRequestError('Only IN_PROGRESS projects can be returned');
+  }
+  if (project._count.submissions > 0) {
+    throw new BadRequestError(
+      'Cannot return project with existing submissions'
+    );
+  }
+
+  const assigneeField =
+    project.current_workflow_type === UnitResponsibleType.CONTRACT
+      ? 'assignee_contract'
+      : 'assignee_procurement';
+
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.project.update({
+      where: {
+        id: projectId,
+        status: ProjectStatus.IN_PROGRESS,
+        [assigneeField]: { some: { id: user.id } },
+      },
+      data: {
+        status: ProjectStatus.UNASSIGNED,
+        [assigneeField]: {
+          disconnect: { id: user.id },
+        },
+      },
+      select: { id: true, status: true },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: projectId,
+        action: LogActionType.ASSIGNEE_UPDATE,
+        old_value: { status: project.status, [assigneeField]: [user.id] },
+        new_value: { status: updated.status, [assigneeField]: [] },
         changed_by: user.id,
       },
     });
@@ -755,9 +832,17 @@ export const cancelProject = async (
       where: { id: data.id },
       select: { status: true },
     });
-
     if (!project) {
       throw new NotFoundError('Project not found');
+    }
+
+    const cancellation = await tx.projectCancellation.findFirst({
+      where: { project_id: data.id, is_active: true },
+    });
+    if (cancellation) {
+      throw new BadRequestError(
+        'There is already an active cancellation request'
+      );
     }
 
     const isHead =
@@ -794,8 +879,9 @@ export const cancelProject = async (
         data: {
           project_id: data.id,
           reason: data.reason,
+          is_active: true,
           is_cancelled: false,
-          cancelled_by: user.id,
+          requested_by: user.id,
         },
         select: { project_id: true, reason: true, is_cancelled: true },
       });
@@ -824,8 +910,10 @@ export const cancelProject = async (
       data: {
         project_id: data.id,
         reason: data.reason,
+        is_active: true,
         is_cancelled: true,
-        cancelled_by: user.id,
+        requested_by: user.id,
+        approved_by: user.id,
       },
       select: { project_id: true, reason: true, is_cancelled: true },
     });

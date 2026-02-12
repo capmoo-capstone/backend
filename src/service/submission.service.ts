@@ -76,9 +76,16 @@ export const createStaffSubmissionsProject = async (
   }
 
   const submission = await prisma.$transaction(async (tx) => {
-    const submission_round = await getSubmissionRound(data, tx);
+    const project = await tx.project.findUnique({
+      where: { id: data.project_id },
+      select: { id: true },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
 
-    let nextStatus: SubmissionStatus = data.require_approval
+    const submission_round = await getSubmissionRound(data, tx);
+    const nextStatus: SubmissionStatus = data.require_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
 

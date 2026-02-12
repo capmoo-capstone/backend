@@ -84,6 +84,25 @@ export const assignProjects = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
+export const addAssignee = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = (req as any).user;
+  const projectId = req.params.id as string;
+  const userId = req.body.userId;
+  const project = await ProjectService.addAssignee({ id }, projectId, userId);
+  res.status(200).json(project);
+};
+
+export const returnProject = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = (req as any).user;
+  const projectId = req.params.id as string;
+  const project = await ProjectService.returnProject({ id }, projectId);
+  res.status(200).json(project);
+};
+
 export const changeAssignee = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
@@ -126,6 +145,24 @@ export const cancelProject = async (req: Request, res: Response) => {
 
   const validatedData = CancelProjectSchema.parse(data);
   const project = await ProjectService.cancelProject({ id }, validatedData);
+  res.status(200).json(project);
+};
+
+export const approveCancellation = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = (req as any).user;
+  const projectId = req.params.id as string;
+  const project = await ProjectService.approveCancellation({ id }, projectId);
+  res.status(200).json(project);
+};
+
+export const rejectCancellation = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { id } = (req as any).user;
+  const projectId = req.params.id as string;
+  const project = await ProjectService.rejectCancellation({ id }, projectId);
   res.status(200).json(project);
 };
 

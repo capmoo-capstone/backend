@@ -136,10 +136,12 @@ model User {
   contract_projects    Project[] @relation("ContractProjects")
   created_projects     Project[] @relation("ProjectCreator")
 
-  submitted_submissions ProjectSubmission[] @relation("SubmitBy")
-  approved_submissions  ProjectSubmission[] @relation("ApprovedBy")
-  proposed_submissions  ProjectSubmission[] @relation("ProposedBy")
-  completed_submissions ProjectSubmission[] @relation("CompletedBy")
+  submitted_submissions  ProjectSubmission[]   @relation("SubmitBy")
+  approved_submissions   ProjectSubmission[]   @relation("ApprovedBy")
+  proposed_submissions   ProjectSubmission[]   @relation("ProposedBy")
+  completed_submissions  ProjectSubmission[]   @relation("CompletedBy")
+  cancellation_requests  ProjectCancellation[] @relation("CancelRequester")
+  cancellation_approvals ProjectCancellation[] @relation("CancelApprover")
 
   @@map("users")
 }
@@ -156,16 +158,16 @@ model AllowedRole {
 }
 
 model Project {
-  id                     String          @id @default(uuid())
+  id                     String              @id @default(uuid())
   receive_no             String
   title                  String
   description            String?
-  budget                 Decimal         @db.Decimal(18, 2)
+  budget                 Decimal             @db.Decimal(18, 2)
   status                 ProjectStatus
   procurement_type       ProcurementType
   current_workflow_type  UnitResponsibleType
   requesting_unit_id     String?
-  is_urgent              UrgentType      @default(NORMAL)
+  is_urgent              UrgentType          @default(NORMAL)
   expected_approval_date DateTime?
   pr_no                  String?
   po_no                  String?
@@ -176,11 +178,11 @@ model Project {
   vendor_tax_id          String?
   vendor_email           String?
   created_by             String
-  created_at             DateTime        @default(now())
-  updated_at             DateTime?       @updatedAt
+  created_at             DateTime            @default(now())
+  updated_at             DateTime?           @updatedAt
 
-  creator          User             @relation("ProjectCreator", fields: [created_by], references: [id])
-  requesting_unit  Unit?            @relation(fields: [requesting_unit_id], references: [id])
+  creator         User  @relation("ProjectCreator", fields: [created_by], references: [id])
+  requesting_unit Unit? @relation(fields: [requesting_unit_id], references: [id])
 
   assignee_procurement User[]                @relation("ProcurementProjects")
   assignee_contract    User[]                @relation("ContractProjects")
@@ -192,14 +194,20 @@ model Project {
 }
 
 model ProjectCancellation {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   project_id   String
   reason       String
-  is_cancelled Boolean  @default(false)
-  cancelled_by String
-  cancelled_at DateTime @default(now())
+  is_active    Boolean   @default(true)
+  is_cancelled Boolean   @default(false)
+  requested_by String
+  requested_at DateTime  @default(now())
+  approved_by  String?
+  approved_at  DateTime?
+  cancelled_at DateTime?
 
-  project Project @relation(fields: [project_id], references: [id])
+  project   Project @relation(fields: [project_id], references: [id])
+  requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
+  approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
 
   @@map("project_cancellations")
 }
@@ -220,16 +228,16 @@ model ProjectHistory {
 }
 
 model ProjectSubmission {
-  id               String           @id @default(uuid())
+  id               String              @id @default(uuid())
   project_id       String
   workflow_type    UnitResponsibleType
   step_order       Int
-  submission_type  SubmissionType   @default(STAFF)
+  submission_type  SubmissionType      @default(STAFF)
   submission_round Int
   po_no            String?
   status           SubmissionStatus
   submitted_by     String?
-  submitted_at     DateTime         @default(now())
+  submitted_at     DateTime            @default(now())
   approved_by      String?
   approved_at      DateTime?
   proposing_by     String?
