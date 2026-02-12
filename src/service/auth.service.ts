@@ -23,8 +23,10 @@ export const login = async (
   );
 
   return {
-    user_id: user.id,
-    token,
+    data: {
+      user_id: user.id,
+      token,
+    },
   };
 };
 
@@ -47,7 +49,7 @@ export const register = async (
       role: role ?? UserRole.GUEST,
     },
   });
-  return newUser;
+  return { data: newUser };
 };
 
 const verifyToken = (token: string): any => {
@@ -67,11 +69,5 @@ export const getMe = async (token: string) => {
   if (!user) {
     throw new UnauthorizedError('User not found');
   }
-  return user;
-};
-
-export const logout = async (token: string): Promise<void> => {
-  // In a real-world application, you might want to implement token blacklisting here.
-  // For simplicity, we'll just verify the token to ensure it's valid.
-  verifyToken(token);
+  return { data: user };
 };

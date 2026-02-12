@@ -5,7 +5,7 @@ export const login = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
   const { username, full_name } = req.body;
   const data = await AuthService.login(username, full_name);
-  res.status(200).json({ data });
+  res.status(200).json(data);
 };
 
 export const register = async (req: Request, res: Response) => {
@@ -17,27 +17,13 @@ export const register = async (req: Request, res: Response) => {
       .json({ error: 'Username and full name are required' });
   }
   const data = await AuthService.register(username, full_name, role);
-  res.status(201).json({ data });
+  res.status(201).json(data);
 };
 
 export const getMe = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Authorization header missing' });
-  }
-  const token = authHeader.split(' ')[1];
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { token } = (req as any).user;
   const data = await AuthService.getMe(token);
-  res.status(200).json({ data });
-};
-
-export const logout = async (req: Request, res: Response) => {
-  // #swagger.tags = ['Auth']
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Authorization header missing' });
-  }
-  const token = authHeader.split(' ')[1];
-  await AuthService.logout(token);
-  res.status(200).json({ message: 'Logged out successfully' });
+  res.status(200).json(data);
 };

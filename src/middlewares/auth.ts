@@ -80,7 +80,7 @@ export const protect = async (
       throw new UnauthorizedError('User not found');
     }
 
-    (req as any).user = user;
+    (req as any).user = { token, ...user };
     next();
   } catch (err) {
     next(err);

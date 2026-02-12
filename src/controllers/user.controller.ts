@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as UserService from '../service/user.service';
+import { CreateUserSchema } from '../models/User';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
@@ -24,7 +25,7 @@ export const updateRole = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
-  const { role } = req.body;
+  const role = req.body.role;
   const updatedUser = await UserService.updateRole(id, role);
   res.status(200).json(updatedUser);
 };
@@ -33,7 +34,7 @@ export const setUserDelegate = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
-  const { delegateId } = req.body;
+  const delegateId = req.body.delegateId;
   const updatedUser = await UserService.setUserDelegate(id, delegateId);
   res.status(200).json(updatedUser);
 };
@@ -49,8 +50,10 @@ export const revokeDelegate = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/UpdateUserDto' } }
   const id = req.params.id as string;
-  const updatedUser = await UserService.updateUser(id, req.body);
+  const validatedData = CreateUserSchema.partial().parse(req.body);
+  const updatedUser = await UserService.updateUser(id, validatedData);
   res.status(200).json(updatedUser);
 };
 

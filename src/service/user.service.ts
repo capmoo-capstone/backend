@@ -71,17 +71,17 @@ const getByUsername = async (username: string): Promise<User | null> => {
   });
 };
 
-export const getById = async (id: string): Promise<User | null> => {
+export const getById = async (id: string): Promise<any> => {
   const user = await prisma.user.findUnique({
     where: { id },
   });
   if (!user) {
     throw new NotFoundError('User not found');
   }
-  return user;
+  return { data: user };
 };
 
-export const updateRole = async (id: string, role: UserRole): Promise<User> => {
+export const updateRole = async (id: string, role: UserRole): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { id },
@@ -93,53 +93,68 @@ export const updateRole = async (id: string, role: UserRole): Promise<User> => {
     if (!user) {
       throw new NotFoundError('User not found');
     }
-    if (!user.dept_id) {
-      throw new NotFoundError('User has no department assigned');
+    if (user.dept_id) {
+      const allowedRole = await tx.allowedRole.findFirst({
+        where: {
+          dept_id: user.dept_id,
+          role,
+        },
+      });
+
+      if (!allowedRole) {
+        throw new BadRequestError(
+          'The specified role is not allowed for this department'
+        );
+      }
     }
 
-    const allowedRole = await tx.allowedRole.findFirst({
-      where: {
-        dept_id: user.dept_id,
-        role,
-      },
-    });
-
-    if (!allowedRole) {
-      throw new BadRequestError(
-        'The specified role is not allowed for this department'
-      );
-    }
-
-    return await tx.user.update({
+    const updated = await tx.user.update({
       where: { id },
       data: { role },
+      select: { id: true, full_name: true, role: true },
     });
+
+    return { data: updated };
   });
 };
 
 export const setUserDelegate = async (
   userId: string,
   delegateUserId: string
-): Promise<User> => {
+): Promise<any> => {
   await Promise.all([getById(userId), getById(delegateUserId)]);
-  return await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: {
       is_delegating: true,
       delegated_user_id: delegateUserId,
     },
+    select: {
+      id: true,
+      full_name: true,
+      is_delegating: true,
+      delegated_user_id: true,
+    },
   });
+  return { data: updated };
 };
 
-export const revokeDelegate = async (id: string): Promise<User> => {
+export const revokeDelegate = async (id: string): Promise<any> => {
   await getById(id);
-  return await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id },
     data: {
       is_delegating: false,
       delegated_user_id: null,
     },
+    select: {
+      id: true,
+      full_name: true,
+      is_delegating: true,
+      delegated_user_id: true,
+    },
   });
+  return { data: updated };
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
@@ -152,10 +167,11 @@ export const deleteUser = async (id: string): Promise<void> => {
 export const updateUser = async (
   id: string,
   updateData: Partial<CreateUserDto>
-): Promise<User> => {
+): Promise<any> => {
   await getById(id);
-  return await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id },
     data: updateData,
   });
+  return { data: updated };
 };
