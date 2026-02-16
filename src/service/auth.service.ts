@@ -220,7 +220,10 @@ export const getMe = async (token: string) => {
     orgRoles.map((r) => ({
       role: r.role.name,
       dept_id: r.department.id,
+      dept_code: r.department.code,
+      dept_name: r.department.name,
       unit_id: r.unit?.id || null,
+      unit_name: r.unit?.name || null,
     }));
 
   const ownRoles = formatRoles(user.roles);
