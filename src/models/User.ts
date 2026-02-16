@@ -4,6 +4,7 @@ import { User, Role, UnitResponsibleType } from '@prisma/client';
 export const RegisterUserSchema = z.object({
   username: z.string(),
   full_name: z.string(),
+  email: z.email().optional(),
   role: z.enum(Role).default(Role.GUEST),
   dept_id: z.string(),
   unit_id: z.string().optional(),

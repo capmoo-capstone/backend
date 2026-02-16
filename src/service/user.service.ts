@@ -118,43 +118,11 @@ export const updateRole = async (id: string, role: UserRole): Promise<any> => {
   });
 };
 
-export const setUserDelegate = async (
-  userId: string,
-  delegateUserId: string
 ): Promise<any> => {
-  await Promise.all([getById(userId), getById(delegateUserId)]);
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      is_delegating: true,
-      delegated_user_id: delegateUserId,
-    },
-    select: {
-      id: true,
-      full_name: true,
-      is_delegating: true,
-      delegated_user_id: true,
-    },
   });
-  return { data: updated };
 };
 
-export const revokeDelegate = async (id: string): Promise<any> => {
-  await getById(id);
-  const updated = await prisma.user.update({
-    where: { id },
-    data: {
-      is_delegating: false,
-      delegated_user_id: null,
-    },
-    select: {
-      id: true,
-      full_name: true,
-      is_delegating: true,
-      delegated_user_id: true,
-    },
   });
-  return { data: updated };
 };
 
 export const deleteUser = async (id: string): Promise<void> => {

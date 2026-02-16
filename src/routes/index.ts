@@ -7,6 +7,7 @@ import authRoutes from './auth.route';
 import departmentRoutes from './department.route';
 import unitRoutes from './unit.route';
 import submissionRoutes from './submission.route';
+import delegationRoutes from './delegation.route';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/project', protect, projectRoutes);
 router.use('/department', protect, departmentRoutes);
 router.use('/unit', protect, unitRoutes);
 router.use('/submission', protect, submissionRoutes);
+router.use('/delegation', protect, delegationRoutes);
 
 export default router;
