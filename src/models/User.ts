@@ -16,19 +16,25 @@ export const UpdateUserUnitSchema = z.object({
   users: z.array(
     z.object({
       id: z.uuid(),
-      role: z.enum(Role).default(Role.GENERAL_STAFF),
     })
   ),
 });
 export type UpdateUserUnitDto = z.infer<typeof UpdateUserUnitSchema>;
 
-const UpdateRepresentativeUnitSchema = z.object({
+export const UpdateRepresentativeUnitSchema = z.object({
+  id: z.uuid(),
   unit_id: z.uuid(),
-  user_id: z.uuid(),
 });
 export type UpdateRepresentativeUnitDto = z.infer<
   typeof UpdateRepresentativeUnitSchema
 >;
+
+export const UpdateRoleSchema = z.object({
+  role: z.enum(Role),
+  dept_id: z.uuid(),
+  unit_id: z.uuid().optional(),
+});
+export type UpdateRoleDto = z.infer<typeof UpdateRoleSchema>;
 
 export interface UsersListFilters {
   unitId?: string;

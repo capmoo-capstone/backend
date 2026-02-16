@@ -110,7 +110,7 @@ model Unit {
   organization_roles UserOrganizationRole[]
   projects           Project[]
 
-  dept Department @relation(fields: [dept_id], references: [id])
+  department Department @relation(fields: [dept_id], references: [id])
 
   @@map("units")
 }

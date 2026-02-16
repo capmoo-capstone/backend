@@ -1,8 +1,14 @@
 import { Role } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { AppError, NotFoundError, UnauthorizedError } from '../lib/errors';
+import {
+  AppError,
+  BadRequestError,
+  NotFoundError,
+  UnauthorizedError,
+} from '../lib/errors';
 import jwt from 'jsonwebtoken';
 import { RegisterUserDto } from '../models/User';
+import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
 
 export const login = async (
   username: string,
@@ -102,6 +108,14 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
 
     if (!departmentRecord) {
       throw new NotFoundError('Department not found');
+    }
+
+    if (isUnitLevelRole(data.role) && !data.unit_id) {
+      throw new BadRequestError('Unit is required for unit-level roles');
+    }
+
+    if (isDeptLevelRole(data.role) && data.unit_id) {
+      throw new BadRequestError('Unit is not allowed for department roles');
     }
 
     if (
