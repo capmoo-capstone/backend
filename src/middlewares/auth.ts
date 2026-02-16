@@ -4,7 +4,7 @@ import { ForbiddenError, UnauthorizedError } from '../lib/errors';
 import { Role } from '@prisma/client';
 import { UserPayload } from '../lib/types';
 
-type AuthPayload = Omit<UserPayload, 'id' | 'username'> & {
+type AuthPayload = Omit<UserPayload, 'id'> & {
   token: string;
 };
 
@@ -29,7 +29,18 @@ export const protect = async (
       process.env.JWT_SECRET as string
     ) as UserPayload;
 
-    req.user = { ...decoded, token };
+    const formatRoles = (orgRoles: any[]) =>
+      orgRoles.map((r) => ({
+        role: r.role.name,
+        dept_id: r.department.id,
+        dept_code: r.department.code,
+        dept_name: r.department.name,
+        unit_id: r.unit?.id || null,
+        unit_name: r.unit?.name || null,
+      }));
+    
+    
+    req.user = { ...decoded, token, roles: { ...decoded.roles, own: formatRoles(decoded.roles.own), delegated: formatRoles(decoded.roles.delegated) } };
     next();
   } catch (err) {
     next(new UnauthorizedError('Invalid or expired token'));

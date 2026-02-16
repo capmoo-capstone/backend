@@ -203,31 +203,22 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
       include: {
         requesting_unit: {
           include: {
-            dept: { select: { id: true, name: true } },
+            department: { select: { id: true, name: true } },
           },
         },
         assignee_procurement: {
           include: {
-            unit: { select: { id: true, name: true } },
-            roles: { select: { role: true } },
+            roles: { select: { role: true, department: { select: { id: true, name: true } }, unit: { select: { id: true, name: true } } } },
           },
         },
         assignee_contract: {
           include: {
-            unit: { select: { id: true, name: true } },
-            roles: { select: { role: true } },
+            roles: { select: { role: true, department: { select: { id: true, name: true } }, unit: { select: { id: true, name: true } } } },
           },
         },
         creator: {
           include: {
-            unit: {
-              select: {
-                id: true,
-                name: true,
-                dept: { select: { id: true, name: true } },
-              },
-            },
-            roles: { select: { role: true } },
+            roles: { select: { role: true, department: { select: { id: true, name: true } }, unit: { select: { id: true, name: true } } } },
           },
         },
         project_cancellation: {
@@ -269,30 +260,30 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
       requester: {
         unit_name: projectData.requesting_unit?.name ?? null,
         unit_id: projectData.requesting_unit?.id ?? null,
-        dept_name: projectData.requesting_unit?.dept?.name ?? null,
-        dept_id: projectData.requesting_unit?.dept?.id ?? null,
+        dept_name: projectData.requesting_unit?.department?.name ?? null,
+        dept_id: projectData.requesting_unit?.department?.id ?? null,
       },
       creator: {
         full_name: projectData.creator.full_name,
         roles: projectData.creator.roles.map((r) => r.role),
-        unit_name: projectData.creator.unit?.name ?? null,
-        unit_id: projectData.creator.unit?.id ?? null,
-        dept_name: projectData.creator.unit?.dept?.name ?? null,
-        dept_id: projectData.creator.unit?.dept?.id ?? null,
+        unit_name: projectData.creator.roles[0]?.unit?.name ?? null,
+        unit_id: projectData.creator.roles[0]?.unit?.id ?? null,
+        dept_name: projectData.creator.roles[0]?.department?.name ?? null,
+        dept_id: projectData.creator.roles[0]?.department?.id ?? null,
       },
       assignee_procurement: projectData.assignee_procurement.map((u) => ({
         id: u.id,
         full_name: u.full_name,
         roles: u.roles.map((r) => r.role),
-        unit_name: u.unit?.name ?? null,
-        unit_id: u.unit?.id ?? null,
+        unit_name: u.roles[0]?.unit?.name ?? null,
+        unit_id: u.roles[0]?.unit?.id ?? null,
       })),
       assignee_contract: projectData.assignee_contract.map((u) => ({
         id: u.id,
         full_name: u.full_name,
         roles: u.roles.map((r) => r.role),
-        unit_name: u.unit?.name ?? null,
-        unit_id: u.unit?.id ?? null,
+        unit_name: u.roles[0]?.unit?.name ?? null,
+        unit_id: u.roles[0]?.unit?.id ?? null,
       })),
       cancellation: projectData.project_cancellation
         ? projectData.project_cancellation.map((c) => ({
@@ -320,7 +311,7 @@ export const getUnassignedProjectsByUnit = async (
   user: UserPayload
 ): Promise<ProjectsListResponse> => {
   const unit = await prisma.unit.findUnique({
-    where: { id: user.unit_id! },
+    where: { id: user.roles.own[0]?.unit_id || user.roles.delegated[0]?.unit_id || '' },
     select: { id: true, name: true, type: true, dept_id: true },
   });
   if (!unit) {
@@ -341,7 +332,7 @@ export const getUnassignedProjectsByUnit = async (
         title: true,
         status: true,
         requesting_unit: {
-          select: { name: true, dept: { select: { name: true } } },
+          select: { name: true, department: { select: { name: true, id: true } } },
         },
         budget: true,
         procurement_type: true,
@@ -409,7 +400,7 @@ export const getAssignedProjects = async (
     user.roles.delegated.some((r) => r.role === Role.HEAD_OF_UNIT)
   ) {
     const unit = await prisma.unit.findUnique({
-      where: { id: user.unit_id! },
+      where: { id: user.roles.own[0]?.unit_id || user.roles.delegated[0]?.unit_id || '' },
       select: { type: true },
     });
 
@@ -444,7 +435,7 @@ export const getAssignedProjects = async (
         title: true,
         status: true,
         requesting_unit: {
-          select: { name: true, dept: { select: { name: true } } },
+          select: { name: true, department: { select: { name: true, id: true } } },
         },
         budget: true,
         procurement_type: true,
