@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as AuthService from '../service/auth.service';
+import { RegisterUserSchema } from '../models/User';
 
 export const login = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
@@ -10,13 +11,21 @@ export const login = async (req: Request, res: Response) => {
 
 export const register = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
-  const { username, full_name, role } = req.body;
-  if (!username || !full_name) {
+  const { username, full_name, role, dept_id, unit_id } = req.body;
+  if (!username || !full_name || !dept_id) {
     return res
       .status(400)
-      .json({ error: 'Username and full name are required' });
+      .json({ error: 'Username, full name, and department ID are required' });
   }
-  const data = await AuthService.register(username, full_name, role);
+
+  const validatedData = RegisterUserSchema.parse({
+    username,
+    full_name,
+    role,
+    dept_id,
+    unit_id,
+  });
+  const data = await AuthService.register(validatedData);
   res.status(201).json(data);
 };
 
