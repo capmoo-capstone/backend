@@ -6,7 +6,7 @@ import {
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
-  UserRole,
+  Role,
   Prisma,
 } from '@prisma/client';
 import {
@@ -209,11 +209,13 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
         assignee_procurement: {
           include: {
             unit: { select: { id: true, name: true } },
+            roles: { select: { role: true } },
           },
         },
         assignee_contract: {
           include: {
             unit: { select: { id: true, name: true } },
+            roles: { select: { role: true } },
           },
         },
         creator: {
@@ -225,13 +227,14 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
                 dept: { select: { id: true, name: true } },
               },
             },
+            roles: { select: { role: true } },
           },
         },
         project_cancellation: {
           where: { is_active: true },
           include: {
-            requester: { select: { id: true, full_name: true, role: true } },
-            approver: { select: { id: true, full_name: true, role: true } },
+            requester: { select: { id: true, full_name: true, roles: true } },
+            approver: { select: { id: true, full_name: true, roles: true } },
           },
         },
       },
@@ -271,7 +274,7 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
       },
       creator: {
         full_name: projectData.creator.full_name,
-        role: projectData.creator.role,
+        roles: projectData.creator.roles.map((r) => r.role),
         unit_name: projectData.creator.unit?.name ?? null,
         unit_id: projectData.creator.unit?.id ?? null,
         dept_name: projectData.creator.unit?.dept?.name ?? null,
@@ -280,14 +283,14 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
       assignee_procurement: projectData.assignee_procurement.map((u) => ({
         id: u.id,
         full_name: u.full_name,
-        role: u.role,
+        roles: u.roles.map((r) => r.role),
         unit_name: u.unit?.name ?? null,
         unit_id: u.unit?.id ?? null,
       })),
       assignee_contract: projectData.assignee_contract.map((u) => ({
         id: u.id,
         full_name: u.full_name,
-        role: u.role,
+        roles: u.roles.map((r) => r.role),
         unit_name: u.unit?.name ?? null,
         unit_id: u.unit?.id ?? null,
       })),
@@ -316,7 +319,13 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
 export const getUnassignedProjectsByUnit = async (
   user: UserPayload
 ): Promise<ProjectsListResponse> => {
-  const unit = await UnitService.getById(user.unit!.id);
+  const unit = await prisma.unit.findUnique({
+    where: { id: user.unit_id! },
+    select: { id: true, name: true, type: true, dept_id: true },
+  });
+  if (!unit) {
+    throw new NotFoundError('Unit not found');
+  }
   const where: any = {
     status: { in: [ProjectStatus.UNASSIGNED] },
     current_workflow_type: unit.type,
@@ -395,10 +404,12 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (user.role === UserRole.HEAD_OF_UNIT) {
-    // Unit-based query
+  if (
+    user.roles.own.some((r) => r.role === Role.HEAD_OF_UNIT) ||
+    user.roles.delegated.some((r) => r.role === Role.HEAD_OF_UNIT)
+  ) {
     const unit = await prisma.unit.findUnique({
-      where: { id: user.unit!.id },
+      where: { id: user.unit_id! },
       select: { type: true },
     });
 
@@ -412,7 +423,8 @@ export const getAssignedProjects = async (
         },
       },
     });
-  } else if (user.role === UserRole.GENERAL_STAFF) {
+  } else if (user.roles.own.some((r) => r.role === Role.GENERAL_STAFF) ||
+    user.roles.delegated.some((r) => r.role === Role.GENERAL_STAFF)) {
     // User-based query
     where.AND.push({
       OR: [
@@ -846,8 +858,10 @@ export const cancelProject = async (
     }
 
     const isHead =
-      user.role === UserRole.HEAD_OF_UNIT ||
-      user.role === UserRole.HEAD_OF_DEPARTMENT;
+      user.roles.own.some((r) => r.role === Role.HEAD_OF_UNIT) ||
+      user.roles.delegated.some((r) => r.role === Role.HEAD_OF_UNIT) ||
+      user.roles.own.some((r) => r.role === Role.HEAD_OF_DEPARTMENT) ||
+      user.roles.delegated.some((r) => r.role === Role.HEAD_OF_DEPARTMENT);
 
     if (!isHead) {
       if (project.status === ProjectStatus.CANCELLED) {
