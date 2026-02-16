@@ -3,326 +3,317 @@ import {
   ProcurementType,
   SubmissionStatus,
   UnitResponsibleType,
-  UserRole,
+  Role as RoleEnum,
   UrgentType,
 } from '@prisma/client';
-
 import { prisma } from '../src/config/prisma';
 
 async function main() {
   console.log('--- Start Seeding ---');
 
-  // --- Start Deleting ---
+  // ---------------------------------------------------------
+  // 1. CLEANUP (Order matters to avoid Foreign Key errors)
+  // ---------------------------------------------------------
+  await prisma.userDelegation.deleteMany();
+  await prisma.userOrganizationRole.deleteMany();
   await prisma.projectDocument.deleteMany();
   await prisma.projectSubmission.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.allowedRole.deleteMany();
+  await prisma.userRole.deleteMany();
   await prisma.unit.deleteMany();
   await prisma.department.deleteMany();
-  // --- End Deleting ---
+  console.log('--- Database Cleaned ---');
 
-  // 1. Create Department
-  const deptPCM = await prisma.department.create({
-    data: {
-      name: 'Office of Supply',
-      code: 'SUPPLY',
-      allowed_role: {
-        create: [
-          { role: UserRole.ADMIN },
-          { role: UserRole.HEAD_OF_DEPARTMENT },
-          { role: UserRole.HEAD_OF_UNIT },
-          { role: UserRole.DOCUMENT_STAFF },
-          { role: UserRole.FINANCE_STAFF },
-          { role: UserRole.GENERAL_STAFF },
-        ],
-      },
-    },
+  // ---------------------------------------------------------
+  // 2. ROLE TEMPLATES
+  // ---------------------------------------------------------
+  // Populate the Role table from the Enum
+  const roleEnums = Object.values(RoleEnum);
+  for (const name of roleEnums) {
+    await prisma.userRole.create({ data: { name } });
+  }
+
+  // ---------------------------------------------------------
+  // 3. ORGANIZATIONAL STRUCTURE
+  // ---------------------------------------------------------
+  const deptSUP = await prisma.department.create({
+    data: { name: 'Office of Supply', code: 'SUPPLY' },
   });
 
   const deptREG = await prisma.department.create({
-    data: {
-      name: 'Office of Registration',
-      code: 'REGISTRATION',
-      allowed_role: {
-        create: [
-          { role: UserRole.HEAD_OF_DEPARTMENT },
-          { role: UserRole.HEAD_OF_UNIT },
-          { role: UserRole.GENERAL_STAFF },
-        ],
-      },
-    },
+    data: { name: 'Office of Registration', code: 'REGISTRATION' },
   });
 
   const deptENG = await prisma.department.create({
-    data: {
-      name: 'Faculty of Engineering',
-      code: 'ENGINEERING',
-      allowed_role: {
-        create: [
-          { role: UserRole.HEAD_OF_DEPARTMENT },
-          { role: UserRole.HEAD_OF_UNIT },
-          { role: UserRole.REPRESENTATIVE },
-          { role: UserRole.GENERAL_STAFF },
-        ],
-      },
-    },
+    data: { name: 'Faculty of Engineering', code: 'ENGINEERING' },
   });
 
-  // 2. Create Unit
+  // Supply Units
   const unit1 = await prisma.unit.create({
     data: {
       name: 'Procurement 1',
+      dept_id: deptSUP.id,
       type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
-      dept_id: deptPCM.id,
     },
   });
   const unit2 = await prisma.unit.create({
     data: {
       name: 'Procurement 2',
+      dept_id: deptSUP.id,
       type: [
         UnitResponsibleType.MT500K,
         UnitResponsibleType.SELECTION,
         UnitResponsibleType.EBIDDING,
       ],
-      dept_id: deptPCM.id,
     },
   });
   const unit3 = await prisma.unit.create({
     data: {
       name: 'Contract',
+      dept_id: deptSUP.id,
       type: [UnitResponsibleType.CONTRACT],
-      dept_id: deptPCM.id,
     },
   });
+
+  // External Unit
   const engineeringUnit = await prisma.unit.create({
-    data: {
-      name: 'Engineering Unit',
-      type: [],
-      dept_id: deptENG.id,
-    },
+    data: { name: 'Engineering Unit', dept_id: deptENG.id, type: [] },
   });
 
-  // 3. Create Users
-  const superAdmin = await prisma.user.create({
-    data: {
-      username: 'super',
-      full_name: 'Super Admin',
-      role: UserRole.SUPER_ADMIN,
-    },
-  });
+  // ---------------------------------------------------------
+  // 4. USERS & ROLE ASSIGNMENTS
+  // ---------------------------------------------------------
 
-  const adminUser = await prisma.user.create({
-    data: {
-      username: 'admin_jane',
-      email: 'jane.doe@company.com',
-      full_name: 'Jane Doe',
-      role: UserRole.ADMIN,
-      dept_id: deptPCM.id,
-      unit_id: unit1.id,
-    },
-  });
-
-  const headOfUnitUser = await prisma.user.create({
-    data: {
-      username: 'HeadUnit1_mike',
-      full_name: 'Mike HeadUnit',
-      role: UserRole.HEAD_OF_UNIT,
-      dept_id: deptPCM.id,
-      unit_id: unit1.id,
-    },
-  });
-
-  const staffUser = await prisma.user.create({
-    data: {
-      username: 'staff_bob',
-      full_name: 'Bob Smith',
-      role: UserRole.GENERAL_STAFF,
-      dept_id: deptPCM.id,
-      unit_id: unit1.id,
-    },
-  });
-
-  const staff2User = await prisma.user.create({
-    data: {
-      username: 'staff_alice',
-      full_name: 'Alice Jones',
-      role: UserRole.GENERAL_STAFF,
-      dept_id: deptPCM.id,
-      unit_id: unit2.id,
-    },
-  });
-
-  const staff3User = await prisma.user.create({
-    data: {
-      username: 'staff_cathy',
-      full_name: 'Cathy Williams',
-      role: UserRole.GENERAL_STAFF,
-      dept_id: deptPCM.id,
-      unit_id: unit3.id,
-    },
-  });
-
-  const regUser = await prisma.user.create({
-    data: {
-      username: 'reg_sam',
-      full_name: 'Sam Registration',
-      role: UserRole.GENERAL_STAFF,
-      dept_id: deptREG.id,
-    },
-  });
-
-  const representativeUser = await prisma.user.create({
-    data: {
-      username: 'rep_charlie',
-      full_name: 'Charlie Rep',
-      role: UserRole.REPRESENTATIVE,
-      dept_id: deptENG.id,
-      unit_id: engineeringUnit.id,
-    },
-  });
-
-  // 4. Create Workflow Template & Steps
-  const procurement1 = {
-    id: 'lt500k-template',
-    type: UnitResponsibleType.LT500K,
-    steps: [
-      {
-        name: 'Initial Request',
-        order: 1,
-        description: 'Staff submits the request',
-        required_step: [],
-        required_documents: [],
+  // Helper to quickly assign roles
+  const assignRole = async (
+    username: string,
+    fullName: string,
+    roleName: RoleEnum,
+    deptId: string,
+    unitId: string | null = null
+  ) => {
+    const user = await prisma.user.create({
+      data: { username, full_name: fullName },
+    });
+    const roleRecord = await prisma.userRole.findUnique({
+      where: { name: roleName },
+    });
+    await prisma.userOrganizationRole.create({
+      data: {
+        user_id: user.id,
+        role_id: roleRecord!.id,
+        dept_id: deptId,
+        unit_id: unitId,
       },
-      {
-        name: 'Manager Approval',
-        order: 2,
-        description: 'Department head reviews',
-        required_step: [1],
-        required_documents: [],
-      },
-    ],
+    });
+    return user;
   };
 
-  const procurement2 = {
-    id: 'mt500k-template',
-    type: UnitResponsibleType.MT500K,
-    steps: [
-      {
-        name: 'Initial Request',
-        order: 1,
-        description: 'Staff submits the request',
-        required_step: [],
-        required_documents: [],
-      },
-      {
-        name: 'Manager Approval',
-        order: 2,
-        description: 'Department head reviews',
-        required_step: [1],
-        required_documents: [],
-      },
-    ],
-  };
+  // Supply Roles (Unit-less Department roles)
+  const headDept = await assignRole(
+    'boss_mike',
+    'Mike Bossman',
+    RoleEnum.HEAD_OF_DEPARTMENT,
+    deptSUP.id
+  );
+  const finStaff = await assignRole(
+    'fin_lisa',
+    'Lisa Finance',
+    RoleEnum.FINANCE_STAFF,
+    deptSUP.id
+  );
+  const docStaff = await assignRole(
+    'doc_mary',
+    'Mary Document',
+    RoleEnum.DOCUMENT_STAFF,
+    deptSUP.id
+  );
 
-  // 5. Create a Project
-  const projectData = [
+  // Supply Roles (Unit-specific)
+  const adminJane = await assignRole(
+    'admin_jane',
+    'Jane Doe',
+    RoleEnum.ADMIN,
+    deptSUP.id,
+    unit1.id
+  );
+  const staffBob = await assignRole(
+    'staff_bob',
+    'Bob Smith',
+    RoleEnum.GENERAL_STAFF,
+    deptSUP.id,
+    unit1.id
+  );
+  const staffAlice = await assignRole(
+    'staff_alice',
+    'Alice Jones',
+    RoleEnum.GENERAL_STAFF,
+    deptSUP.id,
+    unit2.id
+  );
+  const staffCathy = await assignRole(
+    'staff_cathy',
+    'Cathy Williams',
+    RoleEnum.GENERAL_STAFF,
+    deptSUP.id,
+    unit3.id
+  );
+
+  // External Roles
+  const repCharlie = await assignRole(
+    'rep_charlie',
+    'Charlie Rep',
+    RoleEnum.REPRESENTATIVE,
+    deptENG.id,
+    engineeringUnit.id
+  );
+  const regSam = await assignRole(
+    'reg_sam',
+    'Sam Registration',
+    RoleEnum.GENERAL_STAFF,
+    deptREG.id
+  );
+
+  // ---------------------------------------------------------
+  // 5. DELEGATION (Mike delegates to Lisa for 7 days)
+  // ---------------------------------------------------------
+  await prisma.userDelegation.create({
+    data: {
+      delegator_id: headDept.id,
+      delegatee_id: finStaff.id,
+      start_date: new Date(),
+      end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // ---------------------------------------------------------
+  // 6. PROJECTS & WORKFLOW
+  // ---------------------------------------------------------
+  const projects = [
     {
       title: 'New Server Purchase 2026',
       receive_no: '1',
       budget: 150000.0,
       status: ProjectStatus.IN_PROGRESS,
       procurement_type: ProcurementType.LT500K,
-      current_workflow_type: procurement1.type,
-      created_by: adminUser.id,
-      assignee_procurement: {
-        connect: [{ id: staffUser.id }],
-      },
+      current_workflow_type: UnitResponsibleType.LT500K,
+      created_by: adminJane.id,
+      assignee_procurement: { connect: [{ id: staffBob.id }] },
       is_urgent: UrgentType.URGENT,
-      expected_approval_date: new Date('2026-02-15'),
+      expected_approval_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
     },
     {
-      title: 'New Server Purchase 2026/2',
+      title: 'Cloud Infrastructure Upgrade',
       receive_no: '2',
       budget: 750000.0,
       status: ProjectStatus.IN_PROGRESS,
       procurement_type: ProcurementType.MT500K,
-      current_workflow_type: procurement2.type,
-      assignee_procurement: {
-        connect: [{ id: staff2User.id }],
-      },
-      created_by: adminUser.id,
+      current_workflow_type: UnitResponsibleType.MT500K,
+      created_by: adminJane.id,
+      assignee_procurement: { connect: [{ id: staffAlice.id }] },
       is_urgent: UrgentType.NORMAL,
     },
     {
-      title: 'Cloud Purchase 2026',
+      title: 'Office Renovation',
       receive_no: '3',
-      budget: 300000.0,
-      status: ProjectStatus.UNASSIGNED,
-      procurement_type: ProcurementType.LT500K,
-      current_workflow_type: procurement1.type,
-      created_by: adminUser.id,
+      budget: 750000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.SELECTION,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      created_by: adminJane.id,
+      assignee_procurement: { connect: [{ id: staffAlice.id }] },
+      assignee_contract: { connect: [{ id: staffCathy.id }] },
       is_urgent: UrgentType.NORMAL,
     },
   ];
 
-  for (const p of projectData) {
-    await prisma.project.create({
-      data: p,
+  let createdProject = [];
+
+  for (const p of projects) {
+    const created = await prisma.project.create({ data: p });
+    createdProject.push(created);
+  }
+
+  await prisma.projectSubmission.create({
+    data: {
+      project_id: createdProject[0].id,
+      workflow_type: projects[0].current_workflow_type as UnitResponsibleType,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: staffBob.id,
+      documents: {
+        create: [
+          {
+            file_name: 'initial_proposal.pdf',
+            file_path: `/uploads/${createdProject[0].receive_no}/proposal.pdf`,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.projectSubmission.create({
+    data: {
+      project_id: createdProject[1].id,
+      workflow_type: projects[1].current_workflow_type as UnitResponsibleType,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: staffAlice.id,
+      documents: {
+        create: [
+          {
+            file_name: 'initial_proposal.pdf',
+            file_path: `/uploads/${createdProject[1].receive_no}/proposal.pdf`,
+          },
+        ],
+      },
+    },
+  });
+
+  for (let i = 1; i < 4; i++) {
+    await prisma.projectSubmission.create({
+      data: {
+        project_id: createdProject[2].id,
+        workflow_type: UnitResponsibleType.SELECTION,
+        step_order: i,
+        submission_round: 1,
+        status: SubmissionStatus.COMPLETED,
+        submitted_by: staffAlice.id,
+        documents: {
+          create: [
+            {
+              file_name: 'initial_proposal.pdf',
+              file_path: `/uploads/${createdProject[2].receive_no}/proposal.pdf`,
+            },
+          ],
+        },
+      },
     });
   }
 
-  const projects = await prisma.project.findMany({
-    where: { created_by: adminUser.id },
-    orderBy: { receive_no: 'asc' },
-  });
-
-  // 6. Create Project Submission & Document
   await prisma.projectSubmission.create({
     data: {
-      project_id: projects[0].id,
-      workflow_type: procurement1.type,
-      step_order: procurement1.steps[0].order,
-      submission_round: 1,
-      status: SubmissionStatus.COMPLETED,
-      submitted_by: adminUser.id,
-      meta_data: [{ browser: 'Chrome', ip: '192.168.1.1' }],
-      documents: {
-        create: [
-          {
-            file_name: 'quotation_v1.pdf',
-            file_path: '/uploads/projects/quotation_v1.pdf',
-          },
-        ],
-      },
-    },
-  });
-
-  await prisma.projectSubmission.create({
-    data: {
-      project_id: projects[1].id,
-      workflow_type: procurement2.type,
-      step_order: procurement2.steps[0].order,
+      project_id: createdProject[2].id,
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 1,
       submission_round: 1,
       status: SubmissionStatus.WAITING_APPROVAL,
-      submitted_by: staff2User.id,
-      meta_data: [],
+      submitted_by: staffCathy.id,
       documents: {
         create: [
           {
-            field_key: 'mt500k_procurement_plan_file',
-            file_name: 'procurement_plan.pdf',
-            file_path: '/uploads/projects/procurement_plan.pdf',
-          },
-          {
-            field_key: 'mt500k_tor_committee_appt_file',
-            file_name: 'tor_document.pdf',
-            file_path: '/uploads/projects/tor_document.pdf',
+            file_name: 'initial_proposal.pdf',
+            file_path: `/uploads/${createdProject[2].receive_no}/proposal.pdf`,
           },
         ],
       },
     },
   });
+
+  // 7. SUBMISSIONS & DOCUMENTS
 
   console.log('--- Seeding Completed Successfully ---');
 }

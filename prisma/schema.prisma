@@ -13,7 +13,7 @@ datasource db {
 }
 
 // --- ENUMS ---
-enum UserRole {
+enum Role {
   SUPER_ADMIN
   ADMIN
   HEAD_OF_DEPARTMENT
@@ -91,12 +91,12 @@ enum UrgentType {
 // --- MODELS ---
 
 model Department {
-  id           String        @id @default(uuid())
-  name         String
-  code         String
-  units        Unit[]
-  allowed_role AllowedRole[]
-  users        User[]
+  id   String @id @default(uuid())
+  name String
+  code String
+
+  units              Unit[]
+  organization_roles UserOrganizationRole[]
 
   @@map("departments")
 }
@@ -107,30 +107,25 @@ model Unit {
   name    String
   type    UnitResponsibleType[]
 
-  dept     Department @relation(fields: [dept_id], references: [id])
-  users    User[]
-  projects Project[]
+  organization_roles UserOrganizationRole[]
+  projects           Project[]
+
+  dept Department @relation(fields: [dept_id], references: [id])
 
   @@map("units")
 }
 
 model User {
-  id                String    @id @default(uuid())
-  dept_id           String?
-  unit_id           String?
-  username          String    @unique
-  email             String?   @unique
-  full_name         String
-  role              UserRole?
-  is_delegating     Boolean   @default(false)
-  delegated_user_id String?
-  created_at        DateTime  @default(now())
+  id         String   @id @default(uuid())
+  username   String   @unique
+  email      String?  @unique
+  full_name  String
+  created_at DateTime @default(now())
 
-  dept Department? @relation(fields: [dept_id], references: [id])
-  unit Unit?       @relation(fields: [unit_id], references: [id])
+  roles UserOrganizationRole[]
 
-  delegate_to    User?  @relation("UserDelegation", fields: [delegated_user_id], references: [id])
-  delegated_from User[] @relation("UserDelegation")
+  delegations_given    UserDelegation[] @relation("Delegator")
+  delegations_received UserDelegation[] @relation("Delegatee")
 
   procurement_projects Project[] @relation("ProcurementProjects")
   contract_projects    Project[] @relation("ContractProjects")
@@ -146,15 +141,42 @@ model User {
   @@map("users")
 }
 
-model AllowedRole {
-  id      String   @id @default(uuid())
+model UserDelegation {
+  id           String   @id @default(uuid())
+  delegator_id String
+  delegatee_id String
+  start_date   DateTime
+  end_date     DateTime?
+  is_active    Boolean  @default(true)
+
+  delegator User @relation("Delegator", fields: [delegator_id], references: [id])
+  delegatee User @relation("Delegatee", fields: [delegatee_id], references: [id])
+
+  @@map("user_delegations")
+}
+
+model UserRole {
+  id   String @id @default(uuid())
+  name Role   @unique
+
+  organization_roles UserOrganizationRole[]
+
+  @@map("user_roles")
+}
+
+model UserOrganizationRole {
+  id      String  @id @default(uuid())
+  user_id String
+  role_id String
   dept_id String
-  role    UserRole
+  unit_id String?
 
-  dept Department @relation(fields: [dept_id], references: [id])
+  user       User       @relation(fields: [user_id], references: [id])
+  role       UserRole   @relation(fields: [role_id], references: [id])
+  department Department @relation(fields: [dept_id], references: [id])
+  unit       Unit?      @relation(fields: [unit_id], references: [id])
 
-  @@unique([dept_id, role])
-  @@map("allowed_roles")
+  @@map("user_organization_roles")
 }
 
 model Project {
