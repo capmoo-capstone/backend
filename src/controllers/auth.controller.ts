@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import * as AuthService from '../service/auth.service';
 import { RegisterUserSchema } from '../models/User';
+import { AuthPayload } from '../lib/types';
 
 export const login = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
@@ -32,7 +33,6 @@ export const register = async (req: Request, res: Response) => {
 export const getMe = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { token } = (req as any).user;
-  const data = await AuthService.getMe(token);
-  res.status(200).json(data);
+  const payload = (req as any).user as AuthPayload;
+  res.status(200).json({ data: payload });
 };

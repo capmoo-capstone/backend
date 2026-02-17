@@ -22,8 +22,7 @@ import {
 } from '../models/Project';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
-import * as UnitService from './unit.service';
-import { UserPayload } from '../lib/types';
+import { AuthPayload } from '../lib/types';
 
 const mapSubmissionToPhaseStatus = (
   status: SubmissionStatus
@@ -151,7 +150,7 @@ export const getWorkflowStatus = async (
 };
 
 export const listProjects = async (
-  user: UserPayload,
+  user: AuthPayload,
   page: number,
   limit: number
 ): Promise<PaginatedProjects> => {
@@ -178,7 +177,7 @@ export const listProjects = async (
 };
 
 export const createProject = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: CreateProjectDto
 ): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
@@ -196,7 +195,7 @@ export const createProject = async (
   });
 };
 
-export const getById = async (user: UserPayload, id: string): Promise<any> => {
+export const getById = async (user: AuthPayload, id: string): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
     const projectData = await tx.project.findUnique({
       where: { id },
@@ -208,17 +207,35 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
         },
         assignee_procurement: {
           include: {
-            roles: { select: { role: true, department: { select: { id: true, name: true } }, unit: { select: { id: true, name: true } } } },
+            roles: {
+              select: {
+                role: true,
+                department: { select: { id: true, name: true } },
+                unit: { select: { id: true, name: true } },
+              },
+            },
           },
         },
         assignee_contract: {
           include: {
-            roles: { select: { role: true, department: { select: { id: true, name: true } }, unit: { select: { id: true, name: true } } } },
+            roles: {
+              select: {
+                role: true,
+                department: { select: { id: true, name: true } },
+                unit: { select: { id: true, name: true } },
+              },
+            },
           },
         },
         creator: {
           include: {
-            roles: { select: { role: true, department: { select: { id: true, name: true } }, unit: { select: { id: true, name: true } } } },
+            roles: {
+              select: {
+                role: true,
+                department: { select: { id: true, name: true } },
+                unit: { select: { id: true, name: true } },
+              },
+            },
           },
         },
         project_cancellation: {
@@ -308,18 +325,31 @@ export const getById = async (user: UserPayload, id: string): Promise<any> => {
 };
 
 export const getUnassignedProjectsByUnit = async (
-  user: UserPayload
+  user: AuthPayload
 ): Promise<ProjectsListResponse> => {
-  const unit = await prisma.unit.findUnique({
-    where: { id: user.roles.own[0]?.unit_id || user.roles.delegated[0]?.unit_id || '' },
-    select: { id: true, name: true, type: true, dept_id: true },
+  const unitIds = user.roles
+    .map((r) => r.unit_id)
+    .filter((id): id is string => Boolean(id));
+  if (unitIds.length === 0) {
+    throw new NotFoundError('Unit not found');
+  }
+
+  const units = await prisma.unit.findMany({
+    where: {
+      id: {
+        in: unitIds,
+      },
+    },
+    select: { type: true },
   });
-  if (!unit) {
+  if (units.length === 0) {
     throw new NotFoundError('Unit not found');
   }
   const where: any = {
     status: { in: [ProjectStatus.UNASSIGNED] },
-    current_workflow_type: unit.type,
+    current_workflow_type: {
+      in: units.flatMap((unit) => unit.type),
+    },
   };
 
   const [projects, total] = await prisma.$transaction([
@@ -332,7 +362,10 @@ export const getUnassignedProjectsByUnit = async (
         title: true,
         status: true,
         requesting_unit: {
-          select: { name: true, department: { select: { name: true, id: true } } },
+          select: {
+            name: true,
+            department: { select: { name: true, id: true } },
+          },
         },
         budget: true,
         procurement_type: true,
@@ -352,7 +385,7 @@ export const getUnassignedProjectsByUnit = async (
 };
 
 export const getAssignedProjects = async (
-  user: UserPayload,
+  user: AuthPayload,
   targetDate: Date
 ): Promise<ProjectsListResponse> => {
   const startOfDay = new Date(targetDate);
@@ -395,28 +428,34 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (
-    user.roles.own.some((r) => r.role === Role.HEAD_OF_UNIT) ||
-    user.roles.delegated.some((r) => r.role === Role.HEAD_OF_UNIT)
-  ) {
-    const unit = await prisma.unit.findUnique({
-      where: { id: user.roles.own[0]?.unit_id || user.roles.delegated[0]?.unit_id || '' },
-      select: { type: true },
-    });
-
-    if (!unit) {
+  if (user.roles.some((r) => r.role === Role.HEAD_OF_UNIT)) {
+    const unitIds = user.roles
+      .map((r) => r.unit_id)
+      .filter((id): id is string => Boolean(id));
+    if (unitIds.length === 0) {
       throw new NotFoundError('Unit not found');
     }
+
+    const unit = await prisma.unit.findMany({
+      where: {
+        id: {
+          in: unitIds,
+        },
+      },
+      select: { type: true },
+    });
+    if (unit.length === 0) {
+      throw new NotFoundError('Unit not found');
+    }
+
     where.AND.push({
       current_template: {
         type: {
-          in: unit.type,
+          in: unit.map((u) => u.type),
         },
       },
     });
-  } else if (user.roles.own.some((r) => r.role === Role.GENERAL_STAFF) ||
-    user.roles.delegated.some((r) => r.role === Role.GENERAL_STAFF)) {
-    // User-based query
+  } else if (user.roles.some((r) => r.role === Role.GENERAL_STAFF)) {
     where.AND.push({
       OR: [
         { assignee_procurement: { some: { id: user.id } } },
@@ -435,7 +474,10 @@ export const getAssignedProjects = async (
         title: true,
         status: true,
         requesting_unit: {
-          select: { name: true, department: { select: { name: true, id: true } } },
+          select: {
+            name: true,
+            department: { select: { name: true, id: true } },
+          },
         },
         budget: true,
         procurement_type: true,
@@ -473,7 +515,7 @@ export const getAssignedProjects = async (
 };
 
 export const assignProjectsToUser = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: UpdateStatusProjectsDto
 ) => {
   return await prisma.$transaction(async (tx) => {
@@ -538,7 +580,7 @@ export const assignProjectsToUser = async (
 };
 
 export const changeAssignee = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: UpdateStatusProjectDto
 ) => {
   const { id, userId: newAssigneeId } = data;
@@ -598,7 +640,7 @@ export const changeAssignee = async (
   });
 };
 
-export const claimProject = async (user: UserPayload, projectId: string) => {
+export const claimProject = async (user: AuthPayload, projectId: string) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -648,7 +690,7 @@ export const claimProject = async (user: UserPayload, projectId: string) => {
 };
 
 export const acceptProjects = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: AcceptProjectsDto
 ) => {
   return await prisma.$transaction(async (tx) => {
@@ -711,7 +753,7 @@ export const acceptProjects = async (
 };
 
 export const addAssignee = async (
-  user: UserPayload,
+  user: AuthPayload,
   projectId: string,
   assigneeId: string
 ) => {
@@ -768,7 +810,7 @@ export const addAssignee = async (
   });
 };
 
-export const returnProject = async (user: UserPayload, projectId: string) => {
+export const returnProject = async (user: AuthPayload, projectId: string) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -827,7 +869,7 @@ export const returnProject = async (user: UserPayload, projectId: string) => {
 };
 
 export const cancelProject = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: CancelProjectDto
 ) => {
   return await prisma.$transaction(async (tx) => {
@@ -849,10 +891,8 @@ export const cancelProject = async (
     }
 
     const isHead =
-      user.roles.own.some((r) => r.role === Role.HEAD_OF_UNIT) ||
-      user.roles.delegated.some((r) => r.role === Role.HEAD_OF_UNIT) ||
-      user.roles.own.some((r) => r.role === Role.HEAD_OF_DEPARTMENT) ||
-      user.roles.delegated.some((r) => r.role === Role.HEAD_OF_DEPARTMENT);
+      user.roles.some((r) => r.role === Role.HEAD_OF_UNIT) ||
+      user.roles.some((r) => r.role === Role.HEAD_OF_DEPARTMENT);
 
     if (!isHead) {
       if (project.status === ProjectStatus.CANCELLED) {
@@ -928,7 +968,7 @@ export const cancelProject = async (
 };
 
 export const approveCancellation = async (
-  user: UserPayload,
+  user: AuthPayload,
   projectId: string
 ) => {
   return await prisma.$transaction(async (tx) => {
@@ -969,7 +1009,7 @@ export const approveCancellation = async (
 };
 
 export const rejectCancellation = async (
-  user: UserPayload,
+  user: AuthPayload,
   projectId: string
 ) => {
   return await prisma.$transaction(async (tx) => {
@@ -1010,7 +1050,7 @@ export const rejectCancellation = async (
 };
 
 export const updateProjectData = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: UpdateProjectDto
 ) => {
   if (!data || !data.updateData || Object.keys(data.updateData).length === 0) {
@@ -1043,7 +1083,7 @@ export const updateProjectData = async (
 };
 
 export const deleteProject = async (
-  user: UserPayload,
+  user: AuthPayload,
   id: string
 ): Promise<void> => {
   await getById(user, id);

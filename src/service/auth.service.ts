@@ -9,6 +9,7 @@ import {
 import jwt from 'jsonwebtoken';
 import { RegisterUserDto } from '../models/User';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
+import { AuthPayload } from '../lib/types';
 
 export const login = async (
   username: string,
@@ -68,10 +69,7 @@ export const login = async (
   const tokenPayload = {
     id: user.id,
     username: user.username,
-    roles: {
-      own: ownRoles,
-      delegated: inheritedRoles,
-    },
+    full_name: user.full_name,
   };
 
   const token = jwt.sign(tokenPayload, process.env.JWT_SECRET as string, {
@@ -167,82 +165,4 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
   });
 
   return { data: result };
-};
-
-const verifyToken = (token: string) => {
-  try {
-    return jwt.verify(token, process.env.JWT_SECRET as string);
-  } catch (err) {
-    throw new UnauthorizedError('Invalid or expired token');
-  }
-};
-
-export const getMe = async (token: string) => {
-  const decoded: any = verifyToken(token);
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.id },
-    include: {
-      roles: {
-        include: {
-          role: true,
-          department: { select: { id: true, code: true, name: true } },
-          unit: { select: { id: true, name: true } },
-        },
-      },
-      delegations_received: {
-        where: {
-          is_active: true,
-          start_date: { lte: new Date() },
-          end_date: { gte: new Date() },
-        },
-        include: {
-          delegator: {
-            include: {
-              roles: {
-                include: {
-                  role: true,
-                  department: { select: { id: true, code: true, name: true } },
-                  unit: { select: { id: true, name: true } },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!user) {
-    throw new UnauthorizedError('User not found');
-  }
-
-  const formatRoles = (orgRoles: any[]) =>
-    orgRoles.map((r) => ({
-      role: r.role.name,
-      dept_id: r.department.id,
-      dept_code: r.department.code,
-      dept_name: r.department.name,
-      unit_id: r.unit?.id || null,
-      unit_name: r.unit?.name || null,
-    }));
-
-  const ownRoles = formatRoles(user.roles);
-  const inheritedRoles =
-    user.delegations_received.length > 0
-      ? formatRoles(user.delegations_received.flatMap((d) => d.delegator.roles))
-      : [];
-
-  return {
-    data: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      full_name: user.full_name,
-      is_delegated: user.delegations_received.length > 0,
-      roles: {
-        own: ownRoles,
-        delegated: inheritedRoles,
-      },
-    },
-  };
 };
