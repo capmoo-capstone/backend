@@ -5,9 +5,6 @@ const router = Router();
 
 router.get('/:projectId', submissionController.getProjectSubmissions);
 router.post('/', submissionController.createSubmission);
-router.patch('/:id/approve', submissionController.approveSubmission);
-router.patch('/:id/propose', submissionController.proposeSubmission);
-router.patch('/:id/sign', submissionController.signAndCompleteSubmission);
-router.patch('/:id/reject', submissionController.rejectSubmission);
+router.patch('/:id/:action', submissionController.handleSubmissionAction);
 
 export default router;

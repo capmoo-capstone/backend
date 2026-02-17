@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Department, UserRole } from '@prisma/client';
+import { Department } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,
@@ -44,23 +44,10 @@ export const getById = async (id: string): Promise<Department> => {
 export const createDepartment = async (
   data: CreateDepartmentDto
 ): Promise<Department> => {
-  let defaultRoles: UserRole[] = [
-    UserRole.HEAD_OF_DEPARTMENT,
-    UserRole.HEAD_OF_UNIT,
-    UserRole.ADMIN,
-    UserRole.GENERAL_STAFF,
-  ];
-
-  if (data.allowed_role && data.allowed_role.length > 0) {
-    defaultRoles = Array.from(new Set([...defaultRoles, ...data.allowed_role]));
-  }
   const department = await prisma.department.create({
     data: {
       name: data.name,
       code: data.code,
-      allowed_role: {
-        create: defaultRoles.map((role) => ({ role })),
-      },
     },
   });
   if (!department) {

@@ -1,34 +1,19 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../config/prisma';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
+import { AuthPayload } from '../lib/types';
+import { prisma } from '../config/prisma';
 
-type AuthUser = {
+interface JwtPayload {
   id: string;
   username: string;
-  role: UserRole | null;
   full_name: string;
-  unit: any;
-  dept: any;
-  delegate_to: string | null;
-};
+}
 
-type AuthenticatedRequest = Request & { user?: AuthUser };
-
-const extractToken = (req: Request): string => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    throw new UnauthorizedError('Authorization header missing');
-  }
-
-  const [scheme, token] = authHeader.split(' ');
-  if (scheme !== 'Bearer' || !token) {
-    throw new UnauthorizedError('Invalid authorization header format');
-  }
-
-  return token;
-};
+export interface AuthenticatedRequest extends Request {
+  user?: AuthPayload;
+}
 
 export const protect = async (
   req: AuthenticatedRequest,
@@ -36,40 +21,47 @@ export const protect = async (
   next: NextFunction
 ) => {
   try {
-    const token = extractToken(req);
-    const payload = jwt.verify(token, process.env.JWT_SECRET as string) as {
-      userId: string;
-      username: string;
-      role: UserRole | null;
-      full_name: string;
-      unit_id: string | null;
-      dept_id: string | null;
-    };
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedError('Authorization header missing or invalid');
+    }
 
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as JwtPayload;
+
+    const now = new Date();
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: {
-        id: true,
-        username: true,
-        role: true,
-        full_name: true,
-        unit: {
-          select: { id: true, name: true },
-        },
-        dept: {
-          select: { id: true, name: true, code: true },
-        },
-        delegate_to: {
-          select: {
-            id: true,
-            username: true,
+      where: { id: decoded.id },
+      include: {
+        roles: {
+          include: {
             role: true,
-            full_name: true,
-            unit: {
-              select: { id: true, name: true },
-            },
-            dept: {
-              select: { id: true, name: true, code: true },
+            department: { select: { id: true, code: true, name: true } },
+            unit: { select: { id: true, name: true } },
+          },
+        },
+        delegations_received: {
+          where: {
+            is_active: true,
+            start_date: { lte: now },
+            OR: [{ end_date: null }, { end_date: { gte: now } }],
+          },
+          include: {
+            delegator: {
+              include: {
+                roles: {
+                  include: {
+                    role: true,
+                    department: {
+                      select: { id: true, code: true, name: true },
+                    },
+                    unit: { select: { id: true, name: true } },
+                  },
+                },
+              },
             },
           },
         },
@@ -80,27 +72,84 @@ export const protect = async (
       throw new UnauthorizedError('User not found');
     }
 
-    (req as any).user = user;
+    const formatRoles = (orgRoles: any[]) =>
+      orgRoles.map((r) => ({
+        role: r.role.name,
+        dept_id: r.department.id,
+        dept_code: r.department.code,
+        dept_name: r.department.name,
+        unit_id: r.unit?.id || null,
+        unit_name: r.unit?.name || null,
+      }));
+
+    const ownRoles = formatRoles(user.roles);
+    const inheritedRoles =
+      user.delegations_received.length > 0
+        ? formatRoles(
+            user.delegations_received.flatMap((d) => d.delegator.roles)
+          )
+        : [];
+
+    req.user = {
+      token,
+      id: user.id,
+      username: user.username,
+      full_name: user.full_name,
+      roles: [...ownRoles, ...inheritedRoles],
+      is_delegated: user.delegations_received.length > 0,
+      delegated_by: user.delegations_received.map((d) => ({
+        id: d.delegator.id,
+        full_name: d.delegator.full_name,
+        roles: d.delegator.roles.map((r) => r.role.name),
+      })),
+    };
     next();
   } catch (err) {
-    next(err);
+    console.error('Auth Middleware Error:', err);
+    next(new UnauthorizedError('Invalid or expired token'));
   }
 };
 
-export const authorize = (roles: UserRole[] = []) => {
+export const authorize = (allowedRoles: Role[]) => {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     try {
-      if (!req.user) {
-        throw new UnauthorizedError('Not authenticated');
+      if (!req.user) throw new UnauthorizedError('Not authenticated');
+
+      if (req.user.roles.some((r) => r.role === Role.SUPER_ADMIN))
+        return next();
+
+      const hasPermission = req.user.roles.some((r) =>
+        allowedRoles.includes(r.role as Role)
+      );
+
+      if (!hasPermission) {
+        throw new ForbiddenError('Insufficient permissions');
       }
-      if (roles.length > 0 && req.user!.role) {
-        if (req.user.role === UserRole.SUPER_ADMIN) {
-          return next();
-        }
-        if (!roles.includes(req.user.role)) {
-          throw new ForbiddenError('Insufficient permissions');
-        }
+
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+};
+export const authorizeSupply = (allowedRoles: Role[]) => {
+  return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) throw new UnauthorizedError('Not authenticated');
+
+      if (req.user.roles.some((r) => r.role === Role.SUPER_ADMIN))
+        return next();
+
+      const hasSupplyPermission = req.user.roles.some(
+        (r) => r.dept_code === 'SUPPLY' && allowedRoles.includes(r.role as Role)
+      );
+
+      if (!hasSupplyPermission) {
+        throw new ForbiddenError(
+          'This action requires Supply Department authority.'
+        );
       }
+
       next();
     } catch (err) {
       next(err);
@@ -108,18 +157,5 @@ export const authorize = (roles: UserRole[] = []) => {
   };
 };
 
-export const authorizeForSupply = (roles: UserRole[] = []) => {
-  return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
-    try {
-      if (req.user?.dept.code !== 'SUPPLY') {
-        throw new ForbiddenError('Access restricted to Supply department');
-      }
-      authorize(roles)(req, _res, next);
-    } catch (err) {
-      next(err);
-    }
-  };
-};
-
 export const requireRoles = authorize;
-export const requireSupplyRoles = authorizeForSupply;
+export const requireSupplyRoles = authorizeSupply;

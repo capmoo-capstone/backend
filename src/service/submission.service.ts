@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { BadRequestError, NotFoundError } from '../lib/errors';
-import { UserPayload } from '../lib/types';
+import { AuthPayload } from '../lib/types';
 import {
   ApproveSubmissionDto,
   CreateSubmissionDto,
@@ -33,7 +33,7 @@ const getSubmissionRound = async (
 };
 
 export const getProjectSubmissions = async (
-  user: UserPayload,
+  user: AuthPayload,
   projectId: string
 ) => {
   const project = await prisma.project.findUnique({
@@ -68,7 +68,7 @@ export const getProjectSubmissions = async (
 };
 
 export const createStaffSubmissionsProject = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: CreateSubmissionDto
 ) => {
   if (data.type !== SubmissionType.STAFF) {
@@ -76,9 +76,16 @@ export const createStaffSubmissionsProject = async (
   }
 
   const submission = await prisma.$transaction(async (tx) => {
-    const submission_round = await getSubmissionRound(data, tx);
+    const project = await tx.project.findUnique({
+      where: { id: data.project_id },
+      select: { id: true },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
 
-    let nextStatus: SubmissionStatus = data.require_approval
+    const submission_round = await getSubmissionRound(data, tx);
+    const nextStatus: SubmissionStatus = data.require_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
 
@@ -107,7 +114,7 @@ export const createStaffSubmissionsProject = async (
 };
 
 export const rejectSubmission = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: RejectSubmissionDto
 ) => {
   const submission = await prisma.projectSubmission.update({
@@ -125,7 +132,7 @@ export const rejectSubmission = async (
 };
 
 export const approveSubmission = async (
-  user: UserPayload,
+  user: AuthPayload,
   data: ApproveSubmissionDto
 ) => {
   const submission = await prisma.projectSubmission.findUnique({
@@ -164,7 +171,7 @@ export const approveSubmission = async (
   return { data: updated };
 };
 
-export const proposeSubmission = async (user: UserPayload, id: string) => {
+export const proposeSubmission = async (user: AuthPayload, id: string) => {
   const submission = await prisma.projectSubmission.findUnique({
     where: { id },
     select: { status: true },
@@ -198,7 +205,7 @@ export const proposeSubmission = async (user: UserPayload, id: string) => {
 };
 
 export const signAndCompleteSubmission = async (
-  user: UserPayload,
+  user: AuthPayload,
   id: string
 ) => {
   const submission = await prisma.projectSubmission.findUnique({

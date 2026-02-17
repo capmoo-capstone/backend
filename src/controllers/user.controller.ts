@@ -1,5 +1,10 @@
 import { Request, Response } from 'express';
 import * as UserService from '../service/user.service';
+import {
+  UpdateRoleSchema,
+  UpdateRepresentativeUnitSchema,
+  UpdateUserUnitSchema,
+} from '../models/User';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
@@ -24,33 +29,37 @@ export const updateRole = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
-  const { role } = req.body;
-  const updatedUser = await UserService.updateRole(id, role);
+  const { role, dept_id, unit_id } = req.body;
+  const validatedData = UpdateRoleSchema.parse({ role, dept_id, unit_id });
+  const updatedUser = await UserService.updateRole(id, validatedData);
   res.status(200).json(updatedUser);
 };
 
-export const setUserDelegate = async (req: Request, res: Response) => {
+export const addUsersToUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const id = req.params.id as string;
-  const { delegateId } = req.body;
-  const updatedUser = await UserService.setUserDelegate(id, delegateId);
+  const unitId = req.params.unitId as string;
+  const users = req.body.users;
+
+  const validatedData = UpdateUserUnitSchema.parse({
+    unit_id: unitId,
+    users: users,
+  });
+  const updatedUser = await UserService.addUsersToSupplyUnit(validatedData);
   res.status(200).json(updatedUser);
 };
 
-export const revokeDelegate = async (req: Request, res: Response) => {
+export const addRepresentativeToUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
-  const updatedUser = await UserService.revokeDelegate(id);
-  res.status(200).json(updatedUser);
-};
+  const unitId = req.params.unitId as string;
 
-export const updateUser = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const id = req.params.id as string;
-  const updatedUser = await UserService.updateUser(id, req.body);
+  const validatedData = UpdateRepresentativeUnitSchema.parse({
+    id: id,
+    unit_id: unitId,
+  });
+  const updatedUser = await UserService.addRepresentativeToUnit(validatedData);
   res.status(200).json(updatedUser);
 };
 

@@ -9,11 +9,11 @@ import {
 export const getProjectSubmissions = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id } = (req as any).user;
+  const payload = (req as any).user;
   const projectId = req.params.projectId as string;
 
   const submissions = await SubmissionService.getProjectSubmissions(
-    { id },
+    payload,
     projectId
   );
   res.status(200).json(submissions);
@@ -22,66 +22,63 @@ export const getProjectSubmissions = async (req: Request, res: Response) => {
 export const createSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id } = (req as any).user;
+  const payload = (req as any).user;
 
   const validateData = CreateSubmissionSchema.parse(req.body);
   const submission = await SubmissionService.createStaffSubmissionsProject(
-    { id },
+    payload,
     validateData
   );
   res.status(201).json(submission);
 };
 
-export const approveSubmission = async (req: Request, res: Response) => {
+const approveSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id } = (req as any).user;
+  const payload = (req as any).user;
   const submissionId = req.params.id as string;
 
   const validateData = ApproveSubmissionSchema.parse({
     id: submissionId,
-    required_signature: req.body.requiredSignature,
+    required_signature: req.body.required_signature,
   });
   const submission = await SubmissionService.approveSubmission(
-    { id },
+    payload,
     validateData
   );
   res.status(200).json(submission);
 };
 
-export const proposeSubmission = async (req: Request, res: Response) => {
+const proposeSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id } = (req as any).user;
+  const payload = (req as any).user;
   const submissionId = req.params.id as string;
 
   const submission = await SubmissionService.proposeSubmission(
-    { id },
+    payload,
     submissionId
   );
   res.status(200).json(submission);
 };
 
-export const signAndCompleteSubmission = async (
-  req: Request,
-  res: Response
-) => {
+const signAndCompleteSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id } = (req as any).user;
+  const payload = (req as any).user;
   const submissionId = req.params.id as string;
 
   const submission = await SubmissionService.signAndCompleteSubmission(
-    { id },
+    payload,
     submissionId
   );
   res.status(200).json(submission);
 };
 
-export const rejectSubmission = async (req: Request, res: Response) => {
+const rejectSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { id } = (req as any).user;
+  const payload = (req as any).user;
   const submissionId = req.params.id as string;
 
   const validateData = RejectSubmissionSchema.parse({
@@ -89,8 +86,27 @@ export const rejectSubmission = async (req: Request, res: Response) => {
     comment: req.body.comment,
   });
   const submission = await SubmissionService.rejectSubmission(
-    { id },
+    payload,
     validateData
   );
   res.status(200).json(submission);
+};
+
+export const handleSubmissionAction = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Submission']
+  // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
+  const action = req.params.action as string;
+  switch (action) {
+    case 'approve':
+      return approveSubmission(req, res);
+    case 'propose':
+      return proposeSubmission(req, res);
+    case 'sign':
+      return signAndCompleteSubmission(req, res);
+    case 'reject':
+      return rejectSubmission(req, res);
+    default:
+      res.status(400).json({ message: 'Invalid action' });
+  }
 };
