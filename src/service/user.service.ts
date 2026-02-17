@@ -15,7 +15,6 @@ export const listUsers = async (
 ): Promise<Partial<UsersListResponse>> => {
   const { unitId, deptId } = filters;
 
-  const where: Prisma.UserWhereInput = {};
   let data: Partial<UsersListResponse> = {};
 
   if (unitId) {
@@ -227,14 +226,14 @@ const upsertUserRoleInternal = async (
 
   if (sameUnitAssignment) {
     return tx.userOrganizationRole.update({
-      where: { id: sameUnitAssignment.id, unit_id: unitId },
+      where: { id: sameUnitAssignment.id },
       data: { role_id: roleId },
     });
   }
 
   if (guestAssignment && userRoles.length === 1) {
     return tx.userOrganizationRole.update({
-      where: { id: guestAssignment.id, role: { name: Role.GUEST } },
+      where: { id: guestAssignment.id },
       data: { role_id: roleId, unit_id: unitId },
     });
   }

@@ -5,6 +5,12 @@ import { Role } from '@prisma/client';
 import { AuthPayload } from '../lib/types';
 import { prisma } from '../config/prisma';
 
+interface JwtPayload {
+  id: string;
+  username: string;
+  full_name: string;
+}
+
 export interface AuthenticatedRequest extends Request {
   user?: AuthPayload;
 }
@@ -24,8 +30,9 @@ export const protect = async (
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET as string
-    ) as AuthPayload;
+    ) as JwtPayload;
 
+    const now = new Date();
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       include: {
@@ -39,8 +46,8 @@ export const protect = async (
         delegations_received: {
           where: {
             is_active: true,
-            start_date: { lte: new Date() },
-            end_date: { gte: new Date() },
+            start_date: { lte: now },
+            OR: [{ end_date: null }, { end_date: { gte: now } }],
           },
           include: {
             delegator: {

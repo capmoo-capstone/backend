@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma';
+import { NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../models/Delegation';
 import * as UserService from './user.service';
 
@@ -63,7 +64,7 @@ export const getById = async (id: string): Promise<any> => {
   });
 
   if (!delegation) {
-    throw new Error('Delegation not found');
+    throw new NotFoundError('Delegation not found');
   }
 
   return { data: delegation };

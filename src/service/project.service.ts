@@ -451,7 +451,7 @@ export const getAssignedProjects = async (
     where.AND.push({
       current_template: {
         type: {
-          in: unit.map((u) => u.type),
+          in: unit.flatMap((u) => u.type),
         },
       },
     });
@@ -754,12 +754,11 @@ export const acceptProjects = async (
 
 export const addAssignee = async (
   user: AuthPayload,
-  projectId: string,
-  assigneeId: string
+  data: UpdateStatusProjectDto
 ) => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
-      where: { id: projectId },
+      where: { id: data.id },
       select: {
         assignee_contract: true,
         assignee_procurement: true,
@@ -783,23 +782,23 @@ export const addAssignee = async (
       );
     }
 
-    if (project[assigneeField].some((u) => u.id === assigneeId)) {
+    if (project[assigneeField].some((u) => u.id === data.userId)) {
       throw new BadRequestError('User is already an assignee of this project');
     }
-    await UserService.getById(assigneeId);
+    await UserService.getById(data.userId);
 
     const updated = await tx.project.update({
-      where: { id: projectId, [assigneeField]: { none: { id: assigneeId } } },
+      where: { id: data.id, [assigneeField]: { none: { id: data.userId } } },
       data: {
         [assigneeField]: {
-          connect: { id: assigneeId },
+          connect: { id: data.userId },
         },
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
     await tx.projectHistory.create({
       data: {
-        project_id: projectId,
+        project_id: data.id,
         action: LogActionType.ASSIGNEE_UPDATE,
         old_value: { [assigneeField]: project[assigneeField].map((u) => u.id) },
         new_value: { [assigneeField]: updated[assigneeField].map((u) => u.id) },

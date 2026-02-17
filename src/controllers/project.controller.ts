@@ -81,8 +81,11 @@ export const addAssignee = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const userId = req.body.userId;
-  const project = await ProjectService.addAssignee(payload, projectId, userId);
+  const validatedData = UpdateStatusProjectSchema.parse({
+    id: projectId,
+    userId: req.body.userId,
+  });
+  const project = await ProjectService.addAssignee(payload, validatedData);
   res.status(200).json(project);
 };
 

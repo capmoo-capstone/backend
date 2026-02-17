@@ -5,7 +5,6 @@ import {
   UpdateRepresentativeUnitSchema,
   UpdateUserUnitSchema,
 } from '../models/User';
-import { id } from 'zod/locales';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
@@ -39,7 +38,7 @@ export const updateRole = async (req: Request, res: Response) => {
 export const addUsersToUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const unitId = req.params.id as string;
+  const unitId = req.params.unitId as string;
   const users = req.body.users;
 
   const validatedData = UpdateUserUnitSchema.parse({

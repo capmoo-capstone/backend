@@ -9,14 +9,13 @@ import {
 import jwt from 'jsonwebtoken';
 import { RegisterUserDto } from '../models/User';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
-import { AuthPayload } from '../lib/types';
 
 export const login = async (
   username: string,
   full_name: string
 ): Promise<any> => {
   const now = new Date();
-  const user = await prisma.user.findUnique({
+  const user = await prisma.user.findFirst({
     where: { username, full_name },
     include: {
       roles: {
@@ -30,7 +29,7 @@ export const login = async (
         where: {
           is_active: true,
           start_date: { lte: now },
-          end_date: { gte: now },
+          OR: [{ end_date: null }, { end_date: { gte: now } }],
         },
         include: {
           delegator: {
@@ -135,6 +134,7 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
       data: {
         username: data.username,
         full_name: data.full_name,
+        email: data.email,
         roles: {
           create: [
             {
