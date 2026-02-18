@@ -54,6 +54,7 @@ const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
   [UnitResponsibleType.SELECTION]: makeStepRange(1, 7),
   [UnitResponsibleType.EBIDDING]: makeStepRange(1, 10),
   [UnitResponsibleType.CONTRACT]: makeStepRange(1, 7),
+  [UnitResponsibleType.INTERNAL]: makeStepRange(1, 4),
 };
 
 const computePhaseStatus = async (
@@ -183,11 +184,20 @@ export const createProject = async (
   return await prisma.$transaction(async (tx) => {
     const receiveNumber = ((await tx.project.count()) + 1).toString();
 
+    const responsibleUnit = await tx.unit.findFirst({
+      where: { type: { has: data.procurement_type } },
+      select: { id: true },
+    });
+    if (!responsibleUnit) {
+      throw new Error('Responsible unit not found');
+    }
+
     return await tx.project.create({
       data: {
         ...data,
         status: ProjectStatus.UNASSIGNED,
         current_workflow_type: data.procurement_type,
+        responsible_unit_id: responsibleUnit.id,
         receive_no: receiveNumber,
         created_by: user.id,
       },

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Role, Unit, UnitResponsibleType } from '@prisma/client';
 
 const CreateUnitSchema = z.object({
+  id: z.string(),
   name: z.string(),
   type: z.array(z.enum(UnitResponsibleType)).optional(),
   dept_id: z.uuid(),
@@ -9,7 +10,7 @@ const CreateUnitSchema = z.object({
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
 
 const updateUnitSchema = z.object({
-  id: z.uuid(),
+  id: z.string(),
   name: z.string().optional(),
   type: z.array(z.enum(UnitResponsibleType)).optional(),
   dept_id: z.uuid().optional(),

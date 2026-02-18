@@ -8,7 +8,6 @@ export interface AuthPayload {
   roles: Array<{
     role: Role;
     dept_id: string;
-    dept_code: string;
     dept_name: string;
     unit_id: string | null;
     unit_name: string | null;
@@ -19,4 +18,4 @@ export interface AuthPayload {
     full_name: string;
     roles: Role[];
   }>;
-};
+}

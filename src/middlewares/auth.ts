@@ -39,7 +39,7 @@ export const protect = async (
         roles: {
           include: {
             role: true,
-            department: { select: { id: true, code: true, name: true } },
+            department: { select: { id: true, name: true } },
             unit: { select: { id: true, name: true } },
           },
         },
@@ -56,7 +56,7 @@ export const protect = async (
                   include: {
                     role: true,
                     department: {
-                      select: { id: true, code: true, name: true },
+                      select: { id: true, name: true },
                     },
                     unit: { select: { id: true, name: true } },
                   },
@@ -76,7 +76,6 @@ export const protect = async (
       orgRoles.map((r) => ({
         role: r.role.name,
         dept_id: r.department.id,
-        dept_code: r.department.code,
         dept_name: r.department.name,
         unit_id: r.unit?.id || null,
         unit_name: r.unit?.name || null,
@@ -141,7 +140,8 @@ export const authorizeSupply = (allowedRoles: Role[]) => {
         return next();
 
       const hasSupplyPermission = req.user.roles.some(
-        (r) => r.dept_code === 'SUPPLY' && allowedRoles.includes(r.role as Role)
+        (r) =>
+          r.dept_id === 'DEPT-SUP-OPS' && allowedRoles.includes(r.role as Role)
       );
 
       if (!hasSupplyPermission) {

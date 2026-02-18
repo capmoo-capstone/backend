@@ -46,8 +46,8 @@ export const createDepartment = async (
 ): Promise<Department> => {
   const department = await prisma.department.create({
     data: {
+      id: data.id,
       name: data.name,
-      code: data.code,
     },
   });
   if (!department) {

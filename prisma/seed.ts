@@ -37,48 +37,115 @@ async function main() {
   // ---------------------------------------------------------
   // 3. ORGANIZATIONAL STRUCTURE
   // ---------------------------------------------------------
-  const deptSUP = await prisma.department.create({
-    data: { name: 'Office of Supply', code: 'SUPPLY' },
+
+  const deptFIN = await prisma.department.create({
+    data: {
+      id: 'DEPT-FIN',
+      name: 'สำนักงานบริหารการเงิน การบัญชี และการพัสดุ',
+      units: {
+        create: [
+          {
+            id: 'UNIT-FIN',
+            name: 'ฝ่ายการเงิน',
+            type: [],
+          },
+          {
+            id: 'UNIT-ACC',
+            name: 'ฝ่ายการบัญชี',
+            type: [],
+          },
+          {
+            id: 'UNIT-SUP',
+            name: 'ฝ่ายการพัสดุ',
+            type: [],
+          },
+        ],
+      },
+    },
+    select: {
+      id: true,
+      units: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  const deptSUPOPS = await prisma.department.create({
+    data: {
+      id: 'DEPT-SUP-OPS',
+      name: 'Supply Operation',
+      units: {
+        create: [
+          {
+            id: 'UNIT-PROC-1',
+            name: 'กลุ่มงานจัดซื้อจัดจ้าง 1',
+            type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
+          },
+          {
+            id: 'UNIT-PROC-2',
+            name: 'กลุ่มงานจัดซื้อจัดจ้าง 2',
+            type: [
+              UnitResponsibleType.MT500K,
+              UnitResponsibleType.SELECTION,
+              UnitResponsibleType.EBIDDING,
+              UnitResponsibleType.INTERNAL,
+            ],
+          },
+          {
+            id: 'UNIT-CONT',
+            name: 'กลุ่มงานบริหารสัญญา',
+            type: [UnitResponsibleType.CONTRACT],
+          },
+        ],
+      },
+    },
+    select: {
+      id: true,
+      units: {
+        select: {
+          id: true,
+        },
+      },
+    },
   });
 
   const deptREG = await prisma.department.create({
-    data: { name: 'Office of Registration', code: 'REGISTRATION' },
-  });
-
-  const deptENG = await prisma.department.create({
-    data: { name: 'Faculty of Engineering', code: 'ENGINEERING' },
-  });
-
-  // Supply Units
-  const unit1 = await prisma.unit.create({
     data: {
-      name: 'Procurement 1',
-      dept_id: deptSUP.id,
-      type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
-    },
-  });
-  const unit2 = await prisma.unit.create({
-    data: {
-      name: 'Procurement 2',
-      dept_id: deptSUP.id,
-      type: [
-        UnitResponsibleType.MT500K,
-        UnitResponsibleType.SELECTION,
-        UnitResponsibleType.EBIDDING,
-      ],
-    },
-  });
-  const unit3 = await prisma.unit.create({
-    data: {
-      name: 'Contract',
-      dept_id: deptSUP.id,
-      type: [UnitResponsibleType.CONTRACT],
+      id: 'DEPT-REG',
+      name: 'สำนักงานทะเบียน',
     },
   });
 
-  // External Unit
-  const engineeringUnit = await prisma.unit.create({
-    data: { name: 'Engineering Unit', dept_id: deptENG.id, type: [] },
+  const deptLOC = await prisma.department.create({
+    data: {
+      id: 'DEPT-LOC',
+      name: 'สำนักงานบริหารระบบกายภาพ',
+      units: {
+        create: [
+          { id: 'UNIT-BUILD', name: 'ฝ่ายอาคารสถานที่', type: [] },
+          { id: 'UNIT-MAINT', name: 'ฝ่ายซ่อมบำรุง', type: [] },
+        ],
+      },
+    },
+  });
+
+  const deptSTUAFF = await prisma.department.create({
+    data: {
+      id: 'DEPT-STUAFF',
+      name: 'สำนักบริหารกิจการนิสิต',
+      units: {
+        create: [
+          { id: 'UNIT-EDU', name: 'ฝ่ายทุนการศึกษาและบริการนิสิต', type: [] },
+          {
+            id: 'UNIT-NET',
+            name: 'ฝ่ายประสานงานและเครือข่ายกิจการนิสิต',
+            type: [],
+          },
+        ],
+      },
+    },
   });
 
   // ---------------------------------------------------------
@@ -93,9 +160,14 @@ async function main() {
     deptId: string,
     unitId: string | null = null
   ) => {
-    const user = await prisma.user.create({
-      data: { username, full_name: fullName },
+    const existingUser = await prisma.user.findUnique({
+      where: { username },
     });
+    const user = existingUser
+      ? existingUser
+      : await prisma.user.create({
+          data: { username, full_name: fullName },
+        });
     const roleRecord = await prisma.userRole.findUnique({
       where: { name: roleName },
     });
@@ -111,53 +183,147 @@ async function main() {
   };
 
   // Supply Roles (Unit-less Department roles)
+  const superAdmin = await prisma.user.create({
+    data: {
+      username: 'super_admin',
+      full_name: 'Super Admin',
+      roles: {
+        create: [
+          {
+            role_id: (
+              await prisma.userRole.findUnique({ where: { name: RoleEnum.SUPER_ADMIN } })
+            )!.id,
+            dept_id: "SUPER_ADMIN",
+            unit_id: null,
+          },
+        ],
+      },
+    },
+  });
+
   const headDept = await assignRole(
     'boss_mike',
     'Mike Bossman',
-    RoleEnum.HEAD_OF_DEPARTMENT,
-    deptSUP.id
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
   );
+
+  await assignRole(
+    'boss_mike',
+    'Mike Bossman',
+    RoleEnum.HEAD_OF_DEPARTMENT,
+    deptSUPOPS.id
+  );
+
+  const headUnit1 = await assignRole(
+    'head_proc1',
+    'Bee Procurement',
+    RoleEnum.HEAD_OF_UNIT,
+    deptSUPOPS.id,
+    'UNIT-PROC-1'
+  );
+
+  await assignRole(
+    'head_proc1',
+    'Bee Procurement',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
+  );
+
   const finStaff = await assignRole(
     'fin_lisa',
     'Lisa Finance',
     RoleEnum.FINANCE_STAFF,
-    deptSUP.id
+    deptSUPOPS.id
   );
+
+  await assignRole(
+    'fin_lisa',
+    'Lisa Finance',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
+  );
+
   const docStaff = await assignRole(
     'doc_mary',
     'Mary Document',
     RoleEnum.DOCUMENT_STAFF,
-    deptSUP.id
+    deptSUPOPS.id
   );
 
-  // Supply Roles (Unit-specific)
+  await assignRole(
+    'doc_mary',
+    'Mary Document',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
+  );
+
   const adminJane = await assignRole(
     'admin_jane',
     'Jane Doe',
     RoleEnum.ADMIN,
-    deptSUP.id,
-    unit1.id
+    deptSUPOPS.id
   );
+
+  await assignRole(
+    'admin_jane',
+    'Jane Doe',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
+  );
+
+  // Supply Roles (Unit-specific)
   const staffBob = await assignRole(
     'staff_bob',
     'Bob Smith',
     RoleEnum.GENERAL_STAFF,
-    deptSUP.id,
-    unit1.id
+    deptSUPOPS.id,
+    'UNIT-PROC-1'
   );
+
+  await assignRole(
+    'staff_bob',
+    'Bob Smith',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
+  );
+
   const staffAlice = await assignRole(
     'staff_alice',
     'Alice Jones',
     RoleEnum.GENERAL_STAFF,
-    deptSUP.id,
-    unit2.id
+    deptSUPOPS.id,
+    'UNIT-PROC-2'
   );
+
+  await assignRole(
+    'staff_alice',
+    'Alice Jones',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
+  );
+
   const staffCathy = await assignRole(
     'staff_cathy',
     'Cathy Williams',
     RoleEnum.GENERAL_STAFF,
-    deptSUP.id,
-    unit3.id
+    deptSUPOPS.id,
+    'UNIT-CONT'
+  );
+
+  await assignRole(
+    'staff_cathy',
+    'Cathy Williams',
+    RoleEnum.GUEST,
+    'DEPT-FIN',
+    'UNIT-SUP'
   );
 
   // External Roles
@@ -165,9 +331,18 @@ async function main() {
     'rep_charlie',
     'Charlie Rep',
     RoleEnum.REPRESENTATIVE,
-    deptENG.id,
-    engineeringUnit.id
+    deptLOC.id,
+    'UNIT-BUILD'
   );
+
+  const rep_kevin = await assignRole(
+    'rep_kevin',
+    'Kevin Rep',
+    RoleEnum.REPRESENTATIVE,
+    deptLOC.id,
+    'UNIT-MAINT'
+  );
+
   const regSam = await assignRole(
     'reg_sam',
     'Sam Registration',
@@ -175,13 +350,29 @@ async function main() {
     deptREG.id
   );
 
+  const stuAffEmily = await assignRole(
+    'stu_emily',
+    'Emily StudentAffairs',
+    RoleEnum.REPRESENTATIVE,
+    deptSTUAFF.id,
+    'UNIT-EDU'
+  );
+
+  await assignRole(
+    'stu_emily',
+    'Emily StudentAffairs',
+    RoleEnum.REPRESENTATIVE,
+    deptSTUAFF.id,
+    'UNIT-NET'
+  );
+
   // ---------------------------------------------------------
   // 5. DELEGATION (Mike delegates to Lisa for 7 days)
   // ---------------------------------------------------------
   await prisma.userDelegation.create({
     data: {
-      delegator_id: headDept.id,
-      delegatee_id: finStaff.id,
+      delegator_id: headUnit1.id,
+      delegatee_id: staffBob.id,
       start_date: new Date(),
       end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
@@ -198,6 +389,9 @@ async function main() {
       status: ProjectStatus.IN_PROGRESS,
       procurement_type: ProcurementType.LT500K,
       current_workflow_type: UnitResponsibleType.LT500K,
+      responsible_unit_id: 'UNIT-PROC-1',
+      requesting_dept_id: deptLOC.id,
+      requesting_unit_id: 'UNIT-BUILD',
       created_by: adminJane.id,
       assignee_procurement: { connect: [{ id: staffBob.id }] },
       is_urgent: UrgentType.URGENT,
@@ -210,6 +404,9 @@ async function main() {
       status: ProjectStatus.IN_PROGRESS,
       procurement_type: ProcurementType.MT500K,
       current_workflow_type: UnitResponsibleType.MT500K,
+      responsible_unit_id: 'UNIT-PROC-2',
+      requesting_dept_id: deptFIN.id,
+      requesting_unit_id: 'UNIT-SUP',
       created_by: adminJane.id,
       assignee_procurement: { connect: [{ id: staffAlice.id }] },
       is_urgent: UrgentType.NORMAL,
@@ -221,6 +418,9 @@ async function main() {
       status: ProjectStatus.IN_PROGRESS,
       procurement_type: ProcurementType.SELECTION,
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      responsible_unit_id: 'UNIT-CONT',
+      requesting_dept_id: deptSTUAFF.id,
+      requesting_unit_id: 'UNIT-EDU',
       created_by: adminJane.id,
       assignee_procurement: { connect: [{ id: staffAlice.id }] },
       assignee_contract: { connect: [{ id: staffCathy.id }] },

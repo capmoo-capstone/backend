@@ -21,7 +21,7 @@ export const login = async (
       roles: {
         include: {
           role: true,
-          department: { select: { id: true, code: true, name: true } },
+          department: { select: { id: true, name: true } },
           unit: { select: { id: true, name: true } },
         },
       },
@@ -37,7 +37,7 @@ export const login = async (
               roles: {
                 include: {
                   role: true,
-                  department: { select: { id: true, code: true, name: true } },
+                  department: { select: { id: true, name: true } },
                   unit: { select: { id: true, name: true } },
                 },
               },
@@ -80,10 +80,7 @@ export const login = async (
       token,
       id: user.id,
       is_delegated: user.delegations_received.length > 0,
-      roles: {
-        own: ownRoles,
-        delegated: inheritedRoles,
-      },
+      roles: [...ownRoles, ...inheritedRoles],
     },
   };
 };
@@ -153,7 +150,7 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
         roles: {
           include: {
             role: true,
-            department: { select: { id: true, code: true, name: true } },
+            department: { select: { id: true, name: true } },
             unit: { select: { id: true, name: true } },
           },
         },
@@ -165,4 +162,70 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
   });
 
   return { data: result };
+};
+
+export const getMe = async (id: string): Promise<any> => {
+  const now = new Date();
+  const user = await prisma.user.findUnique({
+    where: { id },
+    include: {
+      roles: {
+        include: {
+          role: true,
+          department: { select: { id: true, name: true } },
+          unit: { select: { id: true, name: true } },
+        },
+      },
+      delegations_received: {
+        where: {
+          is_active: true,
+          start_date: { lte: now },
+          OR: [{ end_date: null }, { end_date: { gte: now } }],
+        },
+        include: {
+          delegator: {
+            include: {
+              roles: {
+                include: {
+                  role: true,
+                  department: { select: { id: true, name: true } },
+                  unit: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  const formatRoles = (orgRoles: any[]) =>
+    orgRoles.map((r) => ({
+      role: r.role.name,
+      dept_id: r.department.id,
+      dept_name: r.department.name,
+      unit_id: r.unit?.id || null,
+      unit_name: r.unit?.name || null,
+    }));
+
+  const ownRoles = formatRoles(user.roles);
+  const inheritedRoles =
+    user.delegations_received.length > 0
+      ? formatRoles(user.delegations_received.flatMap((d) => d.delegator.roles))
+      : [];
+
+  return {
+    data: {
+      id: user.id,
+      username: user.username,
+      full_name: user.full_name,
+      email: user.email,
+      roles: [...ownRoles, ...inheritedRoles],
+      created_at: user.created_at,
+    },
+  };
 };

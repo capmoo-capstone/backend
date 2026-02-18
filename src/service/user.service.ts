@@ -183,7 +183,6 @@ export const getById = async (id: string): Promise<any> => {
           department: {
             select: {
               id: true,
-              code: true,
               name: true,
             },
           },
@@ -291,11 +290,11 @@ export const addRepresentativeToUnit = async (
   return await prisma.$transaction(async (tx) => {
     const unit = await tx.unit.findUnique({
       where: { id: data.unit_id },
-      select: { id: true, department: { select: { id: true, code: true } } },
+      select: { id: true, department: { select: { id: true } } },
     });
 
     if (!unit) throw new NotFoundError('Unit not found');
-    if (unit.department?.code === 'SUPPLY') {
+    if (unit.department?.id === 'DEPT-SUP-OPS') {
       throw new BadRequestError(
         'Representative role is not allowed for SUPPLY units'
       );

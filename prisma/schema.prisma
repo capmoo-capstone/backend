@@ -41,6 +41,7 @@ enum UnitResponsibleType {
   MT500K
   SELECTION
   EBIDDING
+  INTERNAL
   CONTRACT
 }
 
@@ -57,6 +58,7 @@ enum ProcurementType {
   MT500K
   SELECTION
   EBIDDING
+  INTERNAL
 }
 
 enum SubmissionStatus {
@@ -91,24 +93,25 @@ enum UrgentType {
 // --- MODELS ---
 
 model Department {
-  id   String @id @default(uuid())
+  id   String @id
   name String
-  code String
 
   units              Unit[]
   organization_roles UserOrganizationRole[]
+  projects           Project[]
 
   @@map("departments")
 }
 
 model Unit {
-  id      String                @id @default(uuid())
+  id      String                @id
   dept_id String
   name    String
   type    UnitResponsibleType[]
 
-  organization_roles UserOrganizationRole[]
-  projects           Project[]
+  organization_roles   UserOrganizationRole[]
+  requesting_projects  Project[]              @relation("RequestingUnit")
+  responsible_projects Project[]              @relation("ResponsibleUnit")
 
   department Department @relation(fields: [dept_id], references: [id])
 
@@ -142,12 +145,12 @@ model User {
 }
 
 model UserDelegation {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   delegator_id String
   delegatee_id String
   start_date   DateTime
   end_date     DateTime?
-  is_active    Boolean  @default(true)
+  is_active    Boolean   @default(true)
 
   delegator User @relation("Delegator", fields: [delegator_id], references: [id])
   delegatee User @relation("Delegatee", fields: [delegatee_id], references: [id])
@@ -187,7 +190,9 @@ model Project {
   budget                 Decimal             @db.Decimal(18, 2)
   status                 ProjectStatus
   procurement_type       ProcurementType
-  current_workflow_type  UnitResponsibleType
+  current_workflow_type UnitResponsibleType
+  responsible_unit_id    String
+  requesting_dept_id     String
   requesting_unit_id     String?
   is_urgent              UrgentType          @default(NORMAL)
   expected_approval_date DateTime?
@@ -203,8 +208,10 @@ model Project {
   created_at             DateTime            @default(now())
   updated_at             DateTime?           @updatedAt
 
-  creator         User  @relation("ProjectCreator", fields: [created_by], references: [id])
-  requesting_unit Unit? @relation(fields: [requesting_unit_id], references: [id])
+  creator          User       @relation("ProjectCreator", fields: [created_by], references: [id])
+  requesting_dept  Department @relation(fields: [requesting_dept_id], references: [id])
+  requesting_unit  Unit?      @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
+  responsible_unit Unit?      @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
 
   assignee_procurement User[]                @relation("ProcurementProjects")
   assignee_contract    User[]                @relation("ContractProjects")

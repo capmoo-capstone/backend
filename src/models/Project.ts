@@ -5,6 +5,7 @@ import {
   ProcurementType,
   UrgentType,
 } from '@prisma/client';
+import { request } from 'node:http';
 
 export interface PhaseStatusResult {
   status: ProjectPhaseStatus;
@@ -17,7 +18,8 @@ export const CreateProjectSchema = z.object({
   budget: z.number(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),
-  requesting_unit_id: z.string().optional(),
+  requesting_dept_id: z.string(),
+  requesting_unit_id: z.string(),
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
   expected_approval_date: z.coerce.date().optional(),
