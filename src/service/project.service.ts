@@ -20,9 +20,11 @@ import {
   UpdateStatusProjectDto,
   UpdateStatusProjectsDto,
 } from '../models/Project';
-import { BadRequestError, NotFoundError } from '../lib/errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
 import { AuthPayload } from '../lib/types';
+import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
+import { SUPPLY_DEPT_ID, WORKFLOW_STEP_ORDERS } from '../lib/constant';
 
 const mapSubmissionToPhaseStatus = (
   status: SubmissionStatus
@@ -41,20 +43,6 @@ const mapSubmissionToPhaseStatus = (
     default:
       return ProjectPhaseStatus.IN_PROGRESS;
   }
-};
-
-const makeStepRange = (start: number, end: number): number[] => {
-  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
-};
-
-const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
-  [UnitResponsibleType.LT100K]: makeStepRange(1, 4),
-  [UnitResponsibleType.LT500K]: makeStepRange(1, 4),
-  [UnitResponsibleType.MT500K]: makeStepRange(1, 6),
-  [UnitResponsibleType.SELECTION]: makeStepRange(1, 7),
-  [UnitResponsibleType.EBIDDING]: makeStepRange(1, 10),
-  [UnitResponsibleType.CONTRACT]: makeStepRange(1, 7),
-  [UnitResponsibleType.INTERNAL]: makeStepRange(1, 4),
 };
 
 const computePhaseStatus = async (
@@ -107,8 +95,8 @@ const computePhaseStatus = async (
 };
 
 export const getWorkflowStatus = async (
-  projectId: string,
-  tx: Prisma.TransactionClient
+  tx: Prisma.TransactionClient,
+  projectId: string
 ) => {
   const project = await tx.project.findUnique({
     where: { id: projectId },
@@ -156,7 +144,11 @@ export const listProjects = async (
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
-  const where: Prisma.ProjectWhereInput = {};
+  let where = {};
+
+  if (!haveSupplyPermission(user)) {
+    where = { requesting_dept_id: { in: getDeptIdsForUser(user) } };
+  }
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
@@ -206,46 +198,51 @@ export const createProject = async (
 };
 
 export const getById = async (user: AuthPayload, id: string): Promise<any> => {
+  const haveAccess =
+    haveSupplyPermission(user) ||
+    (await prisma.project.count({
+      where: {
+        id,
+        requesting_dept_id: { in: getDeptIdsForUser(user) },
+      },
+    })) > 0;
+
+  if (!haveAccess) {
+    throw new ForbiddenError('You do not have access to this project');
+  }
+
   return await prisma.$transaction(async (tx) => {
     const projectData = await tx.project.findUnique({
       where: { id },
       include: {
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
-          include: {
-            department: { select: { id: true, name: true } },
+          select: {
+            id: true,
+            name: true,
           },
         },
         assignee_procurement: {
-          include: {
-            roles: {
-              select: {
-                role: true,
-                department: { select: { id: true, name: true } },
-                unit: { select: { id: true, name: true } },
-              },
-            },
+          select: {
+            id: true,
+            full_name: true,
           },
         },
         assignee_contract: {
-          include: {
-            roles: {
-              select: {
-                role: true,
-                department: { select: { id: true, name: true } },
-                unit: { select: { id: true, name: true } },
-              },
-            },
+          select: {
+            id: true,
+            full_name: true,
           },
         },
         creator: {
-          include: {
-            roles: {
-              select: {
-                role: true,
-                department: { select: { id: true, name: true } },
-                unit: { select: { id: true, name: true } },
-              },
-            },
+          select: {
+            id: true,
+            full_name: true,
           },
         },
         project_cancellation: {
@@ -285,32 +282,22 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
         email: projectData.vendor_email,
       },
       requester: {
-        unit_name: projectData.requesting_unit?.name ?? null,
+        dept_id: projectData.requesting_dept.id,
+        dept_name: projectData.requesting_dept.name,
         unit_id: projectData.requesting_unit?.id ?? null,
-        dept_name: projectData.requesting_unit?.department?.name ?? null,
-        dept_id: projectData.requesting_unit?.department?.id ?? null,
+        unit_name: projectData.requesting_unit?.name ?? null,
       },
       creator: {
+        id: projectData.creator.id,
         full_name: projectData.creator.full_name,
-        roles: projectData.creator.roles.map((r) => r.role),
-        unit_name: projectData.creator.roles[0]?.unit?.name ?? null,
-        unit_id: projectData.creator.roles[0]?.unit?.id ?? null,
-        dept_name: projectData.creator.roles[0]?.department?.name ?? null,
-        dept_id: projectData.creator.roles[0]?.department?.id ?? null,
       },
       assignee_procurement: projectData.assignee_procurement.map((u) => ({
         id: u.id,
         full_name: u.full_name,
-        roles: u.roles.map((r) => r.role),
-        unit_name: u.roles[0]?.unit?.name ?? null,
-        unit_id: u.roles[0]?.unit?.id ?? null,
       })),
       assignee_contract: projectData.assignee_contract.map((u) => ({
         id: u.id,
         full_name: u.full_name,
-        roles: u.roles.map((r) => r.role),
-        unit_name: u.roles[0]?.unit?.name ?? null,
-        unit_id: u.roles[0]?.unit?.id ?? null,
       })),
       cancellation: projectData.project_cancellation
         ? projectData.project_cancellation.map((c) => ({
@@ -324,12 +311,12 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
         : null,
     };
 
-    const { procurement, contract } = await getWorkflowStatus(id, tx);
+    const { procurement, contract } = await getWorkflowStatus(tx, id);
 
     return {
-      ...project,
       procurement_status: procurement,
       contract_status: contract,
+      ...project,
     };
   });
 };
