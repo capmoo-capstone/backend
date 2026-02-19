@@ -13,10 +13,7 @@ const updateDepartmentSchema = z.object({
 });
 export type UpdateDepartmentDto = z.infer<typeof updateDepartmentSchema>;
 
-export interface PaginatedDepartments {
+export interface DepartmentsListResponse {
   total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
   data: Array<Department>;
 }
