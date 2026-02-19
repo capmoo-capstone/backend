@@ -5,7 +5,6 @@ export const deptLevelRoles = new Set<Role>([
   Role.FINANCE_STAFF,
   Role.DOCUMENT_STAFF,
   Role.ADMIN,
-  Role.GUEST,
 ]);
 
 export const unitLevelRoles = new Set<Role>([
