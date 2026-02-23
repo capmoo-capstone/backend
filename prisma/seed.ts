@@ -7,6 +7,7 @@ import {
   UrgentType,
 } from '@prisma/client';
 import { prisma } from '../src/config/prisma';
+import { WORKFLOW_STEP_ORDERS } from '../src/lib/constant';
 
 async function main() {
   console.log('--- Start Seeding ---');
@@ -148,6 +149,13 @@ async function main() {
     },
   });
 
+  const deptSuperAdmin = await prisma.department.create({
+    data: {
+      id: 'SUPER_ADMIN',
+      name: 'Super Admin Department',
+    },
+  });
+
   // ---------------------------------------------------------
   // 4. USERS & ROLE ASSIGNMENTS
   // ---------------------------------------------------------
@@ -190,10 +198,10 @@ async function main() {
       roles: {
         create: [
           {
-            role_id: (
-              await prisma.userRole.findUnique({ where: { name: RoleEnum.SUPER_ADMIN } })
-            )!.id,
-            dept_id: "SUPER_ADMIN",
+            role_id: (await prisma.userRole.findUnique({
+              where: { name: RoleEnum.SUPER_ADMIN },
+            }))!.id,
+            dept_id: 'SUPER_ADMIN',
             unit_id: null,
           },
         ],
@@ -382,6 +390,10 @@ async function main() {
   // 6. PROJECTS & WORKFLOW
   // ---------------------------------------------------------
   const projects = [
+    // ---------------------------------------------------------
+    // 1. New Server Purchase 2026
+    // Requesting: DEPT-LOC / UNIT-BUILD (Charlie)
+    // ---------------------------------------------------------
     {
       title: 'New Server Purchase 2026',
       receive_no: '1',
@@ -392,11 +404,16 @@ async function main() {
       responsible_unit_id: 'UNIT-PROC-1',
       requesting_dept_id: deptLOC.id,
       requesting_unit_id: 'UNIT-BUILD',
-      created_by: adminJane.id,
+      created_by: repCharlie.id, // Updated: Charlie requests for Building
       assignee_procurement: { connect: [{ id: staffBob.id }] },
       is_urgent: UrgentType.URGENT,
-      expected_approval_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
+      expected_approval_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     },
+
+    // ---------------------------------------------------------
+    // 2. Cloud Infrastructure Upgrade
+    // Requesting: DEPT-FIN / UNIT-SUP (Lisa - Finance Proxy)
+    // ---------------------------------------------------------
     {
       title: 'Cloud Infrastructure Upgrade',
       receive_no: '2',
@@ -407,10 +424,15 @@ async function main() {
       responsible_unit_id: 'UNIT-PROC-2',
       requesting_dept_id: deptFIN.id,
       requesting_unit_id: 'UNIT-SUP',
-      created_by: adminJane.id,
+      created_by: finStaff.id, // Updated: Lisa (Finance Staff) requests
       assignee_procurement: { connect: [{ id: staffAlice.id }] },
       is_urgent: UrgentType.NORMAL,
     },
+
+    // ---------------------------------------------------------
+    // 3. Office Renovation
+    // Requesting: DEPT-STUAFF / UNIT-EDU (Emily)
+    // ---------------------------------------------------------
     {
       title: 'Office Renovation',
       receive_no: '3',
@@ -421,10 +443,146 @@ async function main() {
       responsible_unit_id: 'UNIT-CONT',
       requesting_dept_id: deptSTUAFF.id,
       requesting_unit_id: 'UNIT-EDU',
-      created_by: adminJane.id,
+      created_by: stuAffEmily.id, // Updated: Emily requests for Student Affairs
       assignee_procurement: { connect: [{ id: staffAlice.id }] },
       assignee_contract: { connect: [{ id: staffCathy.id }] },
       is_urgent: UrgentType.NORMAL,
+    },
+
+    // ---------------------------------------------------------
+    // 4. Quarterly Cleaning Supplies 2026
+    // Requesting: DEPT-LOC / UNIT-MAINT (Kevin)
+    // ---------------------------------------------------------
+    {
+      title: 'Quarterly Cleaning Supplies 2026',
+      receive_no: '4',
+      budget: 45000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.LT100K,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      responsible_unit_id: 'UNIT-PROC-1',
+      requesting_dept_id: deptLOC.id,
+      requesting_unit_id: 'UNIT-MAINT',
+      created_by: rep_kevin.id, // Updated: Kevin requests for Maintenance
+      assignee_procurement: { connect: [{ id: staffBob.id }] },
+      is_urgent: UrgentType.NORMAL,
+    },
+
+    // ---------------------------------------------------------
+    // 5. Annual Student Festival Stage Construction
+    // Requesting: DEPT-STUAFF / UNIT-NET (Emily)
+    // ---------------------------------------------------------
+    {
+      title: 'Annual Student Festival Stage Construction',
+      receive_no: '5',
+      budget: 1200000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.EBIDDING,
+      current_workflow_type: UnitResponsibleType.EBIDDING,
+      responsible_unit_id: 'UNIT-PROC-2',
+      requesting_dept_id: deptSTUAFF.id,
+      requesting_unit_id: 'UNIT-NET',
+      created_by: stuAffEmily.id, // Updated: Emily requests
+      assignee_procurement: { connect: [{ id: staffAlice.id }] },
+      is_urgent: UrgentType.NORMAL,
+      expected_approval_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+
+    // ---------------------------------------------------------
+    // 6. Emergency Pipe Repair - Building A
+    // Requesting: DEPT-LOC / UNIT-BUILD (Charlie)
+    // ---------------------------------------------------------
+    {
+      title: 'Emergency Pipe Repair - Building A',
+      receive_no: '6',
+      budget: 85000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.LT100K,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      responsible_unit_id: 'UNIT-PROC-1',
+      requesting_dept_id: deptLOC.id,
+      requesting_unit_id: 'UNIT-BUILD',
+      created_by: repCharlie.id, // Updated: Charlie requests
+      assignee_procurement: { connect: [{ id: staffBob.id }] },
+      is_urgent: UrgentType.URGENT,
+    },
+
+    // ---------------------------------------------------------
+    // 7. Security Guard Services Outsourcing
+    // Requesting: DEPT-LOC / UNIT-BUILD (Charlie)
+    // ---------------------------------------------------------
+    {
+      title: 'Security Guard Services Outsourcing 2026-2027',
+      receive_no: '7',
+      budget: 2400000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.SELECTION,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      responsible_unit_id: 'UNIT-CONT',
+      requesting_dept_id: deptLOC.id,
+      requesting_unit_id: 'UNIT-BUILD',
+      created_by: repCharlie.id, // Updated: Charlie requests
+      assignee_procurement: { connect: [{ id: staffAlice.id }] },
+      assignee_contract: { connect: [{ id: staffCathy.id }] },
+      is_urgent: UrgentType.NORMAL,
+    },
+
+    // ---------------------------------------------------------
+    // 8. A4 Paper Bulk Order
+    // Requesting: DEPT-REG (Sam)
+    // ---------------------------------------------------------
+    {
+      title: 'A4 Paper Bulk Order for Registration',
+      receive_no: '8',
+      budget: 200000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.LT500K,
+      current_workflow_type: UnitResponsibleType.LT500K,
+      responsible_unit_id: 'UNIT-PROC-1',
+      requesting_dept_id: deptREG.id,
+      requesting_unit_id: null,
+      created_by: regSam.id, // Updated: Sam requests for Registration
+      assignee_procurement: { connect: [{ id: staffBob.id }] },
+      is_urgent: UrgentType.NORMAL,
+    },
+
+    // ---------------------------------------------------------
+    // 9. ERP System License Renewal
+    // Requesting: DEPT-FIN / UNIT-ACC (Lisa)
+    // ---------------------------------------------------------
+    {
+      title: 'ERP System License Renewal',
+      receive_no: '9',
+      budget: 650000.0,
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.SELECTION,
+      current_workflow_type: UnitResponsibleType.SELECTION,
+      responsible_unit_id: 'UNIT-PROC-2',
+      requesting_dept_id: deptFIN.id,
+      requesting_unit_id: 'UNIT-ACC',
+      created_by: finStaff.id, // Updated: Lisa requests
+      assignee_procurement: { connect: [{ id: staffAlice.id }] },
+      is_urgent: UrgentType.NORMAL,
+    },
+
+    // ---------------------------------------------------------
+    // 10. Freshmen Orientation Welcome Kits
+    // Requesting: DEPT-STUAFF / UNIT-EDU (Emily)
+    // ---------------------------------------------------------
+    {
+      title: 'Freshmen Orientation Welcome Kits',
+      receive_no: '10',
+      budget: 120000.0,
+      status: ProjectStatus.CLOSED,
+      procurement_type: ProcurementType.LT500K,
+      current_workflow_type: UnitResponsibleType.LT500K,
+      responsible_unit_id: 'UNIT-PROC-1',
+      requesting_dept_id: deptSTUAFF.id,
+      requesting_unit_id: 'UNIT-EDU',
+      created_by: stuAffEmily.id, // Updated: Emily requests
+      assignee_procurement: { connect: [{ id: staffBob.id }] },
+      is_urgent: UrgentType.NORMAL,
+      expected_approval_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     },
   ];
 
@@ -435,85 +593,78 @@ async function main() {
     createdProject.push(created);
   }
 
-  await prisma.projectSubmission.create({
-    data: {
-      project_id: createdProject[0].id,
-      workflow_type: projects[0].current_workflow_type as UnitResponsibleType,
-      step_order: 1,
-      submission_round: 1,
-      status: SubmissionStatus.WAITING_APPROVAL,
-      submitted_by: staffBob.id,
-      documents: {
-        create: [
-          {
-            file_name: 'initial_proposal.pdf',
-            file_path: `/uploads/${createdProject[0].receive_no}/proposal.pdf`,
-          },
-        ],
-      },
-    },
-  });
-
-  await prisma.projectSubmission.create({
-    data: {
-      project_id: createdProject[1].id,
-      workflow_type: projects[1].current_workflow_type as UnitResponsibleType,
-      step_order: 1,
-      submission_round: 1,
-      status: SubmissionStatus.WAITING_APPROVAL,
-      submitted_by: staffAlice.id,
-      documents: {
-        create: [
-          {
-            file_name: 'initial_proposal.pdf',
-            file_path: `/uploads/${createdProject[1].receive_no}/proposal.pdf`,
-          },
-        ],
-      },
-    },
-  });
-
-  for (let i = 1; i < 4; i++) {
-    await prisma.projectSubmission.create({
-      data: {
-        project_id: createdProject[2].id,
-        workflow_type: UnitResponsibleType.SELECTION,
-        step_order: i,
-        submission_round: 1,
-        status: SubmissionStatus.COMPLETED,
-        submitted_by: staffAlice.id,
-        documents: {
-          create: [
-            {
-              file_name: 'initial_proposal.pdf',
-              file_path: `/uploads/${createdProject[2].receive_no}/proposal.pdf`,
-            },
-          ],
-        },
-      },
-    });
-  }
-
-  await prisma.projectSubmission.create({
-    data: {
-      project_id: createdProject[2].id,
-      workflow_type: UnitResponsibleType.CONTRACT,
-      step_order: 1,
-      submission_round: 1,
-      status: SubmissionStatus.WAITING_APPROVAL,
-      submitted_by: staffCathy.id,
-      documents: {
-        create: [
-          {
-            file_name: 'initial_proposal.pdf',
-            file_path: `/uploads/${createdProject[2].receive_no}/proposal.pdf`,
-          },
-        ],
-      },
-    },
-  });
-
   // 7. SUBMISSIONS & DOCUMENTS
+  // ---------------------------------------------------------
+  // 7. SEED SUBMISSIONS (HISTORY)
+  // ---------------------------------------------------------
+
+  // Fetch projects with their assignees to determine "who" submitted
+  const allProjects = await prisma.project.findMany({
+    include: {
+      assignee_procurement: true,
+      assignee_contract: true,
+    },
+  });
+
+  for (const project of allProjects) {
+    const wfType = project.current_workflow_type as UnitResponsibleType;
+    const steps = WORKFLOW_STEP_ORDERS[wfType] || [];
+
+    // 1. Determine the Submitter
+    // Logic: If in Contract phase, the Contract Staff submits. Otherwise, Procurement Staff.
+    let submitterId = project.created_by; // Fallback to creator
+
+    if (wfType === UnitResponsibleType.CONTRACT) {
+      if (project.assignee_contract.length > 0) {
+        submitterId = project.assignee_contract[0].id; // e.g., Cathy
+      }
+    } else {
+      if (project.assignee_procurement.length > 0) {
+        submitterId = project.assignee_procurement[0].id; // e.g., Bob or Alice
+      }
+    }
+
+    // 2. Determine how many steps are "Done"
+    let stepsToComplete = 0;
+
+    if (project.status === ProjectStatus.CLOSED) {
+      // If project is done, ALL steps must be completed
+      stepsToComplete = steps.length;
+    } else {
+      // If in progress, randomize progress (e.g., complete 1 to N-1 steps)
+      // ensuring at least 1 step is done, but not all (so it stays in progress)
+      if (steps.length > 1) {
+        stepsToComplete = Math.floor(Math.random() * (steps.length - 1)) + 1;
+      } else {
+        stepsToComplete = 0; // Just started, no steps done
+      }
+    }
+
+    // 3. Create the Submission Records
+    for (let i = 0; i < stepsToComplete; i++) {
+      const stepNum = steps[i];
+
+      await prisma.projectSubmission.create({
+        data: {
+          project_id: project.id,
+          workflow_type: wfType,
+          step_order: stepNum,
+          submission_round: 1, // Default to round 1
+          status: SubmissionStatus.COMPLETED,
+          submitted_by: submitterId,
+          // Mock a document for every step
+          documents: {
+            create: [
+              {
+                file_name: `doc_step_${stepNum}.pdf`,
+                file_path: `/uploads/${project.receive_no}/${wfType}/step_${stepNum}.pdf`,
+              },
+            ],
+          },
+        },
+      });
+    }
+  }
 
   console.log('--- Seeding Completed Successfully ---');
 }
