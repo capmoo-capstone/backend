@@ -166,7 +166,7 @@ model UserOrganizationRole {
   dept_id String
   unit_id String?
 
-  user       User       @relation(fields: [user_id], references: [id])
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
   department Department @relation(fields: [dept_id], references: [id])
   unit       Unit?      @relation(fields: [unit_id], references: [id])
 

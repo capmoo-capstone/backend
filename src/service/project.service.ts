@@ -24,7 +24,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors';
 import * as UserService from './user.service';
 import { AuthPayload } from '../lib/types';
 import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
-import { SUPPLY_DEPT_ID, WORKFLOW_STEP_ORDERS } from '../lib/constant';
+import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
 
 const mapSubmissionToPhaseStatus = (
   status: SubmissionStatus
