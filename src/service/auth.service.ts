@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import {
   AppError,
@@ -9,19 +9,18 @@ import {
 import jwt from 'jsonwebtoken';
 import { RegisterUserDto } from '../models/User';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
+import e from 'express';
 
-export const login = async (
-  username: string,
-  full_name: string
-): Promise<any> => {
+// Add this helper to src/service/auth.service.ts
+
+export const fetchAndFormatUserDetails = async (whereClause: any) => {
   const now = new Date();
   const user = await prisma.user.findFirst({
-    where: { username, full_name },
+    where: whereClause,
     include: {
       roles: {
         include: {
-          role: true,
-          department: { select: { id: true, name: true } },
+          department: { select: { id: true, name: true } }, // Included code for middleware
           unit: { select: { id: true, name: true } },
         },
       },
@@ -36,7 +35,6 @@ export const login = async (
             include: {
               roles: {
                 include: {
-                  role: true,
                   department: { select: { id: true, name: true } },
                   unit: { select: { id: true, name: true } },
                 },
@@ -48,15 +46,15 @@ export const login = async (
     },
   });
 
-  if (!user) {
-    throw new UnauthorizedError('Invalid credentials');
-  }
+  if (!user) return null;
 
   const formatRoles = (orgRoles: any[]) =>
     orgRoles.map((r) => ({
-      role: r.role.name,
+      role: r.role,
       dept_id: r.department.id,
+      dept_name: r.department.name,
       unit_id: r.unit?.id || null,
+      unit_name: r.unit?.name || null,
     }));
 
   const ownRoles = formatRoles(user.roles);
@@ -64,6 +62,37 @@ export const login = async (
     user.delegations_received.length > 0
       ? formatRoles(user.delegations_received.flatMap((d) => d.delegator.roles))
       : [];
+
+  const finalRoles = [...ownRoles, ...inheritedRoles];
+  const isDelegated = user.delegations_received.length > 0;
+  const delegatedBy = user.delegations_received.map((d) => ({
+    id: d.delegator.id,
+    full_name: d.delegator.full_name,
+    roles: d.delegator.roles.map((r) => r.role),
+  }));
+
+  return {
+    user, // Raw user data (id, username, full_name, email, etc.)
+    authData: {
+      // Formatted data for the cache/tokens
+      roles: finalRoles,
+      is_delegated: isDelegated,
+      delegated_by: delegatedBy,
+    },
+  };
+};
+
+export const login = async (
+  username: string,
+  full_name: string
+): Promise<any> => {
+  const result = await fetchAndFormatUserDetails({ username, full_name });
+
+  if (!result) {
+    throw new UnauthorizedError('Invalid credentials');
+  }
+
+  const { user, authData } = result;
 
   const tokenPayload = {
     id: user.id,
@@ -79,12 +108,10 @@ export const login = async (
     data: {
       token,
       id: user.id,
-      is_delegated: user.delegations_received.length > 0,
-      roles: [...ownRoles, ...inheritedRoles],
+      ...authData, // Spread the roles and delegations perfectly
     },
   };
 };
-
 export const register = async (data: RegisterUserDto): Promise<any> => {
   const existingUser = await prisma.user.findUnique({
     where: { username: data.username },
@@ -119,14 +146,6 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
       throw new NotFoundError('Unit not found in this department');
     }
 
-    const roleRecord = await tx.userRole.findUnique({
-      where: { name: data.role },
-    });
-    if (!roleRecord) {
-      console.error(`Role not found: ${data.role}`);
-      throw new NotFoundError('Role not found');
-    }
-
     const newUser = await tx.user.create({
       data: {
         username: data.username,
@@ -135,7 +154,7 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
         roles: {
           create: [
             {
-              role_id: roleRecord.id,
+              role: data.role,
               dept_id: data.dept_id,
               unit_id: data.unit_id || null,
             },
@@ -149,7 +168,6 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
         full_name: true,
         roles: {
           include: {
-            role: true,
             department: { select: { id: true, name: true } },
             unit: { select: { id: true, name: true } },
           },
@@ -162,70 +180,4 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
   });
 
   return { data: result };
-};
-
-export const getMe = async (id: string): Promise<any> => {
-  const now = new Date();
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: {
-      roles: {
-        include: {
-          role: true,
-          department: { select: { id: true, name: true } },
-          unit: { select: { id: true, name: true } },
-        },
-      },
-      delegations_received: {
-        where: {
-          is_active: true,
-          start_date: { lte: now },
-          OR: [{ end_date: null }, { end_date: { gte: now } }],
-        },
-        include: {
-          delegator: {
-            include: {
-              roles: {
-                include: {
-                  role: true,
-                  department: { select: { id: true, name: true } },
-                  unit: { select: { id: true, name: true } },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!user) {
-    throw new NotFoundError('User not found');
-  }
-
-  const formatRoles = (orgRoles: any[]) =>
-    orgRoles.map((r) => ({
-      role: r.role.name,
-      dept_id: r.department.id,
-      dept_name: r.department.name,
-      unit_id: r.unit?.id || null,
-      unit_name: r.unit?.name || null,
-    }));
-
-  const ownRoles = formatRoles(user.roles);
-  const inheritedRoles =
-    user.delegations_received.length > 0
-      ? formatRoles(user.delegations_received.flatMap((d) => d.delegator.roles))
-      : [];
-
-  return {
-    data: {
-      id: user.id,
-      username: user.username,
-      full_name: user.full_name,
-      email: user.email,
-      roles: [...ownRoles, ...inheritedRoles],
-      created_at: user.created_at,
-    },
-  };
 };

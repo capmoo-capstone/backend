@@ -8,26 +8,48 @@ export const addDelegation = async (data: AddDelegationDto): Promise<any> => {
     UserService.getById(data.delegator_id),
     UserService.getById(data.delegatee_id),
   ]);
-  const created = await prisma.userDelegation.create({
-    data: {
-      delegator_id: data.delegator_id,
-      delegatee_id: data.delegatee_id,
-      start_date: data.start_date,
-      end_date: data.end_date ?? undefined,
-      is_active: true,
-    },
+  return await prisma.$transaction(async (tx) => {
+    const created = await tx.userDelegation.create({
+      data: {
+        delegator_id: data.delegator_id,
+        delegatee_id: data.delegatee_id,
+        start_date: data.start_date,
+        end_date: data.end_date ?? undefined,
+        is_active: true,
+      },
+    });
+
+    await tx.user.update({
+      where: { id: data.delegatee_id },
+      data: { role_updated_at: new Date() },
+    });
+
+    return { data: created };
   });
-  return { data: created };
 };
 
 export const cancelDelegation = async (id: string): Promise<any> => {
-  const updated = await prisma.userDelegation.update({
-    where: { id },
-    data: {
-      is_active: false,
-    },
+  return await prisma.$transaction(async (tx) => {
+    const delegation = await tx.userDelegation.findUnique({
+      where: { id },
+    });
+    if (!delegation) {
+      throw new NotFoundError('Delegation not found');
+    }
+
+    const updated = await tx.userDelegation.update({
+      where: { id },
+      data: {
+        is_active: false,
+      },
+    });
+
+    await tx.user.update({
+      where: { id: updated.delegatee_id },
+      data: { role_updated_at: new Date() },
+    });
+    return { data: updated };
   });
-  return { data: updated };
 };
 
 export const getById = async (id: string): Promise<any> => {
@@ -40,7 +62,7 @@ export const getById = async (id: string): Promise<any> => {
           full_name: true,
           roles: {
             select: {
-              role: { select: { name: true } },
+              role: true,
               dept_id: true,
               unit_id: true,
             },
@@ -53,7 +75,7 @@ export const getById = async (id: string): Promise<any> => {
           full_name: true,
           roles: {
             select: {
-              role: { select: { name: true } },
+              role: true,
               dept_id: true,
               unit_id: true,
             },

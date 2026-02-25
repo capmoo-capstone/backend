@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { User, Role, UnitResponsibleType } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 
 export const RegisterUserSchema = z.object({
   username: z.string(),
   full_name: z.string(),
   email: z.email().optional(),
-  role: z.enum(Role).default(Role.GUEST),
+  role: z.enum(UserRole).default(UserRole.GUEST),
   dept_id: z.string(),
   unit_id: z.string().optional(),
 });
@@ -30,7 +30,7 @@ export type UpdateRepresentativeUnitDto = z.infer<
 >;
 
 export const UpdateRoleSchema = z.object({
-  role: z.enum(Role),
+  role: z.enum(UserRole),
   dept_id: z.uuid(),
   unit_id: z.uuid().optional(),
 });

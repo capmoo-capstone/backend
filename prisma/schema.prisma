@@ -13,7 +13,7 @@ datasource db {
 }
 
 // --- ENUMS ---
-enum Role {
+enum UserRole {
   SUPER_ADMIN
   ADMIN
   HEAD_OF_DEPARTMENT
@@ -124,6 +124,7 @@ model User {
   email      String?  @unique
   full_name  String
   created_at DateTime @default(now())
+  role_updated_at DateTime @default(now())
 
   roles UserOrganizationRole[]
 
@@ -158,24 +159,14 @@ model UserDelegation {
   @@map("user_delegations")
 }
 
-model UserRole {
-  id   String @id @default(uuid())
-  name Role   @unique
-
-  organization_roles UserOrganizationRole[]
-
-  @@map("user_roles")
-}
-
 model UserOrganizationRole {
   id      String  @id @default(uuid())
   user_id String
-  role_id String
+  role    UserRole
   dept_id String
   unit_id String?
 
   user       User       @relation(fields: [user_id], references: [id])
-  role       UserRole   @relation(fields: [role_id], references: [id])
   department Department @relation(fields: [dept_id], references: [id])
   unit       Unit?      @relation(fields: [unit_id], references: [id])
 

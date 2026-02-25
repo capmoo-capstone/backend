@@ -6,7 +6,7 @@ import {
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
-  Role,
+  UserRole,
   Prisma,
 } from '@prisma/client';
 import {
@@ -425,7 +425,7 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (user.roles.some((r) => r.role === Role.HEAD_OF_UNIT)) {
+  if (user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT)) {
     const unitIds = user.roles
       .map((r) => r.unit_id)
       .filter((id): id is string => Boolean(id));
@@ -452,7 +452,7 @@ export const getAssignedProjects = async (
         },
       },
     });
-  } else if (user.roles.some((r) => r.role === Role.GENERAL_STAFF)) {
+  } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
     where.AND.push({
       OR: [
         { assignee_procurement: { some: { id: user.id } } },
@@ -887,8 +887,8 @@ export const cancelProject = async (
     }
 
     const isHead =
-      user.roles.some((r) => r.role === Role.HEAD_OF_UNIT) ||
-      user.roles.some((r) => r.role === Role.HEAD_OF_DEPARTMENT);
+      user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT) ||
+      user.roles.some((r) => r.role === UserRole.HEAD_OF_DEPARTMENT);
 
     if (!isHead) {
       if (project.status === ProjectStatus.CANCELLED) {

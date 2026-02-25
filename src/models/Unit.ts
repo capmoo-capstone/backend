@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Role, Unit, UnitResponsibleType } from '@prisma/client';
+import { Unit, UnitResponsibleType } from '@prisma/client';
 
 const CreateUnitSchema = z.object({
   id: z.string(),

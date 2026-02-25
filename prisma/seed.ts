@@ -3,7 +3,7 @@ import {
   ProcurementType,
   SubmissionStatus,
   UnitResponsibleType,
-  Role as RoleEnum,
+  UserRole,
   UrgentType,
 } from '@prisma/client';
 import { prisma } from '../src/config/prisma';
@@ -21,19 +21,9 @@ async function main() {
   await prisma.projectSubmission.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.userRole.deleteMany();
   await prisma.unit.deleteMany();
   await prisma.department.deleteMany();
   console.log('--- Database Cleaned ---');
-
-  // ---------------------------------------------------------
-  // 2. ROLE TEMPLATES
-  // ---------------------------------------------------------
-  // Populate the Role table from the Enum
-  const roleEnums = Object.values(RoleEnum);
-  for (const name of roleEnums) {
-    await prisma.userRole.create({ data: { name } });
-  }
 
   // ---------------------------------------------------------
   // 3. ORGANIZATIONAL STRUCTURE
@@ -164,7 +154,7 @@ async function main() {
   const assignRole = async (
     username: string,
     fullName: string,
-    roleName: RoleEnum,
+    roleName: UserRole,
     deptId: string,
     unitId: string | null = null
   ) => {
@@ -176,13 +166,10 @@ async function main() {
       : await prisma.user.create({
           data: { username, full_name: fullName },
         });
-    const roleRecord = await prisma.userRole.findUnique({
-      where: { name: roleName },
-    });
     await prisma.userOrganizationRole.create({
       data: {
         user_id: user.id,
-        role_id: roleRecord!.id,
+        role: roleName,
         dept_id: deptId,
         unit_id: unitId,
       },
@@ -198,9 +185,7 @@ async function main() {
       roles: {
         create: [
           {
-            role_id: (await prisma.userRole.findUnique({
-              where: { name: RoleEnum.SUPER_ADMIN },
-            }))!.id,
+            role: UserRole.SUPER_ADMIN,
             dept_id: 'SUPER_ADMIN',
             unit_id: null,
           },
@@ -212,7 +197,7 @@ async function main() {
   const headDept = await assignRole(
     'boss_mike',
     'Mike Bossman',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -220,14 +205,14 @@ async function main() {
   await assignRole(
     'boss_mike',
     'Mike Bossman',
-    RoleEnum.HEAD_OF_DEPARTMENT,
+    UserRole.HEAD_OF_DEPARTMENT,
     deptSUPOPS.id
   );
 
   const headUnit1 = await assignRole(
     'head_proc1',
     'Bee Procurement',
-    RoleEnum.HEAD_OF_UNIT,
+    UserRole.HEAD_OF_UNIT,
     deptSUPOPS.id,
     'UNIT-PROC-1'
   );
@@ -235,7 +220,7 @@ async function main() {
   await assignRole(
     'head_proc1',
     'Bee Procurement',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -243,14 +228,14 @@ async function main() {
   const finStaff = await assignRole(
     'fin_lisa',
     'Lisa Finance',
-    RoleEnum.FINANCE_STAFF,
+    UserRole.FINANCE_STAFF,
     deptSUPOPS.id
   );
 
   await assignRole(
     'fin_lisa',
     'Lisa Finance',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -258,14 +243,14 @@ async function main() {
   const docStaff = await assignRole(
     'doc_mary',
     'Mary Document',
-    RoleEnum.DOCUMENT_STAFF,
+    UserRole.DOCUMENT_STAFF,
     deptSUPOPS.id
   );
 
   await assignRole(
     'doc_mary',
     'Mary Document',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -273,14 +258,14 @@ async function main() {
   const adminJane = await assignRole(
     'admin_jane',
     'Jane Doe',
-    RoleEnum.ADMIN,
+    UserRole.ADMIN,
     deptSUPOPS.id
   );
 
   await assignRole(
     'admin_jane',
     'Jane Doe',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -289,7 +274,7 @@ async function main() {
   const staffBob = await assignRole(
     'staff_bob',
     'Bob Smith',
-    RoleEnum.GENERAL_STAFF,
+    UserRole.GENERAL_STAFF,
     deptSUPOPS.id,
     'UNIT-PROC-1'
   );
@@ -297,7 +282,7 @@ async function main() {
   await assignRole(
     'staff_bob',
     'Bob Smith',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -305,7 +290,7 @@ async function main() {
   const staffAlice = await assignRole(
     'staff_alice',
     'Alice Jones',
-    RoleEnum.GENERAL_STAFF,
+    UserRole.GENERAL_STAFF,
     deptSUPOPS.id,
     'UNIT-PROC-2'
   );
@@ -313,7 +298,7 @@ async function main() {
   await assignRole(
     'staff_alice',
     'Alice Jones',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -321,7 +306,7 @@ async function main() {
   const staffCathy = await assignRole(
     'staff_cathy',
     'Cathy Williams',
-    RoleEnum.GENERAL_STAFF,
+    UserRole.GENERAL_STAFF,
     deptSUPOPS.id,
     'UNIT-CONT'
   );
@@ -329,7 +314,7 @@ async function main() {
   await assignRole(
     'staff_cathy',
     'Cathy Williams',
-    RoleEnum.GUEST,
+    UserRole.GUEST,
     'DEPT-FIN',
     'UNIT-SUP'
   );
@@ -338,7 +323,7 @@ async function main() {
   const repCharlie = await assignRole(
     'rep_charlie',
     'Charlie Rep',
-    RoleEnum.REPRESENTATIVE,
+    UserRole.REPRESENTATIVE,
     deptLOC.id,
     'UNIT-BUILD'
   );
@@ -346,7 +331,7 @@ async function main() {
   const rep_kevin = await assignRole(
     'rep_kevin',
     'Kevin Rep',
-    RoleEnum.REPRESENTATIVE,
+    UserRole.REPRESENTATIVE,
     deptLOC.id,
     'UNIT-MAINT'
   );
@@ -354,14 +339,14 @@ async function main() {
   const regSam = await assignRole(
     'reg_sam',
     'Sam Registration',
-    RoleEnum.GENERAL_STAFF,
+    UserRole.GENERAL_STAFF,
     deptREG.id
   );
 
   const stuAffEmily = await assignRole(
     'stu_emily',
     'Emily StudentAffairs',
-    RoleEnum.REPRESENTATIVE,
+    UserRole.REPRESENTATIVE,
     deptSTUAFF.id,
     'UNIT-EDU'
   );
@@ -369,7 +354,7 @@ async function main() {
   await assignRole(
     'stu_emily',
     'Emily StudentAffairs',
-    RoleEnum.REPRESENTATIVE,
+    UserRole.REPRESENTATIVE,
     deptSTUAFF.id,
     'UNIT-NET'
   );
