@@ -12,6 +12,7 @@ import {
   CreateSubmissionDto,
   RejectSubmissionDto,
 } from '../models/Submission';
+import { syncProjectPhases } from '../lib/phase-status';
 
 const getSubmissionRound = async (
   data: CreateSubmissionDto,
@@ -75,7 +76,7 @@ export const createStaffSubmissionsProject = async (
     throw new BadRequestError('Invalid submission type for staff submission');
   }
 
-  const submission = await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.project_id },
       select: { id: true },
@@ -89,7 +90,7 @@ export const createStaffSubmissionsProject = async (
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
 
-    return tx.projectSubmission.create({
+    const submission = await tx.projectSubmission.create({
       data: {
         project_id: data.project_id,
         submitted_by: user.id,
@@ -107,134 +108,179 @@ export const createStaffSubmissionsProject = async (
           })),
         },
       },
+      select: {
+        id: true,
+        project_id: true,
+        workflow_type: true,
+        step_order: true,
+        submission_round: true,
+        status: true,
+      },
     });
+    await syncProjectPhases(
+      tx,
+      submission.workflow_type,
+      submission.project_id
+    );
+    return { data: submission };
   });
-
-  return submission;
 };
 
 export const rejectSubmission = async (
   user: AuthPayload,
   data: RejectSubmissionDto
 ) => {
-  const submission = await prisma.projectSubmission.update({
-    where: { id: data.id },
-    data: {
-      status: SubmissionStatus.REJECTED,
-      comment: data.comment,
-      approved_by: user.id,
-      approved_at: new Date(),
-    },
-    select: { id: true, project_id: true, status: true, comment: true },
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.projectSubmission.update({
+      where: { id: data.id },
+      data: {
+        status: SubmissionStatus.REJECTED,
+        comment: data.comment,
+        approved_by: user.id,
+        approved_at: new Date(),
+      },
+      select: {
+        id: true,
+        project_id: true,
+        workflow_type: true,
+        step_order: true,
+        submission_round: true,
+        status: true,
+        comment: true,
+      },
+    });
+    await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    return { data: updated };
   });
-
-  return { data: submission };
 };
 
 export const approveSubmission = async (
   user: AuthPayload,
   data: ApproveSubmissionDto
 ) => {
-  const submission = await prisma.projectSubmission.findUnique({
-    where: { id: data.id },
-    select: { status: true, submitted_by: true },
+  return await prisma.$transaction(async (tx) => {
+    const submission = await tx.projectSubmission.findUnique({
+      where: { id: data.id },
+      select: { status: true, submitted_by: true },
+    });
+
+    if (!submission) {
+      throw new NotFoundError('Submission not found');
+    }
+
+    if (submission.status !== SubmissionStatus.WAITING_APPROVAL) {
+      throw new BadRequestError(
+        'Only submissions with WAITING_APPROVAL status can be approved'
+      );
+    }
+
+    const updated = await tx.projectSubmission.update({
+      where: { id: data.id },
+      data: {
+        status: data.required_signature
+          ? SubmissionStatus.WAITING_PROPOSAL
+          : SubmissionStatus.COMPLETED,
+        approved_at: new Date(),
+        approved_by: user.id,
+        completed_at: data.required_signature ? null : new Date(),
+        completed_by: data.required_signature ? null : user.id,
+      },
+      select: {
+        id: true,
+        project_id: true,
+        workflow_type: true,
+        step_order: true,
+        submission_round: true,
+        status: true,
+        approved_at: data.required_signature ? true : false,
+        approved_by: data.required_signature ? true : false,
+        completed_at: data.required_signature ? false : true,
+        completed_by: data.required_signature ? false : true,
+      },
+    });
+    await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    return { data: updated };
   });
-
-  if (!submission) {
-    throw new NotFoundError('Submission not found');
-  }
-
-  if (submission.status !== SubmissionStatus.WAITING_APPROVAL) {
-    throw new BadRequestError(
-      'Only submissions with WAITING_APPROVAL status can be approved'
-    );
-  }
-
-  const updated = await prisma.projectSubmission.update({
-    where: { id: data.id },
-    data: {
-      status: data.required_signature
-        ? SubmissionStatus.WAITING_PROPOSAL
-        : SubmissionStatus.COMPLETED,
-      approved_at: new Date(),
-      approved_by: user.id,
-      completed_at: data.required_signature ? null : new Date(),
-      completed_by: data.required_signature ? null : submission.submitted_by,
-    },
-    select: {
-      id: true,
-      project_id: true,
-      status: true,
-    },
-  });
-
-  return { data: updated };
 };
 
 export const proposeSubmission = async (user: AuthPayload, id: string) => {
-  const submission = await prisma.projectSubmission.findUnique({
-    where: { id },
-    select: { status: true },
+  return await prisma.$transaction(async (tx) => {
+    const submission = await tx.projectSubmission.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (!submission) {
+      throw new NotFoundError('Submission not found');
+    }
+
+    if (submission.status !== SubmissionStatus.WAITING_PROPOSAL) {
+      throw new BadRequestError(
+        'Only submissions with WAITING_PROPOSAL status can be signed and completed'
+      );
+    }
+
+    const updated = await tx.projectSubmission.update({
+      where: { id },
+      data: {
+        status: SubmissionStatus.WAITING_SIGNATURE,
+        proposing_at: new Date(),
+        proposing_by: user.id,
+      },
+      select: {
+        id: true,
+        project_id: true,
+        workflow_type: true,
+        step_order: true,
+        submission_round: true,
+        status: true,
+        proposing_at: true,
+        proposing_by: true,
+      },
+    });
+    await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    return { data: updated };
   });
-
-  if (!submission) {
-    throw new NotFoundError('Submission not found');
-  }
-
-  if (submission.status !== SubmissionStatus.WAITING_PROPOSAL) {
-    throw new BadRequestError(
-      'Only submissions with WAITING_PROPOSAL status can be signed and completed'
-    );
-  }
-
-  const updated = await prisma.projectSubmission.update({
-    where: { id },
-    data: {
-      status: SubmissionStatus.WAITING_SIGNATURE,
-      proposing_at: new Date(),
-      proposing_by: user.id,
-    },
-    select: {
-      id: true,
-      project_id: true,
-      status: true,
-    },
-  });
-
-  return { data: updated };
 };
 
 export const signAndCompleteSubmission = async (
   user: AuthPayload,
   id: string
 ) => {
-  const submission = await prisma.projectSubmission.findUnique({
-    where: { id },
-    select: { status: true, submitted_by: true },
+  return await prisma.$transaction(async (tx) => {
+    const submission = await tx.projectSubmission.findUnique({
+      where: { id },
+      select: { status: true, submitted_by: true },
+    });
+
+    if (!submission) {
+      throw new NotFoundError('Submission not found');
+    }
+    if (submission.status !== SubmissionStatus.WAITING_SIGNATURE) {
+      throw new BadRequestError(
+        'Only submissions with WAITING_SIGNATURE status can be completed'
+      );
+    }
+
+    const updated = await tx.projectSubmission.update({
+      where: { id },
+      data: {
+        status: SubmissionStatus.COMPLETED,
+        completed_at: new Date(),
+        completed_by: user.id,
+      },
+      select: {
+        id: true,
+        project_id: true,
+        workflow_type: true,
+        step_order: true,
+        submission_round: true,
+        status: true,
+        completed_at: true,
+        completed_by: true,
+      },
+    });
+    await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    return { data: updated };
   });
-
-  if (!submission) {
-    throw new NotFoundError('Submission not found');
-  }
-  if (submission.status !== SubmissionStatus.WAITING_SIGNATURE) {
-    throw new BadRequestError(
-      'Only submissions with WAITING_SIGNATURE status can be completed'
-    );
-  }
-
-  const updated = await prisma.projectSubmission.update({
-    where: { id },
-    data: {
-      status: SubmissionStatus.COMPLETED,
-      completed_at: new Date(),
-      completed_by: user.id,
-    },
-    select: {
-      id: true,
-      project_id: true,
-      status: true,
-    },
-  });
-
-  return { data: updated };
 };

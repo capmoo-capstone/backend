@@ -1,6 +1,9 @@
 import { UnitResponsibleType } from '@prisma/client';
 
 export const OPS_DEPT_ID = 'DEPT-SUP-OPS';
+export const PROC1_UNIT_ID = 'UNIT-PROC1';
+export const PROC2_UNIT_ID = 'UNIT-PROC2';
+export const CONTRACT_UNIT_ID = 'UNIT-CONT';
 export const SUPPLY_UNIT_ID = 'UNIT-SUP';
 
 export const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {

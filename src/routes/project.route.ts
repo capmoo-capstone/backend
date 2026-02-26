@@ -17,6 +17,12 @@ router.patch('/:id/claim', projectController.claimProject);
 router.patch('/:id/cancel', projectController.cancelProject);
 router.patch('/:id/approve-cancel', projectController.approveCancellation);
 router.patch('/:id/reject-cancel', projectController.rejectCancellation);
+router.patch(
+  '/:id/complete-procurement',
+  projectController.completeProcurement
+);
+router.patch('/:id/close', projectController.closeProject);
+router.patch('/:id/request-edit', projectController.requestEditProject);
 router.patch('/:id/update', projectController.updateProject);
 router.delete('/:id', projectController.removeProject);
 

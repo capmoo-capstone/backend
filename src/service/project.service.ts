@@ -1,20 +1,17 @@
 import { prisma } from '../config/prisma';
 import {
   LogActionType,
-  ProjectStatus,
+  Prisma,
   ProjectPhaseStatus,
-  SubmissionStatus,
-  SubmissionType,
+  ProjectStatus,
   UnitResponsibleType,
   UserRole,
-  Prisma,
 } from '@prisma/client';
 import {
   AcceptProjectsDto,
   CancelProjectDto,
   CreateProjectDto,
   PaginatedProjects,
-  PhaseStatusResult,
   ProjectsListResponse,
   UpdateProjectDto,
   UpdateStatusProjectDto,
@@ -23,118 +20,21 @@ import {
 import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors';
 import { AuthPayload } from '../lib/types';
 import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
-import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
+import { CONTRACT_UNIT_ID } from '../lib/constant';
 
-const mapSubmissionToPhaseStatus = (
-  status: SubmissionStatus
-): ProjectPhaseStatus => {
-  switch (status) {
-    case SubmissionStatus.WAITING_APPROVAL:
-      return ProjectPhaseStatus.WAITING_APPROVAL;
-    case SubmissionStatus.WAITING_PROPOSAL:
-      return ProjectPhaseStatus.WAITING_PROPOSAL;
-    case SubmissionStatus.WAITING_SIGNATURE:
-      return ProjectPhaseStatus.WAITING_SIGNATURE;
-    case SubmissionStatus.REJECTED:
-      return ProjectPhaseStatus.REJECTED;
-    case SubmissionStatus.COMPLETED:
-      return ProjectPhaseStatus.COMPLETED;
-    default:
-      return ProjectPhaseStatus.IN_PROGRESS;
-  }
-};
-
-const computePhaseStatus = async (
-  projectId: string,
-  workflowType: UnitResponsibleType,
-  tx: Prisma.TransactionClient
-): Promise<PhaseStatusResult> => {
-  const stepOrders = WORKFLOW_STEP_ORDERS[workflowType] ?? [];
-  const submissions = await tx.projectSubmission.findMany({
-    where: {
-      project_id: projectId,
-      submission_type: SubmissionType.STAFF,
-      workflow_type: workflowType,
-    },
-    orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
-    select: { step_order: true, status: true },
-  });
-
-  const latestByStep = new Map<number, SubmissionStatus>();
-
-  for (const s of submissions) {
-    if (s.step_order !== null && !latestByStep.has(s.step_order)) {
-      latestByStep.set(s.step_order, s.status as SubmissionStatus);
-    }
-  }
-
-  for (const stepOrder of stepOrders) {
-    if (latestByStep.get(stepOrder) === SubmissionStatus.REJECTED) {
-      return { status: ProjectPhaseStatus.REJECTED, step: stepOrder };
-    }
-  }
-
-  for (const stepOrder of stepOrders) {
-    if (!latestByStep.has(stepOrder)) {
-      return { status: ProjectPhaseStatus.IN_PROGRESS, step: stepOrder };
-    }
-  }
-
-  for (const stepOrder of stepOrders) {
-    const currentStatus = latestByStep.get(stepOrder);
-    if (currentStatus !== SubmissionStatus.COMPLETED) {
-      return {
-        status: mapSubmissionToPhaseStatus(currentStatus as SubmissionStatus),
-        step: stepOrder,
-      };
-    }
-  }
-
-  return { status: ProjectPhaseStatus.COMPLETED };
-};
-
-export const getWorkflowStatus = async (
+const getReceiveNumber = async (
   tx: Prisma.TransactionClient,
-  projectId: string
+  budget_year?: number
 ) => {
-  const project = await tx.project.findUnique({
-    where: { id: projectId },
-    select: {
-      procurement_type: true,
-      current_workflow_type: true,
-      assignee_procurement: true,
-      assignee_contract: true,
-    },
-  });
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
+  const count = await tx.project.count();
+  budget_year = 2569;
+  const format = budget_year
+    .toString()
+    .concat('/')
+    .concat((count + 1).toString().padStart(5, '0'));
 
-  if (!project) throw new NotFoundError('Project not found');
-
-  let procurement: PhaseStatusResult;
-  let contract: PhaseStatusResult;
-
-  if (project.assignee_procurement.length == 0) {
-    procurement = { status: ProjectPhaseStatus.NOT_STARTED };
-  } else
-    procurement = await computePhaseStatus(
-      projectId,
-      project.procurement_type,
-      tx
-    );
-
-  if (
-    procurement.status !== ProjectPhaseStatus.COMPLETED ||
-    project.current_workflow_type !== UnitResponsibleType.CONTRACT ||
-    project.assignee_contract.length == 0
-  ) {
-    contract = { status: ProjectPhaseStatus.NOT_STARTED };
-  } else
-    contract = await computePhaseStatus(
-      projectId,
-      UnitResponsibleType.CONTRACT,
-      tx
-    );
-
-  return { procurement, contract };
+  return format;
 };
 
 export const listProjects = async (
@@ -173,8 +73,6 @@ export const createProject = async (
   data: CreateProjectDto
 ): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
-    const receiveNumber = ((await tx.project.count()) + 1).toString();
-
     const responsibleUnit = await tx.unit.findFirst({
       where: { type: { has: data.procurement_type } },
       select: { id: true },
@@ -182,6 +80,7 @@ export const createProject = async (
     if (!responsibleUnit) {
       throw new NotFoundError('Responsible unit not found');
     }
+    const receiveNumber = await getReceiveNumber(tx);
 
     return await tx.project.create({
       data: {
@@ -266,6 +165,14 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
       description: projectData.description,
       budget: projectData.budget,
       status: projectData.status,
+      procurement_status: {
+        status: projectData.procurement_phase_status,
+        step: projectData.procurement_step,
+      },
+      contract_status: {
+        status: projectData.contract_phase_status,
+        step: projectData.contract_step,
+      },
       receive_no: projectData.receive_no,
       less_no: projectData.less_no,
       pr_no: projectData.pr_no,
@@ -310,13 +217,7 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
         : null,
     };
 
-    const { procurement, contract } = await getWorkflowStatus(tx, id);
-
-    return {
-      procurement_status: procurement,
-      contract_status: contract,
-      ...project,
-    };
+    return project;
   });
 };
 
@@ -513,69 +414,86 @@ export const assignProjectsToUser = async (
   data: UpdateStatusProjectsDto
 ) => {
   return await prisma.$transaction(async (tx) => {
-    const updatedProjects = [];
+    const projectIds = data.map((d) => d.id);
+    const assigneeIds = [...new Set(data.map((d) => d.userId))];
+
+    const projects = await tx.project.findMany({
+      where: { id: { in: projectIds } },
+      select: {
+        id: true,
+        status: true,
+        current_workflow_type: true,
+        assignee_contract: true,
+        assignee_procurement: true,
+      },
+    });
+
+    const assignees = await tx.user.findMany({
+      where: { id: { in: assigneeIds } },
+      select: { id: true, full_name: true },
+    });
+
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+    const assigneeMap = new Map(assignees.map((a) => [a.id, a]));
+
+    const updatePromises = [];
+    const historyPromises = [];
+
     for (const item of data) {
       const { id, userId: assigneeId } = item;
-      const project = await tx.project.findUnique({
-        where: { id },
-        select: {
-          status: true,
-          current_workflow_type: true,
-          assignee_contract: true,
-          assignee_procurement: true,
-        },
-      });
+      const project = projectMap.get(id);
+      const assignee = assigneeMap.get(assigneeId);
 
-      if (!project) {
-        throw new NotFoundError(`Project ${id} not found`);
+      if (!project) throw new NotFoundError(`Project ${id} not found`);
+      if (!assignee)
+        throw new NotFoundError(`Assignee ${assigneeId} not found`);
+      if (project.status !== ProjectStatus.UNASSIGNED) {
+        throw new BadRequestError(`Project ${id} is not unassigned`);
       }
+
       const assigneeField =
         project.current_workflow_type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
 
-      const assignee = await tx.user.findUnique({
-        where: { id: assigneeId },
-        select: { id: true, full_name: true },
-      });
-      if (!assignee) {
-        throw new NotFoundError(`Assignee ${assigneeId} not found`);
-      }
-
-      if (project.status !== ProjectStatus.UNASSIGNED) {
-        throw new BadRequestError(`Project ${id} is not unassigned`);
-      }
       if ((project as any)[assigneeField].length > 0) {
         throw new BadRequestError(`Project ${id} is already assigned`);
       }
 
-      const updated = await tx.project.update({
-        where: {
-          id,
-          status: ProjectStatus.UNASSIGNED,
-          [assigneeField]: { none: {} },
-        },
-        data: {
-          status: ProjectStatus.WAITING_ACCEPT,
-          [assigneeField]: {
-            connect: { id: assigneeId },
+      updatePromises.push(
+        tx.project.update({
+          where: {
+            id,
+            status: ProjectStatus.UNASSIGNED,
+            [assigneeField]: { none: {} },
           },
-        },
-        select: { id: true, status: true, [assigneeField]: true },
-      });
+          data: {
+            status: ProjectStatus.WAITING_ACCEPT,
+            [assigneeField]: { connect: { id: assigneeId } },
+          },
+          select: { id: true, status: true, [assigneeField]: true },
+        })
+      );
 
-      updatedProjects.push(updated);
-
-      await tx.projectHistory.create({
-        data: {
-          project_id: id,
-          action: LogActionType.ASSIGNEE_UPDATE,
-          old_value: { status: project.status, [assigneeField]: [] },
-          new_value: { status: updated.status, [assigneeField]: [assigneeId] },
-          changed_by: user.id,
-        },
-      });
+      historyPromises.push(
+        tx.projectHistory.create({
+          data: {
+            project_id: id,
+            action: LogActionType.ASSIGNEE_UPDATE,
+            old_value: { status: project.status, [assigneeField]: [] },
+            new_value: {
+              status: ProjectStatus.WAITING_ACCEPT,
+              [assigneeField]: [assigneeId],
+            },
+            changed_by: user.id,
+          },
+        })
+      );
     }
+
+    const updatedProjects = await Promise.all(updatePromises);
+    await Promise.all(historyPromises);
+
     return { data: updatedProjects };
   });
 };
@@ -585,34 +503,30 @@ export const changeAssignee = async (
   data: UpdateStatusProjectDto
 ) => {
   const { id, userId: newAssigneeId } = data;
-  if (!newAssigneeId) {
-    throw new BadRequestError('No new assignee ID provided for update');
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id },
-    select: {
-      status: true,
-      current_workflow_type: true,
-      assignee_contract: true,
-      assignee_procurement: true,
-    },
-  });
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-
-  if (project.status !== ProjectStatus.WAITING_ACCEPT) {
-    throw new BadRequestError(
-      'Assignee can only be changed when project is in WAITING_ACCEPT status'
-    );
-  }
-  const assigneeField =
-    project.current_workflow_type === UnitResponsibleType.CONTRACT
-      ? 'assignee_contract'
-      : 'assignee_procurement';
-
   return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        current_workflow_type: true,
+        assignee_contract: true,
+        assignee_procurement: true,
+      },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    if (project.status !== ProjectStatus.WAITING_ACCEPT) {
+      throw new BadRequestError(
+        'Assignee can only be changed when project is in WAITING_ACCEPT status'
+      );
+    }
+    const assigneeField =
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+        ? 'assignee_contract'
+        : 'assignee_procurement';
+
     const oldAssigneeId = (project as any)[assigneeField]?.[0]?.id;
     const newAssignee = await tx.user.findUnique({
       where: { id: newAssigneeId },
@@ -648,27 +562,27 @@ export const changeAssignee = async (
 };
 
 export const claimProject = async (user: AuthPayload, projectId: string) => {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      status: true,
-      current_workflow_type: true,
-    },
-  });
-
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  const assigneeField =
-    project.current_workflow_type === UnitResponsibleType.CONTRACT
-      ? 'assignee_contract'
-      : 'assignee_procurement';
-
-  if (project.status !== ProjectStatus.UNASSIGNED) {
-    throw new BadRequestError('This project cannot be claimed');
-  }
-
   return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        status: true,
+        current_workflow_type: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+    const assigneeField =
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+        ? 'assignee_contract'
+        : 'assignee_procurement';
+
+    if (project.status !== ProjectStatus.UNASSIGNED) {
+      throw new BadRequestError('This project cannot be claimed');
+    }
+
     const updated = await tx.project.update({
       where: {
         id: projectId,
@@ -701,59 +615,65 @@ export const acceptProjects = async (
   data: AcceptProjectsDto
 ) => {
   return await prisma.$transaction(async (tx) => {
-    const updatedProjects = [];
+    const projects = await tx.project.findMany({
+      where: { id: { in: data.id } },
+      select: {
+        id: true,
+        status: true,
+        assignee_procurement: true,
+        assignee_contract: true,
+        current_workflow_type: true,
+      },
+    });
 
-    for (const id of data.id) {
-      const project = await tx.project.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          status: true,
-          assignee_procurement: true,
-          assignee_contract: true,
-          current_workflow_type: true,
-        },
-      });
+    if (projects.length !== data.id.length) {
+      throw new NotFoundError('One or more projects not found');
+    }
 
-      if (!project) {
-        throw new NotFoundError(`Project ${id} not found`);
-      }
+    const updatePromises = [];
+    const historyPromises = [];
 
+    for (const project of projects) {
       const assigneeField =
         project.current_workflow_type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
 
       if (project[assigneeField]?.some((u) => u.id === user.id) === false) {
-        throw new BadRequestError(`You are not the assignee of project ${id}`);
+        throw new BadRequestError(
+          `You are not the assignee of project ${project.id}`
+        );
       }
 
       if (project.status !== ProjectStatus.WAITING_ACCEPT) {
         throw new BadRequestError(
-          `Project ${id} is not in WAITING_ACCEPT status`
+          `Project ${project.id} is not in WAITING_ACCEPT status`
         );
       }
 
-      const updated = await tx.project.update({
-        where: { id, status: ProjectStatus.WAITING_ACCEPT },
-        data: {
-          status: ProjectStatus.IN_PROGRESS,
-        },
-        select: { id: true, status: true },
-      });
+      updatePromises.push(
+        tx.project.update({
+          where: { id: project.id, status: ProjectStatus.WAITING_ACCEPT },
+          data: { status: ProjectStatus.IN_PROGRESS },
+          select: { id: true, status: true },
+        })
+      );
 
-      await tx.projectHistory.create({
-        data: {
-          project_id: id,
-          action: LogActionType.STATUS_UPDATE,
-          old_value: { status: ProjectStatus.WAITING_ACCEPT },
-          new_value: { status: ProjectStatus.IN_PROGRESS },
-          changed_by: user.id,
-        },
-      });
-
-      updatedProjects.push(updated);
+      historyPromises.push(
+        tx.projectHistory.create({
+          data: {
+            project_id: project.id,
+            action: LogActionType.STATUS_UPDATE,
+            old_value: { status: ProjectStatus.WAITING_ACCEPT },
+            new_value: { status: ProjectStatus.IN_PROGRESS },
+            changed_by: user.id,
+          },
+        })
+      );
     }
+
+    const updatedProjects = await Promise.all(updatePromises);
+    await Promise.all(historyPromises);
 
     return { data: updatedProjects };
   });
@@ -823,36 +743,36 @@ export const addAssignee = async (
 };
 
 export const returnProject = async (user: AuthPayload, projectId: string) => {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      status: true,
-      current_workflow_type: true,
-      _count: {
-        select: {
-          submissions: true,
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        status: true,
+        current_workflow_type: true,
+        _count: {
+          select: {
+            submissions: true,
+          },
         },
       },
-    },
-  });
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  if (project.status !== ProjectStatus.IN_PROGRESS) {
-    throw new BadRequestError('Only IN_PROGRESS projects can be returned');
-  }
-  if (project._count.submissions > 0) {
-    throw new BadRequestError(
-      'Cannot return project with existing submissions'
-    );
-  }
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+    if (project.status !== ProjectStatus.IN_PROGRESS) {
+      throw new BadRequestError('Only IN_PROGRESS projects can be returned');
+    }
+    if (project._count.submissions > 0) {
+      throw new BadRequestError(
+        'Cannot return project with existing submissions'
+      );
+    }
 
-  const assigneeField =
-    project.current_workflow_type === UnitResponsibleType.CONTRACT
-      ? 'assignee_contract'
-      : 'assignee_procurement';
+    const assigneeField =
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+        ? 'assignee_contract'
+        : 'assignee_procurement';
 
-  return await prisma.$transaction(async (tx) => {
     const updated = await tx.project.update({
       where: {
         id: projectId,
@@ -1061,6 +981,153 @@ export const rejectCancellation = async (
   });
 };
 
+export const completeProcurementPhase = async (
+  user: AuthPayload,
+  projectId: string
+) => {
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        status: true,
+        current_workflow_type: true,
+        procurement_phase_status: true,
+        responsible_unit_id: true,
+      },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+    if (project.status !== ProjectStatus.IN_PROGRESS) {
+      throw new BadRequestError('Project is not in IN_PROGRESS status');
+    }
+    if (project.procurement_phase_status !== ProjectPhaseStatus.COMPLETED) {
+      throw new BadRequestError('Procurement phase is not in COMPLETED status');
+    }
+    if (project.current_workflow_type === UnitResponsibleType.CONTRACT) {
+      throw new BadRequestError('Project is already in CONTRACT workflow type');
+    }
+
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: ProjectStatus.UNASSIGNED,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+        responsible_unit_id: CONTRACT_UNIT_ID,
+      },
+      select: {
+        id: true,
+        status: true,
+        current_workflow_type: true,
+        responsible_unit_id: true,
+      },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: projectId,
+        action: LogActionType.STATUS_UPDATE,
+        old_value: {
+          status: project.status,
+          current_workflow_type: project.current_workflow_type,
+          responsible_unit_id: project.responsible_unit_id,
+        },
+        new_value: {
+          status: ProjectStatus.UNASSIGNED,
+          current_workflow_type: UnitResponsibleType.CONTRACT,
+          responsible_unit_id: CONTRACT_UNIT_ID,
+        },
+        changed_by: user.id,
+      },
+    });
+    return { data: updated };
+  });
+};
+
+export const closeProject = async (user: AuthPayload, projectId: string) => {
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        status: true,
+        current_workflow_type: true,
+        contract_phase_status: true,
+      },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+    if (project.status !== ProjectStatus.IN_PROGRESS) {
+      throw new BadRequestError('Project is not in IN_PROGRESS status');
+    }
+    if (project.contract_phase_status !== ProjectPhaseStatus.COMPLETED) {
+      throw new BadRequestError('Contract phase is not in COMPLETED status');
+    }
+    if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
+      throw new BadRequestError('Project is not in CONTRACT workflow type');
+    }
+
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: ProjectStatus.CLOSED,
+      },
+      select: { id: true, status: true },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: projectId,
+        action: LogActionType.STATUS_UPDATE,
+        old_value: {
+          status: project.status,
+        },
+        new_value: {
+          status: ProjectStatus.CLOSED,
+        },
+        changed_by: user.id,
+      },
+    });
+
+    return { data: updated };
+  });
+};
+
+export const requestEditProject = async (
+  user: AuthPayload,
+  projectId: string
+) => {
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { status: true },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+    if (project.status !== ProjectStatus.CLOSED) {
+      throw new BadRequestError('Project is not in CLOSED status');
+    }
+
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: ProjectStatus.REQUEST_EDIT,
+      },
+      select: { id: true, status: true },
+    });
+
+    await tx.projectHistory.create({
+      data: {
+        project_id: projectId,
+        action: LogActionType.STATUS_UPDATE,
+        old_value: { status: project.status },
+        new_value: { status: updated.status },
+        changed_by: user.id,
+      },
+    });
+    return { data: updated };
+  });
+};
+
 export const updateProjectData = async (
   user: AuthPayload,
   data: UpdateProjectDto
@@ -1068,8 +1135,13 @@ export const updateProjectData = async (
   if (!data || !data.updateData || Object.keys(data.updateData).length === 0) {
     throw new BadRequestError('No data provided for update');
   }
-  const current = await getById(user, data.id);
   return await prisma.$transaction(async (tx) => {
+    const current = await tx.project.findUnique({
+      where: { id: data.id },
+    });
+    if (!current) {
+      throw new NotFoundError('Project not found');
+    }
     const oldValue: any = {};
     Object.keys(data.updateData).forEach((key) => {
       oldValue[key] = (current as any)[key];
@@ -1098,7 +1170,13 @@ export const deleteProject = async (
   user: AuthPayload,
   id: string
 ): Promise<void> => {
-  await getById(user, id);
+  const project = await prisma.project.findUnique({
+    where: { id },
+    select: { status: true },
+  });
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
   await prisma.project.delete({
     where: { id },
   });
