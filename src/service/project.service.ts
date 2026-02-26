@@ -21,7 +21,6 @@ import {
   UpdateStatusProjectsDto,
 } from '../models/Project';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors';
-import * as UserService from './user.service';
 import { AuthPayload } from '../lib/types';
 import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
 import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
@@ -108,7 +107,7 @@ export const getWorkflowStatus = async (
     },
   });
 
-  if (!project) throw new Error('Project not found');
+  if (!project) throw new NotFoundError('Project not found');
 
   let procurement: PhaseStatusResult;
   let contract: PhaseStatusResult;
@@ -181,7 +180,7 @@ export const createProject = async (
       select: { id: true },
     });
     if (!responsibleUnit) {
-      throw new Error('Responsible unit not found');
+      throw new NotFoundError('Responsible unit not found');
     }
 
     return await tx.project.create({
@@ -446,10 +445,8 @@ export const getAssignedProjects = async (
     }
 
     where.AND.push({
-      current_template: {
-        type: {
-          in: unit.flatMap((u) => u.type),
-        },
+      current_workflow_type: {
+        in: unit.flatMap((u) => u.type),
       },
     });
   } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
@@ -530,13 +527,20 @@ export const assignProjectsToUser = async (
       });
 
       if (!project) {
-        throw new BadRequestError(`Project ${id} not found`);
+        throw new NotFoundError(`Project ${id} not found`);
       }
       const assigneeField =
         project.current_workflow_type === UnitResponsibleType.CONTRACT
           ? 'assignee_contract'
           : 'assignee_procurement';
-      await UserService.getById(assigneeId);
+
+      const assignee = await tx.user.findUnique({
+        where: { id: assigneeId },
+        select: { id: true, full_name: true },
+      });
+      if (!assignee) {
+        throw new NotFoundError(`Assignee ${assigneeId} not found`);
+      }
 
       if (project.status !== ProjectStatus.UNASSIGNED) {
         throw new BadRequestError(`Project ${id} is not unassigned`);
@@ -610,7 +614,13 @@ export const changeAssignee = async (
 
   return await prisma.$transaction(async (tx) => {
     const oldAssigneeId = (project as any)[assigneeField]?.[0]?.id;
-    await UserService.getById(newAssigneeId);
+    const newAssignee = await tx.user.findUnique({
+      where: { id: newAssigneeId },
+      select: { id: true, full_name: true },
+    });
+    if (!newAssignee) {
+      throw new NotFoundError(`New assignee ${newAssigneeId} not found`);
+    }
 
     const updated = await tx.project.update({
       where: { id },
@@ -782,7 +792,13 @@ export const addAssignee = async (
     if (project[assigneeField].some((u) => u.id === data.userId)) {
       throw new BadRequestError('User is already an assignee of this project');
     }
-    await UserService.getById(data.userId);
+    const assignee = await tx.user.findUnique({
+      where: { id: data.userId },
+      select: { id: true, full_name: true },
+    });
+    if (!assignee) {
+      throw new NotFoundError(`Assignee ${data.userId} not found`);
+    }
 
     const updated = await tx.project.update({
       where: { id: data.id, [assigneeField]: { none: { id: data.userId } } },
