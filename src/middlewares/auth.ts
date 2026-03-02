@@ -33,8 +33,15 @@ export const protect = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedError('Authorization header missing or invalid');
+    console.log(authHeader);
+    if (!authHeader) {
+      throw new UnauthorizedError('Authorization header missing');
+    }
+
+    if (!authHeader.toLowerCase().startsWith('bearer ')) {
+      throw new UnauthorizedError(
+        'Authorization header must start with Bearer'
+      );
     }
 
     const token = authHeader.split(' ')[1];
