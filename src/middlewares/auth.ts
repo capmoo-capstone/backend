@@ -33,7 +33,6 @@ export const protect = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log(authHeader);
     if (!authHeader) {
       throw new UnauthorizedError('Authorization header missing');
     }
@@ -63,14 +62,9 @@ export const protect = async (
     if (cachedData && cachedData.cached_at >= userMeta.role_updated_at) {
       req.user = {
         token,
-        id: decoded.id,
-        username: decoded.username,
-        full_name: decoded.full_name,
-        roles: cachedData.roles,
-        is_delegated: cachedData.is_delegated,
-        delegated_by: cachedData.delegated_by,
+        ...decoded,
+        ...cachedData,
       };
-      console.log(`Cache hit for user ${decoded.id}`);
       return next();
     }
 
