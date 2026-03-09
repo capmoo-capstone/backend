@@ -99,6 +99,7 @@ model Department {
   units              Unit[]
   organization_roles UserOrganizationRole[]
   projects           Project[]
+  budgetPlans        BudgetPlan[]
 
   @@map("departments")
 }
@@ -119,11 +120,11 @@ model Unit {
 }
 
 model User {
-  id         String   @id @default(uuid())
-  username   String   @unique
-  email      String?  @unique
-  full_name  String
-  created_at DateTime @default(now())
+  id              String   @id @default(uuid())
+  username        String   @unique
+  email           String?  @unique
+  full_name       String
+  created_at      DateTime @default(now())
   role_updated_at DateTime @default(now())
 
   roles UserOrganizationRole[]
@@ -160,7 +161,7 @@ model UserDelegation {
 }
 
 model UserOrganizationRole {
-  id      String  @id @default(uuid())
+  id      String   @id @default(uuid())
   user_id String
   role    UserRole
   dept_id String
@@ -181,16 +182,17 @@ model Project {
   budget                 Decimal             @db.Decimal(18, 2)
   status                 ProjectStatus
   procurement_type       ProcurementType
-  current_workflow_type UnitResponsibleType
+  current_workflow_type  UnitResponsibleType
   responsible_unit_id    String
   requesting_dept_id     String
   requesting_unit_id     String?
   is_urgent              UrgentType          @default(NORMAL)
   expected_approval_date DateTime?
-  procurement_phase_status ProjectPhaseStatus @default(NOT_STARTED)
-  procurement_step         Int?
-  contract_phase_status    ProjectPhaseStatus @default(NOT_STARTED)
-  contract_step            Int?
+  procurement_status     ProjectPhaseStatus  @default(NOT_STARTED)
+  procurement_step       Int?
+  contract_status        ProjectPhaseStatus  @default(NOT_STARTED)
+  contract_step          Int?
+  budget_plan_id         String[]
   pr_no                  String?
   po_no                  String?
   less_no                String?
@@ -213,6 +215,7 @@ model Project {
   project_cancellation ProjectCancellation[]
   project_histories    ProjectHistory[]
   submissions          ProjectSubmission[]
+  budget_plans         BudgetPlan[]
 
   @@map("projects")
 }
@@ -291,4 +294,23 @@ model ProjectDocument {
   submission ProjectSubmission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
 
   @@map("project_documents")
+}
+
+model BudgetPlan {
+  id                 String   @id @default(uuid())
+  budget_year        String
+  cost_center_no     String
+  cost_center_name   String
+  department_id      String
+  activity_type      String
+  activity_type_name String
+  description        String?
+  budget_amount      Decimal  @db.Decimal(18, 2)
+  project_id         String?
+  created_at         DateTime @default(now())
+
+  department Department @relation(fields: [department_id], references: [id])
+  project    Project?   @relation(fields: [project_id], references: [id])
+
+  @@map("budget_plans")
 }

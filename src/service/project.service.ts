@@ -80,9 +80,18 @@ export const createProject = async (
     if (!responsibleUnit) {
       throw new NotFoundError('Responsible unit not found');
     }
-    const receiveNumber = await getReceiveNumber(tx);
+    if (data.budget_plan_id && data.budget_plan_id.length > 0) {
+      const budgetPlans = await tx.budgetPlan.findMany({
+        where: { id: { in: data.budget_plan_id } },
+        select: { id: true },
+      });
+      if (budgetPlans.length !== data.budget_plan_id.length) {
+        throw new NotFoundError('One or more budget plans not found');
+      }
+    }
 
-    return await tx.project.create({
+    const receiveNumber = await getReceiveNumber(tx);
+    const project = await tx.project.create({
       data: {
         ...data,
         status: ProjectStatus.UNASSIGNED,
@@ -92,6 +101,15 @@ export const createProject = async (
         created_by: user.id,
       },
     });
+
+    if (data.budget_plan_id && data.budget_plan_id.length > 0) {
+      await tx.budgetPlan.updateMany({
+        where: { id: { in: data.budget_plan_id } },
+        data: { project_id: project.id },
+      });
+    }
+
+    return { data: project };
   });
 };
 
