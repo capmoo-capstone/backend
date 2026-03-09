@@ -166,11 +166,11 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
       budget: projectData.budget,
       status: projectData.status,
       procurement_status: {
-        status: projectData.procurement_phase_status,
+        status: projectData.procurement_status,
         step: projectData.procurement_step,
       },
       contract_status: {
-        status: projectData.contract_phase_status,
+        status: projectData.contract_status,
         step: projectData.contract_step,
       },
       receive_no: projectData.receive_no,
@@ -991,7 +991,7 @@ export const completeProcurementPhase = async (
       select: {
         status: true,
         current_workflow_type: true,
-        procurement_phase_status: true,
+        procurement_status: true,
         responsible_unit_id: true,
       },
     });
@@ -1001,7 +1001,7 @@ export const completeProcurementPhase = async (
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Project is not in IN_PROGRESS status');
     }
-    if (project.procurement_phase_status !== ProjectPhaseStatus.COMPLETED) {
+    if (project.procurement_status !== ProjectPhaseStatus.COMPLETED) {
       throw new BadRequestError('Procurement phase is not in COMPLETED status');
     }
     if (project.current_workflow_type === UnitResponsibleType.CONTRACT) {
@@ -1050,7 +1050,7 @@ export const closeProject = async (user: AuthPayload, projectId: string) => {
       select: {
         status: true,
         current_workflow_type: true,
-        contract_phase_status: true,
+        contract_status: true,
       },
     });
     if (!project) {
@@ -1059,7 +1059,7 @@ export const closeProject = async (user: AuthPayload, projectId: string) => {
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Project is not in IN_PROGRESS status');
     }
-    if (project.contract_phase_status !== ProjectPhaseStatus.COMPLETED) {
+    if (project.contract_status !== ProjectPhaseStatus.COMPLETED) {
       throw new BadRequestError('Contract phase is not in COMPLETED status');
     }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
