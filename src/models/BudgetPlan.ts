@@ -17,7 +17,7 @@ export const ImportBudgetPlanSchema = z.object({
   activity_type: z.string(),
   activity_type_name: z.string(),
   description: z.string().optional(),
-  budget_amount: z.string(),
+  budget_amount: z.number(),
 });
 
 export type ImportBudgetPlanDto = z.infer<typeof ImportBudgetPlanSchema>;
