@@ -94,21 +94,28 @@ export const syncProjectPhases = async (
   );
 
   const dataToUpdate: Partial<{
-    procurement_phase_status: ProjectPhaseStatus;
+    procurement_status: ProjectPhaseStatus;
     procurement_step: number;
-    contract_phase_status: ProjectPhaseStatus;
+    contract_status: ProjectPhaseStatus;
     contract_step: number;
   }> = {};
   if (workflowType === UnitResponsibleType.CONTRACT) {
-    dataToUpdate.contract_phase_status = status;
+    dataToUpdate.contract_status = status;
     dataToUpdate.contract_step = step;
   } else {
-    dataToUpdate.procurement_phase_status = status;
+    dataToUpdate.procurement_status = status;
     dataToUpdate.procurement_step = step;
   }
 
-  await tx.project.update({
+  return await tx.project.update({
     where: { id: projectId },
     data: dataToUpdate,
+    select: {
+      id: true,
+      procurement_status: true,
+      procurement_step: true,
+      contract_status: true,
+      contract_step: true,
+    },
   });
 };

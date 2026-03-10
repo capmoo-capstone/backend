@@ -23,6 +23,7 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.unit.deleteMany();
   await prisma.department.deleteMany();
+  await prisma.budgetPlan.deleteMany();
   console.log('--- Database Cleaned ---');
 
   // ---------------------------------------------------------
@@ -650,6 +651,25 @@ async function main() {
       });
     }
   }
+
+  // ---------------------------------------------------------
+  // 8. BUDGET PLANS (Optional, can be expanded similarly)
+  // ---------------------------------------------------------
+
+  // Example: Create some budget plans (optional)
+  await prisma.budgetPlan.create({
+    data: {
+      cost_center_name: 'ฝ่ายการพัสดุ',
+      cost_center_no: '1010803000',
+      department_id: deptFIN.id,
+      activity_type: 'ระบบติตดาม',
+      activity_type_name: 'ระบบติดตามสถานะการจัดซื้อจัดจ้าง',
+      description: 'ระบบติดตามสถานะการจัดซื้อจัดจ้างและการบริหารสัญญา',
+      budget_amount: 1000000,
+      budget_year: '2026',
+      created_by: superAdmin.id,
+    },
+  });
 
   console.log('--- Seeding Completed Successfully ---');
 }

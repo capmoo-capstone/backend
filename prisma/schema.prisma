@@ -171,6 +171,7 @@ model UserOrganizationRole {
   department Department @relation(fields: [dept_id], references: [id])
   unit       Unit?      @relation(fields: [unit_id], references: [id])
 
+  @@index([user_id])
   @@map("user_organization_roles")
 }
 
@@ -217,6 +218,9 @@ model Project {
   submissions          ProjectSubmission[]
   budget_plans         BudgetPlan[]
 
+  @@index([receive_no(sort: Desc)])
+  @@index([status, current_workflow_type])
+  @@index([requesting_dept_id])
   @@map("projects")
 }
 
@@ -232,7 +236,7 @@ model ProjectCancellation {
   approved_at  DateTime?
   cancelled_at DateTime?
 
-  project   Project @relation(fields: [project_id], references: [id])
+  project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
   approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
 
@@ -249,8 +253,10 @@ model ProjectHistory {
   changed_by String
   changed_at DateTime      @default(now())
 
-  project Project @relation(fields: [project_id], references: [id])
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
+  @@index([project_id])
+  @@index([changed_at])
   @@map("project_histories")
 }
 
@@ -274,13 +280,15 @@ model ProjectSubmission {
   comment          String?
   meta_data        Json[]
 
-  project   Project           @relation(fields: [project_id], references: [id])
+  project   Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
   submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
   approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id])
   proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id])
   completer User?             @relation("CompletedBy", fields: [completed_by], references: [id])
   documents ProjectDocument[]
 
+  @@index([project_id, submitted_at(sort: Desc)])
+  @@index([project_id, step_order, submission_type])
   @@map("project_submissions")
 }
 
@@ -308,6 +316,7 @@ model BudgetPlan {
   budget_amount      Decimal  @db.Decimal(18, 2)
   project_id         String?
   created_at         DateTime @default(now())
+  created_by         String
 
   department Department @relation(fields: [department_id], references: [id])
   project    Project?   @relation(fields: [project_id], references: [id])

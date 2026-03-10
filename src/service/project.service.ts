@@ -21,12 +21,13 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors';
 import { AuthPayload } from '../lib/types';
 import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
 import { CONTRACT_UNIT_ID } from '../lib/constant';
+import { syncProjectPhases } from '../lib/phase-status';
 
 const getReceiveNumber = async (
   tx: Prisma.TransactionClient,
   budget_year?: number
 ) => {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
   const count = await tx.project.count();
   budget_year = 2569;
   const format = budget_year
@@ -329,10 +330,26 @@ export const getAssignedProjects = async (
                   },
                   { changed_at: { gte: startOfDay, lte: endOfDay } },
                   {
-                    new_value: {
-                      path: ['status'],
-                      equals: ProjectStatus.IN_PROGRESS,
-                    },
+                    OR: [
+                      {
+                        new_value: {
+                          path: ['status'],
+                          equals: ProjectStatus.IN_PROGRESS,
+                        },
+                      },
+                      {
+                        new_value: {
+                          path: ['status'],
+                          equals: ProjectStatus.WAITING_CANCEL,
+                        },
+                      },
+                      {
+                        new_value: {
+                          path: ['status'],
+                          equals: ProjectStatus.CANCELLED,
+                        },
+                      },
+                    ],
                   },
                 ],
               },
@@ -614,6 +631,8 @@ export const claimProject = async (user: AuthPayload, projectId: string) => {
       select: { id: true, status: true, [assigneeField]: true },
     });
 
+    await syncProjectPhases(tx, project.current_workflow_type, projectId);
+
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
@@ -674,7 +693,8 @@ export const acceptProjects = async (
           where: { id: project.id, status: ProjectStatus.WAITING_ACCEPT },
           data: { status: ProjectStatus.IN_PROGRESS },
           select: { id: true, status: true },
-        })
+        }),
+        syncProjectPhases(tx, project.current_workflow_type, project.id)
       );
 
       historyPromises.push(
@@ -805,6 +825,9 @@ export const returnProject = async (user: AuthPayload, projectId: string) => {
       },
       select: { id: true, status: true },
     });
+
+    await syncProjectPhases(tx, project.current_workflow_type, updated.id);
+
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
@@ -942,7 +965,11 @@ export const approveCancellation = async (
 
     await tx.projectCancellation.updateMany({
       where: { project_id: projectId },
-      data: { is_cancelled: true },
+      data: {
+        is_cancelled: true,
+        approved_by: user.id,
+        approved_at: new Date(),
+      },
     });
 
     await tx.projectHistory.create({
@@ -973,10 +1000,26 @@ export const rejectCancellation = async (
     if (project.status !== ProjectStatus.WAITING_CANCEL) {
       throw new BadRequestError('Project is not in WAITING_CANCEL status');
     }
+
+    const lastHistory = await tx.projectHistory.findFirst({
+      where: {
+        project_id: projectId,
+        action: LogActionType.STATUS_UPDATE,
+        new_value: {
+          path: ['status'],
+          equals: ProjectStatus.WAITING_CANCEL,
+        },
+      },
+      orderBy: { changed_at: 'desc' },
+      select: { old_value: true },
+    });
+
+    const lastStatus = (lastHistory?.old_value as any)?.status;
+
     const updated = await tx.project.update({
       where: { id: projectId },
       data: {
-        status: ProjectStatus.IN_PROGRESS,
+        status: lastStatus,
       },
       select: { id: true, status: true },
     });

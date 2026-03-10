@@ -66,6 +66,7 @@ export const createProject = async (req: Request, res: Response) => {
 export const assignProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/AssignProjectsDto' } }
   const payload = (req as any).user;
 
   const validatedData = UpdateStatusProjectsSchema.parse(req.body);

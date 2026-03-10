@@ -19,7 +19,7 @@ const getSubmissionRound = async (
   tx: Prisma.TransactionClient
 ) => {
   const lockKey = `${data.project_id}:${data.step_order ?? 'null'}:${SubmissionType.STAFF}`;
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
   const lastSubmission = await tx.projectSubmission.findFirst({
     where: {
