@@ -8,7 +8,7 @@ import departmentRoutes from './department.route';
 import unitRoutes from './unit.route';
 import submissionRoutes from './submission.route';
 import delegationRoutes from './delegation.route';
-import budgetPlanRoutes from './budgetplan.route';
+import budgetPlanRoutes from './budgetPlan.route';
 
 const router = Router();
 
