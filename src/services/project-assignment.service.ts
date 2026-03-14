@@ -365,10 +365,7 @@ export const returnProject = async (user: AuthPayload, projectId: string) => {
       );
     }
 
-    const assigneeField =
-      project.current_workflow_type === UnitResponsibleType.CONTRACT
-        ? 'assignee_contract'
-        : 'assignee_procurement';
+    const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
     const updated = await tx.project.update({
       where: {

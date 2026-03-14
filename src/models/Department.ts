@@ -1,17 +1,17 @@
 import { z } from 'zod';
 import { Department } from '@prisma/client';
 
-const CreateDepartmentSchema = z.object({
+export const CreateDepartmentSchema = z.object({
   id: z.string(),
   name: z.string(),
 });
 export type CreateDepartmentDto = z.infer<typeof CreateDepartmentSchema>;
 
-const updateDepartmentSchema = z.object({
+export const UpdateDepartmentSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
 });
-export type UpdateDepartmentDto = z.infer<typeof updateDepartmentSchema>;
+export type UpdateDepartmentDto = z.infer<typeof UpdateDepartmentSchema>;
 
 export interface DepartmentsListResponse {
   total: number;

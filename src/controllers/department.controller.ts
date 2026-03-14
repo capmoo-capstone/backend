@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import * as DepartmentService from '../services/department.service';
 import { AuthPayload } from '../lib/types';
+import {
+  CreateDepartmentSchema,
+  UpdateDepartmentSchema,
+} from '../models/Department';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
@@ -22,18 +26,19 @@ export const createDepartment = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateDepartmentDto' } }
-  const data = req.body;
-  const department = await DepartmentService.createDepartment(data);
+  const validatedData = CreateDepartmentSchema.parse(req.body);
+  const department = await DepartmentService.createDepartment(validatedData);
   res.status(201).json(department);
 };
 
 export const updateDepartment = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
-  // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateDepartmentDto' } }
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/UpdateDepartmentDto' } }
   const id = req.params.id as string;
-  const data = { ...req.body, id };
-  const updatedDepartment = await DepartmentService.updateDepartment(data);
+  const validatedData = UpdateDepartmentSchema.parse({ ...req.body, id });
+  const updatedDepartment =
+    await DepartmentService.updateDepartment(validatedData);
   res.status(200).json(updatedDepartment);
 };
 
