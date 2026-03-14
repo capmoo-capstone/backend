@@ -31,10 +31,11 @@ export const listBudgetPlans = async (
 };
 
 export const importBudgetPlan = async (
+  user: AuthPayload,
   data: ImportBudgetPlanDto
 ): Promise<any> => {
   const budgetPlan = await prisma.budgetPlan.createManyAndReturn({
-    data,
+    data: data.map((item) => ({ ...item, created_by: user.id })),
     skipDuplicates: true,
     select: {
       id: true,
@@ -47,6 +48,7 @@ export const importBudgetPlan = async (
 };
 
 export const updateProjectIdPlan = async (
+  user: AuthPayload,
   id: string,
   projectId: string
 ): Promise<any> => {
@@ -64,7 +66,10 @@ export const updateProjectIdPlan = async (
   return { data: updatedBudgetPlan };
 };
 
-export const deleteBudgetPlan = async (id: string): Promise<void> => {
+export const deleteBudgetPlan = async (
+  user: AuthPayload,
+  id: string
+): Promise<void> => {
   await prisma.budgetPlan.delete({
     where: { id },
   });
