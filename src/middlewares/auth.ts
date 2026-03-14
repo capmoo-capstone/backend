@@ -4,7 +4,7 @@ import { ForbiddenError, UnauthorizedError } from '../lib/errors';
 import { UserRole } from '@prisma/client';
 import { AuthPayload } from '../lib/types';
 import { prisma } from '../config/prisma';
-import { fetchAndFormatUserDetails } from '../service/auth.service';
+import { fetchAndFormatUserDetails } from '../services/auth.service';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { LRUCache } from 'lru-cache';
 
@@ -20,15 +20,12 @@ export interface AuthenticatedRequest extends Request {
 
 const userAuthCache = new LRUCache<
   string,
-  {
-    roles: any[];
-    is_delegated: boolean;
-    delegated_by: any[];
+  Omit<AuthPayload, 'token' | 'id' | 'username' | 'full_name'> & {
     cached_at: Date;
   }
 >({
   max: 100,
-  ttl: 30 * 60 * 1000,
+  ttl: 10 * 60 * 1000,
 });
 
 export const protect = async (

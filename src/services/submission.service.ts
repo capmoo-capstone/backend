@@ -59,7 +59,9 @@ export const getProjectSubmissions = async (
   );
 
   const procurementSubmissions = submissionData.filter(
-    (submission) => submission.workflow_type === project?.procurement_type
+    (submission) =>
+      submission.workflow_type ===
+      (project?.procurement_type as UnitResponsibleType)
   );
 
   return {

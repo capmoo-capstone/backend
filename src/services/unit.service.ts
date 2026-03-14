@@ -37,18 +37,20 @@ export const getById = async (id: string): Promise<Unit> => {
   return unit;
 };
 
-const checkValidateType = async (type: UnitResponsibleType[]) => {
-  return await prisma.unit.findFirst({
+const checkValidateType = async (
+  type: UnitResponsibleType[]
+): Promise<boolean> => {
+  return !!(await prisma.unit.findFirst({
     where: {
       type: {
         hasSome: type,
       },
     },
-  });
-}
+  }));
+};
 
 export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
-  if (data.type && await checkValidateType(data.type)) {
+  if (data.type && (await checkValidateType(data.type))) {
     throw new BadRequestError('Unit with the same type already exists');
   }
   const unit = await prisma.unit.create({
@@ -67,7 +69,7 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
 
 export const updateUnit = async (data: UpdateUnitDto): Promise<Unit> => {
   await getById(data.id);
-  if (data.type && await checkValidateType(data.type)) {
+  if (data.type && (await checkValidateType(data.type))) {
     throw new BadRequestError('Unit with the same type already exists');
   }
   return await prisma.unit.update({

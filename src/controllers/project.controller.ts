@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as ProjectService from '../service/project.service';
+import * as ProjectService from '../services/project.service';
 import {
   AcceptProjectsSchema,
   CancelProjectSchema,

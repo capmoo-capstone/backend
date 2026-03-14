@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as AuthService from '../service/auth.service';
+import * as AuthService from '../services/auth.service';
 import { RegisterUserSchema } from '../models/User';
 import { AuthPayload } from '../lib/types';
 
@@ -13,12 +13,6 @@ export const login = async (req: Request, res: Response) => {
 export const register = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
   const { username, full_name, role, dept_id, unit_id } = req.body;
-  if (!username || !full_name || !dept_id) {
-    return res
-      .status(400)
-      .json({ error: 'Username, full name, and department ID are required' });
-  }
-
   const validatedData = RegisterUserSchema.parse({
     username,
     full_name,

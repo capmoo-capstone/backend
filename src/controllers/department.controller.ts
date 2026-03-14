@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as DepartmentService from '../service/department.service';
+import * as DepartmentService from '../services/department.service';
 import { AuthPayload } from '../lib/types';
 
 export const getAll = async (req: Request, res: Response) => {

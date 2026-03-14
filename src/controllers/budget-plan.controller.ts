@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as BudgetPlanService from '../service/budgetPlan.service';
+import * as BudgetPlanService from '../services/budget-plan.service';
 import { ImportBudgetPlanSchema } from '../models/BudgetPlan';
 
 export const getAll = async (req: Request, res: Response) => {

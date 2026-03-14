@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as SubmissionService from '../service/submission.service';
+import * as SubmissionService from '../services/submission.service';
 import {
   CreateSubmissionSchema,
   ApproveSubmissionSchema,

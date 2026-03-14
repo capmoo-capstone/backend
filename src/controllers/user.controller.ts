@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as UserService from '../service/user.service';
+import * as UserService from '../services/user.service';
 import {
   UpdateRoleSchema,
   UpdateRepresentativeUnitSchema,
