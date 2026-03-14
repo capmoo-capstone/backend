@@ -1,4 +1,3 @@
-import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import {
   AppError,
@@ -9,9 +8,6 @@ import {
 import jwt from 'jsonwebtoken';
 import { RegisterUserDto } from '../models/User';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
-import e from 'express';
-
-// Add this helper to src/service/auth.service.ts
 
 export const fetchAndFormatUserDetails = async (whereClause: any) => {
   const now = new Date();
@@ -20,7 +16,7 @@ export const fetchAndFormatUserDetails = async (whereClause: any) => {
     include: {
       roles: {
         include: {
-          department: { select: { id: true, name: true } }, // Included code for middleware
+          department: { select: { id: true, name: true } },
           unit: { select: { id: true, name: true } },
         },
       },

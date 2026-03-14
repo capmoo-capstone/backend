@@ -693,11 +693,11 @@ export const acceptProjects = async (
           where: { id: project.id, status: ProjectStatus.WAITING_ACCEPT },
           data: { status: ProjectStatus.IN_PROGRESS },
           select: { id: true, status: true },
-        }),
-        syncProjectPhases(tx, project.current_workflow_type, project.id)
+        })
       );
 
       historyPromises.push(
+        syncProjectPhases(tx, project.current_workflow_type, project.id),
         tx.projectHistory.create({
           data: {
             project_id: project.id,
@@ -1014,7 +1014,12 @@ export const rejectCancellation = async (
       select: { old_value: true },
     });
 
-    const lastStatus = (lastHistory?.old_value as any)?.status;
+    const lastStatus = (lastHistory?.old_value as any)?.status ?? undefined;
+    if (!lastStatus) {
+      throw new BadRequestError(
+        'Previous status not found, cannot reject cancellation'
+      );
+    }
 
     const updated = await tx.project.update({
       where: { id: projectId },

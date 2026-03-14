@@ -45,6 +45,6 @@ export const removeBudgetPlan = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const id = req.params.id as string;
-  const data = await BudgetPlanService.deleteBudgetPlan(payload, id);
-  res.status(200).json(data);
+  await BudgetPlanService.deleteBudgetPlan(payload, id);
+  res.status(204).send();
 };

@@ -5,6 +5,8 @@ import { UserRole } from '@prisma/client';
 import { AuthPayload } from '../lib/types';
 import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../service/auth.service';
+import { OPS_DEPT_ID } from '../lib/constant';
+import { LRUCache } from 'lru-cache';
 
 interface JwtPayload {
   id: string;
@@ -16,7 +18,7 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthPayload;
 }
 
-const userAuthCache = new Map<
+const userAuthCache = new LRUCache<
   string,
   {
     roles: any[];
@@ -24,7 +26,10 @@ const userAuthCache = new Map<
     delegated_by: any[];
     cached_at: Date;
   }
->();
+>({
+  max: 100,
+  ttl: 30 * 60 * 1000,
+});
 
 export const protect = async (
   req: AuthenticatedRequest,
@@ -125,8 +130,7 @@ export const authorizeSupply = (allowedRoles: UserRole[]) => {
 
       const hasSupplyPermission = req.user.roles.some(
         (r) =>
-          r.dept_id === 'DEPT-SUP-OPS' &&
-          allowedRoles.includes(r.role as UserRole)
+          r.dept_id === OPS_DEPT_ID && allowedRoles.includes(r.role as UserRole)
       );
 
       if (!hasSupplyPermission) {
