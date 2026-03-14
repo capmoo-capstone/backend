@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import * as BudgetPlanService from '../service/budgetplan.service';
+import * as BudgetPlanService from '../service/budgetPlan.service';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Budget Plan']
