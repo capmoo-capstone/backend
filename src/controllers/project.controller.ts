@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
-import * as ProjectService from '../services/project.service';
+import * as ProjectQueryService from '../services/project-query.service';
+import * as ProjectAssignmentService from '../services/project-assignment.service';
+import * as ProjectDataService from '../services/project-data.service';
+import * as ProjectLifecycleService from '../services/project-lifecycle.service';
 import {
   AcceptProjectsSchema,
   CancelProjectSchema,
@@ -14,7 +17,7 @@ export const getAll = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
   const payload = (req as any).user;
-  const data = await ProjectService.listProjects(
+  const data = await ProjectQueryService.listProjects(
     payload,
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10
@@ -27,7 +30,7 @@ export const getById = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const projectId = req.params.id as string;
   const payload = (req as any).user;
-  const project = await ProjectService.getById(payload, projectId);
+  const project = await ProjectQueryService.getById(payload, projectId);
   res.status(200).json(project);
 };
 
@@ -35,7 +38,8 @@ export const getUnassignedByUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
-  const projects = await ProjectService.getUnassignedProjectsByUnit(payload);
+  const projects =
+    await ProjectQueryService.getUnassignedProjectsByUnit(payload);
   res.status(200).json(projects);
 };
 
@@ -45,7 +49,7 @@ export const getAssignedProjects = async (req: Request, res: Response) => {
   const { date } = req.query;
   const payload = (req as any).user;
   const targetDate = date ? new Date(date as string) : new Date();
-  const projects = await ProjectService.getAssignedProjects(
+  const projects = await ProjectQueryService.getAssignedProjects(
     payload,
     targetDate
   );
@@ -59,7 +63,10 @@ export const createProject = async (req: Request, res: Response) => {
   const payload = (req as any).user;
 
   const validatedData = CreateProjectSchema.parse(req.body);
-  const project = await ProjectService.createProject(payload, validatedData);
+  const project = await ProjectDataService.createProject(
+    payload,
+    validatedData
+  );
   res.status(201).json(project);
 };
 
@@ -70,7 +77,7 @@ export const assignProjects = async (req: Request, res: Response) => {
   const payload = (req as any).user;
 
   const validatedData = UpdateStatusProjectsSchema.parse(req.body);
-  const project = await ProjectService.assignProjectsToUser(
+  const project = await ProjectAssignmentService.assignProjectsToUser(
     payload,
     validatedData
   );
@@ -86,7 +93,10 @@ export const addAssignee = async (req: Request, res: Response) => {
     id: projectId,
     userId: req.body.userId,
   });
-  const project = await ProjectService.addAssignee(payload, validatedData);
+  const project = await ProjectAssignmentService.addAssignee(
+    payload,
+    validatedData
+  );
   res.status(200).json(project);
 };
 
@@ -95,7 +105,10 @@ export const returnProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.returnProject(payload, projectId);
+  const project = await ProjectAssignmentService.returnProject(
+    payload,
+    projectId
+  );
   res.status(200).json(project);
 };
 
@@ -107,7 +120,10 @@ export const changeAssignee = async (req: Request, res: Response) => {
   const data = { id: projectId, userId: req.body.userId };
 
   const validatedData = UpdateStatusProjectSchema.parse(data);
-  const project = await ProjectService.changeAssignee(payload, validatedData);
+  const project = await ProjectAssignmentService.changeAssignee(
+    payload,
+    validatedData
+  );
   res.status(200).json(project);
 };
 
@@ -119,7 +135,10 @@ export const acceptProjects = async (req: Request, res: Response) => {
   const validatedData = AcceptProjectsSchema.parse({
     id: data.map((item: any) => item.id),
   });
-  const project = await ProjectService.acceptProjects(payload, validatedData);
+  const project = await ProjectAssignmentService.acceptProjects(
+    payload,
+    validatedData
+  );
   res.status(200).json(project);
 };
 
@@ -128,7 +147,10 @@ export const claimProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.claimProject(payload, projectId);
+  const project = await ProjectAssignmentService.claimProject(
+    payload,
+    projectId
+  );
   res.status(200).json(project);
 };
 
@@ -140,7 +162,10 @@ export const cancelProject = async (req: Request, res: Response) => {
   const data = { id: projectId, reason: req.body.reason };
 
   const validatedData = CancelProjectSchema.parse(data);
-  const project = await ProjectService.cancelProject(payload, validatedData);
+  const project = await ProjectLifecycleService.cancelProject(
+    payload,
+    validatedData
+  );
   res.status(200).json(project);
 };
 
@@ -149,7 +174,10 @@ export const approveCancellation = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.approveCancellation(payload, projectId);
+  const project = await ProjectLifecycleService.approveCancellation(
+    payload,
+    projectId
+  );
   res.status(200).json(project);
 };
 
@@ -158,7 +186,10 @@ export const rejectCancellation = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.rejectCancellation(payload, projectId);
+  const project = await ProjectLifecycleService.rejectCancellation(
+    payload,
+    projectId
+  );
   res.status(200).json(project);
 };
 
@@ -167,7 +198,7 @@ export const completeProcurement = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.completeProcurementPhase(
+  const project = await ProjectLifecycleService.completeProcurementPhase(
     payload,
     projectId
   );
@@ -179,7 +210,10 @@ export const closeProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.closeProject(payload, projectId);
+  const project = await ProjectLifecycleService.closeProject(
+    payload,
+    projectId
+  );
   res.status(200).json(project);
 };
 
@@ -188,7 +222,10 @@ export const requestEditProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const project = await ProjectService.requestEditProject(payload, projectId);
+  const project = await ProjectLifecycleService.requestEditProject(
+    payload,
+    projectId
+  );
   res.status(200).json(project);
 };
 
@@ -201,7 +238,7 @@ export const updateProject = async (req: Request, res: Response) => {
   const data = { id: projectId, updateData: req.body };
 
   const validatedData = UpdateProjectSchema.parse(data);
-  const updatedProject = await ProjectService.updateProjectData(
+  const updatedProject = await ProjectDataService.updateProjectData(
     payload,
     validatedData
   );
@@ -213,6 +250,6 @@ export const removeProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const projectId = req.params.id as string;
   const payload = (req as any).user;
-  await ProjectService.deleteProject(payload, projectId);
+  await ProjectDataService.deleteProject(payload, projectId);
   res.status(204).send();
 };
