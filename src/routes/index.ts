@@ -8,15 +8,17 @@ import departmentRoutes from './department.route';
 import unitRoutes from './unit.route';
 import submissionRoutes from './submission.route';
 import delegationRoutes from './delegation.route';
+import budgetPlanRoutes from './budgetPlan.route';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
-router.use('/user', protect, userRoutes);
-router.use('/project', protect, projectRoutes);
-router.use('/department', protect, departmentRoutes);
-router.use('/unit', protect, unitRoutes);
-router.use('/submission', protect, submissionRoutes);
-router.use('/delegation', protect, delegationRoutes);
+router.use('/users', protect, userRoutes);
+router.use('/projects', protect, projectRoutes);
+router.use('/departments', protect, departmentRoutes);
+router.use('/units', protect, unitRoutes);
+router.use('/submissions', protect, submissionRoutes);
+router.use('/delegations', protect, delegationRoutes);
+router.use('/budget-plans', protect, budgetPlanRoutes);
 
 export default router;

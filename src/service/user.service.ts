@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Prisma, Role } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import {
   UpdateRepresentativeUnitDto,
   UpdateRoleDto,
@@ -9,6 +9,7 @@ import {
 } from '../models/User';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
+import { SUPPLY_UNIT_ID, OPS_DEPT_ID } from '../lib/constant';
 
 export const listUsers = async (
   filters: UsersListFilters
@@ -25,7 +26,7 @@ export const listUsers = async (
     if (!unit) {
       throw new NotFoundError('Unit not found');
     }
-    const [users, count] = await prisma.$transaction([
+    const [users, count] = await Promise.all([
       prisma.user.findMany({
         where: {
           roles: {
@@ -42,11 +43,7 @@ export const listUsers = async (
               unit_id: unitId,
             },
             select: {
-              role: {
-                select: {
-                  name: true,
-                },
-              },
+              role: true,
             },
           },
         },
@@ -71,7 +68,7 @@ export const listUsers = async (
         return {
           id: u.id,
           full_name: u.full_name,
-          roles: u.roles.map((r) => r.role.name),
+          roles: u.roles.map((r) => r.role),
         };
       }),
     };
@@ -83,7 +80,7 @@ export const listUsers = async (
     if (!department) {
       throw new NotFoundError('Department not found');
     }
-    const [users, count] = await prisma.$transaction([
+    const [users, count] = await Promise.all([
       prisma.user.findMany({
         where: {
           roles: {
@@ -100,11 +97,7 @@ export const listUsers = async (
               dept_id: deptId,
             },
             select: {
-              role: {
-                select: {
-                  name: true,
-                },
-              },
+              role: true,
             },
           },
         },
@@ -128,23 +121,19 @@ export const listUsers = async (
         return {
           id: u.id,
           full_name: u.full_name,
-          roles: u.roles.map((r) => r.role.name),
+          roles: u.roles.map((r) => r.role),
         };
       }),
     };
   } else {
-    const [users, count] = await prisma.$transaction([
+    const [users, count] = await Promise.all([
       prisma.user.findMany({
         select: {
           id: true,
           full_name: true,
           roles: {
             select: {
-              role: {
-                select: {
-                  name: true,
-                },
-              },
+              role: true,
             },
           },
         },
@@ -160,7 +149,7 @@ export const listUsers = async (
         return {
           id: u.id,
           full_name: u.full_name,
-          roles: u.roles.map((r) => r.role.name),
+          roles: u.roles.map((r) => r.role),
         };
       }),
     };
@@ -175,15 +164,10 @@ export const getById = async (id: string): Promise<any> => {
     include: {
       roles: {
         select: {
-          role: {
-            select: {
-              name: true,
-            },
-          },
+          role: true,
           department: {
             select: {
               id: true,
-              code: true,
               name: true,
             },
           },
@@ -207,45 +191,48 @@ const upsertUserRoleInternal = async (
   tx: any,
   params: {
     userId: string;
-    roleId: string;
+    role: UserRole;
     deptId: string;
     unitId: string | null;
   }
 ) => {
-  const { userId, roleId, deptId, unitId } = params;
+  const { userId, role, deptId, unitId } = params;
 
   const userRoles = await tx.userOrganizationRole.findMany({
     where: { user_id: userId, dept_id: deptId },
-    include: { role: { select: { name: true } } },
+    select: { id: true, role: true, unit_id: true },
   });
 
   const sameUnitAssignment = userRoles.find((a: any) => a.unit_id === unitId);
-  const guestAssignment = userRoles.find(
-    (a: any) => a.role.name === Role.GUEST
-  );
+  const guestAssignment = userRoles.find((a: any) => a.role === UserRole.GUEST);
 
+  let result;
   if (sameUnitAssignment) {
-    return tx.userOrganizationRole.update({
+    result = await tx.userOrganizationRole.update({
       where: { id: sameUnitAssignment.id },
-      data: { role_id: roleId },
+      data: { role },
     });
-  }
-
-  if (guestAssignment && userRoles.length === 1) {
-    return tx.userOrganizationRole.update({
+  } else if (guestAssignment && userRoles.length === 1) {
+    result = await tx.userOrganizationRole.update({
       where: { id: guestAssignment.id },
-      data: { role_id: roleId, unit_id: unitId },
+      data: { role, unit_id: unitId },
     });
-  }
+  } else
+    result = await tx.userOrganizationRole.create({
+      data: {
+        user_id: userId,
+        role,
+        dept_id: deptId,
+        unit_id: unitId,
+      },
+    });
 
-  return tx.userOrganizationRole.create({
-    data: {
-      user_id: userId,
-      role_id: roleId,
-      dept_id: deptId,
-      unit_id: unitId,
-    },
+  await tx.user.update({
+    where: { id: userId },
+    data: { role_updated_at: new Date() },
   });
+
+  return result;
 };
 
 export const addUsersToSupplyUnit = async (
@@ -257,30 +244,45 @@ export const addUsersToSupplyUnit = async (
       select: { id: true, dept_id: true },
     });
     if (!unit) throw new NotFoundError('Unit not found');
+    if (unit.dept_id !== OPS_DEPT_ID) {
+      throw new BadRequestError(
+        'This endpoint is only for units under the Supply department'
+      );
+    }
 
-    const role = await tx.userRole.findFirst({
-      where: { name: Role.GENERAL_STAFF },
+    const usersCount = await tx.user.count({
+      where: { id: { in: data.users } },
     });
-    if (!role) throw new NotFoundError('General Staff role not found');
-
-    const userIds = data.users.map((u) => u.id);
-    const usersCount = await tx.user.count({ where: { id: { in: userIds } } });
 
     if (usersCount !== data.users.length) {
       throw new NotFoundError('One or more users not found');
     }
-    for (const user of data.users) {
-      await upsertUserRoleInternal(tx, {
-        userId: user.id,
-        roleId: role.id,
-        deptId: unit.dept_id,
-        unitId: unit.id,
+
+    for (const id of data.users) {
+      const user = await tx.user.findUnique({
+        where: { id },
+        select: {
+          full_name: true,
+          roles: { select: { role: true, dept_id: true, unit_id: true } },
+        },
       });
+
+      if (user!.roles.some((r: any) => r.unit_id === SUPPLY_UNIT_ID)) {
+        await upsertUserRoleInternal(tx, {
+          userId: id,
+          role: UserRole.GENERAL_STAFF,
+          deptId: OPS_DEPT_ID,
+          unitId: unit.id,
+        });
+      } else
+        throw new BadRequestError(
+          `User ${user!.full_name} cannot be added to Supply Operation units`
+        );
     }
 
     return {
       count: data.users.length,
-      message: `${data.users.length} users processed successfully.`,
+      message: `${data.users.length} users added to Supply unit ${data.unit_id} successfully.`,
     };
   });
 };
@@ -289,37 +291,53 @@ export const addRepresentativeToUnit = async (
   data: UpdateRepresentativeUnitDto
 ): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
+    const userOrgRoles = await tx.userOrganizationRole.findFirst({
+      where: { unit_id: data.unit_id, role: UserRole.REPRESENTATIVE },
+      select: { id: true },
+    });
+    if (userOrgRoles) {
+      throw new BadRequestError(
+        'Unit already has a representative. Please remove the existing representative before adding a new one.'
+      );
+    }
+
     const unit = await tx.unit.findUnique({
       where: { id: data.unit_id },
-      select: { id: true, department: { select: { id: true, code: true } } },
+      select: { id: true, department: { select: { id: true } } },
     });
-
     if (!unit) throw new NotFoundError('Unit not found');
-    if (unit.department?.code === 'SUPPLY') {
+    if (unit.department?.id === OPS_DEPT_ID) {
       throw new BadRequestError(
         'Representative role is not allowed for SUPPLY units'
       );
     }
 
-    const userRole = await tx.userRole.findFirst({
-      where: { name: Role.REPRESENTATIVE },
+    const user = await tx.user.findUnique({
+      where: { id: data.id },
+      select: {
+        roles: { select: { role: true, dept_id: true, unit_id: true } },
+      },
     });
+    if (!user) throw new NotFoundError('User not found');
 
-    await upsertUserRoleInternal(tx, {
+    if (
+      user.roles.some(
+        (r: any) => r.role === UserRole.REPRESENTATIVE && r.unit_id === unit.id
+      )
+    ) {
+      throw new BadRequestError(
+        'User is already a representative for this unit'
+      );
+    }
+
+    const result = await upsertUserRoleInternal(tx, {
       userId: data.id,
-      roleId: userRole!.id,
+      role: UserRole.REPRESENTATIVE,
       deptId: unit.department!.id,
       unitId: unit.id,
     });
 
-    return tx.user.findUnique({
-      where: { id: data.id },
-      include: {
-        roles: {
-          include: { role: true, department: true, unit: true },
-        },
-      },
-    });
+    return { data: result };
   });
 };
 
@@ -328,6 +346,13 @@ export const updateRole = async (
   data: UpdateRoleDto
 ): Promise<any> => {
   return await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id },
+      select: {
+        roles: { select: { role: true, dept_id: true, unit_id: true } },
+      },
+    });
+    if (!user) throw new NotFoundError('User not found');
     if (isUnitLevelRole(data.role) && !data.unit_id) {
       throw new BadRequestError('Unit is required for unit-level roles');
     }
@@ -335,16 +360,24 @@ export const updateRole = async (
       throw new BadRequestError('Unit is not allowed for department roles');
     }
 
-    const roleRecord = await tx.userRole.findUnique({
-      where: { name: data.role },
-    });
-    if (!roleRecord) throw new NotFoundError(`Role ${data.role} not found`);
-
     const targetUnitId = isUnitLevelRole(data.role) ? data.unit_id! : null;
+
+    if (
+      user.roles.some(
+        (r: any) =>
+          r.role === data.role &&
+          r.dept_id === data.dept_id &&
+          r.unit_id === targetUnitId
+      )
+    ) {
+      throw new BadRequestError(
+        'User already has this role assigned in this unit/department'
+      );
+    }
 
     const result = await upsertUserRoleInternal(tx, {
       userId: id,
-      roleId: roleRecord.id,
+      role: data.role,
       deptId: data.dept_id,
       unitId: targetUnitId,
     });

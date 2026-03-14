@@ -1,9 +1,12 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
-import { Role } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { AuthPayload } from '../lib/types';
 import { prisma } from '../config/prisma';
+import { fetchAndFormatUserDetails } from '../service/auth.service';
+import { OPS_DEPT_ID } from '../lib/constant';
+import { LRUCache } from 'lru-cache';
 
 interface JwtPayload {
   id: string;
@@ -15,6 +18,19 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthPayload;
 }
 
+const userAuthCache = new LRUCache<
+  string,
+  {
+    roles: any[];
+    is_delegated: boolean;
+    delegated_by: any[];
+    cached_at: Date;
+  }
+>({
+  max: 100,
+  ttl: 30 * 60 * 1000,
+});
+
 export const protect = async (
   req: AuthenticatedRequest,
   _res: Response,
@@ -22,8 +38,14 @@ export const protect = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedError('Authorization header missing or invalid');
+    if (!authHeader) {
+      throw new UnauthorizedError('Authorization header missing');
+    }
+
+    if (!authHeader.toLowerCase().startsWith('bearer ')) {
+      throw new UnauthorizedError(
+        'Authorization header must start with Bearer'
+      );
     }
 
     const token = authHeader.split(' ')[1];
@@ -32,77 +54,43 @@ export const protect = async (
       process.env.JWT_SECRET as string
     ) as JwtPayload;
 
-    const now = new Date();
-    const user = await prisma.user.findUnique({
+    const userMeta = await prisma.user.findUnique({
       where: { id: decoded.id },
-      include: {
-        roles: {
-          include: {
-            role: true,
-            department: { select: { id: true, code: true, name: true } },
-            unit: { select: { id: true, name: true } },
-          },
-        },
-        delegations_received: {
-          where: {
-            is_active: true,
-            start_date: { lte: now },
-            OR: [{ end_date: null }, { end_date: { gte: now } }],
-          },
-          include: {
-            delegator: {
-              include: {
-                roles: {
-                  include: {
-                    role: true,
-                    department: {
-                      select: { id: true, code: true, name: true },
-                    },
-                    unit: { select: { id: true, name: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      select: { role_updated_at: true },
     });
 
-    if (!user) {
+    if (!userMeta) {
       throw new UnauthorizedError('User not found');
     }
 
-    const formatRoles = (orgRoles: any[]) =>
-      orgRoles.map((r) => ({
-        role: r.role.name,
-        dept_id: r.department.id,
-        dept_code: r.department.code,
-        dept_name: r.department.name,
-        unit_id: r.unit?.id || null,
-        unit_name: r.unit?.name || null,
-      }));
+    const cachedData = userAuthCache.get(decoded.id);
+    if (cachedData && cachedData.cached_at >= userMeta.role_updated_at) {
+      req.user = {
+        token,
+        ...decoded,
+        ...cachedData,
+      };
+      return next();
+    }
 
-    const ownRoles = formatRoles(user.roles);
-    const inheritedRoles =
-      user.delegations_received.length > 0
-        ? formatRoles(
-            user.delegations_received.flatMap((d) => d.delegator.roles)
-          )
-        : [];
+    const result = await fetchAndFormatUserDetails({ id: decoded.id });
+    if (!result) throw new UnauthorizedError('User not found');
+
+    const { user, authData } = result;
+
+    userAuthCache.set(decoded.id, {
+      ...authData,
+      cached_at: new Date(),
+    });
 
     req.user = {
       token,
       id: user.id,
       username: user.username,
       full_name: user.full_name,
-      roles: [...ownRoles, ...inheritedRoles],
-      is_delegated: user.delegations_received.length > 0,
-      delegated_by: user.delegations_received.map((d) => ({
-        id: d.delegator.id,
-        full_name: d.delegator.full_name,
-        roles: d.delegator.roles.map((r) => r.role.name),
-      })),
+      ...authData,
     };
+
     next();
   } catch (err) {
     console.error('Auth Middleware Error:', err);
@@ -110,16 +98,16 @@ export const protect = async (
   }
 };
 
-export const authorize = (allowedRoles: Role[]) => {
+export const authorize = (allowedRoles: UserRole[]) => {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     try {
       if (!req.user) throw new UnauthorizedError('Not authenticated');
 
-      if (req.user.roles.some((r) => r.role === Role.SUPER_ADMIN))
+      if (req.user.roles.some((r) => r.role === UserRole.SUPER_ADMIN))
         return next();
 
       const hasPermission = req.user.roles.some((r) =>
-        allowedRoles.includes(r.role as Role)
+        allowedRoles.includes(r.role as UserRole)
       );
 
       if (!hasPermission) {
@@ -132,16 +120,17 @@ export const authorize = (allowedRoles: Role[]) => {
     }
   };
 };
-export const authorizeSupply = (allowedRoles: Role[]) => {
+export const authorizeSupply = (allowedRoles: UserRole[]) => {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     try {
       if (!req.user) throw new UnauthorizedError('Not authenticated');
 
-      if (req.user.roles.some((r) => r.role === Role.SUPER_ADMIN))
+      if (req.user.roles.some((r) => r.role === UserRole.SUPER_ADMIN))
         return next();
 
       const hasSupplyPermission = req.user.roles.some(
-        (r) => r.dept_code === 'SUPPLY' && allowedRoles.includes(r.role as Role)
+        (r) =>
+          r.dept_id === OPS_DEPT_ID && allowedRoles.includes(r.role as UserRole)
       );
 
       if (!hasSupplyPermission) {

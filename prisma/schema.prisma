@@ -13,7 +13,7 @@ datasource db {
 }
 
 // --- ENUMS ---
-enum Role {
+enum UserRole {
   SUPER_ADMIN
   ADMIN
   HEAD_OF_DEPARTMENT
@@ -41,6 +41,7 @@ enum UnitResponsibleType {
   MT500K
   SELECTION
   EBIDDING
+  INTERNAL
   CONTRACT
 }
 
@@ -57,6 +58,7 @@ enum ProcurementType {
   MT500K
   SELECTION
   EBIDDING
+  INTERNAL
 }
 
 enum SubmissionStatus {
@@ -91,24 +93,26 @@ enum UrgentType {
 // --- MODELS ---
 
 model Department {
-  id   String @id @default(uuid())
+  id   String @id
   name String
-  code String
 
   units              Unit[]
   organization_roles UserOrganizationRole[]
+  projects           Project[]
+  budgetPlans        BudgetPlan[]
 
   @@map("departments")
 }
 
 model Unit {
-  id      String                @id @default(uuid())
+  id      String                @id
   dept_id String
   name    String
   type    UnitResponsibleType[]
 
-  organization_roles UserOrganizationRole[]
-  projects           Project[]
+  organization_roles   UserOrganizationRole[]
+  requesting_projects  Project[]              @relation("RequestingUnit")
+  responsible_projects Project[]              @relation("ResponsibleUnit")
 
   department Department @relation(fields: [dept_id], references: [id])
 
@@ -116,11 +120,12 @@ model Unit {
 }
 
 model User {
-  id         String   @id @default(uuid())
-  username   String   @unique
-  email      String?  @unique
-  full_name  String
-  created_at DateTime @default(now())
+  id              String   @id @default(uuid())
+  username        String   @unique
+  email           String?  @unique
+  full_name       String
+  created_at      DateTime @default(now())
+  role_updated_at DateTime @default(now())
 
   roles UserOrganizationRole[]
 
@@ -142,12 +147,12 @@ model User {
 }
 
 model UserDelegation {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   delegator_id String
   delegatee_id String
   start_date   DateTime
   end_date     DateTime?
-  is_active    Boolean  @default(true)
+  is_active    Boolean   @default(true)
 
   delegator User @relation("Delegator", fields: [delegator_id], references: [id])
   delegatee User @relation("Delegatee", fields: [delegatee_id], references: [id])
@@ -155,27 +160,18 @@ model UserDelegation {
   @@map("user_delegations")
 }
 
-model UserRole {
-  id   String @id @default(uuid())
-  name Role   @unique
-
-  organization_roles UserOrganizationRole[]
-
-  @@map("user_roles")
-}
-
 model UserOrganizationRole {
-  id      String  @id @default(uuid())
+  id      String   @id @default(uuid())
   user_id String
-  role_id String
+  role    UserRole
   dept_id String
   unit_id String?
 
-  user       User       @relation(fields: [user_id], references: [id])
-  role       UserRole   @relation(fields: [role_id], references: [id])
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
   department Department @relation(fields: [dept_id], references: [id])
   unit       Unit?      @relation(fields: [unit_id], references: [id])
 
+  @@index([user_id])
   @@map("user_organization_roles")
 }
 
@@ -188,9 +184,16 @@ model Project {
   status                 ProjectStatus
   procurement_type       ProcurementType
   current_workflow_type  UnitResponsibleType
+  responsible_unit_id    String
+  requesting_dept_id     String
   requesting_unit_id     String?
   is_urgent              UrgentType          @default(NORMAL)
   expected_approval_date DateTime?
+  procurement_status     ProjectPhaseStatus  @default(NOT_STARTED)
+  procurement_step       Int?
+  contract_status        ProjectPhaseStatus  @default(NOT_STARTED)
+  contract_step          Int?
+  budget_plan_id         String[]
   pr_no                  String?
   po_no                  String?
   less_no                String?
@@ -203,15 +206,21 @@ model Project {
   created_at             DateTime            @default(now())
   updated_at             DateTime?           @updatedAt
 
-  creator         User  @relation("ProjectCreator", fields: [created_by], references: [id])
-  requesting_unit Unit? @relation(fields: [requesting_unit_id], references: [id])
+  creator          User       @relation("ProjectCreator", fields: [created_by], references: [id])
+  requesting_dept  Department @relation(fields: [requesting_dept_id], references: [id])
+  requesting_unit  Unit?      @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
+  responsible_unit Unit?      @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
 
   assignee_procurement User[]                @relation("ProcurementProjects")
   assignee_contract    User[]                @relation("ContractProjects")
   project_cancellation ProjectCancellation[]
   project_histories    ProjectHistory[]
   submissions          ProjectSubmission[]
+  budget_plans         BudgetPlan[]
 
+  @@index([receive_no(sort: Desc)])
+  @@index([status, current_workflow_type])
+  @@index([requesting_dept_id])
   @@map("projects")
 }
 
@@ -227,7 +236,7 @@ model ProjectCancellation {
   approved_at  DateTime?
   cancelled_at DateTime?
 
-  project   Project @relation(fields: [project_id], references: [id])
+  project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
   approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
 
@@ -244,8 +253,10 @@ model ProjectHistory {
   changed_by String
   changed_at DateTime      @default(now())
 
-  project Project @relation(fields: [project_id], references: [id])
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
+  @@index([project_id])
+  @@index([changed_at])
   @@map("project_histories")
 }
 
@@ -269,13 +280,15 @@ model ProjectSubmission {
   comment          String?
   meta_data        Json[]
 
-  project   Project           @relation(fields: [project_id], references: [id])
+  project   Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
   submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
   approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id])
   proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id])
   completer User?             @relation("CompletedBy", fields: [completed_by], references: [id])
   documents ProjectDocument[]
 
+  @@index([project_id, submitted_at(sort: Desc)])
+  @@index([project_id, step_order, submission_type])
   @@map("project_submissions")
 }
 
@@ -289,4 +302,24 @@ model ProjectDocument {
   submission ProjectSubmission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
 
   @@map("project_documents")
+}
+
+model BudgetPlan {
+  id                 String   @id @default(uuid())
+  budget_year        String
+  cost_center_no     String
+  cost_center_name   String
+  department_id      String
+  activity_type      String
+  activity_type_name String
+  description        String?
+  budget_amount      Decimal  @db.Decimal(18, 2)
+  project_id         String?
+  created_at         DateTime @default(now())
+  created_by         String
+
+  department Department @relation(fields: [department_id], references: [id])
+  project    Project?   @relation(fields: [project_id], references: [id])
+
+  @@map("budget_plans")
 }

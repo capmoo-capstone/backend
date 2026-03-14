@@ -3,30 +3,31 @@ import { Department } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,
-  PaginatedDepartments,
+  DepartmentsListResponse,
   UpdateDepartmentDto,
 } from '../models/Department';
+import { AuthPayload } from '../lib/types';
 
 export const listDepartments = async (
-  page: number,
-  limit: number
-): Promise<PaginatedDepartments> => {
-  const skip = (page - 1) * limit;
-
+  user: AuthPayload
+): Promise<DepartmentsListResponse> => {
   const [departments, total] = await prisma.$transaction([
     prisma.department.findMany({
-      skip: skip,
-      take: limit,
-      orderBy: { id: 'desc' },
+      include: {
+        units: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
     }),
     prisma.department.count(),
   ]);
 
   return {
     total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
     data: departments,
   };
 };
@@ -34,6 +35,14 @@ export const listDepartments = async (
 export const getById = async (id: string): Promise<Department> => {
   const department = await prisma.department.findUnique({
     where: { id },
+    include: {
+      units: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   });
   if (!department) {
     throw new NotFoundError('Department not found');
@@ -46,8 +55,8 @@ export const createDepartment = async (
 ): Promise<Department> => {
   const department = await prisma.department.create({
     data: {
+      id: data.id,
       name: data.name,
-      code: data.code,
     },
   });
   if (!department) {

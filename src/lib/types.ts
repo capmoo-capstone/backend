@@ -1,14 +1,14 @@
-import { Role } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 
 export interface AuthPayload {
   token: string;
   id: string;
   username: string;
   full_name: string;
+  email?: string;
   roles: Array<{
-    role: Role;
+    role: UserRole;
     dept_id: string;
-    dept_code: string;
     dept_name: string;
     unit_id: string | null;
     unit_name: string | null;
@@ -17,6 +17,6 @@ export interface AuthPayload {
   delegated_by: Array<{
     id: string;
     full_name: string;
-    roles: Role[];
+    roles: UserRole[];
   }>;
-};
+}

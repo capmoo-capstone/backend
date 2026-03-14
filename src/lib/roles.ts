@@ -1,21 +1,20 @@
-import { Role } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 
-export const deptLevelRoles = new Set<Role>([
-  Role.HEAD_OF_DEPARTMENT,
-  Role.FINANCE_STAFF,
-  Role.DOCUMENT_STAFF,
-  Role.ADMIN,
-  Role.GUEST,
+export const deptLevelRoles = new Set<UserRole>([
+  UserRole.HEAD_OF_DEPARTMENT,
+  UserRole.FINANCE_STAFF,
+  UserRole.DOCUMENT_STAFF,
+  UserRole.ADMIN,
 ]);
 
-export const unitLevelRoles = new Set<Role>([
-  Role.HEAD_OF_UNIT,
-  Role.GENERAL_STAFF,
-  Role.REPRESENTATIVE,
+export const unitLevelRoles = new Set<UserRole>([
+  UserRole.HEAD_OF_UNIT,
+  UserRole.GENERAL_STAFF,
+  UserRole.REPRESENTATIVE,
 ]);
 
-export const isDeptLevelRole = (role: Role): boolean =>
+export const isDeptLevelRole = (role: UserRole): boolean =>
   deptLevelRoles.has(role);
 
-export const isUnitLevelRole = (role: Role): boolean =>
+export const isUnitLevelRole = (role: UserRole): boolean =>
   unitLevelRoles.has(role);

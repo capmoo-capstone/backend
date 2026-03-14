@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma';
-import { Unit } from '@prisma/client';
-import { AppError, NotFoundError } from '../lib/errors';
+import { Unit, UnitResponsibleType } from '@prisma/client';
+import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
 import { CreateUnitDto, PaginatedUnits, UpdateUnitDto } from '../models/Unit';
 
 export const listUnits = async (
@@ -37,9 +37,23 @@ export const getById = async (id: string): Promise<Unit> => {
   return unit;
 };
 
+const checkValidateType = async (type: UnitResponsibleType[]) => {
+  return await prisma.unit.findFirst({
+    where: {
+      type: {
+        hasSome: type,
+      },
+    },
+  });
+}
+
 export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
+  if (data.type && await checkValidateType(data.type)) {
+    throw new BadRequestError('Unit with the same type already exists');
+  }
   const unit = await prisma.unit.create({
     data: {
+      id: data.id,
       name: data.name,
       type: data.type,
       dept_id: data.dept_id,
@@ -53,6 +67,9 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
 
 export const updateUnit = async (data: UpdateUnitDto): Promise<Unit> => {
   await getById(data.id);
+  if (data.type && await checkValidateType(data.type)) {
+    throw new BadRequestError('Unit with the same type already exists');
+  }
   return await prisma.unit.update({
     where: { id: data.id },
     data: { ...data },

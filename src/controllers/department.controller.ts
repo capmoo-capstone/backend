@@ -1,14 +1,12 @@
 import { Request, Response } from 'express';
 import * as DepartmentService from '../service/department.service';
+import { AuthPayload } from '../lib/types';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit } = req.query;
-  const data = await DepartmentService.listDepartments(
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
-  );
+  const payload = (req as any).user as AuthPayload;
+  const data = await DepartmentService.listDepartments(payload);
   res.status(200).json(data);
 };
 
