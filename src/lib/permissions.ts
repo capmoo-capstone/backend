@@ -1,6 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { OPS_DEPT_ID } from './constant';
-import { AuthPayload } from './types';
+import { AuthPayload } from '../types/auth.type';
 
 export const haveSupplyPermission = (user: AuthPayload): boolean =>
   user.roles.some((r) => r.dept_id === OPS_DEPT_ID) || isSuperAdmin(user);
