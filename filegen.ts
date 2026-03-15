@@ -10,7 +10,7 @@ if (!moduleName) {
 }
 
 const lowerName = moduleName.toLowerCase();
-const pascalName = lowerName.charAt(0).toUpperCase() + lowerName.slice(1);
+const pascalName = moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
 
 interface FileTemplate {
   folder: string;
@@ -25,7 +25,7 @@ const templates: FileTemplate[] = [
     content: `import { Request, Response } from 'express';\n\nexport const getAll = async (req: Request, res: Response) => {\n  try {\n    // Controller logic\n  } catch (error) {\n    res.status(500).json({ message: error });\n  }\n};`,
   },
   {
-    folder: 'src/service',
+    folder: 'src/services',
     fileName: `${lowerName}.service.ts`,
     content: `import { prisma } from '../config/prisma';\n\nexport const list${pascalName}s = async () => {\n  return await prisma.${lowerName}.findMany();\n};`,
   },
@@ -35,9 +35,19 @@ const templates: FileTemplate[] = [
     content: `import { Router } from 'express';\nimport * as controller from '../controllers/${lowerName}.controller';\n\nconst router = Router();\n\nrouter.get('/', controller.getAll);\n\nexport default router;`,
   },
   {
-    folder: 'src/models',
-    fileName: `${pascalName}.ts`,
-    content: `export interface ${pascalName} {\n  id: string;\n  createdAt: Date;\n  updatedAt: Date;\n}`,
+    folder: 'src/schemas',
+    fileName: `${lowerName}.schema.ts`,
+    content: `export const ${pascalName}Schema = {\n  // Define your schema here\n};`,
+  },
+  {
+    folder: 'src/types',
+    fileName: `${lowerName}.type.ts`,
+    content: `export interface ${pascalName} {
+      id: string;
+      createdAt: Date;
+      updatedAt: Date;
+      // Add your fields here
+    }`,
   },
 ];
 
