@@ -1,29 +1,26 @@
 import { Router } from 'express';
-import * as projectController from '../controllers/project.controller';
+import * as controller from '../controllers/project.controller';
 
 const router = Router();
 
-router.get('/', projectController.getAll);
-router.get('/unassigned', projectController.getUnassignedByUnit);
-router.get('/assigned', projectController.getAssignedProjects);
-router.post('/create', projectController.createProject);
-router.patch('/assign', projectController.assignProjects);
-router.patch('/accept', projectController.acceptProjects);
-router.get('/:id', projectController.getById);
-router.patch('/:id/return', projectController.returnProject);
-router.patch('/:id/change-assignee', projectController.changeAssignee);
-router.patch('/:id/add-assignee', projectController.addAssignee);
-router.patch('/:id/claim', projectController.claimProject);
-router.patch('/:id/cancel', projectController.cancelProject);
-router.patch('/:id/approve-cancel', projectController.approveCancellation);
-router.patch('/:id/reject-cancel', projectController.rejectCancellation);
-router.patch(
-  '/:id/complete-procurement',
-  projectController.completeProcurement
-);
-router.patch('/:id/close', projectController.closeProject);
-router.patch('/:id/request-edit', projectController.requestEditProject);
-router.patch('/:id/update', projectController.updateProject);
-router.delete('/:id', projectController.removeProject);
+router.get('/', controller.getAll);
+router.get('/unassigned', controller.getUnassignedByUnit);
+router.get('/assigned', controller.getAssignedProjects);
+router.post('/create', controller.createProject);
+router.patch('/assign', controller.assignProjects);
+router.patch('/accept', controller.acceptProjects);
+router.get('/:id', controller.getById);
+router.patch('/:id/return', controller.returnProject);
+router.patch('/:id/change-assignee', controller.changeAssignee);
+router.patch('/:id/add-assignee', controller.addAssignee);
+router.patch('/:id/claim', controller.claimProject);
+router.patch('/:id/cancel', controller.cancelProject);
+router.patch('/:id/approve-cancel', controller.approveCancellation);
+router.patch('/:id/reject-cancel', controller.rejectCancellation);
+router.patch('/:id/complete-procurement', controller.completeProcurement);
+router.patch('/:id/close', controller.closeProject);
+router.patch('/:id/request-edit', controller.requestEditProject);
+router.patch('/:id/update', controller.updateProject);
+router.delete('/:id', controller.removeProject);
 
 export default router;

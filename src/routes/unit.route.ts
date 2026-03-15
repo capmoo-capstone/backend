@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import * as unitController from '../controllers/unit.controller';
+import * as controller from '../controllers/unit.controller';
 
 const router = Router();
 
-router.get('/', unitController.getAll);
-router.post('/create', unitController.createUnit);
-router.get('/:id', unitController.getById);
-router.patch('/:id/update', unitController.updateUnit);
-router.delete('/:id', unitController.removeUnit);
+router.get('/', controller.getAll);
+router.post('/create', controller.createUnit);
+router.get('/:id', controller.getById);
+router.patch('/:id/update', controller.updateUnit);
+router.delete('/:id', controller.removeUnit);
 
 export default router;

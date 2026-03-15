@@ -1,6 +1,6 @@
 // Routing for API Version 1
 import { Router } from 'express';
-import { protect, authorize } from '../middlewares/auth';
+import { protect } from '../middlewares/auth';
 import userRoutes from './user.route';
 import projectRoutes from './project.route';
 import authRoutes from './auth.route';
@@ -13,12 +13,19 @@ import budgetPlanRoutes from './budget-plan.route';
 const router = Router();
 
 router.use('/auth', authRoutes);
-router.use('/users', protect, userRoutes);
-router.use('/projects', protect, projectRoutes);
-router.use('/departments', protect, departmentRoutes);
-router.use('/units', protect, unitRoutes);
-router.use('/submissions', protect, submissionRoutes);
-router.use('/delegations', protect, delegationRoutes);
-router.use('/budget-plans', protect, budgetPlanRoutes);
+
+const protectedRoutes = [
+  ['/users', userRoutes],
+  ['/projects', projectRoutes],
+  ['/departments', departmentRoutes],
+  ['/units', unitRoutes],
+  ['/submissions', submissionRoutes],
+  ['/delegations', delegationRoutes],
+  ['/budget-plans', budgetPlanRoutes],
+] as const;
+
+protectedRoutes.forEach(([path, route]) => {
+  router.use(path, protect, route);
+});
 
 export default router;

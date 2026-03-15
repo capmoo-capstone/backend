@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import * as submissionController from '../controllers/submission.controller';
+import * as controller from '../controllers/submission.controller';
 
 const router = Router();
 
-router.get('/:projectId', submissionController.getProjectSubmissions);
-router.post('/', submissionController.createSubmission);
-router.patch('/:id/:action', submissionController.handleSubmissionAction);
+router.get('/:projectId', controller.getProjectSubmissions);
+router.post('/', controller.createSubmission);
+router.patch('/:id/:action', controller.handleSubmissionAction);
 
 export default router;
