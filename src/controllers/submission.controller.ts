@@ -4,7 +4,7 @@ import {
   CreateSubmissionSchema,
   ApproveSubmissionSchema,
   RejectSubmissionSchema,
-} from '../models/Submission';
+} from '../schemas/submission.schema';
 
 export const getProjectSubmissions = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']

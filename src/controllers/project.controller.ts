@@ -10,7 +10,7 @@ import {
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
-} from '../models/Project';
+} from '../schemas/project.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']

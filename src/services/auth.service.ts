@@ -6,7 +6,7 @@ import {
   UnauthorizedError,
 } from '../lib/errors';
 import jwt from 'jsonwebtoken';
-import { RegisterUserDto } from '../models/User';
+import { RegisterUserDto } from '../schemas/user.schema';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
 
 export const fetchAndFormatUserDetails = async (whereClause: any) => {

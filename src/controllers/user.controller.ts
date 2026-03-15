@@ -4,7 +4,7 @@ import {
   UpdateRoleSchema,
   UpdateRepresentativeUnitSchema,
   UpdateUserUnitSchema,
-} from '../models/User';
+} from '../schemas/user.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']

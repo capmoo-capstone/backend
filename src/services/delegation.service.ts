@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma';
 import { NotFoundError } from '../lib/errors';
-import { AddDelegationDto } from '../models/Delegation';
+import { AddDelegationDto } from '../schemas/delegation.schema';
 import * as UserService from './user.service';
 
 export const addDelegation = async (data: AddDelegationDto): Promise<any> => {

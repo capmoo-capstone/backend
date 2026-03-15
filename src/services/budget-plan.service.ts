@@ -1,9 +1,7 @@
 import { prisma } from '../config/prisma';
-import { AuthPayload } from '../lib/types';
-import {
-  ImportBudgetPlanDto,
-  PaginatedBudgetPlans,
-} from '../models/BudgetPlan';
+import { AuthPayload } from '../types/auth.type';
+import { ImportBudgetPlanDto } from '../schemas/budget-plan.schema';
+import { PaginatedBudgetPlans } from '../types/budget-plan.type';
 
 export const listBudgetPlans = async (
   user: AuthPayload,

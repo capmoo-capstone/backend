@@ -1,13 +1,4 @@
-import { BudgetPlan } from '@prisma/client';
 import { z } from 'zod';
-
-export interface PaginatedBudgetPlans {
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  data: Array<Partial<BudgetPlan>>;
-}
 
 export const ImportBudgetPlanSchema = z.array(
   z.object({

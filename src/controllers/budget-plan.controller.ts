@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as BudgetPlanService from '../services/budget-plan.service';
-import { ImportBudgetPlanSchema } from '../models/BudgetPlan';
+import { ImportBudgetPlanSchema } from '../schemas/budget-plan.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Budget Plan']

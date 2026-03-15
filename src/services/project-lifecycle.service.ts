@@ -8,8 +8,8 @@ import {
 import { prisma } from '../config/prisma';
 import { CONTRACT_UNIT_ID } from '../lib/constant';
 import { NotFoundError, BadRequestError } from '../lib/errors';
-import { AuthPayload } from '../lib/types';
-import { CancelProjectDto } from '../models/Project';
+import { AuthPayload } from '../types/auth.type';
+import { CancelProjectDto } from '../schemas/project.schema';
 
 export const cancelProject = async (
   user: AuthPayload,

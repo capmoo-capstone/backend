@@ -1,7 +1,8 @@
 import { prisma } from '../config/prisma';
 import { Unit, UnitResponsibleType } from '@prisma/client';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
-import { CreateUnitDto, PaginatedUnits, UpdateUnitDto } from '../models/Unit';
+import { CreateUnitDto, UpdateUnitDto } from '../schemas/unit.schema';
+import { PaginatedUnits } from '../types/unit.type';
 
 export const listUnits = async (
   page: number,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Unit, UnitResponsibleType } from '@prisma/client';
+import { UnitResponsibleType } from '@prisma/client';
 
 export const CreateUnitSchema = z.object({
   id: z.string(),
@@ -7,7 +7,6 @@ export const CreateUnitSchema = z.object({
   type: z.array(z.enum(UnitResponsibleType)).optional(),
   dept_id: z.uuid(),
 });
-export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
 
 export const UpdateUnitSchema = z.object({
   id: z.string(),
@@ -15,12 +14,6 @@ export const UpdateUnitSchema = z.object({
   type: z.array(z.enum(UnitResponsibleType)).optional(),
   dept_id: z.uuid().optional(),
 });
-export type UpdateUnitDto = z.infer<typeof UpdateUnitSchema>;
 
-export interface PaginatedUnits {
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  data: Array<Unit>;
-}
+export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
+export type UpdateUnitDto = z.infer<typeof UpdateUnitSchema>;

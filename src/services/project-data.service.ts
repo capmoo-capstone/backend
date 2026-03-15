@@ -1,8 +1,8 @@
 import { Prisma, ProjectStatus, LogActionType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError } from '../lib/errors';
-import { AuthPayload } from '../lib/types';
-import { CreateProjectDto, UpdateProjectDto } from '../models/Project';
+import { AuthPayload } from '../types/auth.type';
+import { CreateProjectDto, UpdateProjectDto } from '../schemas/project.schema';
 
 const getReceiveNumber = async (
   tx: Prisma.TransactionClient,

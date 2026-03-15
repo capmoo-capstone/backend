@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
 import { UserRole } from '@prisma/client';
-import { AuthPayload } from '../lib/types';
+import { AuthPayload } from '../types/auth.type';
 import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../services/auth.service';
 import { OPS_DEPT_ID } from '../lib/constant';

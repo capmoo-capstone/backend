@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import * as DepartmentService from '../services/department.service';
-import { AuthPayload } from '../lib/types';
+import { AuthPayload } from '../types/auth.type';
 import {
   CreateDepartmentSchema,
   UpdateDepartmentSchema,
-} from '../models/Department';
+} from '../schemas/department.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Department']

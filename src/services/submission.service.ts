@@ -6,12 +6,12 @@ import {
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { BadRequestError, NotFoundError } from '../lib/errors';
-import { AuthPayload } from '../lib/types';
+import { AuthPayload } from '../types/auth.type';
 import {
   ApproveSubmissionDto,
   CreateSubmissionDto,
   RejectSubmissionDto,
-} from '../models/Submission';
+} from '../schemas/submission.schema';
 import { syncProjectPhases } from '../lib/phase-status';
 
 const getSubmissionRound = async (

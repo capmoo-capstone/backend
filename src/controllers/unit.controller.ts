@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as UnitService from '../services/unit.service';
-import { CreateUnitSchema, UpdateUnitSchema } from '../models/Unit';
+import { CreateUnitSchema, UpdateUnitSchema } from '../schemas/unit.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']

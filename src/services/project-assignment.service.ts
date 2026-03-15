@@ -6,12 +6,12 @@ import {
 import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { syncProjectPhases } from '../lib/phase-status';
-import { AuthPayload } from '../lib/types';
+import { AuthPayload } from '../types/auth.type';
 import {
   UpdateStatusProjectsDto,
   UpdateStatusProjectDto,
   AcceptProjectsDto,
-} from '../models/Project';
+} from '../schemas/project.schema';
 
 const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
   workflowType === UnitResponsibleType.CONTRACT

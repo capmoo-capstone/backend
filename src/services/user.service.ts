@@ -1,12 +1,11 @@
 import { prisma } from '../config/prisma';
 import { UserRole } from '@prisma/client';
+import { UsersListFilters, UsersListResponse } from '../types/user.type';
 import {
   UpdateRepresentativeUnitDto,
   UpdateRoleDto,
   UpdateUserUnitDto,
-  UsersListFilters,
-  UsersListResponse,
-} from '../models/User';
+} from '../schemas/user.schema';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
 import { SUPPLY_UNIT_ID, OPS_DEPT_ID } from '../lib/constant';

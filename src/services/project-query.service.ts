@@ -7,8 +7,8 @@ import {
 import { prisma } from '../config/prisma';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
 import { haveSupplyPermission, getDeptIdsForUser } from '../lib/permissions';
-import { AuthPayload } from '../lib/types';
-import { PaginatedProjects, ProjectsListResponse } from '../models/Project';
+import { AuthPayload } from '../types/auth.type';
+import { PaginatedProjects, ProjectsListResponse } from '../types/project.type';
 
 export const listProjects = async (
   user: AuthPayload,

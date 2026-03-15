@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as DelegationService from '../services/delegation.service';
-import { AddDelegationSchema } from '../models/Delegation';
+import { AddDelegationSchema } from '../schemas/delegation.schema';
 
 export const addDelegation = async (req: Request, res: Response) => {
   // #swagger.tags = ['Delegation']

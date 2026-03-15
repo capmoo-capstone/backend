@@ -25,16 +25,17 @@ export const CreateSubmissionSchema = z.object({
     )
     .optional(),
 });
-export type CreateSubmissionDto = z.infer<typeof CreateSubmissionSchema>;
 
 export const ApproveSubmissionSchema = z.object({
   id: z.uuid(),
   required_signature: z.boolean(),
 });
-export type ApproveSubmissionDto = z.infer<typeof ApproveSubmissionSchema>;
 
 export const RejectSubmissionSchema = z.object({
   id: z.uuid(),
   comment: z.string(),
 });
+
+export type CreateSubmissionDto = z.infer<typeof CreateSubmissionSchema>;
+export type ApproveSubmissionDto = z.infer<typeof ApproveSubmissionSchema>;
 export type RejectSubmissionDto = z.infer<typeof RejectSubmissionSchema>;

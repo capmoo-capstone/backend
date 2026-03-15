@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import * as AuthService from '../services/auth.service';
-import { RegisterUserSchema } from '../models/User';
-import { AuthPayload } from '../lib/types';
+import { RegisterUserSchema } from '../schemas/user.schema';
+import { AuthPayload } from '../types/auth.type';
 
 export const login = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']

@@ -3,10 +3,10 @@ import { Department } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,
-  DepartmentsListResponse,
   UpdateDepartmentDto,
-} from '../models/Department';
-import { AuthPayload } from '../lib/types';
+} from '../schemas/department.schema';
+import { AuthPayload } from '../types/auth.type';
+import { DepartmentsListResponse } from '../types/department.type';
 
 export const listDepartments = async (
   user: AuthPayload

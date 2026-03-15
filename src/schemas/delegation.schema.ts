@@ -6,4 +6,5 @@ export const AddDelegationSchema = z.object({
   start_date: z.coerce.date(),
   end_date: z.coerce.date().optional(),
 });
+
 export type AddDelegationDto = z.infer<typeof AddDelegationSchema>;
