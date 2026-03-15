@@ -56,6 +56,36 @@ export const getAssignedProjects = async (req: Request, res: Response) => {
   res.status(200).json(projects);
 };
 
+export const getOwnProjects = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { page, limit } = req.query;
+  const payload = (req as any).user;
+  const projects = await ProjectQueryService.getOwnProjects(
+    payload,
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10
+  );
+  res.status(200).json(projects);
+};
+
+export const getWorkload = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = (req as any).user;
+  const filterUnitId = req.query.unitId as string | undefined;
+  const workload = await ProjectQueryService.getWorkload(payload, filterUnitId);
+  res.status(200).json(workload);
+};
+
+export const getSummary = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = (req as any).user;
+  const summary = await ProjectQueryService.getSummaryCards(payload);
+  res.status(200).json(summary);
+};
+
 export const createProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]

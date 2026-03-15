@@ -3,12 +3,28 @@ import {
   LogActionType,
   UserRole,
   UnitResponsibleType,
+  UrgentType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
-import { haveSupplyPermission, getDeptIdsForUser } from '../lib/permissions';
+import {
+  haveSupplyPermission,
+  getDeptIdsForUser,
+  isHeadOfSupplyDept,
+  isHeadOfSupplyUnit,
+  isSuperAdmin,
+} from '../lib/permissions';
 import { AuthPayload } from '../types/auth.type';
-import { PaginatedProjects, ProjectsListResponse } from '../types/project.type';
+import {
+  PaginatedProjects,
+  ProjectsListResponse,
+  StaffWorkload,
+  SummaryResponse,
+  UnitWorkload,
+  WorkloadStatsResponse,
+} from '../types/project.type';
+import { OPS_DEPT_ID, WORKLOAD_STATUSES } from '../lib/constant';
+import { is } from 'zod/locales';
 
 export const listProjects = async (
   user: AuthPayload,
@@ -368,5 +384,287 @@ export const getAssignedProjects = async (
         assignee_contract: undefined,
       };
     }),
+  };
+};
+
+export const getOwnProjects = async (
+  user: AuthPayload,
+  page: number,
+  limit: number
+): Promise<PaginatedProjects> => {
+  const skip = (page - 1) * limit;
+  const where = {
+    OR: [
+      { assignee_procurement: { some: { id: user.id } } },
+      { assignee_contract: { some: { id: user.id } } },
+    ],
+  };
+
+  const [projects, total] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      skip: skip,
+      take: limit,
+      orderBy: [{ receive_no: 'desc' }],
+      select: {
+        id: true,
+        receive_no: true,
+        title: true,
+        status: true,
+        requesting_unit: {
+          select: {
+            name: true,
+            department: { select: { name: true, id: true } },
+          },
+        },
+        budget: true,
+        procurement_type: true,
+        current_workflow_type: true,
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
+        is_urgent: true,
+        expected_approval_date: true,
+        created_at: true,
+        updated_at: true,
+      },
+    }),
+    prisma.project.count({ where }),
+  ]);
+
+  return {
+    total,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
+    data: projects,
+  };
+};
+
+const aggregateByStaff = (
+  projects: Array<{
+    current_workflow_type: UnitResponsibleType;
+    assignee_procurement: { id: string; full_name: string }[];
+    assignee_contract: { id: string; full_name: string }[];
+  }>
+): Map<string, StaffWorkload> => {
+  const map = new Map<string, StaffWorkload>();
+
+  for (const project of projects) {
+    const assignees =
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+        ? project.assignee_contract
+        : project.assignee_procurement;
+
+    for (const user of assignees) {
+      const existing = map.get(user.id);
+      if (existing) {
+        existing.workload += 1;
+      } else {
+        map.set(user.id, {
+          user_id: user.id,
+          full_name: user.full_name,
+          workload: 1,
+        });
+      }
+    }
+  }
+
+  return map;
+};
+
+export const getWorkload = async (
+  user: AuthPayload,
+  filterUnitId?: string
+): Promise<WorkloadStatsResponse> => {
+  // ── HEAD_OF_DEPARTMENT (or SUPER_ADMIN/ADMIN): return all units ────────────
+  if (isHeadOfSupplyDept(user) || isSuperAdmin(user)) {
+    const unitWhere: any = { dept_id: OPS_DEPT_ID };
+    if (filterUnitId) unitWhere.id = filterUnitId;
+
+    const units = await prisma.unit.findMany({
+      where: unitWhere,
+      select: { id: true, name: true, type: true },
+      orderBy: { id: 'asc' },
+    });
+
+    const projects = await prisma.project.findMany({
+      where: {
+        status: { in: WORKLOAD_STATUSES },
+        responsible_unit_id: { in: units.map((u) => u.id) },
+      },
+      select: {
+        responsible_unit_id: true,
+        current_workflow_type: true,
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
+      },
+    });
+
+    const result: UnitWorkload[] = units.map((unit) => {
+      const unitProjects = projects.filter(
+        (p) => p.responsible_unit_id === unit.id
+      );
+      const staffMap = aggregateByStaff(unitProjects);
+      return {
+        unit_id: unit.id,
+        unit_name: unit.name,
+        staff: Array.from(staffMap.values()).sort(
+          (a, b) => b.workload - a.workload
+        ),
+      };
+    });
+    return {
+      role: UserRole.HEAD_OF_DEPARTMENT,
+      units: result,
+    };
+  }
+  // ── HEAD_OF_UNIT: return staff workload within own unit ────────────────────
+  else if (isHeadOfSupplyUnit(user) && !isHeadOfSupplyDept(user)) {
+    const unitIds = user.roles
+      .filter((r) => r.role === UserRole.HEAD_OF_UNIT && r.unit_id)
+      .map((r) => r.unit_id as string);
+
+    if (unitIds.length === 0) {
+      throw new ForbiddenError('No unit assigned to this user');
+    }
+
+    const targetUnitId = unitIds[0];
+
+    const unit = await prisma.unit.findUnique({
+      where: { id: targetUnitId },
+      select: { id: true, name: true },
+    });
+
+    const projects = await prisma.project.findMany({
+      where: {
+        status: { in: WORKLOAD_STATUSES },
+        responsible_unit_id: targetUnitId,
+      },
+      select: {
+        current_workflow_type: true,
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
+      },
+    });
+
+    const staffMap = aggregateByStaff(projects);
+
+    return {
+      role: UserRole.HEAD_OF_UNIT,
+      unit_id: unit!.id,
+      unit_name: unit!.name,
+      staff: Array.from(staffMap.values()).sort(
+        (a, b) => b.workload - a.workload
+      ),
+    };
+  }
+
+  throw new ForbiddenError('You do not have permission to view workload stats');
+};
+
+export const getSummaryCards = async (
+  user: AuthPayload
+): Promise<SummaryResponse> => {
+  const isSupply = haveSupplyPermission(user);
+  if (isSupply) {
+    const [
+      total,
+      unassigned,
+      waiting_accept,
+      in_progress,
+      closed,
+      cancelled,
+      urgent,
+      very_urgent,
+    ] = await prisma.$transaction([
+      prisma.project.count(),
+      prisma.project.count({ where: { status: ProjectStatus.UNASSIGNED } }),
+      prisma.project.count({ where: { status: ProjectStatus.WAITING_ACCEPT } }),
+      prisma.project.count({
+        where: {
+          status: {
+            in: [
+              ProjectStatus.IN_PROGRESS,
+              ProjectStatus.WAITING_CANCEL,
+              ProjectStatus.REQUEST_EDIT,
+            ],
+          },
+        },
+      }),
+      prisma.project.count({ where: { status: ProjectStatus.CLOSED } }),
+      prisma.project.count({ where: { status: ProjectStatus.CANCELLED } }),
+      prisma.project.count({ where: { is_urgent: UrgentType.URGENT } }),
+      prisma.project.count({ where: { is_urgent: UrgentType.VERY_URGENT } }),
+    ]);
+
+    return {
+      role: 'SUPPLY',
+      total,
+      unassigned,
+      waiting_accept,
+      in_progress,
+      closed,
+      cancelled,
+      urgent,
+      very_urgent,
+    };
+  }
+
+  const deptIds = getDeptIdsForUser(user);
+  const baseWhere = { requesting_dept_id: { in: deptIds } };
+
+  const [
+    total,
+    not_started,
+    in_progress,
+    closed,
+    cancelled,
+    urgent,
+    very_urgent,
+  ] = await prisma.$transaction([
+    prisma.project.count({ where: baseWhere }),
+    prisma.project.count({
+      where: {
+        ...baseWhere,
+        status: {
+          in: [ProjectStatus.UNASSIGNED, ProjectStatus.WAITING_ACCEPT],
+        },
+      },
+    }),
+    prisma.project.count({
+      where: {
+        ...baseWhere,
+        status: {
+          in: [
+            ProjectStatus.IN_PROGRESS,
+            ProjectStatus.WAITING_CANCEL,
+            ProjectStatus.REQUEST_EDIT,
+          ],
+        },
+      },
+    }),
+    prisma.project.count({
+      where: { ...baseWhere, status: ProjectStatus.CLOSED },
+    }),
+    prisma.project.count({
+      where: { ...baseWhere, status: ProjectStatus.CANCELLED },
+    }),
+    prisma.project.count({
+      where: { ...baseWhere, is_urgent: UrgentType.URGENT },
+    }),
+    prisma.project.count({
+      where: { ...baseWhere, is_urgent: UrgentType.VERY_URGENT },
+    }),
+  ]);
+
+  return {
+    role: 'EXTERNAL',
+    total,
+    not_started,
+    in_progress,
+    closed,
+    cancelled,
+    urgent,
+    very_urgent,
   };
 };

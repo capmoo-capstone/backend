@@ -1,4 +1,4 @@
-import { UnitResponsibleType } from '@prisma/client';
+import { ProjectStatus, UnitResponsibleType } from '@prisma/client';
 
 export const OPS_DEPT_ID = 'DEPT-SUP-OPS';
 export const PROC1_UNIT_ID = 'UNIT-PROC-1';
@@ -15,3 +15,10 @@ export const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
   [UnitResponsibleType.CONTRACT]: [1, 2, 3, 4, 5, 6, 7],
   [UnitResponsibleType.INTERNAL]: [1, 2, 3, 4],
 };
+
+export const WORKLOAD_STATUSES = [
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.IN_PROGRESS,
+  ProjectStatus.WAITING_CANCEL,
+  ProjectStatus.REQUEST_EDIT,
+];
