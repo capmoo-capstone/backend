@@ -6,7 +6,7 @@
   "scripts": {
     "swagger": "tsx swagger.ts",
     "dev": "npm run swagger && tsx --env-file=.env src/local.ts",
-    "postinstall": "NODE_ENV=production prisma generate",
+    "postinstall": "prisma generate",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "migrate:reset": "prisma migrate reset",

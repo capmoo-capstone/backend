@@ -318,7 +318,7 @@ model BudgetPlan {
   created_at         DateTime @default(now())
   created_by         String
 
-  department Department @relation(fields: [department_id], references: [id])
+  department Department @relation(fields: [department_id], references: [id], onDelete: Cascade)
   project    Project?   @relation(fields: [project_id], references: [id])
 
   @@map("budget_plans")
