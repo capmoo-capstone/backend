@@ -5,7 +5,6 @@ export const ImportBudgetPlanSchema = z.array(
     budget_year: z.string(),
     cost_center_no: z.string(),
     cost_center_name: z.string(),
-    department_id: z.string(),
     activity_type: z.string(),
     activity_type_name: z.string(),
     description: z.string().optional(),

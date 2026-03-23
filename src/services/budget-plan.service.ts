@@ -32,8 +32,22 @@ export const importBudgetPlan = async (
   user: AuthPayload,
   data: ImportBudgetPlanDto
 ): Promise<any> => {
+  const formatData = await Promise.all(
+    data.map(async (item) => ({
+      ...item,
+      unit_id: (
+        await prisma.unit.findFirstOrThrow({
+          where: { name: item.cost_center_name },
+          select: { id: true },
+        })
+      ).id,
+      unit_no: item.cost_center_no,
+      created_by: user.id,
+    }))
+  );
+
   const budgetPlan = await prisma.budgetPlan.createManyAndReturn({
-    data: data.map((item) => ({ ...item, created_by: user.id })),
+    data: formatData,
     skipDuplicates: true,
     select: {
       id: true,
