@@ -5,7 +5,7 @@ const router = Router();
 
 router.get('/', controller.getAll);
 router.post('/', controller.importBudgetPlan);
-router.patch('/:id/project/:projectId', controller.updateProjectIdPlan);
+router.patch('/:id/projects/:projectId', controller.updateProjectIdPlan);
 router.delete('/:id', controller.removeBudgetPlan);
 
 export default router;
