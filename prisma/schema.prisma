@@ -99,7 +99,6 @@ model Department {
   units              Unit[]
   organization_roles UserOrganizationRole[]
   projects           Project[]
-  budgetPlans        BudgetPlan[]
 
   @@map("departments")
 }
@@ -114,7 +113,8 @@ model Unit {
   requesting_projects  Project[]              @relation("RequestingUnit")
   responsible_projects Project[]              @relation("ResponsibleUnit")
 
-  department Department @relation(fields: [dept_id], references: [id])
+  department  Department   @relation(fields: [dept_id], references: [id])
+  budgetPlans BudgetPlan[]
 
   @@map("units")
 }
@@ -307,19 +307,20 @@ model ProjectDocument {
 model BudgetPlan {
   id                 String   @id @default(uuid())
   budget_year        String
-  cost_center_no     String
-  cost_center_name   String
-  department_id      String
+  unit_id            String
+  unit_no            String
   activity_type      String
   activity_type_name String
   description        String?
+  budget_no          String?
+  budget_name        String?
   budget_amount      Decimal  @db.Decimal(18, 2)
   project_id         String?
   created_at         DateTime @default(now())
   created_by         String
 
-  department Department @relation(fields: [department_id], references: [id], onDelete: Cascade)
-  project    Project?   @relation(fields: [project_id], references: [id])
+  unit    Unit     @relation(fields: [unit_id], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [project_id], references: [id])
 
   @@map("budget_plans")
 }

@@ -140,13 +140,6 @@ async function main() {
     },
   });
 
-  const deptSuperAdmin = await prisma.department.create({
-    data: {
-      id: 'SUPER_ADMIN',
-      name: 'Super Admin Department',
-    },
-  });
-
   // ---------------------------------------------------------
   // 4. USERS & ROLE ASSIGNMENTS
   // ---------------------------------------------------------
@@ -187,7 +180,7 @@ async function main() {
         create: [
           {
             role: UserRole.SUPER_ADMIN,
-            dept_id: 'SUPER_ADMIN',
+            dept_id: 'DEPT-SUP-OPS',
             unit_id: null,
           },
         ],
@@ -659,9 +652,8 @@ async function main() {
   // Example: Create some budget plans (optional)
   await prisma.budgetPlan.create({
     data: {
-      cost_center_name: 'ฝ่ายการพัสดุ',
-      cost_center_no: '1010803000',
-      department_id: deptFIN.id,
+      unit_id: 'UNIT-SUP',
+      unit_no: '1010803000',
       activity_type: 'ระบบติตดาม',
       activity_type_name: 'ระบบติดตามสถานะการจัดซื้อจัดจ้าง',
       description: 'ระบบติดตามสถานะการจัดซื้อจัดจ้างและการบริหารสัญญา',
