@@ -24,7 +24,6 @@ import {
   WorkloadStatsResponse,
 } from '../types/project.type';
 import { OPS_DEPT_ID, WORKLOAD_STATUSES } from '../lib/constant';
-import { is } from 'zod/locales';
 
 export const listProjects = async (
   user: AuthPayload,

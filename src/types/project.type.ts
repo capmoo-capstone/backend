@@ -1,4 +1,4 @@
-import { Project, ProjectPhaseStatus, User, UserRole } from '@prisma/client';
+import { Project, ProjectPhaseStatus, UserRole } from '@prisma/client';
 import { ListResponse, PaginatedResponse } from './common.type';
 
 export interface PhaseStatusResult {
