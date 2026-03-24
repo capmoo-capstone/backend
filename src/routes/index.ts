@@ -13,19 +13,12 @@ import budgetPlanRoutes from './budget-plan.route';
 const router = Router();
 
 router.use('/auth', authRoutes);
-
-const protectedRoutes = [
-  ['/users', userRoutes],
-  ['/projects', projectRoutes],
-  ['/departments', departmentRoutes],
-  ['/units', unitRoutes],
-  ['/submissions', submissionRoutes],
-  ['/delegations', delegationRoutes],
-  ['/budget-plans', budgetPlanRoutes],
-] as const;
-
-protectedRoutes.forEach(([path, route]) => {
-  router.use(path, protect, route);
-});
+router.use('/users', protect, userRoutes);
+router.use('/projects', protect, projectRoutes);
+router.use('/departments', protect, departmentRoutes);
+router.use('/units', protect, unitRoutes);
+router.use('/submissions', protect, submissionRoutes);
+router.use('/delegations', protect, delegationRoutes);
+router.use('/budget-plans', protect, budgetPlanRoutes);
 
 export default router;
