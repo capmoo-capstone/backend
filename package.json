@@ -30,7 +30,7 @@
   "homepage": "https://github.com/capmoo-capstone/backend#readme",
   "dependencies": {
     "@prisma/adapter-pg": "^7.2.0",
-    "@prisma/client": "^7.2.0",
+    "@prisma/client": "^7.5.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -58,10 +58,15 @@
     "eslint-plugin-prettier": "^5.5.4",
     "globals": "^17.0.0",
     "prettier": "^3.7.4",
-    "prisma": "^7.2.0",
+    "prisma": "^7.5.0",
     "swagger-autogen": "^2.23.7",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.52.0",
     "vitest": "^4.0.16"
+  },
+  "overrides": {
+    "hono": "^4.12.7",
+    "lodash": "^4.17.21",
+    "glob": "^10.3.10"
   }
 }
