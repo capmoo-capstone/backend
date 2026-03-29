@@ -5,14 +5,14 @@ export const CreateUnitSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.array(z.enum(UnitResponsibleType)).optional(),
-  dept_id: z.uuid(),
+  dept_id: z.string(),
 });
 
 export const UpdateUnitSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   type: z.array(z.enum(UnitResponsibleType)).optional(),
-  dept_id: z.uuid().optional(),
+  dept_id: z.string().optional(),
 });
 
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
