@@ -64,6 +64,40 @@ export const createProject = async (
   });
 };
 
+export const importProjects = async (
+  user: AuthPayload,
+  data: CreateProjectDto[]
+): Promise<any> => {
+  return await prisma.$transaction(async (tx) => {
+    const createdProjects = [];
+    for (const projectData of data) {
+      const responsibleUnit = await tx.unit.findFirst({
+        where: { type: { has: projectData.procurement_type } },
+        select: { id: true },
+      });
+      if (!responsibleUnit) {
+        throw new NotFoundError(
+          `Responsible unit not found for procurement type ${projectData.procurement_type}`
+        );
+      }
+      const receiveNumber = await getReceiveNumber(tx);
+      const project = await tx.project.create({
+        data: {
+          ...projectData,
+          status: ProjectStatus.UNASSIGNED,
+          current_workflow_type: projectData.procurement_type,
+          responsible_unit_id: responsibleUnit.id,
+          receive_no: receiveNumber,
+          created_by: user.id,
+        },
+      });
+      createdProjects.push(project);
+    }
+
+    return { data: createdProjects };
+  });
+};
+
 export const updateProjectData = async (
   user: AuthPayload,
   data: UpdateProjectDto
