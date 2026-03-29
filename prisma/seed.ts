@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../src/config/prisma';
 import { WORKFLOW_STEP_ORDERS } from '../src/lib/constant';
+import { syncProjectPhases } from '../src/lib/phase-status';
 
 async function main() {
   console.log('--- Start Seeding ---');
@@ -643,6 +644,9 @@ async function main() {
         },
       });
     }
+    await prisma.$transaction(
+      async (tx) => await syncProjectPhases(tx, wfType, project.id)
+    );
   }
 
   // ---------------------------------------------------------
