@@ -1,9 +1,14 @@
+import { UserDelegation } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../schemas/delegation.schema';
+import { DataResponse } from '../types/common.type';
 import * as UserService from './user.service';
+import { DelegationDetail } from '../types/delegation.type';
 
-export const addDelegation = async (data: AddDelegationDto): Promise<any> => {
+export const addDelegation = async (
+  data: AddDelegationDto
+): Promise<DataResponse<UserDelegation>> => {
   await Promise.all([
     UserService.getById(data.delegator_id),
     UserService.getById(data.delegatee_id),
@@ -28,7 +33,9 @@ export const addDelegation = async (data: AddDelegationDto): Promise<any> => {
   });
 };
 
-export const cancelDelegation = async (id: string): Promise<any> => {
+export const cancelDelegation = async (
+  id: string
+): Promise<DataResponse<UserDelegation>> => {
   return await prisma.$transaction(async (tx) => {
     const delegation = await tx.userDelegation.findUnique({
       where: { id },
@@ -52,7 +59,9 @@ export const cancelDelegation = async (id: string): Promise<any> => {
   });
 };
 
-export const getById = async (id: string): Promise<any> => {
+export const getById = async (
+  id: string
+): Promise<DataResponse<DelegationDetail>> => {
   const delegation = await prisma.userDelegation.findUnique({
     where: { id },
     include: {

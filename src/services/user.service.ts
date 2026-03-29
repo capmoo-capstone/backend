@@ -1,6 +1,11 @@
 import { prisma } from '../config/prisma';
 import { UserRole } from '@prisma/client';
-import { UsersListFilters, UsersListResponse } from '../types/user.type';
+import {
+  UpdateUserRoleResponse,
+  UserDetailResponse,
+  UsersListFilters,
+  UsersListResponse,
+} from '../types/user.type';
 import {
   UpdateRepresentativeUnitDto,
   UpdateRoleDto,
@@ -12,10 +17,10 @@ import { SUPPLY_UNIT_ID, OPS_DEPT_ID } from '../lib/constant';
 
 export const listUsers = async (
   filters: UsersListFilters
-): Promise<Partial<UsersListResponse>> => {
+): Promise<UsersListResponse> => {
   const { unitId, deptId } = filters;
 
-  let data: Partial<UsersListResponse> = {};
+  let data: UsersListResponse = {} as UsersListResponse;
 
   if (unitId) {
     const unit = await prisma.unit.findUnique({
@@ -157,7 +162,9 @@ export const listUsers = async (
   return data;
 };
 
-export const getById = async (id: string): Promise<any> => {
+export const getById = async (
+  id: string
+): Promise<{ data: UserDetailResponse }> => {
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
@@ -194,7 +201,7 @@ const upsertUserRoleInternal = async (
     deptId: string;
     unitId: string | null;
   }
-) => {
+): Promise<UpdateUserRoleResponse> => {
   const { userId, role, deptId, unitId } = params;
 
   const userRoles = await tx.userOrganizationRole.findMany({
@@ -205,7 +212,7 @@ const upsertUserRoleInternal = async (
   const sameUnitAssignment = userRoles.find((a: any) => a.unit_id === unitId);
   const guestAssignment = userRoles.find((a: any) => a.role === UserRole.GUEST);
 
-  let result;
+  let result: UpdateUserRoleResponse;
   if (sameUnitAssignment) {
     result = await tx.userOrganizationRole.update({
       where: { id: sameUnitAssignment.id },
@@ -288,7 +295,7 @@ export const addUsersToSupplyUnit = async (
 
 export const addRepresentativeToUnit = async (
   data: UpdateRepresentativeUnitDto
-): Promise<any> => {
+): Promise<{ data: UpdateUserRoleResponse }> => {
   return await prisma.$transaction(async (tx) => {
     const userOrgRoles = await tx.userOrganizationRole.findFirst({
       where: { unit_id: data.unit_id, role: UserRole.REPRESENTATIVE },
@@ -341,12 +348,11 @@ export const addRepresentativeToUnit = async (
 };
 
 export const updateRole = async (
-  id: string,
   data: UpdateRoleDto
-): Promise<any> => {
+): Promise<{ data: UpdateUserRoleResponse }> => {
   return await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
-      where: { id },
+      where: { id: data.id },
       select: {
         roles: { select: { role: true, dept_id: true, unit_id: true } },
       },
@@ -375,7 +381,7 @@ export const updateRole = async (
     }
 
     const result = await upsertUserRoleInternal(tx, {
-      userId: id,
+      userId: data.id,
       role: data.role,
       deptId: data.dept_id,
       unitId: targetUnitId,

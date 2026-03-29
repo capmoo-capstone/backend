@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
+import { id } from 'zod/locales';
 
 export const RegisterUserSchema = z.object({
   username: z.string(),
@@ -21,6 +22,7 @@ export const UpdateRepresentativeUnitSchema = z.object({
 });
 
 export const UpdateRoleSchema = z.object({
+  id: z.uuid(),
   role: z.enum(UserRole),
   dept_id: z.string(),
   unit_id: z.string().optional(),

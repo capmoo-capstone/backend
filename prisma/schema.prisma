@@ -153,6 +153,8 @@ model UserDelegation {
   start_date   DateTime
   end_date     DateTime?
   is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
 
   delegator User @relation("Delegator", fields: [delegator_id], references: [id])
   delegatee User @relation("Delegatee", fields: [delegatee_id], references: [id])

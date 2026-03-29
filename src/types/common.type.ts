@@ -10,3 +10,7 @@ export interface ListResponse<T> {
   total: number;
   data: Array<Partial<T>>;
 }
+
+export interface DataResponse<T> {
+  data: T;
+}
