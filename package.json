@@ -51,7 +51,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.0.3",
-    "@types/pg": "^8.16.0",
+    "@types/pg": "8.11.10",
     "@types/swagger-ui-express": "^4.1.8",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
@@ -67,6 +67,7 @@
   "overrides": {
     "hono": "^4.12.7",
     "lodash": "^4.17.21",
-    "glob": "^10.3.10"
+    "glob": "^10.3.10",
+    "@types/pg": "8.11.10"
   }
 }

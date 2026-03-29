@@ -4,11 +4,7 @@ import { env } from '@prisma/config';
 import pg from 'pg';
 
 let connectionString = env('DATABASE_URL');
-// if (env('NODE_ENV') === 'production') {
-//   connectionString = env('DATABASE_URL');
-// }
 const pool = new pg.Pool({ connectionString });
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg(pool as any);
 
-// Instantiate the client with the adapter
 export const prisma = new PrismaClient({ adapter });
