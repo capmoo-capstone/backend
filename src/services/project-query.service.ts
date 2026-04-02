@@ -40,6 +40,32 @@ export const listProjects = async (
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where,
+      include: {
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        requesting_unit: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        assignee_procurement: {
+          select: {
+            id: true,
+            full_name: true,
+          },
+        },
+        assignee_contract: {
+          select: {
+            id: true,
+            full_name: true,
+          },
+        },
+      },
       skip: skip,
       take: limit,
       orderBy: [{ receive_no: 'desc' }],
