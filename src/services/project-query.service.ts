@@ -216,15 +216,18 @@ export const getUnassignedProjectsByUnit = async (
     .map((r) => r.unit_id)
     .filter((id): id is string => Boolean(id));
 
-  if (isHeadOfSupplyDept(user) || isSuperAdmin(user)) {
-  } else if (userUnitIds.length > 0) {
-    if (!userUnitIds.includes(unitId)) {
+  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
+    if (userUnitIds.length > 0) {
+      if (!userUnitIds.includes(unitId)) {
+        throw new ForbiddenError(
+          'You do not have permission to access this unit'
+        );
+      }
+    } else {
       throw new ForbiddenError(
         'You do not have permission to access this unit'
       );
     }
-  } else {
-    throw new ForbiddenError('You do not have permission to access this unit');
   }
 
   const unit = await prisma.unit.findUnique({
