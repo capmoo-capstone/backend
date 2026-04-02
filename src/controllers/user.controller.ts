@@ -30,8 +30,8 @@ export const updateRole = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
   const { role, dept_id, unit_id } = req.body;
-  const validatedData = UpdateRoleSchema.parse({ role, dept_id, unit_id });
-  const updatedUser = await UserService.updateRole(id, validatedData);
+  const validatedData = UpdateRoleSchema.parse({ id, role, dept_id, unit_id });
+  const updatedUser = await UserService.updateRole(validatedData);
   res.status(200).json(updatedUser);
 };
 

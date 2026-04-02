@@ -21,6 +21,7 @@ export const UpdateRepresentativeUnitSchema = z.object({
 });
 
 export const UpdateRoleSchema = z.object({
+  id: z.uuid(),
   role: z.enum(UserRole),
   dept_id: z.string(),
   unit_id: z.string().optional(),

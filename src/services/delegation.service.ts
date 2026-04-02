@@ -1,9 +1,13 @@
+import { UserDelegation } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import * as UserService from './user.service';
+import { DelegationDetail } from '../types/delegation.type';
 
-export const addDelegation = async (data: AddDelegationDto): Promise<any> => {
+export const addDelegation = async (
+  data: AddDelegationDto
+): Promise<UserDelegation> => {
   await Promise.all([
     UserService.getById(data.delegator_id),
     UserService.getById(data.delegatee_id),
@@ -24,11 +28,13 @@ export const addDelegation = async (data: AddDelegationDto): Promise<any> => {
       data: { role_updated_at: new Date() },
     });
 
-    return { data: created };
+    return created ;
   });
 };
 
-export const cancelDelegation = async (id: string): Promise<any> => {
+export const cancelDelegation = async (
+  id: string
+): Promise<UserDelegation> => {
   return await prisma.$transaction(async (tx) => {
     const delegation = await tx.userDelegation.findUnique({
       where: { id },
@@ -48,11 +54,13 @@ export const cancelDelegation = async (id: string): Promise<any> => {
       where: { id: updated.delegatee_id },
       data: { role_updated_at: new Date() },
     });
-    return { data: updated };
+    return updated;
   });
 };
 
-export const getById = async (id: string): Promise<any> => {
+export const getById = async (
+  id: string
+): Promise<DelegationDetail> => {
   const delegation = await prisma.userDelegation.findUnique({
     where: { id },
     include: {
@@ -89,5 +97,5 @@ export const getById = async (id: string): Promise<any> => {
     throw new NotFoundError('Delegation not found');
   }
 
-  return { data: delegation };
+  return delegation;
 };
