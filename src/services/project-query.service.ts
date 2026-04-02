@@ -209,30 +209,37 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
 };
 
 export const getUnassignedProjectsByUnit = async (
-  user: AuthPayload
+  user: AuthPayload,
+  unitId: string
 ): Promise<ProjectsListResponse> => {
-  const unitIds = user.roles
+  const userUnitIds = user.roles
     .map((r) => r.unit_id)
     .filter((id): id is string => Boolean(id));
-  if (unitIds.length === 0) {
-    throw new NotFoundError('Unit not found');
+
+  if (isHeadOfSupplyDept(user) || isSuperAdmin(user)) {
+  } else if (userUnitIds.length > 0) {
+    if (!userUnitIds.includes(unitId)) {
+      throw new ForbiddenError(
+        'You do not have permission to access this unit'
+      );
+    }
+  } else {
+    throw new ForbiddenError('You do not have permission to access this unit');
   }
 
-  const units = await prisma.unit.findMany({
+  const unit = await prisma.unit.findUnique({
     where: {
-      id: {
-        in: unitIds,
-      },
+      id: unitId,
     },
     select: { type: true },
   });
-  if (units.length === 0) {
+  if (!unit) {
     throw new NotFoundError('Unit not found');
   }
   const where: any = {
     status: { in: [ProjectStatus.UNASSIGNED] },
     current_workflow_type: {
-      in: units.flatMap((unit) => unit.type),
+      in: unit.type,
     },
   };
 

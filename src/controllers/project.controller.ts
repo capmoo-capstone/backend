@@ -37,9 +37,12 @@ export const getById = async (req: Request, res: Response) => {
 export const getUnassignedByUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId } = req.query;
   const payload = (req as any).user;
-  const projects =
-    await ProjectQueryService.getUnassignedProjectsByUnit(payload);
+  const projects = await ProjectQueryService.getUnassignedProjectsByUnit(
+    payload,
+    unitId as string
+  );
   res.status(200).json(projects);
 };
 
