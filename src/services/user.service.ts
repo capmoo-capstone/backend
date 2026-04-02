@@ -164,7 +164,7 @@ export const listUsers = async (
 
 export const getById = async (
   id: string
-): Promise<{ data: UserDetailResponse }> => {
+): Promise<UserDetailResponse> => {
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
@@ -190,7 +190,7 @@ export const getById = async (
   if (!user) {
     throw new NotFoundError('User not found');
   }
-  return { data: user };
+  return user;
 };
 
 const upsertUserRoleInternal = async (
@@ -295,7 +295,7 @@ export const addUsersToSupplyUnit = async (
 
 export const addRepresentativeToUnit = async (
   data: UpdateRepresentativeUnitDto
-): Promise<{ data: UpdateUserRoleResponse }> => {
+): Promise<UpdateUserRoleResponse> => {
   return await prisma.$transaction(async (tx) => {
     const userOrgRoles = await tx.userOrganizationRole.findFirst({
       where: { unit_id: data.unit_id, role: UserRole.REPRESENTATIVE },
@@ -343,13 +343,13 @@ export const addRepresentativeToUnit = async (
       unitId: unit.id,
     });
 
-    return { data: result };
+    return result;
   });
 };
 
 export const updateRole = async (
   data: UpdateRoleDto
-): Promise<{ data: UpdateUserRoleResponse }> => {
+): Promise<UpdateUserRoleResponse> => {
   return await prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { id: data.id },
@@ -387,7 +387,7 @@ export const updateRole = async (
       unitId: targetUnitId,
     });
 
-    return { data: result };
+    return result;
   });
 };
 
