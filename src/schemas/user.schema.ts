@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
-import { id } from 'zod/locales';
 
 export const RegisterUserSchema = z.object({
   username: z.string(),

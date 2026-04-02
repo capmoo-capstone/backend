@@ -1,11 +1,11 @@
-import { UserDelegation } from '@prisma/client';
+import { UserDelegation, UserRole } from '@prisma/client';
 
 export interface DelegationDetail extends UserDelegation {
   delegator: {
     id: string;
     full_name: string;
     roles: {
-      role: string;
+      role: UserRole;
       dept_id: string;
       unit_id: string | null;
     }[];
@@ -14,7 +14,7 @@ export interface DelegationDetail extends UserDelegation {
     id: string;
     full_name: string;
     roles: {
-      role: string;
+      role: UserRole;
       dept_id: string;
       unit_id: string | null;
     }[];

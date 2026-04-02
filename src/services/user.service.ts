@@ -20,7 +20,7 @@ export const listUsers = async (
 ): Promise<UsersListResponse> => {
   const { unitId, deptId } = filters;
 
-  let data: UsersListResponse = {} as UsersListResponse;
+  let data = {} as UsersListResponse;
 
   if (unitId) {
     const unit = await prisma.unit.findUnique({
@@ -162,9 +162,7 @@ export const listUsers = async (
   return data;
 };
 
-export const getById = async (
-  id: string
-): Promise<UserDetailResponse> => {
+export const getById = async (id: string): Promise<UserDetailResponse> => {
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
