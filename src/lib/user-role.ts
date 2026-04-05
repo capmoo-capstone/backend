@@ -1,8 +1,8 @@
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { UpdateUserRoleResponse } from '../types/user.type';
 
 export const upsertUserRoleInternal = async (
-  tx: any,
+  tx: Prisma.TransactionClient,
   params: {
     userId: string;
     role: UserRole;
