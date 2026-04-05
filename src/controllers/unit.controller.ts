@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import * as UnitService from '../services/unit.service';
-import { CreateUnitSchema, UpdateUnitSchema } from '../schemas/unit.schema';
+import {
+  CreateUnitSchema,
+  UpdateUnitSchema,
+  UpdateUnitUsersSchema,
+} from '../schemas/unit.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
@@ -46,4 +50,17 @@ export const removeUnit = async (req: Request, res: Response) => {
   const unitId = req.params.id as string;
   await UnitService.deleteUnit(unitId);
   res.status(204).send();
+};
+
+export const updateUnitUsers = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Unit']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const unitId = req.params.id as string;
+
+  const validatedData = UpdateUnitUsersSchema.parse({
+    id: unitId,
+    ...req.body,
+  });
+  const updatedUsers = await UnitService.updateUnitUsers(validatedData);
+  res.status(200).json(updatedUsers);
 };

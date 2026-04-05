@@ -3,7 +3,6 @@ import * as UserService from '../services/user.service';
 import {
   UpdateRoleSchema,
   UpdateRepresentativeUnitSchema,
-  UpdateUserUnitSchema,
 } from '../schemas/user.schema';
 
 export const getAll = async (req: Request, res: Response) => {
@@ -32,20 +31,6 @@ export const updateRole = async (req: Request, res: Response) => {
   const { role, dept_id, unit_id } = req.body;
   const validatedData = UpdateRoleSchema.parse({ id, role, dept_id, unit_id });
   const updatedUser = await UserService.updateRole(validatedData);
-  res.status(200).json(updatedUser);
-};
-
-export const addUsersToUnit = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const unitId = req.params.unitId as string;
-  const users = req.body.users;
-
-  const validatedData = UpdateUserUnitSchema.parse({
-    unit_id: unitId,
-    users: users,
-  });
-  const updatedUser = await UserService.addUsersToSupplyUnit(validatedData);
   res.status(200).json(updatedUser);
 };
 

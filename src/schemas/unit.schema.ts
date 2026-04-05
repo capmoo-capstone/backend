@@ -15,5 +15,12 @@ export const UpdateUnitSchema = z.object({
   dept_id: z.string().optional(),
 });
 
+export const UpdateUnitUsersSchema = z.object({
+  id: z.string(),
+  new_users: z.array(z.uuid()).optional(),
+  remove_users: z.array(z.uuid()).optional(),
+});
+
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
 export type UpdateUnitDto = z.infer<typeof UpdateUnitSchema>;
+export type UpdateUnitUsersDto = z.infer<typeof UpdateUnitUsersSchema>;
