@@ -56,3 +56,19 @@ interface ExternalSummary {
 }
 
 export type SummaryResponse = SupplySummary | ExternalSummary;
+
+export interface ProjectFilterInput {
+  search?: string;
+  title?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  fiscalYear?: string | number;
+  procurementType?: string[];
+  status?: string[];
+  urgentStatus?: string[];
+  assignees?: string[];
+  units?: string[];
+  myTasks?: boolean;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
