@@ -142,17 +142,24 @@ export const updateUnitUsers = async (
       throw new NotFoundError('One or more users not found');
     }
 
+    const newUsersData = await tx.user.findMany({
+      where: { id: { in: newUsers } },
+      select: {
+        id: true,
+        full_name: true,
+        roles: { select: { dept_id: true } },
+      },
+    });
+
+    const newUsersDataById = new Map(
+      newUsersData.map((user) => [user.id, user])
+    );
+
     for (const id of newUsers) {
-      const user = await tx.user.findUnique({
-        where: { id },
-        select: {
-          full_name: true,
-          roles: { select: { dept_id: true } },
-        },
-      });
+      const user = newUsersDataById.get(id);
 
       if (!user) {
-        throw new NotFoundError('One or more users not found');
+        throw new NotFoundError(`User with ID ${id} not found`);
       }
 
       if (user.roles.some((r: any) => r.dept_id === OPS_DEPT_ID)) {
@@ -175,6 +182,7 @@ export const updateUnitUsers = async (
           user_id: { in: removeUsers },
           dept_id: OPS_DEPT_ID,
           unit_id: unit.id,
+          role: UserRole.GENERAL_STAFF,
         },
         data: { unit_id: null },
       });
