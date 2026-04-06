@@ -1,4 +1,11 @@
-import { Project, ProjectPhaseStatus, UserRole } from '@prisma/client';
+import {
+  ProcurementType,
+  Project,
+  ProjectPhaseStatus,
+  ProjectStatus,
+  UrgentType,
+  UserRole,
+} from '@prisma/client';
 import { ListResponse, PaginatedResponse } from './common.type';
 
 export interface PhaseStatusResult {
@@ -32,30 +39,23 @@ export interface WorkloadStatsResponse {
   staff?: StaffWorkload[];
 }
 
-interface SupplySummary {
-  role: 'SUPPLY';
+interface SummaryResponseBase {
   total: number;
-  unassigned: number;
-  waiting_accept: number;
-  in_progress: number;
-  closed: number;
-  cancelled: number;
-  urgent: number;
-  very_urgent: number;
+  [ProjectStatus.IN_PROGRESS]: number;
+  [ProjectStatus.CLOSED]: number;
+  [ProjectStatus.CANCELLED]: number;
+  [UrgentType.URGENT]: number;
+  [UrgentType.VERY_URGENT]: number;
+  [UrgentType.SUPER_URGENT]: number;
 }
 
-interface ExternalSummary {
-  role: 'EXTERNAL';
-  total: number;
-  not_started: number;
-  in_progress: number;
-  closed: number;
-  cancelled: number;
-  urgent: number;
-  very_urgent: number;
-}
-
-export type SummaryResponse = SupplySummary | ExternalSummary;
+export type SummaryResponse =
+  | (SummaryResponseBase & {
+      role: 'SUPPLY';
+      [ProjectStatus.UNASSIGNED]: number;
+      [ProjectStatus.WAITING_ACCEPT]: number;
+    })
+  | (SummaryResponseBase & { role: 'EXTERNAL'; NOT_STARTED: number });
 
 export interface ProjectFilterInput {
   search?: string;
@@ -63,9 +63,9 @@ export interface ProjectFilterInput {
   dateFrom?: string;
   dateTo?: string;
   fiscalYear?: string | number;
-  procurementType?: string[];
-  status?: string[];
-  urgentStatus?: string[];
+  procurementType?: ProcurementType[];
+  status?: ProjectStatus[];
+  urgentStatus?: UrgentType[];
   assignees?: string[];
   units?: string[];
   myTasks?: boolean;

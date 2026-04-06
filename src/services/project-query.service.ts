@@ -67,17 +67,18 @@ const buildWhereClause = (
   }
 
   if (filters.search?.trim()) {
+    const searchTerm = filters.search.trim();
     and.push({
       OR: [
         {
           receive_no: {
-            contains: filters.search,
+            contains: searchTerm,
             mode: Prisma.QueryMode.insensitive,
           },
         },
         {
           title: {
-            contains: filters.search,
+            contains: searchTerm,
             mode: Prisma.QueryMode.insensitive,
           },
         },
@@ -86,8 +87,9 @@ const buildWhereClause = (
   }
 
   if (filters.title?.trim()) {
+    const titleSearchTerm = filters.title.trim();
     and.push({
-      title: { contains: filters.title, mode: Prisma.QueryMode.insensitive },
+      title: { contains: titleSearchTerm, mode: Prisma.QueryMode.insensitive },
     });
   }
 
@@ -514,14 +516,10 @@ export const getWaitingCancellationProjects = async (
   user: AuthPayload,
   unitId: string
 ): Promise<ProjectsListResponse> => {
-  const where: any = {
+  const where: Prisma.ProjectWhereInput = {
     status: ProjectStatus.WAITING_CANCEL,
     responsible_unit_id: unitId,
   };
-
-  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
-    where.requesting_dept_id = { in: getDeptIdsForUser(user) };
-  }
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
@@ -753,6 +751,7 @@ export const getSummaryCards = async (
       cancelled,
       urgent,
       very_urgent,
+      super_urgent,
     ] = await prisma.$transaction([
       prisma.project.count(),
       prisma.project.count({ where: { status: ProjectStatus.UNASSIGNED } }),
@@ -772,18 +771,20 @@ export const getSummaryCards = async (
       prisma.project.count({ where: { status: ProjectStatus.CANCELLED } }),
       prisma.project.count({ where: { is_urgent: UrgentType.URGENT } }),
       prisma.project.count({ where: { is_urgent: UrgentType.VERY_URGENT } }),
+      prisma.project.count({ where: { is_urgent: UrgentType.SUPER_URGENT } }),
     ]);
 
     return {
       role: 'SUPPLY',
       total,
-      unassigned,
-      waiting_accept,
-      in_progress,
-      closed,
-      cancelled,
-      urgent,
-      very_urgent,
+      [ProjectStatus.UNASSIGNED]: unassigned,
+      [ProjectStatus.WAITING_ACCEPT]: waiting_accept,
+      [ProjectStatus.IN_PROGRESS]: in_progress,
+      [ProjectStatus.CLOSED]: closed,
+      [ProjectStatus.CANCELLED]: cancelled,
+      [UrgentType.URGENT]: urgent,
+      [UrgentType.VERY_URGENT]: very_urgent,
+      [UrgentType.SUPER_URGENT]: super_urgent,
     };
   }
 
@@ -798,6 +799,7 @@ export const getSummaryCards = async (
     cancelled,
     urgent,
     very_urgent,
+    super_urgent,
   ] = await prisma.$transaction([
     prisma.project.count({ where: baseWhere }),
     prisma.project.count({
@@ -832,16 +834,20 @@ export const getSummaryCards = async (
     prisma.project.count({
       where: { ...baseWhere, is_urgent: UrgentType.VERY_URGENT },
     }),
+    prisma.project.count({
+      where: { ...baseWhere, is_urgent: UrgentType.SUPER_URGENT },
+    }),
   ]);
 
   return {
     role: 'EXTERNAL',
     total,
-    not_started,
-    in_progress,
-    closed,
-    cancelled,
-    urgent,
-    very_urgent,
+    NOT_STARTED: not_started,
+    [ProjectStatus.IN_PROGRESS]: in_progress,
+    [ProjectStatus.CLOSED]: closed,
+    [ProjectStatus.CANCELLED]: cancelled,
+    [UrgentType.URGENT]: urgent,
+    [UrgentType.VERY_URGENT]: very_urgent,
+    [UrgentType.SUPER_URGENT]: super_urgent,
   };
 };
