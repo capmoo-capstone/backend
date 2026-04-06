@@ -27,6 +27,7 @@ import {
   WorkloadStatsResponse,
 } from '../types/project.type';
 import { OPS_DEPT_ID, WORKLOAD_STATUSES } from '../lib/constant';
+import { equal } from 'node:assert';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -386,12 +387,13 @@ export const getAssignedProjects = async (
   let where: any = {
     AND: [
       {
+        status: {
+          in: [ProjectStatus.WAITING_ACCEPT, ProjectStatus.IN_PROGRESS, ProjectStatus.CANCELLED],
+        },
+      },
+      {
         OR: [
-          {
-            status: {
-              in: [ProjectStatus.WAITING_ACCEPT],
-            },
-          },
+          { status: { equals: ProjectStatus.WAITING_ACCEPT } },
           {
             project_histories: {
               some: {
@@ -405,18 +407,8 @@ export const getAssignedProjects = async (
                   { changed_at: { gte: startOfDay, lte: endOfDay } },
                   {
                     OR: [
-                      {
-                        new_value: {
-                          path: ['status'],
-                          equals: ProjectStatus.IN_PROGRESS,
-                        },
-                      },
-                      {
-                        new_value: {
-                          path: ['status'],
-                          equals: ProjectStatus.CANCELLED,
-                        },
-                      },
+                      { new_value: { path: ['status'], equals: ProjectStatus.IN_PROGRESS } },
+                      { new_value: { path: ['status'], equals: ProjectStatus.CANCELLED } },
                     ],
                   },
                 ],
