@@ -412,12 +412,6 @@ export const getAssignedProjects = async (
                       {
                         new_value: {
                           path: ['status'],
-                          equals: ProjectStatus.WAITING_CANCEL,
-                        },
-                      },
-                      {
-                        new_value: {
-                          path: ['status'],
                           equals: ProjectStatus.CANCELLED,
                         },
                       },
