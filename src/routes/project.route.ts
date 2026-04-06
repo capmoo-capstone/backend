@@ -6,6 +6,7 @@ const router = Router();
 router.get('/', controller.getAll);
 router.get('/unassigned', controller.getUnassignedByUnit);
 router.get('/assigned', controller.getAssignedProjects);
+router.get('/waiting-cancel', controller.getWaitingCancellation);
 router.get('/own', controller.getOwnProjects);
 router.get('/workload', controller.getWorkload);
 router.get('/summary', controller.getSummary);

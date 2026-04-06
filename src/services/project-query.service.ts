@@ -510,6 +510,60 @@ export const getAssignedProjects = async (
   };
 };
 
+export const getWaitingCancellationProjects = async (
+  user: AuthPayload,
+  unitId: string
+): Promise<ProjectsListResponse> => {
+  const where: any = {
+    status: ProjectStatus.WAITING_CANCEL,
+    responsible_unit_id: unitId,
+  };
+
+  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
+    where.requesting_dept_id = { in: getDeptIdsForUser(user) };
+  }
+
+  const [projects, total] = await prisma.$transaction([
+    prisma.project.findMany({
+      where,
+      orderBy: [{ receive_no: 'desc' }],
+      select: {
+        id: true,
+        receive_no: true,
+        title: true,
+        status: true,
+        requesting_unit: {
+          select: {
+            name: true,
+            department: { select: { name: true, id: true } },
+          },
+        },
+        budget: true,
+        procurement_type: true,
+        current_workflow_type: true,
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
+        is_urgent: true,
+        expected_approval_date: true,
+        created_at: true,
+        updated_at: true,
+        project_cancellation: {
+          where: { is_active: true },
+          select: {
+            reason: true,
+          },
+        },
+      },
+    }),
+    prisma.project.count({ where }),
+  ]);
+
+  return {
+    total,
+    data: projects,
+  };
+};
+
 export const getOwnProjects = async (
   user: AuthPayload,
   page: number,

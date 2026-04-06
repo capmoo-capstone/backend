@@ -7,6 +7,7 @@ import {
   AcceptProjectsSchema,
   CancelProjectSchema,
   CreateProjectSchema,
+  GetProjectsQueryByUnitSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
@@ -39,9 +40,10 @@ export const getUnassignedByUnit = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.query;
   const payload = (req as any).user;
+  const validated = GetProjectsQueryByUnitSchema.parse({ unitId });
   const projects = await ProjectQueryService.getUnassignedProjectsByUnit(
     payload,
-    unitId as string
+    validated.unitId
   );
   res.status(200).json(projects);
 };
@@ -55,6 +57,19 @@ export const getAssignedProjects = async (req: Request, res: Response) => {
   const projects = await ProjectQueryService.getAssignedProjects(
     payload,
     targetDate
+  );
+  res.status(200).json(projects);
+};
+
+export const getWaitingCancellation = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId } = req.query;
+  const payload = (req as any).user;
+  const validated = GetProjectsQueryByUnitSchema.parse({ unitId });
+  const projects = await ProjectQueryService.getWaitingCancellationProjects(
+    payload,
+    validated.unitId
   );
   res.status(200).json(projects);
 };
@@ -76,8 +91,11 @@ export const getWorkload = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
-  const filterUnitId = req.query.unitId as string | undefined;
-  const workload = await ProjectQueryService.getWorkload(payload, filterUnitId);
+  const { unitId } = req.query;
+  const workload = await ProjectQueryService.getWorkload(
+    payload,
+    unitId as string
+  );
   res.status(200).json(workload);
 };
 
