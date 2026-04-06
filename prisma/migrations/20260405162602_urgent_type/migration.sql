@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "UrgentType" ADD VALUE 'SUPER_URGENT';

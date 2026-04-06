@@ -1,9 +1,11 @@
 import {
+  Prisma,
   ProjectStatus,
   LogActionType,
   UserRole,
   UnitResponsibleType,
   UrgentType,
+  ProcurementType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
@@ -17,6 +19,7 @@ import {
 import { AuthPayload } from '../types/auth.type';
 import {
   PaginatedProjects,
+  ProjectFilterInput,
   ProjectsListResponse,
   StaffWorkload,
   SummaryResponse,
@@ -25,50 +28,143 @@ import {
 } from '../types/project.type';
 import { OPS_DEPT_ID, WORKLOAD_STATUSES } from '../lib/constant';
 
+const SORTABLE_FIELDS = new Set([
+  'receive_no',
+  'title',
+  'created_at',
+  'status',
+]);
+
+const buildWhereClause = (
+  user: AuthPayload,
+  filters: ProjectFilterInput
+): Prisma.ProjectWhereInput => {
+  const and: Prisma.ProjectWhereInput[] = [];
+
+  if (!haveSupplyPermission(user)) {
+    and.push({ requesting_dept_id: { in: getDeptIdsForUser(user) } });
+  }
+
+  const hasExplicitDate = Boolean(filters.dateFrom || filters.dateTo);
+  if (!hasExplicitDate) {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    and.push({ created_at: { gte: sixMonthsAgo } });
+  } else {
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      dateFilter.gte = fromDate;
+    }
+    if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      dateFilter.lte = toDate;
+    }
+    and.push({ created_at: dateFilter });
+  }
+
+  if (filters.search?.trim()) {
+    const searchTerm = filters.search.trim();
+    and.push({
+      OR: [
+        {
+          receive_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
+          title: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+      ],
+    });
+  }
+
+  if (filters.title?.trim()) {
+    const titleSearchTerm = filters.title.trim();
+    and.push({
+      title: { contains: titleSearchTerm, mode: Prisma.QueryMode.insensitive },
+    });
+  }
+
+  if (filters.fiscalYear !== undefined) {
+    and.push({
+      budget_plans: {
+        some: { budget_year: String(filters.fiscalYear) },
+      },
+    });
+  }
+  if (filters.procurementType?.length) {
+    and.push({
+      procurement_type: { in: filters.procurementType as ProcurementType[] },
+    });
+  }
+  if (filters.status?.length) {
+    and.push({ status: { in: filters.status as ProjectStatus[] } });
+  }
+  if (filters.urgentStatus?.length) {
+    and.push({ is_urgent: { in: filters.urgentStatus as UrgentType[] } });
+  }
+  if (filters.units?.length) {
+    and.push({ requesting_unit_id: { in: filters.units } });
+  }
+
+  // ── Assignees (OR across both relations + myTasks shortcut) ───────────────
+  const assigneeIds = new Set<string>(filters.assignees ?? []);
+  if (filters.myTasks) assigneeIds.add(user.id);
+
+  if (assigneeIds.size > 0) {
+    const ids = [...assigneeIds];
+    and.push({
+      OR: [
+        { assignee_procurement: { some: { id: { in: ids } } } },
+        { assignee_contract: { some: { id: { in: ids } } } },
+      ],
+    });
+  }
+
+  return and.length > 0 ? { AND: and } : {};
+};
+
+const buildOrderBy = (filters: ProjectFilterInput) => {
+  if (filters.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
+    return [
+      {
+        [filters.sortBy]: filters.sortOrder ?? 'desc',
+      } as Prisma.ProjectOrderByWithRelationInput,
+    ];
+  }
+  return [{ receive_no: 'desc' as Prisma.SortOrder }];
+};
+
 export const listProjects = async (
   user: AuthPayload,
   page: number,
-  limit: number
+  limit: number,
+  filters: ProjectFilterInput = {}
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
-  let where = {};
-
-  if (!haveSupplyPermission(user)) {
-    where = { requesting_dept_id: { in: getDeptIdsForUser(user) } };
-  }
+  const where = buildWhereClause(user, filters);
+  const orderBy = buildOrderBy(filters);
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where,
       include: {
-        requesting_dept: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        requesting_unit: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        assignee_procurement: {
-          select: {
-            id: true,
-            full_name: true,
-          },
-        },
-        assignee_contract: {
-          select: {
-            id: true,
-            full_name: true,
-          },
-        },
+        requesting_dept: { select: { id: true, name: true } },
+        requesting_unit: { select: { id: true, name: true } },
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
       },
-      skip: skip,
+      skip,
       take: limit,
-      orderBy: [{ receive_no: 'desc' }],
+      orderBy,
     }),
     prisma.project.count({ where }),
   ]);
@@ -318,12 +414,6 @@ export const getAssignedProjects = async (
                       {
                         new_value: {
                           path: ['status'],
-                          equals: ProjectStatus.WAITING_CANCEL,
-                        },
-                      },
-                      {
-                        new_value: {
-                          path: ['status'],
                           equals: ProjectStatus.CANCELLED,
                         },
                       },
@@ -419,6 +509,56 @@ export const getAssignedProjects = async (
         assignee_contract: undefined,
       };
     }),
+  };
+};
+
+export const getWaitingCancellationProjects = async (
+  user: AuthPayload,
+  unitId: string
+): Promise<ProjectsListResponse> => {
+  const where: Prisma.ProjectWhereInput = {
+    status: ProjectStatus.WAITING_CANCEL,
+    responsible_unit_id: unitId,
+  };
+
+  const [projects, total] = await prisma.$transaction([
+    prisma.project.findMany({
+      where,
+      orderBy: [{ receive_no: 'desc' }],
+      select: {
+        id: true,
+        receive_no: true,
+        title: true,
+        status: true,
+        requesting_unit: {
+          select: {
+            name: true,
+            department: { select: { name: true, id: true } },
+          },
+        },
+        budget: true,
+        procurement_type: true,
+        current_workflow_type: true,
+        assignee_procurement: { select: { id: true, full_name: true } },
+        assignee_contract: { select: { id: true, full_name: true } },
+        is_urgent: true,
+        expected_approval_date: true,
+        created_at: true,
+        updated_at: true,
+        project_cancellation: {
+          where: { is_active: true },
+          select: {
+            reason: true,
+          },
+        },
+      },
+    }),
+    prisma.project.count({ where }),
+  ]);
+
+  return {
+    total,
+    data: projects,
   };
 };
 
@@ -611,6 +751,7 @@ export const getSummaryCards = async (
       cancelled,
       urgent,
       very_urgent,
+      super_urgent,
     ] = await prisma.$transaction([
       prisma.project.count(),
       prisma.project.count({ where: { status: ProjectStatus.UNASSIGNED } }),
@@ -630,18 +771,20 @@ export const getSummaryCards = async (
       prisma.project.count({ where: { status: ProjectStatus.CANCELLED } }),
       prisma.project.count({ where: { is_urgent: UrgentType.URGENT } }),
       prisma.project.count({ where: { is_urgent: UrgentType.VERY_URGENT } }),
+      prisma.project.count({ where: { is_urgent: UrgentType.SUPER_URGENT } }),
     ]);
 
     return {
       role: 'SUPPLY',
       total,
-      unassigned,
-      waiting_accept,
-      in_progress,
-      closed,
-      cancelled,
-      urgent,
-      very_urgent,
+      [ProjectStatus.UNASSIGNED]: unassigned,
+      [ProjectStatus.WAITING_ACCEPT]: waiting_accept,
+      [ProjectStatus.IN_PROGRESS]: in_progress,
+      [ProjectStatus.CLOSED]: closed,
+      [ProjectStatus.CANCELLED]: cancelled,
+      [UrgentType.URGENT]: urgent,
+      [UrgentType.VERY_URGENT]: very_urgent,
+      [UrgentType.SUPER_URGENT]: super_urgent,
     };
   }
 
@@ -656,6 +799,7 @@ export const getSummaryCards = async (
     cancelled,
     urgent,
     very_urgent,
+    super_urgent,
   ] = await prisma.$transaction([
     prisma.project.count({ where: baseWhere }),
     prisma.project.count({
@@ -690,16 +834,20 @@ export const getSummaryCards = async (
     prisma.project.count({
       where: { ...baseWhere, is_urgent: UrgentType.VERY_URGENT },
     }),
+    prisma.project.count({
+      where: { ...baseWhere, is_urgent: UrgentType.SUPER_URGENT },
+    }),
   ]);
 
   return {
     role: 'EXTERNAL',
     total,
-    not_started,
-    in_progress,
-    closed,
-    cancelled,
-    urgent,
-    very_urgent,
+    NOT_STARTED: not_started,
+    [ProjectStatus.IN_PROGRESS]: in_progress,
+    [ProjectStatus.CLOSED]: closed,
+    [ProjectStatus.CANCELLED]: cancelled,
+    [UrgentType.URGENT]: urgent,
+    [UrgentType.VERY_URGENT]: very_urgent,
+    [UrgentType.SUPER_URGENT]: super_urgent,
   };
 };
