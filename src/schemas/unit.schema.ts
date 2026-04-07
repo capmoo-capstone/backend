@@ -22,8 +22,8 @@ export const UpdateUnitUsersSchema = z.object({
 });
 
 export const UpdateRepresentativeUnitSchema = z.object({
-  id: z.uuid(),
-  user_id: z.string(),
+  id: z.string(),
+  user_id: z.uuid(),
 });
 
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
