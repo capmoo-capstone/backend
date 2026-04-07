@@ -254,9 +254,7 @@ export const updateRepresentative = async (
 
     const user = await tx.user.findUnique({
       where: { id: data.user_id },
-      select: {
-        roles: { select: { role: true, dept_id: true, unit_id: true } },
-      },
+      select: { id: true },
     });
     if (!user) throw new NotFoundError('User not found');
 
