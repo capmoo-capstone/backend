@@ -98,7 +98,7 @@ export const getById = async (id: string): Promise<DelegationDetail> => {
 
 export const getActiveDelegationByUnit = async (
   unitId: string
-): Promise<UserDelegation | null> => {
+): Promise<DelegationDetail | null> => {
   const delegation = await prisma.userDelegation.findFirst({
     where: {
       delegator: {
@@ -110,6 +110,8 @@ export const getActiveDelegationByUnit = async (
         },
       },
       is_active: true,
+      start_date: { lte: new Date() },
+      OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
     },
     include: {
       delegator: {
