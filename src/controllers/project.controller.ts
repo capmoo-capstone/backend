@@ -17,11 +17,10 @@ import {
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, filter } = req.query;
+  const { page, limit } = req.query;
+  const { filter } = req.body;
   const payload = (req as any).user;
-  const validatedFilter = filter
-    ? ProjectFilterQuerySchema.parse(JSON.parse(filter as string))
-    : undefined;
+  const validatedFilter = ProjectFilterQuerySchema.parse(filter);
   const data = await ProjectQueryService.listProjects(
     payload,
     parseInt(page as string) || 1,

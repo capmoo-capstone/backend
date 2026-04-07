@@ -54,21 +54,23 @@ export const GetProjectsQueryByUnitSchema = z.object({
   unitId: z.string(),
 });
 
-export const ProjectFilterQuerySchema = z.object({
-  search: z.string().optional(),
-  title: z.string().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
-  fiscalYear: z.union([z.string(), z.number()]).optional(),
-  procurementType: z.array(z.enum(ProcurementType)).optional(),
-  status: z.array(z.enum(ProjectStatus)).optional(),
-  urgentStatus: z.array(z.enum(UrgentType)).optional(),
-  assignees: z.array(z.string()).optional(),
-  units: z.array(z.string()).optional(),
-  myTasks: z.boolean().optional(),
-  sortBy: z.string().optional(),
-  sortOrder: z.enum(['asc', 'desc']).optional(),
-});
+export const ProjectFilterQuerySchema = z
+  .object({
+    search: z.string().optional(),
+    title: z.string().optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    fiscalYear: z.union([z.string(), z.number()]).optional(),
+    procurementType: z.array(z.enum(ProcurementType)).optional(),
+    status: z.array(z.enum(ProjectStatus)).optional(),
+    urgentStatus: z.array(z.enum(UrgentType)).optional(),
+    assignees: z.array(z.string()).optional(),
+    units: z.array(z.string()).optional(),
+    myTasks: z.boolean().optional(),
+    sortBy: z.string().optional(),
+    sortOrder: z.enum(['asc', 'desc']).optional(),
+  })
+  .optional();
 
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 export type UpdateStatusProjectDto = z.infer<typeof UpdateStatusProjectSchema>;
