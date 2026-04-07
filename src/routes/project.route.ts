@@ -3,7 +3,7 @@ import * as controller from '../controllers/project.controller';
 
 const router = Router();
 
-router.get('/', controller.getAll);
+router.post('/', controller.getAll);
 router.get('/unassigned', controller.getUnassignedByUnit);
 router.get('/assigned', controller.getAssignedProjects);
 router.get('/waiting-cancel', controller.getWaitingCancellation);

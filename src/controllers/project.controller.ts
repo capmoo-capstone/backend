@@ -8,6 +8,7 @@ import {
   CancelProjectSchema,
   CreateProjectSchema,
   GetProjectsQueryByUnitSchema,
+  ProjectFilterQuerySchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
@@ -17,11 +18,14 @@ export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
+  const { filter } = req.body;
   const payload = (req as any).user;
+  const validatedFilter = ProjectFilterQuerySchema.parse(filter);
   const data = await ProjectQueryService.listProjects(
     payload,
     parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
+    parseInt(limit as string) || 10,
+    validatedFilter
   );
   res.status(200).json(data);
 };

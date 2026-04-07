@@ -56,19 +56,3 @@ export type SummaryResponse =
       [ProjectStatus.WAITING_ACCEPT]: number;
     })
   | (SummaryResponseBase & { role: 'EXTERNAL'; NOT_STARTED: number });
-
-export interface ProjectFilterInput {
-  search?: string;
-  title?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  fiscalYear?: string | number;
-  procurementType?: ProcurementType[];
-  status?: ProjectStatus[];
-  urgentStatus?: UrgentType[];
-  assignees?: string[];
-  units?: string[];
-  myTasks?: boolean;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}

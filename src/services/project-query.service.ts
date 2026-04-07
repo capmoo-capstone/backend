@@ -19,7 +19,6 @@ import {
 import { AuthPayload } from '../types/auth.type';
 import {
   PaginatedProjects,
-  ProjectFilterInput,
   ProjectsListResponse,
   StaffWorkload,
   SummaryResponse,
@@ -27,6 +26,7 @@ import {
   WorkloadStatsResponse,
 } from '../types/project.type';
 import { OPS_DEPT_ID, WORKLOAD_STATUSES } from '../lib/constant';
+import { ProjectFilterQuery } from '../schemas/project.schema';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -37,7 +37,7 @@ const SORTABLE_FIELDS = new Set([
 
 const buildWhereClause = (
   user: AuthPayload,
-  filters: ProjectFilterInput
+  filters?: ProjectFilterQuery
 ): Prisma.ProjectWhereInput => {
   const and: Prisma.ProjectWhereInput[] = [];
 
@@ -45,7 +45,7 @@ const buildWhereClause = (
     and.push({ requesting_dept_id: { in: getDeptIdsForUser(user) } });
   }
 
-  const hasExplicitDate = Boolean(filters.dateFrom || filters.dateTo);
+  const hasExplicitDate = Boolean(filters?.dateFrom || filters?.dateTo);
   if (!hasExplicitDate) {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setHours(0, 0, 0, 0);
@@ -53,12 +53,12 @@ const buildWhereClause = (
     and.push({ created_at: { gte: sixMonthsAgo } });
   } else {
     const dateFilter: Prisma.DateTimeFilter = {};
-    if (filters.dateFrom) {
+    if (filters?.dateFrom) {
       const fromDate = new Date(filters.dateFrom);
       fromDate.setHours(0, 0, 0, 0);
       dateFilter.gte = fromDate;
     }
-    if (filters.dateTo) {
+    if (filters?.dateTo) {
       const toDate = new Date(filters.dateTo);
       toDate.setHours(23, 59, 59, 999);
       dateFilter.lte = toDate;
@@ -66,7 +66,7 @@ const buildWhereClause = (
     and.push({ created_at: dateFilter });
   }
 
-  if (filters.search?.trim()) {
+  if (filters?.search?.trim()) {
     const searchTerm = filters.search.trim();
     and.push({
       OR: [
@@ -86,38 +86,38 @@ const buildWhereClause = (
     });
   }
 
-  if (filters.title?.trim()) {
+  if (filters?.title?.trim()) {
     const titleSearchTerm = filters.title.trim();
     and.push({
       title: { contains: titleSearchTerm, mode: Prisma.QueryMode.insensitive },
     });
   }
 
-  if (filters.fiscalYear !== undefined) {
+  if (filters?.fiscalYear !== undefined) {
     and.push({
       budget_plans: {
         some: { budget_year: String(filters.fiscalYear) },
       },
     });
   }
-  if (filters.procurementType?.length) {
+  if (filters?.procurementType?.length) {
     and.push({
       procurement_type: { in: filters.procurementType as ProcurementType[] },
     });
   }
-  if (filters.status?.length) {
+  if (filters?.status?.length) {
     and.push({ status: { in: filters.status as ProjectStatus[] } });
   }
-  if (filters.urgentStatus?.length) {
+  if (filters?.urgentStatus?.length) {
     and.push({ is_urgent: { in: filters.urgentStatus as UrgentType[] } });
   }
-  if (filters.units?.length) {
+  if (filters?.units?.length) {
     and.push({ requesting_unit_id: { in: filters.units } });
   }
 
   // ── Assignees (OR across both relations + myTasks shortcut) ───────────────
-  const assigneeIds = new Set<string>(filters.assignees ?? []);
-  if (filters.myTasks) assigneeIds.add(user.id);
+  const assigneeIds = new Set<string>(filters?.assignees ?? []);
+  if (filters?.myTasks) assigneeIds.add(user.id);
 
   if (assigneeIds.size > 0) {
     const ids = [...assigneeIds];
@@ -132,8 +132,8 @@ const buildWhereClause = (
   return and.length > 0 ? { AND: and } : {};
 };
 
-const buildOrderBy = (filters: ProjectFilterInput) => {
-  if (filters.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
+const buildOrderBy = (filters?: ProjectFilterQuery) => {
+  if (filters?.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
     return [
       {
         [filters.sortBy]: filters.sortOrder ?? 'desc',
@@ -147,7 +147,7 @@ export const listProjects = async (
   user: AuthPayload,
   page: number,
   limit: number,
-  filters: ProjectFilterInput = {}
+  filters?: ProjectFilterQuery
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
   const where = buildWhereClause(user, filters);
@@ -386,12 +386,17 @@ export const getAssignedProjects = async (
   let where: any = {
     AND: [
       {
+        status: {
+          in: [
+            ProjectStatus.WAITING_ACCEPT,
+            ProjectStatus.IN_PROGRESS,
+            ProjectStatus.CANCELLED,
+          ],
+        },
+      },
+      {
         OR: [
-          {
-            status: {
-              in: [ProjectStatus.WAITING_ACCEPT],
-            },
-          },
+          { status: { equals: ProjectStatus.WAITING_ACCEPT } },
           {
             project_histories: {
               some: {

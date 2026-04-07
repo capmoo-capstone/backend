@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProcurementType, UrgentType } from '@prisma/client';
+import { ProcurementType, ProjectStatus, UrgentType } from '@prisma/client';
 
 export const CreateProjectSchema = z.object({
   title: z.string(),
@@ -54,6 +54,24 @@ export const GetProjectsQueryByUnitSchema = z.object({
   unitId: z.string(),
 });
 
+export const ProjectFilterQuerySchema = z
+  .object({
+    search: z.string().optional(),
+    title: z.string().optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    fiscalYear: z.union([z.string(), z.number()]).optional(),
+    procurementType: z.array(z.enum(ProcurementType)).optional(),
+    status: z.array(z.enum(ProjectStatus)).optional(),
+    urgentStatus: z.array(z.enum(UrgentType)).optional(),
+    assignees: z.array(z.string()).optional(),
+    units: z.array(z.string()).optional(),
+    myTasks: z.boolean().optional(),
+    sortBy: z.string().optional(),
+    sortOrder: z.enum(['asc', 'desc']).optional(),
+  })
+  .optional();
+
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 export type UpdateStatusProjectDto = z.infer<typeof UpdateStatusProjectSchema>;
 export type UpdateStatusProjectsDto = z.infer<
@@ -65,3 +83,4 @@ export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<
   typeof GetProjectsQueryByUnitSchema
 >;
+export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;

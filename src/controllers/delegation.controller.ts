@@ -32,3 +32,13 @@ export const getById = async (req: Request, res: Response) => {
   const data = await DelegationService.getById(id);
   res.status(200).json(data);
 };
+
+export const getActiveDelegation = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Delegation']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const { unitId } = req.query;
+  const data = await DelegationService.getActiveDelegationByUnit(
+    unitId as string
+  );
+  res.status(200).json(data);
+};
