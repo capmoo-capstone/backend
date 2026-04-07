@@ -1,4 +1,4 @@
-import { UserDelegation } from '@prisma/client';
+import { UserDelegation, UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../schemas/delegation.schema';
@@ -28,13 +28,11 @@ export const addDelegation = async (
       data: { role_updated_at: new Date() },
     });
 
-    return created ;
+    return created;
   });
 };
 
-export const cancelDelegation = async (
-  id: string
-): Promise<UserDelegation> => {
+export const cancelDelegation = async (id: string): Promise<UserDelegation> => {
   return await prisma.$transaction(async (tx) => {
     const delegation = await tx.userDelegation.findUnique({
       where: { id },
@@ -58,9 +56,7 @@ export const cancelDelegation = async (
   });
 };
 
-export const getById = async (
-  id: string
-): Promise<DelegationDetail> => {
+export const getById = async (id: string): Promise<DelegationDetail> => {
   const delegation = await prisma.userDelegation.findUnique({
     where: { id },
     include: {
@@ -98,4 +94,52 @@ export const getById = async (
   }
 
   return delegation;
+};
+
+export const getActiveDelegationByUnit = async (
+  unitId: string
+): Promise<UserDelegation | null> => {
+  const delegation = await prisma.userDelegation.findFirst({
+    where: {
+      delegator: {
+        roles: {
+          some: {
+            role: UserRole.HEAD_OF_UNIT,
+            unit_id: unitId,
+          },
+        },
+      },
+      is_active: true,
+    },
+    include: {
+      delegator: {
+        select: {
+          id: true,
+          full_name: true,
+          roles: {
+            select: {
+              role: true,
+              dept_id: true,
+              unit_id: true,
+            },
+          },
+        },
+      },
+      delegatee: {
+        select: {
+          id: true,
+          full_name: true,
+          roles: {
+            select: {
+              role: true,
+              dept_id: true,
+              unit_id: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return delegation ?? null;
 };

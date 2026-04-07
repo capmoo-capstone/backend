@@ -4,6 +4,7 @@ import * as controller from '../controllers/delegation.controller';
 const router = Router();
 
 router.post('/', controller.addDelegation);
+router.get('/active', controller.getActiveDelegation);
 router.get('/:id', controller.getById);
 router.patch('/:id/cancel', controller.cancelDelegation);
 
