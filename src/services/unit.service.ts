@@ -8,7 +8,11 @@ import {
   UpdateRepresentativeUnitDto,
 } from '../schemas/unit.schema';
 import { UpdateUserRoleResponse } from '../types/user.type';
-import { PaginatedUnits, UpdateUnitUsersResponse } from '../types/unit.type';
+import {
+  PaginatedUnits,
+  UnitRepresentativeResponse,
+  UpdateUnitUsersResponse,
+} from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { upsertUserRoleInternal } from '../lib/user-role';
 
@@ -94,6 +98,32 @@ export const deleteUnit = async (id: string): Promise<Unit> => {
   return await prisma.unit.delete({
     where: { id },
   });
+};
+
+export const getRepresentative = async (
+  id: string
+): Promise<UnitRepresentativeResponse | null> => {
+  await getById(id);
+
+  const representative = await prisma.userOrganizationRole.findFirst({
+    where: { unit_id: id, role: UserRole.REPRESENTATIVE },
+    select: {
+      user: {
+        select: {
+          id: true,
+          full_name: true,
+        },
+      },
+    },
+  });
+
+  return representative
+    ? {
+        id: representative.user.id,
+        full_name: representative.user.full_name,
+        unit_id: id,
+      }
+    : null;
 };
 
 export const updateUnitUsers = async (

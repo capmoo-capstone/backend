@@ -26,6 +26,14 @@ export const getById = async (req: Request, res: Response) => {
   res.status(200).json(unit);
 };
 
+export const getRepresentative = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Unit']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const unitId = req.params.id as string;
+  const representative = await UnitService.getRepresentative(unitId);
+  res.status(200).json(representative);
+};
+
 export const createUnit = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
@@ -67,7 +75,7 @@ export const updateUnitUsers = async (req: Request, res: Response) => {
 };
 
 export const updateRepresentative = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
+  // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
   const userId = req.params.userId as string;
