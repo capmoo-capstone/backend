@@ -7,3 +7,9 @@ export type UpdateUnitUsersResponse = {
   count: number;
   message: string;
 };
+
+export interface UnitRepresentativeResponse {
+  id: string;
+  unit_id: string;
+  full_name: string;
+}

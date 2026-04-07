@@ -5,8 +5,14 @@ import {
   CreateUnitDto,
   UpdateUnitDto,
   UpdateUnitUsersDto,
+  UpdateRepresentativeUnitDto,
 } from '../schemas/unit.schema';
-import { PaginatedUnits, UpdateUnitUsersResponse } from '../types/unit.type';
+import { UpdateUserRoleResponse } from '../types/user.type';
+import {
+  PaginatedUnits,
+  UnitRepresentativeResponse,
+  UpdateUnitUsersResponse,
+} from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { upsertUserRoleInternal } from '../lib/user-role';
 
@@ -92,6 +98,32 @@ export const deleteUnit = async (id: string): Promise<Unit> => {
   return await prisma.unit.delete({
     where: { id },
   });
+};
+
+export const getRepresentative = async (
+  id: string
+): Promise<UnitRepresentativeResponse | null> => {
+  await getById(id);
+
+  const representative = await prisma.userOrganizationRole.findFirst({
+    where: { unit_id: id, role: UserRole.REPRESENTATIVE },
+    select: {
+      user: {
+        select: {
+          id: true,
+          full_name: true,
+        },
+      },
+    },
+  });
+
+  return representative
+    ? {
+        id: representative.user.id,
+        full_name: representative.user.full_name,
+        unit_id: id,
+      }
+    : null;
 };
 
 export const updateUnitUsers = async (
@@ -197,5 +229,64 @@ export const updateUnitUsers = async (
       count: newUsers.length + removeUsers.length,
       message: `${newUsers.length} users added and ${removeUsers.length} users removed for Supply unit ${data.id} successfully.`,
     };
+  });
+};
+
+export const updateRepresentative = async (
+  data: UpdateRepresentativeUnitDto
+): Promise<UpdateUserRoleResponse> => {
+  return await prisma.$transaction(async (tx) => {
+    const existingRepresentatives = await tx.userOrganizationRole.findMany({
+      where: { unit_id: data.id, role: UserRole.REPRESENTATIVE },
+      select: { user_id: true },
+    });
+
+    const unit = await tx.unit.findUnique({
+      where: { id: data.id },
+      select: { id: true, department: { select: { id: true } } },
+    });
+    if (!unit) throw new NotFoundError('Unit not found');
+    if (unit.department.id === OPS_DEPT_ID) {
+      throw new BadRequestError(
+        'Representative role is not allowed for SUPPLY units'
+      );
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id: data.user_id },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundError('User not found');
+
+    if (existingRepresentatives.length > 0) {
+      await tx.userOrganizationRole.updateMany({
+        where: { unit_id: unit.id, role: UserRole.REPRESENTATIVE },
+        data: { role: UserRole.GUEST },
+      });
+
+      const oldRepresentativeIds = [
+        ...new Set(
+          existingRepresentatives.map(
+            (representative) => representative.user_id
+          )
+        ),
+      ];
+
+      if (oldRepresentativeIds.length > 0) {
+        await tx.user.updateMany({
+          where: { id: { in: oldRepresentativeIds } },
+          data: { role_updated_at: new Date() },
+        });
+      }
+    }
+
+    const result = await upsertUserRoleInternal(tx, {
+      userId: data.user_id,
+      role: UserRole.REPRESENTATIVE,
+      deptId: unit.department.id,
+      unitId: unit.id,
+    });
+
+    return result;
   });
 };

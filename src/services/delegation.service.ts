@@ -110,7 +110,6 @@ export const getActiveDelegationByUnit = async (
         },
       },
       is_active: true,
-      start_date: { lte: new Date() },
       OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
     },
     include: {
