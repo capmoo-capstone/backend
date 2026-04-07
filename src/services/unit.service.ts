@@ -5,7 +5,9 @@ import {
   CreateUnitDto,
   UpdateUnitDto,
   UpdateUnitUsersDto,
+  UpdateRepresentativeUnitDto,
 } from '../schemas/unit.schema';
+import { UpdateUserRoleResponse } from '../types/user.type';
 import { PaginatedUnits, UpdateUnitUsersResponse } from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { upsertUserRoleInternal } from '../lib/user-role';
@@ -197,5 +199,66 @@ export const updateUnitUsers = async (
       count: newUsers.length + removeUsers.length,
       message: `${newUsers.length} users added and ${removeUsers.length} users removed for Supply unit ${data.id} successfully.`,
     };
+  });
+};
+
+export const updateRepresentative = async (
+  data: UpdateRepresentativeUnitDto
+): Promise<UpdateUserRoleResponse> => {
+  return await prisma.$transaction(async (tx) => {
+    const existingRepresentatives = await tx.userOrganizationRole.findMany({
+      where: { unit_id: data.id, role: UserRole.REPRESENTATIVE },
+      select: { user_id: true },
+    });
+
+    const unit = await tx.unit.findUnique({
+      where: { id: data.id },
+      select: { id: true, department: { select: { id: true } } },
+    });
+    if (!unit) throw new NotFoundError('Unit not found');
+    if (unit.department.id === OPS_DEPT_ID) {
+      throw new BadRequestError(
+        'Representative role is not allowed for SUPPLY units'
+      );
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id: data.user_id },
+      select: {
+        roles: { select: { role: true, dept_id: true, unit_id: true } },
+      },
+    });
+    if (!user) throw new NotFoundError('User not found');
+
+    if (existingRepresentatives.length > 0) {
+      await tx.userOrganizationRole.updateMany({
+        where: { unit_id: unit.id, role: UserRole.REPRESENTATIVE },
+        data: { role: UserRole.GUEST },
+      });
+
+      const oldRepresentativeIds = [
+        ...new Set(
+          existingRepresentatives.map(
+            (representative) => representative.user_id
+          )
+        ),
+      ];
+
+      if (oldRepresentativeIds.length > 0) {
+        await tx.user.updateMany({
+          where: { id: { in: oldRepresentativeIds } },
+          data: { role_updated_at: new Date() },
+        });
+      }
+    }
+
+    const result = await upsertUserRoleInternal(tx, {
+      userId: data.user_id,
+      role: UserRole.REPRESENTATIVE,
+      deptId: unit.department.id,
+      unitId: unit.id,
+    });
+
+    return result;
   });
 };

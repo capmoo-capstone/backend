@@ -1,9 +1,6 @@
 import { Request, Response } from 'express';
 import * as UserService from '../services/user.service';
-import {
-  UpdateRoleSchema,
-  UpdateRepresentativeUnitSchema,
-} from '../schemas/user.schema';
+import { UpdateRoleSchema } from '../schemas/user.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
@@ -31,20 +28,6 @@ export const updateRole = async (req: Request, res: Response) => {
   const { role, dept_id, unit_id } = req.body;
   const validatedData = UpdateRoleSchema.parse({ id, role, dept_id, unit_id });
   const updatedUser = await UserService.updateRole(validatedData);
-  res.status(200).json(updatedUser);
-};
-
-export const addRepresentativeToUnit = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const id = req.params.id as string;
-  const unitId = req.params.unitId as string;
-
-  const validatedData = UpdateRepresentativeUnitSchema.parse({
-    id: id,
-    unit_id: unitId,
-  });
-  const updatedUser = await UserService.addRepresentativeToUnit(validatedData);
   res.status(200).json(updatedUser);
 };
 

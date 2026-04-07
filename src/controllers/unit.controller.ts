@@ -4,6 +4,7 @@ import {
   CreateUnitSchema,
   UpdateUnitSchema,
   UpdateUnitUsersSchema,
+  UpdateRepresentativeUnitSchema,
 } from '../schemas/unit.schema';
 
 export const getAll = async (req: Request, res: Response) => {
@@ -63,4 +64,18 @@ export const updateUnitUsers = async (req: Request, res: Response) => {
   });
   const updatedUsers = await UnitService.updateUnitUsers(validatedData);
   res.status(200).json(updatedUsers);
+};
+
+export const updateRepresentative = async (req: Request, res: Response) => {
+  // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const id = req.params.id as string;
+  const userId = req.params.userId as string;
+
+  const validatedData = UpdateRepresentativeUnitSchema.parse({
+    id: id,
+    user_id: userId,
+  });
+  const updatedUser = await UnitService.updateRepresentative(validatedData);
+  res.status(200).json(updatedUser);
 };

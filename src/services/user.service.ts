@@ -1,18 +1,13 @@
 import { prisma } from '../config/prisma';
-import { UserRole } from '@prisma/client';
 import {
   UpdateUserRoleResponse,
   UserDetailResponse,
   UsersListFilters,
   UsersListResponse,
 } from '../types/user.type';
-import {
-  UpdateRepresentativeUnitDto,
-  UpdateRoleDto,
-} from '../schemas/user.schema';
+import { UpdateRoleDto } from '../schemas/user.schema';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
-import { OPS_DEPT_ID } from '../lib/constant';
 import { upsertUserRoleInternal } from '../lib/user-role';
 
 export const listUsers = async (
@@ -189,60 +184,6 @@ export const getById = async (id: string): Promise<UserDetailResponse> => {
     throw new NotFoundError('User not found');
   }
   return user;
-};
-
-export const addRepresentativeToUnit = async (
-  data: UpdateRepresentativeUnitDto
-): Promise<UpdateUserRoleResponse> => {
-  return await prisma.$transaction(async (tx) => {
-    const userOrgRoles = await tx.userOrganizationRole.findFirst({
-      where: { unit_id: data.unit_id, role: UserRole.REPRESENTATIVE },
-      select: { id: true },
-    });
-    if (userOrgRoles) {
-      throw new BadRequestError(
-        'Unit already has a representative. Please remove the existing representative before adding a new one.'
-      );
-    }
-
-    const unit = await tx.unit.findUnique({
-      where: { id: data.unit_id },
-      select: { id: true, department: { select: { id: true } } },
-    });
-    if (!unit) throw new NotFoundError('Unit not found');
-    if (unit.department?.id === OPS_DEPT_ID) {
-      throw new BadRequestError(
-        'Representative role is not allowed for SUPPLY units'
-      );
-    }
-
-    const user = await tx.user.findUnique({
-      where: { id: data.id },
-      select: {
-        roles: { select: { role: true, dept_id: true, unit_id: true } },
-      },
-    });
-    if (!user) throw new NotFoundError('User not found');
-
-    if (
-      user.roles.some(
-        (r: any) => r.role === UserRole.REPRESENTATIVE && r.unit_id === unit.id
-      )
-    ) {
-      throw new BadRequestError(
-        'User is already a representative for this unit'
-      );
-    }
-
-    const result = await upsertUserRoleInternal(tx, {
-      userId: data.id,
-      role: UserRole.REPRESENTATIVE,
-      deptId: unit.department!.id,
-      unitId: unit.id,
-    });
-
-    return result;
-  });
 };
 
 export const updateRole = async (

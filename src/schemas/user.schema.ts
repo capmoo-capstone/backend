@@ -10,11 +10,6 @@ export const RegisterUserSchema = z.object({
   unit_id: z.string().optional(),
 });
 
-export const UpdateRepresentativeUnitSchema = z.object({
-  id: z.uuid(),
-  unit_id: z.string(),
-});
-
 export const UpdateRoleSchema = z.object({
   id: z.uuid(),
   role: z.enum(UserRole),
@@ -23,7 +18,4 @@ export const UpdateRoleSchema = z.object({
 });
 
 export type RegisterUserDto = z.infer<typeof RegisterUserSchema>;
-export type UpdateRepresentativeUnitDto = z.infer<
-  typeof UpdateRepresentativeUnitSchema
->;
 export type UpdateRoleDto = z.infer<typeof UpdateRoleSchema>;
