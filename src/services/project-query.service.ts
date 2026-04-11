@@ -562,8 +562,6 @@ export const getWaitingCancellationProjects = async (
         budget: true,
         procurement_type: true,
         current_workflow_type: true,
-        assignee_procurement: { select: { id: true, full_name: true } },
-        assignee_contract: { select: { id: true, full_name: true } },
         is_urgent: true,
         expected_approval_date: true,
         created_at: true,
@@ -572,6 +570,12 @@ export const getWaitingCancellationProjects = async (
           where: { is_active: true },
           select: {
             reason: true,
+            requester: {
+              select: {
+                id: true,
+                full_name: true,
+              },
+            },
           },
         },
       },
