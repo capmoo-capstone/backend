@@ -45,8 +45,6 @@ interface SummaryResponseBase {
   [ProjectStatus.CLOSED]: number;
   [ProjectStatus.CANCELLED]: number;
   [UrgentType.URGENT]: number;
-  [UrgentType.VERY_URGENT]: number;
-  [UrgentType.SUPER_URGENT]: number;
 }
 
 export type SummaryResponse =
