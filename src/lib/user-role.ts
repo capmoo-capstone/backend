@@ -12,33 +12,27 @@ export const upsertUserRoleInternal = async (
 ): Promise<UpdateUserRoleResponse> => {
   const { userId, role, deptId, unitId } = params;
 
-  const userRoles = await tx.userOrganizationRole.findMany({
+  const existing = await tx.userOrganizationRole.findFirst({
     where: { user_id: userId, dept_id: deptId },
-    select: { id: true, role: true, unit_id: true },
   });
 
-  const sameUnitAssignment = userRoles.find((a: any) => a.unit_id === unitId);
-  const guestAssignment = userRoles.find((a: any) => a.role === UserRole.GUEST);
+  const isCrossScope =
+    existing && (existing.unit_id === null) !== (unitId === null);
 
   let result: UpdateUserRoleResponse;
-  if (sameUnitAssignment) {
-    result = await tx.userOrganizationRole.update({
-      where: { id: sameUnitAssignment.id },
-      data: { role },
+  if (!existing) {
+    result = await tx.userOrganizationRole.create({
+      data: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
     });
-  } else if (guestAssignment && userRoles.length === 1) {
-    result = await tx.userOrganizationRole.update({
-      where: { id: guestAssignment.id },
-      data: { role, unit_id: unitId },
+  } else if (isCrossScope) {
+    await tx.userOrganizationRole.delete({ where: { id: existing.id } });
+    result = await tx.userOrganizationRole.create({
+      data: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
     });
   } else {
-    result = await tx.userOrganizationRole.create({
-      data: {
-        user_id: userId,
-        role,
-        dept_id: deptId,
-        unit_id: unitId,
-      },
+    result = await tx.userOrganizationRole.update({
+      where: { id: existing.id },
+      data: { role, unit_id: unitId },
     });
   }
 
