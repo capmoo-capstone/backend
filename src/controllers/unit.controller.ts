@@ -4,7 +4,7 @@ import {
   CreateUnitSchema,
   UpdateUnitSchema,
   UpdateUnitUsersSchema,
-  UpdateRepresentativeUnitSchema,
+  UpdateRepresentativeSchema,
 } from '../schemas/unit.schema';
 
 export const getAll = async (req: Request, res: Response) => {
@@ -64,26 +64,20 @@ export const removeUnit = async (req: Request, res: Response) => {
 export const updateUnitUsers = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const unitId = req.params.id as string;
-
-  const validatedData = UpdateUnitUsersSchema.parse({
-    id: unitId,
-    ...req.body,
-  });
-  const updatedUsers = await UnitService.updateUnitUsers(validatedData);
-  res.status(200).json(updatedUsers);
+  const unit_id = req.params.id as string;
+  const validatedData = UpdateUnitUsersSchema.parse({ unit_id, ...req.body });
+  const result = await UnitService.updateUnitUsers(validatedData);
+  res.status(200).json(result);
 };
 
 export const updateRepresentative = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const id = req.params.id as string;
-  const userId = req.params.userId as string;
-
-  const validatedData = UpdateRepresentativeUnitSchema.parse({
-    id: id,
-    user_id: userId,
+  const unit_id = req.params.id as string;
+  const validatedData = UpdateRepresentativeSchema.parse({
+    unit_id,
+    ...req.body,
   });
-  const updatedUser = await UnitService.updateRepresentative(validatedData);
-  res.status(200).json(updatedUser);
+  const result = await UnitService.updateRepresentative(validatedData);
+  res.status(200).json(result);
 };
