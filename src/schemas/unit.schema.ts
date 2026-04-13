@@ -16,19 +16,20 @@ export const UpdateUnitSchema = z.object({
 });
 
 export const UpdateUnitUsersSchema = z.object({
-  id: z.string(),
-  new_users: z.array(z.uuid()).optional(),
-  remove_users: z.array(z.uuid()).optional(),
+  unit_id: z.string(),
+  new_users: z.array(z.uuid()).default([]),
+  remove_users: z.array(z.uuid()).default([]),
 });
 
-export const UpdateRepresentativeUnitSchema = z.object({
-  id: z.string(),
-  user_id: z.uuid(),
+export const UpdateRepresentativeSchema = z.object({
+  unit_id: z.string(),
+  new_users: z.array(z.uuid()).max(1).default([]),
+  remove_users: z.array(z.uuid()).max(1).default([]),
 });
 
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
 export type UpdateUnitDto = z.infer<typeof UpdateUnitSchema>;
 export type UpdateUnitUsersDto = z.infer<typeof UpdateUnitUsersSchema>;
-export type UpdateRepresentativeUnitDto = z.infer<
-  typeof UpdateRepresentativeUnitSchema
+export type UpdateRepresentativeDto = z.infer<
+  typeof UpdateRepresentativeSchema
 >;

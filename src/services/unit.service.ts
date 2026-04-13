@@ -5,16 +5,20 @@ import {
   CreateUnitDto,
   UpdateUnitDto,
   UpdateUnitUsersDto,
-  UpdateRepresentativeUnitDto,
+  UpdateRepresentativeDto,
 } from '../schemas/unit.schema';
-import { UpdateUserRoleResponse } from '../types/user.type';
 import {
   PaginatedUnits,
   UnitRepresentativeResponse,
   UpdateUnitUsersResponse,
 } from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
-import { upsertUserRoleInternal } from '../lib/user-role';
+import {
+  addRoleInternal,
+  assertNoDuplicatesOrOverlap,
+  assertUsersExist,
+  removeRoleInternal,
+} from '../lib/user-role';
 
 export const listUnits = async (
   page: number,
@@ -128,34 +132,18 @@ export const getRepresentative = async (
 
 export const updateUnitUsers = async (
   data: UpdateUnitUsersDto
-): Promise<UpdateUnitUsersResponse> => {
-  const newUsers = data.new_users ?? [];
-  const removeUsers = data.remove_users ?? [];
+): Promise<{ added: number; removed: number }> => {
+  const { unit_id, new_users, remove_users } = data;
 
-  if (newUsers.length === 0 && removeUsers.length === 0) {
+  if (new_users.length === 0 && remove_users.length === 0) {
     throw new BadRequestError('No users to add or remove');
   }
 
-  if (
-    new Set(newUsers).size !== newUsers.length ||
-    new Set(removeUsers).size !== removeUsers.length
-  ) {
-    throw new BadRequestError('Duplicate user IDs are not allowed');
-  }
-
-  const duplicateUsers = new Set(
-    newUsers.filter((id) => removeUsers.includes(id))
-  );
-
-  if (duplicateUsers.size > 0) {
-    throw new BadRequestError(
-      'The same user cannot be added and removed in one request'
-    );
-  }
+  assertNoDuplicatesOrOverlap(new_users, remove_users);
 
   return await prisma.$transaction(async (tx) => {
     const unit = await tx.unit.findUnique({
-      where: { id: data.id },
+      where: { id: unit_id },
       select: { id: true, dept_id: true },
     });
     if (!unit) throw new NotFoundError('Unit not found');
@@ -165,128 +153,108 @@ export const updateUnitUsers = async (
       );
     }
 
-    const allUsers = [...newUsers, ...removeUsers];
-    const usersCount = await tx.user.count({
-      where: { id: { in: allUsers } },
-    });
+    await assertUsersExist(tx, [...new_users, ...remove_users]);
 
-    if (usersCount !== allUsers.length) {
-      throw new NotFoundError('One or more users not found');
-    }
-
-    const newUsersData = await tx.user.findMany({
-      where: { id: { in: newUsers } },
-      select: {
-        id: true,
-        full_name: true,
-        roles: { select: { dept_id: true } },
-      },
-    });
-
-    const newUsersDataById = new Map(
-      newUsersData.map((user) => [user.id, user])
-    );
-
-    for (const id of newUsers) {
-      const user = newUsersDataById.get(id);
-
-      if (!user) {
-        throw new NotFoundError(`User with ID ${id} not found`);
-      }
-
-      if (user.roles.some((r: any) => r.dept_id === OPS_DEPT_ID)) {
-        await upsertUserRoleInternal(tx, {
-          userId: id,
-          role: UserRole.GENERAL_STAFF,
-          deptId: OPS_DEPT_ID,
-          unitId: unit.id,
+    // ADD — ตรวจว่า user อยู่ใน OPS dept อยู่แล้ว
+    for (const userId of new_users) {
+      const inOpsDept = await tx.userOrganizationRole.findFirst({
+        where: { user_id: userId, dept_id: OPS_DEPT_ID },
+      });
+      if (!inOpsDept) {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { full_name: true },
         });
-      } else {
         throw new BadRequestError(
-          `User ${user.full_name} cannot be assigned to Supply Operation units`
+          `User ${user?.full_name} cannot be assigned to Supply Operation units`
         );
       }
-    }
 
-    if (removeUsers.length > 0) {
-      await tx.userOrganizationRole.updateMany({
-        where: {
-          user_id: { in: removeUsers },
-          dept_id: OPS_DEPT_ID,
-          unit_id: unit.id,
-          role: UserRole.GENERAL_STAFF,
-        },
-        data: { unit_id: null },
-      });
-
-      await tx.user.updateMany({
-        where: { id: { in: removeUsers } },
-        data: { role_updated_at: new Date() },
+      await addRoleInternal(tx, {
+        userId,
+        role: UserRole.GENERAL_STAFF,
+        deptId: OPS_DEPT_ID,
+        unitId: unit_id,
       });
     }
 
-    return {
-      count: newUsers.length + removeUsers.length,
-      message: `${newUsers.length} users added and ${removeUsers.length} users removed for Supply unit ${data.id} successfully.`,
-    };
+    // REMOVE
+    for (const userId of remove_users) {
+      await removeRoleInternal(tx, {
+        userId,
+        role: UserRole.GENERAL_STAFF,
+        deptId: OPS_DEPT_ID,
+        unitId: unit_id,
+      });
+    }
+
+    return { added: new_users.length, removed: remove_users.length };
   });
 };
 
 export const updateRepresentative = async (
-  data: UpdateRepresentativeUnitDto
-): Promise<UpdateUserRoleResponse> => {
-  return await prisma.$transaction(async (tx) => {
-    const existingRepresentatives = await tx.userOrganizationRole.findMany({
-      where: { unit_id: data.id, role: UserRole.REPRESENTATIVE },
-      select: { user_id: true },
-    });
+  data: UpdateRepresentativeDto
+): Promise<{ added: number; removed: number }> => {
+  const { unit_id, new_users, remove_users } = data;
 
+  if (new_users.length === 0 && remove_users.length === 0) {
+    throw new BadRequestError('No users to add or remove');
+  }
+
+  assertNoDuplicatesOrOverlap(new_users, remove_users);
+
+  return await prisma.$transaction(async (tx) => {
     const unit = await tx.unit.findUnique({
-      where: { id: data.id },
+      where: { id: unit_id },
       select: { id: true, department: { select: { id: true } } },
     });
     if (!unit) throw new NotFoundError('Unit not found');
     if (unit.department.id === OPS_DEPT_ID) {
       throw new BadRequestError(
-        'Representative role is not allowed for SUPPLY units'
+        'Representative role is not allowed for Supply units'
       );
     }
 
-    const user = await tx.user.findUnique({
-      where: { id: data.user_id },
-      select: { id: true },
-    });
-    if (!user) throw new NotFoundError('User not found');
+    await assertUsersExist(tx, [...new_users, ...remove_users]);
 
-    if (existingRepresentatives.length > 0) {
-      await tx.userOrganizationRole.updateMany({
-        where: { unit_id: unit.id, role: UserRole.REPRESENTATIVE },
-        data: { role: UserRole.GUEST },
+    // ตรวจว่าถ้าจะ add ใหม่ และ unit มี REPRESENTATIVE อยู่แล้ว
+    // (ที่ไม่ใช่คนที่กำลังจะ remove) → throw error
+    if (new_users.length > 0) {
+      const existingRep = await tx.userOrganizationRole.findFirst({
+        where: {
+          unit_id,
+          role: UserRole.REPRESENTATIVE,
+          user_id: { notIn: remove_users },
+        },
+        select: { user_id: true },
       });
-
-      const oldRepresentativeIds = [
-        ...new Set(
-          existingRepresentatives.map(
-            (representative) => representative.user_id
-          )
-        ),
-      ];
-
-      if (oldRepresentativeIds.length > 0) {
-        await tx.user.updateMany({
-          where: { id: { in: oldRepresentativeIds } },
-          data: { role_updated_at: new Date() },
-        });
+      if (existingRep) {
+        throw new BadRequestError(
+          'Unit already has a representative. Include them in remove_users to replace.'
+        );
       }
     }
 
-    const result = await upsertUserRoleInternal(tx, {
-      userId: data.user_id,
-      role: UserRole.REPRESENTATIVE,
-      deptId: unit.department.id,
-      unitId: unit.id,
-    });
+    // REMOVE
+    for (const userId of remove_users) {
+      await removeRoleInternal(tx, {
+        userId,
+        role: UserRole.REPRESENTATIVE,
+        deptId: unit.department.id,
+        unitId: unit_id,
+      });
+    }
 
-    return result;
+    // ADD
+    for (const userId of new_users) {
+      await addRoleInternal(tx, {
+        userId,
+        role: UserRole.REPRESENTATIVE,
+        deptId: unit.department.id,
+        unitId: unit_id,
+      });
+    }
+
+    return { added: new_users.length, removed: remove_users.length };
   });
 };
