@@ -7,11 +7,7 @@ import {
   UpdateUnitUsersDto,
   UpdateRepresentativeDto,
 } from '../schemas/unit.schema';
-import {
-  PaginatedUnits,
-  UnitRepresentativeResponse,
-  UpdateUnitUsersResponse,
-} from '../types/unit.type';
+import { PaginatedUnits, UnitRepresentativeResponse } from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
 import {
   addRoleInternal,

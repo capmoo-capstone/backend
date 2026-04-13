@@ -62,17 +62,16 @@ export const removeUnit = async (req: Request, res: Response) => {
 };
 
 export const updateUnitUsers = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
+  // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   const unit_id = req.params.id as string;
-  console.log('Updating unit users with data:', { unit_id, body: req.body });
   const validatedData = UpdateUnitUsersSchema.parse({ unit_id, ...req.body });
   const result = await UnitService.updateUnitUsers(validatedData);
   res.status(200).json(result);
 };
 
 export const updateRepresentative = async (req: Request, res: Response) => {
-  // #swagger.tags = ['User']
+  // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   const unit_id = req.params.id as string;
   const validatedData = UpdateRepresentativeSchema.parse({
