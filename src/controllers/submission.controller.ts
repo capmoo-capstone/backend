@@ -40,7 +40,7 @@ const approveSubmission = async (req: Request, res: Response) => {
 
   const validateData = ApproveSubmissionSchema.parse({
     id: submissionId,
-    required_signature: req.body.required_signature,
+    ...req.body,
   });
   const submission = await SubmissionService.approveSubmission(
     payload,
@@ -83,7 +83,7 @@ const rejectSubmission = async (req: Request, res: Response) => {
 
   const validateData = RejectSubmissionSchema.parse({
     id: submissionId,
-    comment: req.body.comment,
+    ...req.body,
   });
   const submission = await SubmissionService.rejectSubmission(
     payload,
