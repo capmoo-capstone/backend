@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ProcurementType, ProjectStatus, UrgentType } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectPhaseStatus,
+  ProjectStatus,
+  UrgentType,
+} from '@prisma/client';
 
 export const CreateProjectSchema = z.object({
   title: z.string(),
@@ -63,6 +68,8 @@ export const ProjectFilterQuerySchema = z
     fiscalYear: z.union([z.string(), z.number()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
     status: z.array(z.enum(ProjectStatus)).optional(),
+    procurementStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),
+    contractStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),
     urgentStatus: z.array(z.enum(UrgentType)).optional(),
     assignees: z.array(z.string()).optional(),
     units: z.array(z.string()).optional(),

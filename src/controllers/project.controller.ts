@@ -146,7 +146,7 @@ export const addAssignee = async (req: Request, res: Response) => {
   const projectId = req.params.id as string;
   const validatedData = UpdateStatusProjectSchema.parse({
     id: projectId,
-    userId: req.body.userId,
+    ...req.body,
   });
   const project = await ProjectAssignmentService.addAssignee(
     payload,
@@ -172,9 +172,10 @@ export const changeAssignee = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const data = { id: projectId, userId: req.body.userId };
-
-  const validatedData = UpdateStatusProjectSchema.parse(data);
+  const validatedData = UpdateStatusProjectSchema.parse({
+    id: projectId,
+    ...req.body,
+  });
   const project = await ProjectAssignmentService.changeAssignee(
     payload,
     validatedData
@@ -214,9 +215,10 @@ export const cancelProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const data = { id: projectId, reason: req.body.reason };
-
-  const validatedData = CancelProjectSchema.parse(data);
+  const validatedData = CancelProjectSchema.parse({
+    id: projectId,
+    ...req.body
+  });
   const project = await ProjectLifecycleService.cancelProject(
     payload,
     validatedData
@@ -290,9 +292,10 @@ export const updateProject = async (req: Request, res: Response) => {
   // #swagger.requestBody = { schema: { $ref: '#/definitions/UpdateProjectDto' } }
   const payload = (req as any).user;
   const projectId = req.params.id as string;
-  const data = { id: projectId, updateData: req.body };
-
-  const validatedData = UpdateProjectSchema.parse(data);
+  const validatedData = UpdateProjectSchema.parse({
+    id: projectId,
+    ...req.body
+  });
   const updatedProject = await ProjectDataService.updateProjectData(
     payload,
     validatedData

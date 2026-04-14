@@ -4,7 +4,9 @@ import { UpdateUserRoleResponse } from '../types/user.type';
 
 /**
  * เพิ่ม role ให้ user
- * - ถ้ามี role ที่ same dept + same unit อยู่แล้ว → update role นั้น
+ * - unit-level (มี unitId): มีได้แค่ 1 role ต่อ 1 unit → update slot เดิม
+ * - dept-level (unitId = null): มีได้หลาย role ใน dept เดียวกัน
+ *   (แต่ไม่สร้างแถวซ้ำ role เดิม)
  * - ถ้ามีแค่ GUEST เดียวใน dept นั้น → replace GUEST
  * - otherwise → create ใหม่
  */
@@ -24,16 +26,17 @@ export const addRoleInternal = async (
     select: { id: true, role: true, unit_id: true },
   });
 
-  const sameSlot = existingRoles.find((r) => r.unit_id === unitId);
+  const sameUnitSlot =
+    unitId !== null ? existingRoles.find((r) => r.unit_id === unitId) : null;
   const onlyGuest =
     existingRoles.length === 1 && existingRoles[0].role === UserRole.GUEST;
 
   let result: UpdateUserRoleResponse;
 
-  if (sameSlot) {
-    // same dept + same unit → update role นั้น
+  if (sameUnitSlot) {
+    // unit-level: same dept + same unit → update role นั้น
     result = await tx.userOrganizationRole.update({
-      where: { id: sameSlot.id },
+      where: { id: sameUnitSlot.id },
       data: { role },
     });
   } else if (onlyGuest) {

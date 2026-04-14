@@ -6,6 +6,7 @@ import {
   UnitResponsibleType,
   UrgentType,
   ProcurementType,
+  ProjectPhaseStatus,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
@@ -25,7 +26,7 @@ import {
   UnitWorkload,
   WorkloadStatsResponse,
 } from '../types/project.type';
-import { OPS_DEPT_ID, WORKLOAD_STATUSES } from '../lib/constant';
+import { CONTRACT_UNIT_ID, OPS_DEPT_ID, PROC1_UNIT_ID, PROC2_UNIT_ID, WORKLOAD_STATUSES } from '../lib/constant';
 import { ProjectFilterQuery } from '../schemas/project.schema';
 
 const SORTABLE_FIELDS = new Set([
@@ -33,6 +34,8 @@ const SORTABLE_FIELDS = new Set([
   'title',
   'created_at',
   'status',
+  'procurement_status',
+  'contract_status',
 ]);
 
 const buildWhereClause = (
@@ -108,6 +111,18 @@ const buildWhereClause = (
   if (filters?.status?.length) {
     and.push({ status: { in: filters.status as ProjectStatus[] } });
   }
+  if (filters?.procurementStatus?.length) {
+    and.push({
+      procurement_status: {
+        in: filters.procurementStatus as ProjectPhaseStatus[],
+      },
+    });
+  }
+  if (filters?.contractStatus?.length) {
+    and.push({
+      contract_status: { in: filters.contractStatus as ProjectPhaseStatus[] },
+    });
+  }
   if (filters?.urgentStatus?.length) {
     and.push({ is_urgent: { in: filters.urgentStatus as UrgentType[] } });
   }
@@ -117,7 +132,20 @@ const buildWhereClause = (
 
   // ── Assignees (OR across both relations + myTasks shortcut) ───────────────
   const assigneeIds = new Set<string>(filters?.assignees ?? []);
-  if (filters?.myTasks) assigneeIds.add(user.id);
+  if (filters?.myTasks) {
+    if (isHeadOfSupplyDept(user)) {
+      and.push({ responsible_unit_id: { in: [PROC1_UNIT_ID, PROC2_UNIT_ID, CONTRACT_UNIT_ID] } });
+    } else if (isHeadOfSupplyUnit(user)) {
+      const unitIds = user.roles
+        .filter((r) => r.role === UserRole.HEAD_OF_UNIT && r.unit_id)
+        .map((r) => r.unit_id as string);
+      if (unitIds.length > 0) {
+        and.push({ responsible_unit_id: { in: unitIds } });
+      }
+    }
+
+    assigneeIds.add(user.id);
+  }
 
   if (assigneeIds.size > 0) {
     const ids = [...assigneeIds];
