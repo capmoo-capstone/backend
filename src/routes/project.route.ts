@@ -11,6 +11,7 @@ router.get('/own', controller.getOwnProjects);
 router.get('/workload', controller.getWorkload);
 router.get('/summary', controller.getSummary);
 router.post('/create', controller.createProject);
+router.post('/import', controller.importProjects);
 router.patch('/assign', controller.assignProjects);
 router.patch('/accept', controller.acceptProjects);
 router.get('/:id', controller.getById);

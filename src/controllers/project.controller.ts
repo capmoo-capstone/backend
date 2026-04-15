@@ -125,6 +125,19 @@ export const createProject = async (req: Request, res: Response) => {
   res.status(201).json(project);
 };
 
+export const importProjects = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDtoArray' } }
+  const payload = (req as any).user;
+  const validatedData = CreateProjectSchema.array().parse(req.body);
+  const result = await ProjectDataService.importProjects(
+    payload,
+    validatedData
+  );
+  res.status(201).json(result);
+};
+
 export const assignProjects = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
@@ -217,7 +230,7 @@ export const cancelProject = async (req: Request, res: Response) => {
   const projectId = req.params.id as string;
   const validatedData = CancelProjectSchema.parse({
     id: projectId,
-    ...req.body
+    ...req.body,
   });
   const project = await ProjectLifecycleService.cancelProject(
     payload,
@@ -294,7 +307,7 @@ export const updateProject = async (req: Request, res: Response) => {
   const projectId = req.params.id as string;
   const validatedData = UpdateProjectSchema.parse({
     id: projectId,
-    ...req.body
+    ...req.body,
   });
   const updatedProject = await ProjectDataService.updateProjectData(
     payload,
