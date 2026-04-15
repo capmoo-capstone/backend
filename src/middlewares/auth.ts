@@ -29,7 +29,7 @@ const userAuthCache = new LRUCache<
 });
 
 export const protect = async (
-  req: AuthenticatedRequest,
+  req: Request & { user?: AuthPayload },
   _res: Response,
   next: NextFunction
 ) => {
