@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "swagger": "tsx swagger.ts",
-    "dev": "npm run swagger && tsx --env-file=.env src/local.ts",
+    "dev": "npm run swagger && tsx --watch --env-file=.env src/local.ts",
     "postinstall": "prisma generate",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
@@ -29,45 +29,28 @@
   },
   "homepage": "https://github.com/capmoo-capstone/backend#readme",
   "dependencies": {
-    "@prisma/adapter-pg": "^7.2.0",
-    "@prisma/client": "^7.5.0",
-    "bcrypt": "^6.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
-    "lru-cache": "^11.2.7",
-    "morgan": "^1.10.1",
-    "pg": "^8.16.3",
-    "serverless-http": "^4.0.0",
+    "lru-cache": "^11.3.5",
+    "pg": "^8.20.0",
+    "prisma": "^7.7.0",
     "swagger-ui-express": "^5.0.1",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^25.0.3",
-    "@types/pg": "8.11.10",
     "@types/swagger-ui-express": "^4.1.8",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
-    "globals": "^17.0.0",
-    "prettier": "^3.7.4",
-    "prisma": "^7.5.0",
     "swagger-autogen": "^2.23.7",
-    "tsx": "^4.21.0",
-    "typescript-eslint": "^8.52.0",
-    "vitest": "^4.0.16"
+    "tsx": "^4.21.0"
   },
   "overrides": {
-    "hono": "^4.12.7",
-    "lodash": "^4.17.21",
-    "glob": "^10.3.10",
-    "@types/pg": "8.11.10"
+    "@hono/node-server": "^1.19.13",
+    "glob": "^12.0.0"
   }
 }
