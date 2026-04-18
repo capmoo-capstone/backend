@@ -37,28 +37,44 @@ export const getProjectSubmissions = async (
   user: AuthPayload,
   projectId: string
 ) => {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { procurement_type: true },
-  });
-
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
+  const project = await prisma.project
+    .findUniqueOrThrow({
+      where: { id: projectId },
+      select: { procurement_type: true },
+    })
+    .catch(() => {
+      throw new NotFoundError('Project not found');
+    });
 
   const submissionData = await prisma.projectSubmission.findMany({
     where: { project_id: projectId },
     orderBy: { submitted_at: 'desc' },
     include: {
       documents: true,
+      submitter: { select: { full_name: true } },
+      approver: { select: { full_name: true } },
+      proposer: { select: { full_name: true } },
+      completer: { select: { full_name: true } },
     },
   });
 
-  const contractSubmissions = submissionData.filter(
+  const formattedSubmissions = submissionData.map((submission) => ({
+    ...submission,
+    submitted_by: submission.submitter?.full_name ?? null,
+    approved_by: submission.approver?.full_name ?? null,
+    proposing_by: submission.proposer?.full_name ?? null,
+    completed_by: submission.completer?.full_name ?? null,
+    submitter: undefined,
+    approver: undefined,
+    proposer: undefined,
+    completer: undefined,
+  }));
+
+  const contractSubmissions = formattedSubmissions.filter(
     (submission) => submission.workflow_type === UnitResponsibleType.CONTRACT
   );
 
-  const procurementSubmissions = submissionData.filter(
+  const procurementSubmissions = formattedSubmissions.filter(
     (submission) =>
       submission.workflow_type ===
       (project?.procurement_type as UnitResponsibleType)
