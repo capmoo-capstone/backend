@@ -5,18 +5,24 @@ import { PaginatedBudgetPlans } from '../types/budget-plan.type';
 
 export const listBudgetPlans = async (
   user: AuthPayload,
+  unitId: string,
   page: number,
   limit: number
 ): Promise<PaginatedBudgetPlans> => {
   const skip = (page - 1) * limit;
+  let where = {};
+  if (unitId) {
+    where = { unit_id: unitId };
+  }
 
   const [budgetPlans, total] = await Promise.all([
     prisma.budgetPlan.findMany({
+      where,
       skip: skip,
       take: limit,
       orderBy: { created_at: 'desc' },
     }),
-    prisma.budgetPlan.count(),
+    prisma.budgetPlan.count({ where }),
   ]);
 
   return {
@@ -32,19 +38,10 @@ export const importBudgetPlan = async (
   user: AuthPayload,
   data: ImportBudgetPlanDto
 ): Promise<any> => {
-  const formatData = await Promise.all(
-    data.map(async (item) => ({
-      ...item,
-      unit_id: (
-        await prisma.unit.findFirstOrThrow({
-          where: { name: item.cost_center_name },
-          select: { id: true },
-        })
-      ).id,
-      unit_no: item.cost_center_no,
-      created_by: user.id,
-    }))
-  );
+  const formatData = data.map((item) => ({
+    ...item,
+    created_by: user.id,
+  }));
 
   const budgetPlan = await prisma.budgetPlan.createManyAndReturn({
     data: formatData,

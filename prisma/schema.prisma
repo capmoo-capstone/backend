@@ -310,13 +310,11 @@ model ProjectDocument {
 
 model BudgetPlan {
   id                 String   @id @default(uuid())
-  budget_year        String
+  budget_year        Int
   unit_id            String
-  unit_no            String
   activity_type      String
   activity_type_name String
   description        String?
-  budget_no          String?
   budget_name        String?
   budget_amount      Decimal  @db.Decimal(18, 2)
   project_id         String?
