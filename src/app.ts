@@ -10,6 +10,9 @@ app.use(cors());
 app.use(express.json());
 
 // Import API v1 routes
+app.use('/', (req, res, next) => {
+  res.status(200).send('Welcome to the API');
+});
 app.use('/api/v1', apiV1Routes);
 
 app.use(errorHandler);
