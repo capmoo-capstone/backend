@@ -52,6 +52,7 @@ A RESTful API backend for managing procurement projects, workflows, staff assign
 │       ├── errors.ts         # AppError, NotFoundError, ForbiddenError, etc.
 │       ├── permissions.ts    # haveSupplyPermission, isSuperAdmin helpers
 │       ├── roles.ts          # Role category helpers (dept-level vs unit-level)
+│       ├── user-role.ts      # addRoleInternal, removeRoleInternal, role helpers
 │       └── phase-status.ts   # Procurement/contract phase sync logic
 ├── filegen.ts                # Module scaffold generator
 ├── swagger.ts                # Swagger doc generator
@@ -66,7 +67,6 @@ A RESTful API backend for managing procurement projects, workflows, staff assign
 
 - Node.js >= 20.19
 - PostgreSQL database
-- Docker (optional, for local DB via `docker-compose.yaml`)
 
 ### Environment Setup
 
@@ -75,10 +75,6 @@ Copy `.env.example` to `.env` and fill in:
 ```env
 PORT=3000
 NODE_ENV=development
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-POSTGRES_DB=your_db
-LOCAL_DATABASE_URL=postgresql://user:password@localhost:5432/db
 DATABASE_URL=postgresql://...  # production
 JWT_SECRET=your_jwt_secret
 ```
@@ -88,12 +84,6 @@ JWT_SECRET=your_jwt_secret
 ```bash
 npm install
 # Prisma client is generated automatically via the postinstall hook
-
-# Run migrations
-npm run migrate
-
-# Seed the database
-npx prisma db seed
 
 # Start dev server (generates Swagger + runs server)
 npm run dev
@@ -132,30 +122,33 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 
 ### Projects — `/projects`
 
-| Method | Path                        | Description                                              |
-| ------ | --------------------------- | -------------------------------------------------------- |
-| GET    | `/`                         | List projects (role-scoped)                              |
-| POST   | `/create`                   | Create a new project                                     |
-| GET    | `/unassigned`               | List unassigned projects for the caller's unit           |
-| GET    | `/assigned`                 | List assigned projects (optionally filtered by `?date=`) |
-| GET    | `/own`                      | List projects assigned to the current user               |
-| GET    | `/workload`                 | Get staff workload stats (scoped by role)                |
-| GET    | `/summary`                  | Get project summary cards (scoped by role)               |
-| PATCH  | `/assign`                   | Assign projects to a staff member                        |
-| PATCH  | `/accept`                   | Accept assigned projects                                 |
-| GET    | `/:id`                      | Get project detail                                       |
-| PATCH  | `/:id/claim`                | Self-assign an unassigned project                        |
-| PATCH  | `/:id/change-assignee`      | Replace the current assignee                             |
-| PATCH  | `/:id/add-assignee`         | Add an additional assignee                               |
-| PATCH  | `/:id/return`               | Return a project to unassigned                           |
-| PATCH  | `/:id/cancel`               | Request cancellation                                     |
-| PATCH  | `/:id/approve-cancel`       | Approve a cancellation request                           |
-| PATCH  | `/:id/reject-cancel`        | Reject a cancellation request                            |
-| PATCH  | `/:id/complete-procurement` | Advance to contract workflow                             |
-| PATCH  | `/:id/close`                | Close a completed project                                |
-| PATCH  | `/:id/request-edit`         | Reopen a closed project for editing                      |
-| PATCH  | `/:id/update`               | Update project information                               |
-| DELETE | `/:id`                      | Delete a project                                         |
+| Method | Path                        | Description                                                 |
+| ------ | --------------------------- | ----------------------------------------------------------- |
+| POST   | `/`                         | List projects with filters (role-scoped)                    |
+| POST   | `/create`                   | Create a new project                                        |
+| POST   | `/import`                   | Bulk import projects                                        |
+| GET    | `/unassigned`               | List unassigned projects (filtered by `?unitId=`)           |
+| GET    | `/assigned`                 | List assigned projects (optionally filtered by `?date=`)    |
+| GET    | `/waiting-cancel`           | List projects pending cancellation (filtered by `?unitId=`) |
+| GET    | `/own`                      | List projects assigned to the current user                  |
+| GET    | `/workload`                 | Get staff workload stats (scoped by role, `?unitId=`)       |
+| GET    | `/summary`                  | Get project summary cards (scoped by role)                  |
+| PATCH  | `/assign`                   | Assign projects to a staff member                           |
+| PATCH  | `/accept`                   | Accept assigned projects                                    |
+| GET    | `/:id`                      | Get project detail                                          |
+| PATCH  | `/:id/claim`                | Self-assign an unassigned project                           |
+| PATCH  | `/:id/change-assignee`      | Replace the current assignee                                |
+| PATCH  | `/:id/add-assignee`         | Add an additional assignee                                  |
+| PATCH  | `/:id/return`               | Return a project to unassigned                              |
+| PATCH  | `/:id/cancel`               | Request cancellation                                        |
+| PATCH  | `/:id/approve-cancel`       | Approve a cancellation request                              |
+| PATCH  | `/:id/reject-cancel`        | Reject a cancellation request                               |
+| PATCH  | `/:id/complete-procurement` | Advance to contract workflow                                |
+| PATCH  | `/:id/complete-contract`    | Mark contract phase as complete (NOT_EXPORTED)              |
+| PATCH  | `/:id/close`                | Close a completed project                                   |
+| PATCH  | `/:id/request-edit`         | Reopen a closed project for editing (requires `reason`)     |
+| PATCH  | `/:id/update`               | Update project information                                  |
+| DELETE | `/:id`                      | Delete a project                                            |
 
 ### Submissions — `/submissions`
 
@@ -167,14 +160,27 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 
 ### Users — `/users`
 
-| Method | Path                | Description                                                |
-| ------ | ------------------- | ---------------------------------------------------------- |
-| GET    | `/`                 | List users (optionally filter by `?unitId=` or `?deptId=`) |
-| GET    | `/:id`              | Get user by ID                                             |
-| PATCH  | `/add-unit/:unitId` | Add users to a supply unit                                 |
-| PATCH  | `/:id/role`         | Update a user's role                                       |
-| PATCH  | `/:id/rep/:unitId`  | Assign representative role to a unit                       |
-| DELETE | `/:id`              | Delete a user                                              |
+| Method | Path               | Description                                                                                                |
+| ------ | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| GET    | `/`                | List users (optionally filter by `?unitId=` or `?deptId=`)                                                 |
+| GET    | `/:id`             | Get user by ID                                                                                             |
+| PATCH  | `/roles/supply`    | Bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) |
+| POST   | `/:id/role`        | Add a role to a user (admin)                                                                               |
+| PATCH  | `/:id/role/remove` | Remove a role from a user (admin)                                                                          |
+| DELETE | `/:id`             | Delete a user                                                                                              |
+
+### Units — `/units`
+
+| Method | Path          | Description                                 |
+| ------ | ------------- | ------------------------------------------- |
+| GET    | `/`           | Paginated list of units                     |
+| POST   | `/create`     | Create a unit                               |
+| GET    | `/:id`        | Get unit by ID                              |
+| GET    | `/:id/rep`    | Get the representative for a unit           |
+| PATCH  | `/:id/users`  | Add/remove `GENERAL_STAFF` in a supply unit |
+| PATCH  | `/:id/rep`    | Add/remove the representative for a unit    |
+| PATCH  | `/:id/update` | Update a unit                               |
+| DELETE | `/:id`        | Delete a unit                               |
 
 ### Departments — `/departments`
 
@@ -186,32 +192,23 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 | PATCH  | `/:id/update` | Update a department               |
 | DELETE | `/:id`        | Delete a department               |
 
-### Units — `/units`
-
-| Method | Path          | Description             |
-| ------ | ------------- | ----------------------- |
-| GET    | `/`           | Paginated list of units |
-| POST   | `/create`     | Create a unit           |
-| GET    | `/:id`        | Get unit by ID          |
-| PATCH  | `/:id/update` | Update a unit           |
-| DELETE | `/:id`        | Delete a unit           |
-
 ### Delegations — `/delegations`
 
-| Method | Path          | Description          |
-| ------ | ------------- | -------------------- |
-| POST   | `/`           | Create a delegation  |
-| GET    | `/:id`        | Get delegation by ID |
-| PATCH  | `/:id/cancel` | Cancel a delegation  |
+| Method | Path          | Description                                       |
+| ------ | ------------- | ------------------------------------------------- |
+| POST   | `/`           | Create a delegation                               |
+| GET    | `/active`     | Get the active delegation for a unit (`?unitId=`) |
+| GET    | `/:id`        | Get delegation by ID                              |
+| PATCH  | `/:id/cancel` | Cancel a delegation                               |
 
 ### Budget Plans — `/budget-plans`
 
-| Method | Path                       | Description                     |
-| ------ | -------------------------- | ------------------------------- |
-| GET    | `/`                        | Paginated list of budget plans  |
-| POST   | `/`                        | Import budget plans (bulk)      |
-| PATCH  | `/:id/projects/:projectId` | Link a budget plan to a project |
-| DELETE | `/:id`                     | Delete a budget plan            |
+| Method | Path                       | Description                                           |
+| ------ | -------------------------- | ----------------------------------------------------- |
+| GET    | `/`                        | Paginated list of budget plans (filter by `?unitId=`) |
+| POST   | `/`                        | Import budget plans (bulk)                            |
+| PATCH  | `/:id/projects/:projectId` | Link a budget plan to a project                       |
+| DELETE | `/:id`                     | Delete a budget plan                                  |
 
 ---
 
@@ -219,26 +216,39 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 
 ### Roles & Permissions
 
-Roles are scoped to a department and optionally a unit via `UserOrganizationRole`. A user can hold multiple roles across departments.
+Roles are scoped to a department and optionally a unit via `UserOrganizationRole`. A user can hold **multiple roles simultaneously** within or across departments (e.g. `ADMIN` + `FINANCE_STAFF` in the same department).
 
-| Role                 | Scope                                                 |
-| -------------------- | ----------------------------------------------------- |
-| `SUPER_ADMIN`        | Full access                                           |
-| `ADMIN`              | Department-level admin                                |
-| `HEAD_OF_DEPARTMENT` | Manages all units in their department                 |
-| `HEAD_OF_UNIT`       | Manages their specific unit                           |
-| `GENERAL_STAFF`      | Assigned to a unit; handles procurement/contract work |
-| `FINANCE_STAFF`      | Department-level finance staff                        |
-| `DOCUMENT_STAFF`     | Department-level document staff                       |
-| `REPRESENTATIVE`     | External requester from a non-supply department       |
-| `GUEST`              | Read-only placeholder role                            |
+| Role                 | Level      | Scope                                                  |
+| -------------------- | ---------- | ------------------------------------------------------ |
+| `SUPER_ADMIN`        | Global     | Full access                                            |
+| `ADMIN`              | Department | Department-level admin                                 |
+| `HEAD_OF_DEPARTMENT` | Department | Manages all units in their department                  |
+| `FINANCE_STAFF`      | Department | Department-level finance staff                         |
+| `DOCUMENT_STAFF`     | Department | Department-level document staff                        |
+| `HEAD_OF_UNIT`       | Unit       | Manages their specific unit                            |
+| `GENERAL_STAFF`      | Unit       | Assigned to a unit; handles procurement/contract work  |
+| `REPRESENTATIVE`     | Unit       | External requester from a non-supply department        |
+| `GUEST`              | Department | Read-only placeholder; fallback when all roles removed |
 
 Supply operations users belong to `DEPT-SUP-OPS` (`OPS_DEPT_ID`). The `haveSupplyPermission()` helper grants supply-specific access.
+
+When a user's last real role in a department is removed, they automatically fall back to `GUEST` rather than being fully removed from that department.
+
+### Role Management Endpoints
+
+Role mutations are split across two surfaces depending on context:
+
+- **`PATCH /users/roles/supply`** — bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) for `DEPT-SUP-OPS`. Enforces the one-head-per-dept constraint.
+- **`POST /users/:id/role`** / **`PATCH /users/:id/role/remove`** — general-purpose add/remove for any role in any department (admin use).
+- **`PATCH /units/:id/users`** — add/remove `GENERAL_STAFF` within a supply unit.
+- **`PATCH /units/:id/rep`** — add/remove the `REPRESENTATIVE` for a non-supply unit (max one per unit).
+
+All role mutations touch `role_updated_at`, invalidating the auth cache.
 
 ### Project Lifecycle
 
 ```
-UNASSIGNED → WAITING_ACCEPT → IN_PROGRESS → (procurement complete) → UNASSIGNED (CONTRACT) → IN_PROGRESS → CLOSED
+UNASSIGNED → WAITING_ACCEPT → IN_PROGRESS → (procurement complete) → UNASSIGNED (CONTRACT) → IN_PROGRESS → NOT_EXPORTED → CLOSED
                                      ↓
                                WAITING_CANCEL → CANCELLED
                                      ↓
@@ -246,6 +256,8 @@ UNASSIGNED → WAITING_ACCEPT → IN_PROGRESS → (procurement complete) → UNA
 ```
 
 Projects have two workflow phases: **procurement** and **contract**, each tracked via `procurement_status` / `contract_status` (`ProjectPhaseStatus`).
+
+When the contract phase completes all steps, `contract_status` transitions to `NOT_EXPORTED` (not directly to `COMPLETED`) — the explicit `complete-contract` action is required to set this, and `close` requires `COMPLETED`.
 
 ### Workflow Types (`UnitResponsibleType`)
 
@@ -264,6 +276,32 @@ Each type maps to a fixed set of ordered workflow steps defined in `WORKFLOW_STE
 ### Delegation
 
 A user can delegate their roles to another user for a specified period. The delegatee inherits the delegator's roles during that window. Role changes and delegations update `role_updated_at`, which invalidates the auth LRU cache.
+
+### Project Filtering
+
+`POST /projects` accepts an optional `filter` body field with the following shape:
+
+```ts
+{
+  search?: string            // matches receive_no or title (case-insensitive)
+  title?: string
+  dateFrom?: string
+  dateTo?: string
+  fiscalYear?: string | number
+  procurementType?: ProcurementType[]
+  status?: ProjectStatus[]
+  procurementStatus?: ProjectPhaseStatus[]
+  contractStatus?: ProjectPhaseStatus[]
+  urgentStatus?: UrgentType[]
+  assignees?: string[]       // user IDs
+  units?: string[]           // requesting_unit_id values
+  myTasks?: boolean          // scopes to caller's assignee / unit
+  sortBy?: string            // receive_no | title | created_at | status | procurement_status | contract_status
+  sortOrder?: 'asc' | 'desc'
+}
+```
+
+When no date filter is provided, results are automatically scoped to the last 6 months.
 
 ---
 
@@ -285,6 +323,9 @@ Tokens expire after **3 hours**.
 - **`ProcurementType` and `UnitResponsibleType`** are intentionally separate enums. They overlap in values (`LT100K`, `LT500K`, etc.) but have distinct domain meanings: `ProcurementType` describes what a project is, while `UnitResponsibleType` describes which unit handles it (and includes `CONTRACT` which has no procurement equivalent).
 - **Workload aggregation** uses a single `prisma.project.findMany` + in-memory grouping to avoid N+1 queries.
 - **`GENERAL_STAFF` is intentionally forbidden** from the workload endpoint — a `ForbiddenError` is thrown by design.
+- **Multi-role architecture**: `addRoleInternal` / `removeRoleInternal` in `src/lib/user-role.ts` centralise all role mutation logic. Unit-level roles update the existing unit slot; dept-level roles replace a solo `GUEST` or append a new row. This allows a user to hold e.g. `ADMIN` + `FINANCE_STAFF` simultaneously.
+- **Advisory locks** via `pg_advisory_xact_lock` guard sequential number generation (`getReceiveNumber`) and submission round incrementing (`getSubmissionRound`) — must use the direct Neon connection URL, not the pooled URL, as PgBouncer in transaction pooling mode does not guarantee connection affinity.
+- **`NOT_EXPORTED` phase status**: after all contract steps complete, `syncProjectPhases` sets `contract_status` to `NOT_EXPORTED` rather than `COMPLETED`. The explicit `complete-contract` endpoint drives the transition to `COMPLETED`, keeping export confirmation a deliberate step.
 
 ---
 
