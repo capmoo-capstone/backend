@@ -192,11 +192,11 @@ model Project {
   requesting_unit_id     String?
   is_urgent              UrgentType          @default(NORMAL)
   expected_approval_date DateTime?
+  expected_completion_procurement_date DateTime?
   procurement_status     ProjectPhaseStatus  @default(NOT_STARTED)
   procurement_step       Int?
   contract_status        ProjectPhaseStatus  @default(NOT_STARTED)
   contract_step          Int?
-  budget_plan_id         String[]
   pr_no                  String?
   po_no                  String?
   less_no                String?

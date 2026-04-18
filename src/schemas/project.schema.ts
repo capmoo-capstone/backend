@@ -18,6 +18,7 @@ export const CreateProjectSchema = z.object({
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
   expected_approval_date: z.coerce.date().optional(),
+  expected_completion_procurement_date: z.coerce.date().optional(),
 });
 
 export const UpdateStatusProjectSchema = z.object({

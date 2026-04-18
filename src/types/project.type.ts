@@ -7,15 +7,82 @@ import {
   UserRole,
 } from '@prisma/client';
 import { ListResponse, PaginatedResponse } from './common.type';
+import { Decimal } from '@prisma/client/runtime/client';
 
 export interface PhaseStatusResult {
   status: ProjectPhaseStatus;
-  step?: number;
+  step?: number | null;
 }
 
 export type PaginatedProjects = PaginatedResponse<Project>;
 
 export type ProjectsListResponse = ListResponse<Project>;
+
+export interface ProjectDetailsResponse {
+  id: string;
+  procurement_type: ProcurementType;
+  current_workflow_type: string;
+  is_urgent: UrgentType;
+  title: string;
+  description: string | null;
+  budget: Decimal;
+  status: ProjectStatus;
+  procurement_status: PhaseStatusResult;
+  contract_status: PhaseStatusResult;
+  budget_plans: Array<{
+    id: string;
+    activity_type_name: string;
+    budget_amount: Decimal;
+  }>;
+  receive_no: string;
+  less_no: string | null;
+  pr_no: string | null;
+  po_no: string | null;
+  contract_no: string | null;
+  migo_no: string | null;
+  expected_approval_date: Date | null;
+  expected_completion_procurement_date: Date | null;
+  request_edit_reason: string | null;
+  created_at: Date;
+  updated_at: Date | null;
+  vendor: {
+    name: string | null;
+    tax_id: string | null;
+    email: string | null;
+  };
+  requester: {
+    dept_id: string;
+    dept_name: string;
+    unit_id: string | null;
+    unit_name: string | null;
+  };
+  creator: {
+    id: string;
+    full_name: string;
+  };
+  assignee_procurement: Array<{
+    id: string;
+    full_name: string;
+  }> | null;
+  assignee_contract: Array<{
+    id: string;
+    full_name: string;
+  }> | null;
+  cancellation: Array<{
+    reason: string;
+    is_cancelled: boolean;
+    requester: {
+      id: string;
+      full_name: string;
+    };
+    approver: {
+      id: string;
+      full_name: string;
+    } | null;
+    requested_at: Date;
+    approved_at: Date | null;
+  }> | null;
+}
 
 export interface StaffWorkload {
   user_id: string;
