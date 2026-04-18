@@ -23,6 +23,7 @@ router.patch('/:id/cancel', controller.cancelProject);
 router.patch('/:id/approve-cancel', controller.approveCancellation);
 router.patch('/:id/reject-cancel', controller.rejectCancellation);
 router.patch('/:id/complete-procurement', controller.completeProcurement);
+router.patch('/:id/complete-contract', controller.completeContract);
 router.patch('/:id/close', controller.closeProject);
 router.patch('/:id/request-edit', controller.requestEditProject);
 router.patch('/:id/update', controller.updateProject);

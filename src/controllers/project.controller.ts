@@ -276,6 +276,18 @@ export const completeProcurement = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
+export const completeContract = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = (req as any).user;
+  const projectId = req.params.id as string;
+  const project = await ProjectLifecycleService.completeContractPhase(
+    payload,
+    projectId
+  );
+  res.status(200).json(project);
+};
+
 export const closeProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
