@@ -287,6 +287,7 @@ export const addAssignee = async (
     const project = await tx.project.findUnique({
       where: { id: data.id },
       select: {
+        status: true,
         assignee_contract: true,
         assignee_procurement: true,
         current_workflow_type: true,
@@ -297,6 +298,20 @@ export const addAssignee = async (
     });
     if (!project) {
       throw new NotFoundError('Project not found');
+    }
+
+    if (
+      project.status in
+      [
+        ProjectStatus.UNASSIGNED,
+        ProjectStatus.WAITING_ACCEPT,
+        ProjectStatus.CANCELLED,
+        ProjectStatus.CLOSED,
+      ]
+    ) {
+      throw new BadRequestError(
+        'Cannot add assignee to project that is not in progress'
+      );
     }
     const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
