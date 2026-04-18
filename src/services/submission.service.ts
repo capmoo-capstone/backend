@@ -25,6 +25,7 @@ const getSubmissionRound = async (
     where: {
       project_id: data.project_id,
       step_order: data.step_order,
+      workflow_type: data.workflow_type,
       submission_type: SubmissionType.STAFF,
     },
     orderBy: { submitted_at: 'desc' },
