@@ -9,7 +9,10 @@ import { prisma } from '../config/prisma';
 import { CONTRACT_UNIT_ID } from '../lib/constant';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
-import { CancelProjectDto } from '../schemas/project.schema';
+import {
+  CancelProjectDto,
+  RequestEditProjectDto,
+} from '../schemas/project.schema';
 
 export const cancelProject = async (
   user: AuthPayload,
@@ -329,11 +332,11 @@ export const closeProject = async (user: AuthPayload, projectId: string) => {
 
 export const requestEditProject = async (
   user: AuthPayload,
-  projectId: string
+  data: RequestEditProjectDto
 ) => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
-      where: { id: projectId },
+      where: { id: data.id },
       select: { status: true },
     });
     if (!project) {
@@ -344,19 +347,20 @@ export const requestEditProject = async (
     }
 
     const updated = await tx.project.update({
-      where: { id: projectId },
+      where: { id: data.id },
       data: {
         status: ProjectStatus.REQUEST_EDIT,
+        request_edit_reason: data.reason,
       },
       select: { id: true, status: true },
     });
 
     await tx.projectHistory.create({
       data: {
-        project_id: projectId,
+        project_id: data.id,
         action: LogActionType.STATUS_UPDATE,
         old_value: { status: project.status },
-        new_value: { status: updated.status },
+        new_value: { status: updated.status, request_edit_reason: data.reason },
         changed_by: user.id,
       },
     });
