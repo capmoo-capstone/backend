@@ -28,5 +28,5 @@ export const getMe = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user as AuthPayload;
-  res.status(200).json({ data: payload });
+  res.status(200).json(payload);
 };

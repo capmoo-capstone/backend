@@ -12,6 +12,11 @@ import {
   UpdateStatusProjectDto,
   AcceptProjectsDto,
 } from '../schemas/project.schema';
+import {
+  ProjectAssigneeListResponse,
+  ProjectAssigneeResponse,
+  ProjectIdStatusResponse,
+} from '../types/project.type';
 
 const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
   workflowType === UnitResponsibleType.CONTRACT
@@ -21,7 +26,7 @@ const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
 export const assignProjectsToUser = async (
   user: AuthPayload,
   data: UpdateStatusProjectsDto
-) => {
+): Promise<ProjectAssigneeListResponse> => {
   return await prisma.$transaction(async (tx) => {
     const projectIds = data.map((d) => d.id);
     const assigneeIds = [...new Set(data.map((d) => d.userId))];
@@ -100,14 +105,14 @@ export const assignProjectsToUser = async (
     const updatedProjects = await Promise.all(updatePromises);
     await Promise.all(historyPromises);
 
-    return { data: updatedProjects };
+    return updatedProjects as unknown as ProjectAssigneeListResponse;
   });
 };
 
 export const changeAssignee = async (
   user: AuthPayload,
   data: UpdateStatusProjectDto
-) => {
+): Promise<ProjectAssigneeResponse> => {
   const { id, userId: newAssigneeId } = data;
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
@@ -160,11 +165,14 @@ export const changeAssignee = async (
         changed_by: user.id,
       },
     });
-    return { data: updated };
+    return updated as unknown as ProjectAssigneeResponse;
   });
 };
 
-export const claimProject = async (user: AuthPayload, projectId: string) => {
+export const claimProject = async (
+  user: AuthPayload,
+  projectId: string
+): Promise<ProjectAssigneeResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -208,14 +216,14 @@ export const claimProject = async (user: AuthPayload, projectId: string) => {
       },
     });
 
-    return { data: updated };
+    return updated as unknown as ProjectAssigneeResponse;
   });
 };
 
 export const acceptProjects = async (
   user: AuthPayload,
   data: AcceptProjectsDto
-) => {
+): Promise<ProjectIdStatusResponse[]> => {
   return await prisma.$transaction(async (tx) => {
     const projects = await tx.project.findMany({
       where: { id: { in: data.id } },
@@ -275,14 +283,14 @@ export const acceptProjects = async (
     const updatedProjects = await Promise.all(updatePromises);
     await Promise.all(historyPromises);
 
-    return { data: updatedProjects };
+    return updatedProjects;
   });
 };
 
 export const addAssignee = async (
   user: AuthPayload,
   data: UpdateStatusProjectDto
-) => {
+): Promise<ProjectAssigneeResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
@@ -350,11 +358,14 @@ export const addAssignee = async (
         changed_by: user.id,
       },
     });
-    return { data: updated };
+    return updated as unknown as ProjectAssigneeResponse;
   });
 };
 
-export const returnProject = async (user: AuthPayload, projectId: string) => {
+export const returnProject = async (
+  user: AuthPayload,
+  projectId: string
+): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -408,6 +419,6 @@ export const returnProject = async (user: AuthPayload, projectId: string) => {
         changed_by: user.id,
       },
     });
-    return { data: updated };
+    return updated;
   });
 };

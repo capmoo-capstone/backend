@@ -13,6 +13,14 @@ import {
   RejectSubmissionDto,
 } from '../schemas/submission.schema';
 import { syncProjectPhases } from '../lib/phase-status';
+import {
+  ApprovedSubmissionResponse,
+  CompletedSubmissionResponse,
+  ProjectSubmissionsResponse,
+  ProposedSubmissionResponse,
+  RejectedSubmissionResponse,
+  SubmissionActionResponse,
+} from '../types/submission.type';
 
 const getSubmissionRound = async (
   data: CreateSubmissionDto,
@@ -37,7 +45,7 @@ const getSubmissionRound = async (
 export const getProjectSubmissions = async (
   user: AuthPayload,
   projectId: string
-) => {
+): Promise<ProjectSubmissionsResponse> => {
   const project = await prisma.project
     .findUniqueOrThrow({
       where: { id: projectId },
@@ -90,7 +98,7 @@ export const getProjectSubmissions = async (
 export const createStaffSubmissionsProject = async (
   user: AuthPayload,
   data: CreateSubmissionDto
-) => {
+): Promise<SubmissionActionResponse> => {
   if (data.type !== SubmissionType.STAFF) {
     throw new BadRequestError('Invalid submission type for staff submission');
   }
@@ -141,14 +149,14 @@ export const createStaffSubmissionsProject = async (
       submission.workflow_type,
       submission.project_id
     );
-    return { data: submission };
+    return submission;
   });
 };
 
 export const rejectSubmission = async (
   user: AuthPayload,
   data: RejectSubmissionDto
-) => {
+): Promise<RejectedSubmissionResponse> => {
   return await prisma.$transaction(async (tx) => {
     const updated = await tx.projectSubmission.update({
       where: { id: data.id },
@@ -166,17 +174,19 @@ export const rejectSubmission = async (
         submission_round: true,
         status: true,
         comment: true,
+        approved_by: true,
+        approved_at: true,
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
-    return { data: updated };
+    return updated;
   });
 };
 
 export const approveSubmission = async (
   user: AuthPayload,
   data: ApproveSubmissionDto
-) => {
+): Promise<ApprovedSubmissionResponse> => {
   return await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
@@ -218,11 +228,14 @@ export const approveSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
-    return { data: updated };
+    return updated;
   });
 };
 
-export const proposeSubmission = async (user: AuthPayload, id: string) => {
+export const proposeSubmission = async (
+  user: AuthPayload,
+  id: string
+): Promise<ProposedSubmissionResponse> => {
   return await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id },
@@ -258,14 +271,14 @@ export const proposeSubmission = async (user: AuthPayload, id: string) => {
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
-    return { data: updated };
+    return updated;
   });
 };
 
 export const signAndCompleteSubmission = async (
   user: AuthPayload,
   id: string
-) => {
+): Promise<CompletedSubmissionResponse> => {
   return await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id },
@@ -300,6 +313,6 @@ export const signAndCompleteSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
-    return { data: updated };
+    return updated;
   });
 };

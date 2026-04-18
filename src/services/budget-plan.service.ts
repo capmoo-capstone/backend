@@ -1,7 +1,11 @@
 import { prisma } from '../config/prisma';
 import { AuthPayload } from '../types/auth.type';
 import { ImportBudgetPlanDto } from '../schemas/budget-plan.schema';
-import { PaginatedBudgetPlans } from '../types/budget-plan.type';
+import {
+  ImportBudgetPlanResponse,
+  PaginatedBudgetPlans,
+  UpdateProjectIdPlanResponse,
+} from '../types/budget-plan.type';
 
 export const listBudgetPlans = async (
   user: AuthPayload,
@@ -37,7 +41,7 @@ export const listBudgetPlans = async (
 export const importBudgetPlan = async (
   user: AuthPayload,
   data: ImportBudgetPlanDto
-): Promise<any> => {
+): Promise<ImportBudgetPlanResponse> => {
   const formatData = data.map((item) => ({
     ...item,
     created_by: user.id,
@@ -53,14 +57,17 @@ export const importBudgetPlan = async (
     },
   });
 
-  return { data: budgetPlan };
+  return {
+    total: budgetPlan.length,
+    data: budgetPlan,
+  };
 };
 
 export const updateProjectIdPlan = async (
   user: AuthPayload,
   id: string,
   projectId: string
-): Promise<any> => {
+): Promise<UpdateProjectIdPlanResponse> => {
   const updatedBudgetPlan = await prisma.budgetPlan.update({
     where: { id },
     data: { project_id: projectId },
@@ -72,7 +79,7 @@ export const updateProjectIdPlan = async (
     },
   });
 
-  return { data: updatedBudgetPlan };
+  return updatedBudgetPlan;
 };
 
 export const deleteBudgetPlan = async (

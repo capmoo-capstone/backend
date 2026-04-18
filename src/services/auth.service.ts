@@ -8,8 +8,15 @@ import {
 import jwt from 'jsonwebtoken';
 import { RegisterUserDto } from '../schemas/user.schema';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
+import {
+  FetchAndFormatUserDetailsResponse,
+  LoginResponse,
+  RegisterResponse,
+} from '../types/auth.type';
 
-export const fetchAndFormatUserDetails = async (whereClause: any) => {
+export const fetchAndFormatUserDetails = async (
+  whereClause: any
+): Promise<FetchAndFormatUserDetailsResponse | null> => {
   const now = new Date();
   const user = await prisma.user.findFirst({
     where: whereClause,
@@ -81,7 +88,7 @@ export const fetchAndFormatUserDetails = async (whereClause: any) => {
 export const login = async (
   username: string,
   full_name: string
-): Promise<any> => {
+): Promise<LoginResponse> => {
   const result = await fetchAndFormatUserDetails({ username, full_name });
 
   if (!result) {
@@ -101,14 +108,14 @@ export const login = async (
   });
 
   return {
-    data: {
-      token,
-      id: user.id,
-      ...authData, // Spread the roles and delegations perfectly
-    },
+    token,
+    id: user.id,
+    ...authData, // Spread the roles and delegations perfectly
   };
 };
-export const register = async (data: RegisterUserDto): Promise<any> => {
+export const register = async (
+  data: RegisterUserDto
+): Promise<RegisterResponse> => {
   const existingUser = await prisma.user.findUnique({
     where: { username: data.username },
   });
@@ -175,5 +182,5 @@ export const register = async (data: RegisterUserDto): Promise<any> => {
     return newUser;
   });
 
-  return { data: result };
+  return result;
 };

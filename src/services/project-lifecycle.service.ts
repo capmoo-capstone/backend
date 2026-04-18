@@ -13,11 +13,19 @@ import {
   CancelProjectDto,
   RequestEditProjectDto,
 } from '../schemas/project.schema';
+import {
+  CompleteContractPhaseResponse,
+  CompleteProcurementPhaseResponse,
+  ProjectCancellationResponse,
+  ProjectIdStatusResponse,
+  RequestEditProjectResponse,
+} from '../types/project.type';
+import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 
 export const cancelProject = async (
   user: AuthPayload,
   data: CancelProjectDto
-) => {
+): Promise<ProjectCancellationResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
@@ -36,9 +44,7 @@ export const cancelProject = async (
       );
     }
 
-    const isHead =
-      user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT) ||
-      user.roles.some((r) => r.role === UserRole.HEAD_OF_DEPARTMENT);
+    const isHead = isHeadOfSupplyDept(user) || isHeadOfSupplyUnit(user);
 
     if (!isHead) {
       if (project.status === ProjectStatus.CANCELLED) {
@@ -77,7 +83,7 @@ export const cancelProject = async (
         select: { project_id: true, reason: true, is_cancelled: true },
       });
 
-      return { data: cancelled };
+      return cancelled;
     }
 
     await tx.project.update({
@@ -109,14 +115,14 @@ export const cancelProject = async (
       select: { project_id: true, reason: true, is_cancelled: true },
     });
 
-    return { data: cancelled };
+    return cancelled;
   });
 };
 
 export const approveCancellation = async (
   user: AuthPayload,
   projectId: string
-) => {
+): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -154,14 +160,14 @@ export const approveCancellation = async (
         changed_by: user.id,
       },
     });
-    return { data: updated };
+    return updated;
   });
 };
 
 export const rejectCancellation = async (
   user: AuthPayload,
   projectId: string
-) => {
+): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -216,14 +222,14 @@ export const rejectCancellation = async (
       },
     });
 
-    return { data: updated };
+    return updated;
   });
 };
 
 export const completeProcurementPhase = async (
   user: AuthPayload,
   projectId: string
-) => {
+): Promise<CompleteProcurementPhaseResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -278,14 +284,14 @@ export const completeProcurementPhase = async (
         changed_by: user.id,
       },
     });
-    return { data: updated };
+    return updated;
   });
 };
 
 export const completeContractPhase = async (
   user: AuthPayload,
   projectId: string
-) => {
+): Promise<CompleteContractPhaseResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -334,11 +340,14 @@ export const completeContractPhase = async (
       },
     });
 
-    return { data: updated };
+    return updated;
   });
 };
 
-export const closeProject = async (user: AuthPayload, projectId: string) => {
+export const closeProject = async (
+  user: AuthPayload,
+  projectId: string
+): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -382,14 +391,14 @@ export const closeProject = async (user: AuthPayload, projectId: string) => {
       },
     });
 
-    return { data: updated };
+    return updated;
   });
 };
 
 export const requestEditProject = async (
   user: AuthPayload,
   data: RequestEditProjectDto
-) => {
+): Promise<RequestEditProjectResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
@@ -408,7 +417,7 @@ export const requestEditProject = async (
         status: ProjectStatus.REQUEST_EDIT,
         request_edit_reason: data.reason,
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, request_edit_reason: true },
     });
 
     await tx.projectHistory.create({
@@ -420,6 +429,6 @@ export const requestEditProject = async (
         changed_by: user.id,
       },
     });
-    return { data: updated };
+    return updated;
   });
 };

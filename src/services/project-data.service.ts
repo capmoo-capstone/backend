@@ -3,7 +3,11 @@ import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import { CreateProjectDto, UpdateProjectDto } from '../schemas/project.schema';
-import { ProjectsListResponse } from '../types/project.type';
+import {
+  CreateProjectResponse,
+  ProjectsListResponse,
+  UpdateProjectDataResponse,
+} from '../types/project.type';
 
 const getReceiveNumber = async (
   tx: Prisma.TransactionClient,
@@ -23,7 +27,7 @@ const getReceiveNumber = async (
 export const createProject = async (
   user: AuthPayload,
   data: CreateProjectDto
-): Promise<any> => {
+): Promise<CreateProjectResponse> => {
   return await prisma.$transaction(async (tx) => {
     const responsibleUnit = await tx.unit.findFirst({
       where: { type: { has: data.procurement_type } },
@@ -61,7 +65,7 @@ export const createProject = async (
       });
     }
 
-    return { data: project };
+    return project;
   });
 };
 
@@ -105,7 +109,7 @@ export const importProjects = async (
 export const updateProjectData = async (
   user: AuthPayload,
   data: UpdateProjectDto
-) => {
+): Promise<UpdateProjectDataResponse> => {
   if (!data || !data.updateData || Object.keys(data.updateData).length === 0) {
     throw new BadRequestError('No data provided for update');
   }
@@ -136,7 +140,7 @@ export const updateProjectData = async (
       },
     });
 
-    return { data: updated };
+    return updated;
   });
 };
 

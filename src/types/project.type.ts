@@ -3,6 +3,7 @@ import {
   Project,
   ProjectPhaseStatus,
   ProjectStatus,
+  UnitResponsibleType,
   UrgentType,
   UserRole,
 } from '@prisma/client';
@@ -17,6 +18,39 @@ export interface PhaseStatusResult {
 export type PaginatedProjects = PaginatedResponse<Project>;
 
 export type ProjectsListResponse = ListResponse<Project>;
+
+export type CreateProjectResponse = Project;
+
+export type UpdateProjectDataResponse = Project;
+
+export interface ProjectIdStatusResponse {
+  id: string;
+  status: ProjectStatus;
+}
+
+export type ProjectAssigneeResponse = ProjectIdStatusResponse &
+  Record<string, unknown>;
+
+export type ProjectAssigneeListResponse = ProjectAssigneeResponse[];
+
+export interface ProjectCancellationResponse {
+  project_id: string;
+  reason: string;
+  is_cancelled: boolean;
+}
+
+export interface CompleteProcurementPhaseResponse extends ProjectIdStatusResponse {
+  current_workflow_type: UnitResponsibleType;
+  responsible_unit_id: string;
+}
+
+export interface CompleteContractPhaseResponse extends ProjectIdStatusResponse {
+  contract_status: ProjectPhaseStatus;
+}
+
+export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
+  request_edit_reason: string | null;
+}
 
 export interface ProjectDetailsResponse {
   id: string;
