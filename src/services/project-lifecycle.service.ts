@@ -9,7 +9,10 @@ import { prisma } from '../config/prisma';
 import { CONTRACT_UNIT_ID } from '../lib/constant';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
-import { CancelProjectDto } from '../schemas/project.schema';
+import {
+  CancelProjectDto,
+  RequestEditProjectDto,
+} from '../schemas/project.schema';
 
 export const cancelProject = async (
   user: AuthPayload,
@@ -279,6 +282,62 @@ export const completeProcurementPhase = async (
   });
 };
 
+export const completeContractPhase = async (
+  user: AuthPayload,
+  projectId: string
+) => {
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: {
+        status: true,
+        current_workflow_type: true,
+        contract_status: true,
+        responsible_unit_id: true,
+      },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+    if (project.status !== ProjectStatus.IN_PROGRESS) {
+      throw new BadRequestError('Project is not in IN_PROGRESS status');
+    }
+    if (project.contract_status !== ProjectPhaseStatus.NOT_EXPORTED) {
+      throw new BadRequestError('Contract phase is not in NOT_EXPORTED status');
+    }
+    if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
+      throw new BadRequestError('Project is not in CONTRACT workflow type');
+    }
+
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: {
+        contract_status: ProjectPhaseStatus.COMPLETED,
+      },
+      select: {
+        id: true,
+        status: true,
+        contract_status: true,
+      },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: projectId,
+        action: LogActionType.STATUS_UPDATE,
+        old_value: {
+          contract_status: project.contract_status,
+        },
+        new_value: {
+          contract_status: updated.contract_status,
+        },
+        changed_by: user.id,
+      },
+    });
+
+    return { data: updated };
+  });
+};
+
 export const closeProject = async (user: AuthPayload, projectId: string) => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
@@ -317,7 +376,7 @@ export const closeProject = async (user: AuthPayload, projectId: string) => {
           status: project.status,
         },
         new_value: {
-          status: ProjectStatus.CLOSED,
+          status: updated.status,
         },
         changed_by: user.id,
       },
@@ -329,11 +388,11 @@ export const closeProject = async (user: AuthPayload, projectId: string) => {
 
 export const requestEditProject = async (
   user: AuthPayload,
-  projectId: string
+  data: RequestEditProjectDto
 ) => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
-      where: { id: projectId },
+      where: { id: data.id },
       select: { status: true },
     });
     if (!project) {
@@ -344,19 +403,20 @@ export const requestEditProject = async (
     }
 
     const updated = await tx.project.update({
-      where: { id: projectId },
+      where: { id: data.id },
       data: {
         status: ProjectStatus.REQUEST_EDIT,
+        request_edit_reason: data.reason,
       },
       select: { id: true, status: true },
     });
 
     await tx.projectHistory.create({
       data: {
-        project_id: projectId,
+        project_id: data.id,
         action: LogActionType.STATUS_UPDATE,
         old_value: { status: project.status },
-        new_value: { status: updated.status },
+        new_value: { status: updated.status, request_edit_reason: data.reason },
         changed_by: user.id,
       },
     });

@@ -20,13 +20,20 @@ import {
 import { AuthPayload } from '../types/auth.type';
 import {
   PaginatedProjects,
+  ProjectDetailsResponse,
   ProjectsListResponse,
   StaffWorkload,
   SummaryResponse,
   UnitWorkload,
   WorkloadStatsResponse,
 } from '../types/project.type';
-import { CONTRACT_UNIT_ID, OPS_DEPT_ID, PROC1_UNIT_ID, PROC2_UNIT_ID, WORKLOAD_STATUSES } from '../lib/constant';
+import {
+  CONTRACT_UNIT_ID,
+  OPS_DEPT_ID,
+  PROC1_UNIT_ID,
+  PROC2_UNIT_ID,
+  WORKLOAD_STATUSES,
+} from '../lib/constant';
 import { ProjectFilterQuery } from '../schemas/project.schema';
 
 const SORTABLE_FIELDS = new Set([
@@ -97,10 +104,20 @@ const buildWhereClause = (
   }
 
   if (filters?.fiscalYear !== undefined) {
+    const lastTwoDigits = String(filters.fiscalYear).slice(-2);
     and.push({
-      budget_plans: {
-        some: { budget_year: String(filters.fiscalYear) },
-      },
+      OR: [
+        {
+          receive_no: {
+            endsWith: `${filters.fiscalYear}`,
+          },
+        },
+        {
+          receive_no: {
+            endsWith: `${lastTwoDigits}`,
+          },
+        },
+      ],
     });
   }
   if (filters?.procurementType?.length) {
@@ -134,7 +151,11 @@ const buildWhereClause = (
   const assigneeIds = new Set<string>(filters?.assignees ?? []);
   if (filters?.myTasks) {
     if (isHeadOfSupplyDept(user)) {
-      and.push({ responsible_unit_id: { in: [PROC1_UNIT_ID, PROC2_UNIT_ID, CONTRACT_UNIT_ID] } });
+      and.push({
+        responsible_unit_id: {
+          in: [PROC1_UNIT_ID, PROC2_UNIT_ID, CONTRACT_UNIT_ID],
+        },
+      });
     } else if (isHeadOfSupplyUnit(user)) {
       const unitIds = user.roles
         .filter((r) => r.role === UserRole.HEAD_OF_UNIT && r.unit_id)
@@ -206,7 +227,10 @@ export const listProjects = async (
   };
 };
 
-export const getById = async (user: AuthPayload, id: string): Promise<any> => {
+export const getById = async (
+  user: AuthPayload,
+  id: string
+): Promise<ProjectDetailsResponse> => {
   const haveAccess =
     haveSupplyPermission(user) ||
     (await prisma.project.count({
@@ -261,6 +285,13 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
             approver: { select: { id: true, full_name: true, roles: true } },
           },
         },
+        budget_plans: {
+          select: {
+            id: true,
+            activity_type_name: true,
+            budget_amount: true,
+          },
+        },
       },
     });
     if (!projectData) {
@@ -284,6 +315,7 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
         status: projectData.contract_status,
         step: projectData.contract_step,
       },
+      budget_plans: projectData.budget_plans ?? [],
       receive_no: projectData.receive_no,
       less_no: projectData.less_no,
       pr_no: projectData.pr_no,
@@ -291,6 +323,9 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
       contract_no: projectData.contract_no,
       migo_no: projectData.migo_no,
       expected_approval_date: projectData.expected_approval_date,
+      expected_completion_procurement_date:
+        projectData.expected_completion_procurement_date,
+      request_edit_reason: projectData.request_edit_reason,
       created_at: projectData.created_at,
       updated_at: projectData.updated_at,
       vendor: {
@@ -308,20 +343,22 @@ export const getById = async (user: AuthPayload, id: string): Promise<any> => {
         id: projectData.creator.id,
         full_name: projectData.creator.full_name,
       },
-      assignee_procurement: projectData.assignee_procurement.map((u) => ({
-        id: u.id,
-        full_name: u.full_name,
-      })),
-      assignee_contract: projectData.assignee_contract.map((u) => ({
-        id: u.id,
-        full_name: u.full_name,
-      })),
+      assignee_procurement: projectData.assignee_procurement,
+      assignee_contract: projectData.assignee_contract,
       cancellation: projectData.project_cancellation
         ? projectData.project_cancellation.map((c) => ({
             reason: c.reason,
             is_cancelled: c.is_cancelled,
-            requester: c.requester,
-            approver: c.approver,
+            requester: {
+              id: c.requester.id,
+              full_name: c.requester.full_name,
+            },
+            approver: c.approver
+              ? {
+                  id: c.approver.id,
+                  full_name: c.approver.full_name,
+                }
+              : null,
             requested_at: c.requested_at,
             approved_at: c.approved_at,
           }))
@@ -856,21 +893,48 @@ export const getSummaryCards = async (
       prisma.project.count({
         where: {
           ...baseWhere,
-          status: {
-            in: [ProjectStatus.UNASSIGNED, ProjectStatus.WAITING_ACCEPT],
-          },
+          AND: [
+            {
+              status: {
+                in: [ProjectStatus.UNASSIGNED, ProjectStatus.WAITING_ACCEPT],
+              },
+            },
+            {
+              procurement_status: {
+                in: [ProjectPhaseStatus.NOT_STARTED],
+              },
+            },
+          ],
         },
       }),
       prisma.project.count({
         where: {
           ...baseWhere,
-          status: {
-            in: [
-              ProjectStatus.IN_PROGRESS,
-              ProjectStatus.WAITING_CANCEL,
-              ProjectStatus.REQUEST_EDIT,
-            ],
-          },
+          OR: [
+            {
+              status: {
+                in: [
+                  ProjectStatus.IN_PROGRESS,
+                  ProjectStatus.WAITING_CANCEL,
+                  ProjectStatus.REQUEST_EDIT,
+                ],
+              },
+            },
+            {
+              AND: [
+                { procurement_status: { in: [ProjectPhaseStatus.COMPLETED] } },
+                { contract_status: { in: [ProjectPhaseStatus.NOT_STARTED] } },
+                {
+                  status: {
+                    in: [
+                      ProjectStatus.UNASSIGNED,
+                      ProjectStatus.WAITING_ACCEPT,
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
         },
       }),
       prisma.project.count({

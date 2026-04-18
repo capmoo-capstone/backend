@@ -5,10 +5,11 @@ import { ImportBudgetPlanSchema } from '../schemas/budget-plan.schema';
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Budget Plan']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit } = req.query;
+  const { page, limit, unitId } = req.query;
   const payload = (req as any).user;
   const data = await BudgetPlanService.listBudgetPlans(
     payload,
+    unitId as string,
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10
   );

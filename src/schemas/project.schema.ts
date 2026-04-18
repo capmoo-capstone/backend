@@ -18,6 +18,7 @@ export const CreateProjectSchema = z.object({
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
   expected_approval_date: z.coerce.date().optional(),
+  expected_completion_procurement_date: z.coerce.date().optional(),
 });
 
 export const UpdateStatusProjectSchema = z.object({
@@ -32,6 +33,11 @@ export const AcceptProjectsSchema = z.object({
 });
 
 export const CancelProjectSchema = z.object({
+  id: z.uuid(),
+  reason: z.string(),
+});
+
+export const RequestEditProjectSchema = z.object({
   id: z.uuid(),
   reason: z.string(),
 });
@@ -86,6 +92,7 @@ export type UpdateStatusProjectsDto = z.infer<
 >;
 export type AcceptProjectsDto = z.infer<typeof AcceptProjectsSchema>;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
+export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<
   typeof GetProjectsQueryByUnitSchema

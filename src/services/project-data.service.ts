@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import { CreateProjectDto, UpdateProjectDto } from '../schemas/project.schema';
+import { ProjectsListResponse } from '../types/project.type';
 
 const getReceiveNumber = async (
   tx: Prisma.TransactionClient,
@@ -67,34 +68,37 @@ export const createProject = async (
 export const importProjects = async (
   user: AuthPayload,
   data: CreateProjectDto[]
-): Promise<any> => {
+): Promise<ProjectsListResponse> => {
   return await prisma.$transaction(async (tx) => {
-    const createdProjects = [];
-    for (const projectData of data) {
-      const responsibleUnit = await tx.unit.findFirst({
-        where: { type: { has: projectData.procurement_type } },
-        select: { id: true },
-      });
-      if (!responsibleUnit) {
-        throw new NotFoundError(
-          `Responsible unit not found for procurement type ${projectData.procurement_type}`
-        );
-      }
-      const receiveNumber = await getReceiveNumber(tx);
-      const project = await tx.project.create({
-        data: {
-          ...projectData,
-          status: ProjectStatus.UNASSIGNED,
-          current_workflow_type: projectData.procurement_type,
-          responsible_unit_id: responsibleUnit.id,
-          receive_no: receiveNumber,
-          created_by: user.id,
-        },
-      });
-      createdProjects.push(project);
-    }
+    const formatData = await Promise.all(
+      data.map(async (project) => ({
+        ...project,
+        status: ProjectStatus.UNASSIGNED,
+        current_workflow_type: project.procurement_type,
+        responsible_unit_id: await tx.unit
+          .findFirstOrThrow({
+            where: { type: { has: project.procurement_type } },
+            select: { id: true },
+          })
+          .then((unit) => unit.id)
+          .catch(() => {
+            throw new NotFoundError(
+              `Responsible unit not found for procurement type ${project.procurement_type}`
+            );
+          }),
+        receive_no: await getReceiveNumber(tx),
+        created_by: user.id,
+      }))
+    );
+    const createdProjects = await tx.project.createManyAndReturn({
+      data: formatData,
+      skipDuplicates: true,
+    });
 
-    return { data: createdProjects };
+    return {
+      total: createdProjects.length,
+      data: createdProjects,
+    };
   });
 };
 

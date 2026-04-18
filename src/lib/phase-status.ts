@@ -100,8 +100,12 @@ export const syncProjectPhases = async (
     contract_step: number;
   }> = {};
   if (workflowType === UnitResponsibleType.CONTRACT) {
-    dataToUpdate.contract_status = status;
-    dataToUpdate.contract_step = step;
+    if (status === ProjectPhaseStatus.COMPLETED) {
+      dataToUpdate.contract_status = ProjectPhaseStatus.NOT_EXPORTED;
+    } else {
+      dataToUpdate.contract_status = status;
+      dataToUpdate.contract_step = step;
+    }
   } else {
     dataToUpdate.procurement_status = status;
     dataToUpdate.procurement_step = step;

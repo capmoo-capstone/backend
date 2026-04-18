@@ -9,6 +9,7 @@ import {
   CreateProjectSchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
+  RequestEditProjectSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
@@ -275,6 +276,18 @@ export const completeProcurement = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
+export const completeContract = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = (req as any).user;
+  const projectId = req.params.id as string;
+  const project = await ProjectLifecycleService.completeContractPhase(
+    payload,
+    projectId
+  );
+  res.status(200).json(project);
+};
+
 export const closeProject = async (req: Request, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
@@ -292,9 +305,13 @@ export const requestEditProject = async (req: Request, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = (req as any).user;
   const projectId = req.params.id as string;
+  const validatedData = RequestEditProjectSchema.parse({
+    id: projectId,
+    ...req.body,
+  });
   const project = await ProjectLifecycleService.requestEditProject(
     payload,
-    projectId
+    validatedData
   );
   res.status(200).json(project);
 };
