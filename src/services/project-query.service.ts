@@ -856,14 +856,25 @@ export const getSummaryCards = async (
       prisma.project.count({
         where: {
           ...baseWhere,
+AND: [
+            {
           status: {
             in: [ProjectStatus.UNASSIGNED, ProjectStatus.WAITING_ACCEPT],
           },
+},
+            {
+              procurement_status: {
+                in: [ProjectPhaseStatus.NOT_STARTED],
+              },
+            },
+          ],
         },
       }),
       prisma.project.count({
         where: {
           ...baseWhere,
+OR: [
+            {
           status: {
             in: [
               ProjectStatus.IN_PROGRESS,
@@ -871,6 +882,22 @@ export const getSummaryCards = async (
               ProjectStatus.REQUEST_EDIT,
             ],
           },
+},
+            {
+              AND: [
+                { procurement_status: { in: [ProjectPhaseStatus.COMPLETED] } },
+                { contract_status: { in: [ProjectPhaseStatus.NOT_STARTED] } },
+                {
+                  status: {
+                    in: [
+                      ProjectStatus.UNASSIGNED,
+                      ProjectStatus.WAITING_ACCEPT,
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
         },
       }),
       prisma.project.count({
