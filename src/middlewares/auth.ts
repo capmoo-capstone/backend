@@ -14,9 +14,9 @@ interface JwtPayload {
   full_name: string;
 }
 
-export interface AuthenticatedRequest extends Request {
+export type AuthenticatedRequest = Request & {
   user?: AuthPayload;
-}
+};
 
 export const protect = async (
   req: AuthenticatedRequest,
