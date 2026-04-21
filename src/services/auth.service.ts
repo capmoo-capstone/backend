@@ -12,7 +12,9 @@ import {
   FetchAndFormatUserDetailsResponse,
   LoginResponse,
   RegisterResponse,
+  AuthPayload,
 } from '../types/auth.type';
+import { clearUserAuthCache } from '../lib/auth-cache';
 
 export const fetchAndFormatUserDetails = async (
   whereClause: any
@@ -184,3 +186,20 @@ export const register = async (
 
   return result;
 };
+
+/**
+ * Clears server-side cached authorization data for the current user.
+ *
+ * Note: this does not revoke or invalidate an already-issued JWT. Any valid
+ * token will remain usable until it expires unless token revocation is
+ * enforced during authentication (for example via jti denylisting or a
+ * refresh-token/session store).
+ */
+export const clearSessionCache = async (
+  payload: AuthPayload
+): Promise<void> => {
+  clearUserAuthCache(payload.id);
+};
+// Backward-compatible alias; retains existing behavior but callers should
+// prefer `clearSessionCache` to avoid implying JWT revocation.
+export const logout = clearSessionCache;

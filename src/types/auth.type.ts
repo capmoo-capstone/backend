@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client';
+import { Request } from 'express';
 
 export interface AuthRoleDetail {
   role: UserRole;
@@ -67,3 +68,7 @@ export interface AuthPayload {
   is_delegated: boolean;
   delegated_by: DelegatedByUser[];
 }
+
+export type AuthenticatedRequest = Request & {
+  user?: AuthPayload;
+};

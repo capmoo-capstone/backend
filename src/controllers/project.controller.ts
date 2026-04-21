@@ -3,6 +3,7 @@ import * as ProjectQueryService from '../services/project-query.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
 import * as ProjectDataService from '../services/project-data.service';
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
+import { AuthenticatedRequest } from '../types/auth.type';
 import {
   AcceptProjectsSchema,
   CancelProjectSchema,
@@ -15,12 +16,12 @@ import {
   UpdateStatusProjectsSchema,
 } from '../schemas/project.schema';
 
-export const getAll = async (req: Request, res: Response) => {
+export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
   const { filter } = req.body;
-  const payload = (req as any).user;
+  const payload = req.user!;
   const validatedFilter = ProjectFilterQuerySchema.parse(filter);
   const data = await ProjectQueryService.listProjects(
     payload,
@@ -31,20 +32,23 @@ export const getAll = async (req: Request, res: Response) => {
   res.status(200).json(data);
 };
 
-export const getById = async (req: Request, res: Response) => {
+export const getById = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const projectId = req.params.id as string;
-  const payload = (req as any).user;
+  const payload = req.user!;
   const project = await ProjectQueryService.getById(payload, projectId);
   res.status(200).json(project);
 };
 
-export const getUnassignedByUnit = async (req: Request, res: Response) => {
+export const getUnassignedByUnit = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.query;
-  const payload = (req as any).user;
+  const payload = req.user!;
   const validated = GetProjectsQueryByUnitSchema.parse({ unitId });
   const projects = await ProjectQueryService.getUnassignedProjectsByUnit(
     payload,
@@ -53,11 +57,14 @@ export const getUnassignedByUnit = async (req: Request, res: Response) => {
   res.status(200).json(projects);
 };
 
-export const getAssignedProjects = async (req: Request, res: Response) => {
+export const getAssignedProjects = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { date } = req.query;
-  const payload = (req as any).user;
+  const payload = req.user!;
   const targetDate = date ? new Date(date as string) : new Date();
   const projects = await ProjectQueryService.getAssignedProjects(
     payload,
@@ -66,11 +73,14 @@ export const getAssignedProjects = async (req: Request, res: Response) => {
   res.status(200).json(projects);
 };
 
-export const getWaitingCancellation = async (req: Request, res: Response) => {
+export const getWaitingCancellation = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { unitId } = req.query;
-  const payload = (req as any).user;
+  const payload = req.user!;
   const validated = GetProjectsQueryByUnitSchema.parse({ unitId });
   const projects = await ProjectQueryService.getWaitingCancellationProjects(
     payload,
@@ -79,11 +89,14 @@ export const getWaitingCancellation = async (req: Request, res: Response) => {
   res.status(200).json(projects);
 };
 
-export const getOwnProjects = async (req: Request, res: Response) => {
+export const getOwnProjects = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projects = await ProjectQueryService.getOwnProjects(
     payload,
     parseInt(page as string) || 1,
@@ -92,10 +105,10 @@ export const getOwnProjects = async (req: Request, res: Response) => {
   res.status(200).json(projects);
 };
 
-export const getWorkload = async (req: Request, res: Response) => {
+export const getWorkload = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const { unitId } = req.query;
   const workload = await ProjectQueryService.getWorkload(
     payload,
@@ -104,19 +117,22 @@ export const getWorkload = async (req: Request, res: Response) => {
   res.status(200).json(workload);
 };
 
-export const getSummary = async (req: Request, res: Response) => {
+export const getSummary = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const summary = await ProjectQueryService.getSummaryCards(payload);
   res.status(200).json(summary);
 };
 
-export const createProject = async (req: Request, res: Response) => {
+export const createProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDto' } }
-  const payload = (req as any).user;
+  const payload = req.user!;
 
   const validatedData = CreateProjectSchema.parse(req.body);
   const project = await ProjectDataService.createProject(
@@ -126,11 +142,14 @@ export const createProject = async (req: Request, res: Response) => {
   res.status(201).json(project);
 };
 
-export const importProjects = async (req: Request, res: Response) => {
+export const importProjects = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateProjectDtoArray' } }
-  const payload = (req as any).user;
+  const payload = req.user!;
   const validatedData = CreateProjectSchema.array().parse(req.body);
   const result = await ProjectDataService.importProjects(
     payload,
@@ -139,11 +158,14 @@ export const importProjects = async (req: Request, res: Response) => {
   res.status(201).json(result);
 };
 
-export const assignProjects = async (req: Request, res: Response) => {
+export const assignProjects = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/AssignProjectsDto' } }
-  const payload = (req as any).user;
+  const payload = req.user!;
 
   const validatedData = UpdateStatusProjectsSchema.parse(req.body);
   const project = await ProjectAssignmentService.assignProjectsToUser(
@@ -153,10 +175,10 @@ export const assignProjects = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const addAssignee = async (req: Request, res: Response) => {
+export const addAssignee = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = UpdateStatusProjectSchema.parse({
     id: projectId,
@@ -169,10 +191,13 @@ export const addAssignee = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const returnProject = async (req: Request, res: Response) => {
+export const returnProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectAssignmentService.returnProject(
     payload,
@@ -181,10 +206,13 @@ export const returnProject = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const changeAssignee = async (req: Request, res: Response) => {
+export const changeAssignee = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = UpdateStatusProjectSchema.parse({
     id: projectId,
@@ -197,10 +225,13 @@ export const changeAssignee = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const acceptProjects = async (req: Request, res: Response) => {
+export const acceptProjects = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const data = req.body;
   const validatedData = AcceptProjectsSchema.parse({
     id: data.map((item: any) => item.id),
@@ -212,10 +243,13 @@ export const acceptProjects = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const claimProject = async (req: Request, res: Response) => {
+export const claimProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectAssignmentService.claimProject(
     payload,
@@ -224,10 +258,13 @@ export const claimProject = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const cancelProject = async (req: Request, res: Response) => {
+export const cancelProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = CancelProjectSchema.parse({
     id: projectId,
@@ -240,10 +277,13 @@ export const cancelProject = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const approveCancellation = async (req: Request, res: Response) => {
+export const approveCancellation = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectLifecycleService.approveCancellation(
     payload,
@@ -252,10 +292,13 @@ export const approveCancellation = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const rejectCancellation = async (req: Request, res: Response) => {
+export const rejectCancellation = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectLifecycleService.rejectCancellation(
     payload,
@@ -264,10 +307,13 @@ export const rejectCancellation = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const completeProcurement = async (req: Request, res: Response) => {
+export const completeProcurement = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectLifecycleService.completeProcurementPhase(
     payload,
@@ -276,10 +322,13 @@ export const completeProcurement = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const completeContract = async (req: Request, res: Response) => {
+export const completeContract = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectLifecycleService.completeContractPhase(
     payload,
@@ -288,10 +337,13 @@ export const completeContract = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const closeProject = async (req: Request, res: Response) => {
+export const closeProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const project = await ProjectLifecycleService.closeProject(
     payload,
@@ -300,10 +352,13 @@ export const closeProject = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const requestEditProject = async (req: Request, res: Response) => {
+export const requestEditProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = RequestEditProjectSchema.parse({
     id: projectId,
@@ -316,11 +371,14 @@ export const requestEditProject = async (req: Request, res: Response) => {
   res.status(200).json(project);
 };
 
-export const updateProject = async (req: Request, res: Response) => {
+export const updateProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/UpdateProjectDto' } }
-  const payload = (req as any).user;
+  const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = UpdateProjectSchema.parse({
     id: projectId,
@@ -333,11 +391,14 @@ export const updateProject = async (req: Request, res: Response) => {
   res.status(200).json(updatedProject);
 };
 
-export const removeProject = async (req: Request, res: Response) => {
+export const removeProject = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const projectId = req.params.id as string;
-  const payload = (req as any).user;
+  const payload = req.user!;
   await ProjectDataService.deleteProject(payload, projectId);
   res.status(204).send();
 };
