@@ -1,15 +1,15 @@
 import { Request, Response } from 'express';
 import * as DepartmentService from '../services/department.service';
-import { AuthPayload } from '../types/auth.type';
+import { AuthenticatedRequest } from '../types/auth.type';
 import {
   CreateDepartmentSchema,
   UpdateDepartmentSchema,
 } from '../schemas/department.schema';
 
-export const getAll = async (req: Request, res: Response) => {
+export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
-  const payload = (req as any).user as AuthPayload;
+  const payload = req.user!;
   const data = await DepartmentService.listDepartments(payload);
   res.status(200).json(data);
 };
