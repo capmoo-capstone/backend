@@ -108,12 +108,11 @@ export const authorizeSupply = (allowedRoles: UserRole[]) => {
       if (req.user.roles.some((r) => r.role === UserRole.SUPER_ADMIN))
         return next();
 
-      if (req.user.roles.some((r) => r.role === UserRole.HEAD_OF_DEPARTMENT))
-        return next();
-
       const hasSupplyPermission = req.user.roles.some(
         (r) =>
-          r.dept_id === OPS_DEPT_ID && allowedRoles.includes(r.role as UserRole)
+          r.dept_id === OPS_DEPT_ID &&
+          (allowedRoles.length === 0 ||
+            allowedRoles.includes(r.role as UserRole))
       );
 
       if (!hasSupplyPermission) {

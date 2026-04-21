@@ -48,8 +48,7 @@ router.get(
 // ── Create / Import ───────────────────────────────────────────────────────────
 router.post(
   '/create',
-  requireRoles([REPRESENTATIVE]) ||
-    requireSupplyRoles([DOCUMENT_STAFF, FINANCE_STAFF]),
+  requireRoles([REPRESENTATIVE, DOCUMENT_STAFF]),
   controller.createProject
 );
 router.post(
@@ -112,10 +111,7 @@ router.patch(
 
 router.patch(
   '/:id/complete-procurement',
-  requireSupplyRoles([
-    GENERAL_STAFF,
-    HEAD_OF_UNIT,
-  ]),
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT]),
   controller.completeProcurement
 );
 router.patch(

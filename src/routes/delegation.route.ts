@@ -14,7 +14,7 @@ router.post(
 );
 router.get(
   '/active',
-  requireSupplyRoles([HEAD_OF_UNIT]),
+  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getActiveDelegation
 );
 router.get('/:id', requireSupplyRoles([]), controller.getById);

@@ -1,7 +1,10 @@
 import { LRUCache } from 'lru-cache';
 import { AuthPayload } from '../types/auth.type';
 
-type CachedAuthData = Omit<AuthPayload, 'token' | 'id' | 'username' | 'full_name'> & {
+type CachedAuthData = Omit<
+  AuthPayload,
+  'token' | 'id' | 'username' | 'full_name'
+> & {
   cached_at: Date;
 };
 
