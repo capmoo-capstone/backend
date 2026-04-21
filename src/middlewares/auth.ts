@@ -6,7 +6,7 @@ import { AuthPayload } from '../types/auth.type';
 import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../services/auth.service';
 import { OPS_DEPT_ID } from '../lib/constant';
-import { LRUCache } from 'lru-cache';
+import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
 
 interface JwtPayload {
   id: string;
@@ -18,18 +18,8 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthPayload;
 }
 
-const userAuthCache = new LRUCache<
-  string,
-  Omit<AuthPayload, 'token' | 'id' | 'username' | 'full_name'> & {
-    cached_at: Date;
-  }
->({
-  max: 100,
-  ttl: 10 * 60 * 1000,
-});
-
 export const protect = async (
-  req: Request & { user?: AuthPayload },
+  req: AuthenticatedRequest,
   _res: Response,
   next: NextFunction
 ) => {
@@ -60,7 +50,7 @@ export const protect = async (
       throw new UnauthorizedError('User not found');
     }
 
-    const cachedData = userAuthCache.get(decoded.id);
+    const cachedData = getUserAuthCache(decoded.id);
     if (cachedData && cachedData.cached_at >= userMeta.role_updated_at) {
       req.user = {
         token,
@@ -75,10 +65,7 @@ export const protect = async (
 
     const { user, authData } = result;
 
-    userAuthCache.set(decoded.id, {
-      ...authData,
-      cached_at: new Date(),
-    });
+    setUserAuthCache(decoded.id, authData);
 
     req.user = {
       token,
@@ -123,6 +110,9 @@ export const authorizeSupply = (allowedRoles: UserRole[]) => {
       if (!req.user) throw new UnauthorizedError('Not authenticated');
 
       if (req.user.roles.some((r) => r.role === UserRole.SUPER_ADMIN))
+        return next();
+
+      if (req.user.roles.some((r) => r.role === UserRole.HEAD_OF_DEPARTMENT))
         return next();
 
       const hasSupplyPermission = req.user.roles.some(

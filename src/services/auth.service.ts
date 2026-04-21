@@ -12,7 +12,9 @@ import {
   FetchAndFormatUserDetailsResponse,
   LoginResponse,
   RegisterResponse,
+  AuthPayload,
 } from '../types/auth.type';
+import { clearUserAuthCache } from '../lib/auth-cache';
 
 export const fetchAndFormatUserDetails = async (
   whereClause: any
@@ -183,4 +185,8 @@ export const register = async (
   });
 
   return result;
+};
+
+export const logout = async (payload: AuthPayload): Promise<void> => {
+  clearUserAuthCache(payload.id);
 };

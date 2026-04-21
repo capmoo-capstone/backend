@@ -30,3 +30,11 @@ export const getMe = async (req: Request, res: Response) => {
   const payload = (req as any).user as AuthPayload;
   res.status(200).json(payload);
 };
+
+export const logout = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Auth']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = (req as any).user as AuthPayload;
+  await AuthService.logout(payload);
+  res.status(200).json({ message: 'Logged out successfully' });
+};
