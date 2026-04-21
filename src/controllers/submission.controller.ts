@@ -39,9 +39,10 @@ export const createSubmission = async (
   res.status(201).json(submission);
 };
 
-const approveSubmission = async (req: AuthenticatedRequest, res: Response) => {
+export const approveSubmission = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
   const payload = req.user!;
   const submissionId = req.params.id as string;
 
@@ -56,9 +57,10 @@ const approveSubmission = async (req: AuthenticatedRequest, res: Response) => {
   res.status(200).json(submission);
 };
 
-const proposeSubmission = async (req: AuthenticatedRequest, res: Response) => {
+export const proposeSubmission = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
   const payload = req.user!;
   const submissionId = req.params.id as string;
 
@@ -69,12 +71,16 @@ const proposeSubmission = async (req: AuthenticatedRequest, res: Response) => {
   res.status(200).json(submission);
 };
 
-const signAndCompleteSubmission = async (
+export const signAndCompleteSubmission = async (
+  
   req: AuthenticatedRequest,
+ 
   res: Response
+
 ) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
   const payload = req.user!;
   const submissionId = req.params.id as string;
 
@@ -85,9 +91,10 @@ const signAndCompleteSubmission = async (
   res.status(200).json(submission);
 };
 
-const rejectSubmission = async (req: AuthenticatedRequest, res: Response) => {
+export const rejectSubmission = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
   const payload = req.user!;
   const submissionId = req.params.id as string;
 
@@ -100,26 +107,4 @@ const rejectSubmission = async (req: AuthenticatedRequest, res: Response) => {
     validateData
   );
   res.status(200).json(submission);
-};
-
-export const handleSubmissionAction = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  // #swagger.tags = ['Submission']
-  // #swagger.security = [{ bearerAuth: [] }]
-  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
-  const action = req.params.action as string;
-  switch (action) {
-    case 'approve':
-      return approveSubmission(req, res);
-    case 'propose':
-      return proposeSubmission(req, res);
-    case 'sign':
-      return signAndCompleteSubmission(req, res);
-    case 'reject':
-      return rejectSubmission(req, res);
-    default:
-      res.status(400).json({ message: 'Invalid action' });
-  }
 };
