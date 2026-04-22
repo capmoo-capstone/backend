@@ -55,6 +55,7 @@ export const createProject = async (
         responsible_unit_id: responsibleUnit.id,
         receive_no: receiveNumber,
         created_by: user.id,
+        budget_plan_id: undefined,
       },
     });
 
@@ -74,30 +75,52 @@ export const importProjects = async (
   data: CreateProjectDto[]
 ): Promise<ProjectsListResponse> => {
   return await prisma.$transaction(async (tx) => {
-    const formatData = await Promise.all(
-      data.map(async (project) => ({
-        ...project,
-        status: ProjectStatus.UNASSIGNED,
-        current_workflow_type: project.procurement_type,
-        responsible_unit_id: await tx.unit
-          .findFirstOrThrow({
-            where: { type: { has: project.procurement_type } },
-            select: { id: true },
-          })
-          .then((unit) => unit.id)
-          .catch(() => {
-            throw new NotFoundError(
-              `Responsible unit not found for procurement type ${project.procurement_type}`
-            );
-          }),
-        receive_no: await getReceiveNumber(tx),
-        created_by: user.id,
-      }))
-    );
-    const createdProjects = await tx.project.createManyAndReturn({
-      data: formatData,
-      skipDuplicates: true,
-    });
+    const createdProjects = [];
+
+    for (const project of data) {
+      const responsibleUnit = await tx.unit.findFirst({
+        where: { type: { has: project.procurement_type } },
+        select: { id: true },
+      });
+      if (!responsibleUnit) {
+        throw new NotFoundError(
+          `Responsible unit not found for procurement type ${project.procurement_type}`
+        );
+      }
+
+      if (project.budget_plan_id && project.budget_plan_id.length > 0) {
+        const budgetPlans = await tx.budgetPlan.findMany({
+          where: { id: { in: project.budget_plan_id } },
+          select: { id: true },
+        });
+
+        if (budgetPlans.length !== project.budget_plan_id.length) {
+          throw new NotFoundError('One or more budget plans not found');
+        }
+      }
+
+      const receiveNumber = await getReceiveNumber(tx);
+      const createdProject = await tx.project.create({
+        data: {
+          ...project,
+          status: ProjectStatus.UNASSIGNED,
+          current_workflow_type: project.procurement_type,
+          responsible_unit_id: responsibleUnit.id,
+          receive_no: receiveNumber,
+          created_by: user.id,
+          budget_plan_id: undefined,
+        },
+      });
+
+      if (project.budget_plan_id && project.budget_plan_id.length > 0) {
+        await tx.budgetPlan.updateMany({
+          where: { id: { in: project.budget_plan_id } },
+          data: { project_id: createdProject.id },
+        });
+      }
+
+      createdProjects.push(createdProject);
+    }
 
     return {
       total: createdProjects.length,
