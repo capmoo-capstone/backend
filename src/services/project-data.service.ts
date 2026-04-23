@@ -29,6 +29,8 @@ export const createProject = async (
   data: CreateProjectDto
 ): Promise<CreateProjectResponse> => {
   return await prisma.$transaction(async (tx) => {
+    const { budget_plan_id, ...projectData } = data;
+
     const responsibleUnit = await tx.unit.findFirst({
       where: { type: { has: data.procurement_type } },
       select: { id: true },
@@ -49,13 +51,12 @@ export const createProject = async (
     const receiveNumber = await getReceiveNumber(tx);
     const project = await tx.project.create({
       data: {
-        ...data,
+        ...projectData,
         status: ProjectStatus.UNASSIGNED,
         current_workflow_type: data.procurement_type,
         responsible_unit_id: responsibleUnit.id,
         receive_no: receiveNumber,
         created_by: user.id,
-        budget_plan_id: undefined,
       },
     });
 
@@ -78,6 +79,8 @@ export const importProjects = async (
     const createdProjects = [];
 
     for (const project of data) {
+      const { budget_plan_id, ...projectData } = project;
+
       const responsibleUnit = await tx.unit.findFirst({
         where: { type: { has: project.procurement_type } },
         select: { id: true },
@@ -102,13 +105,12 @@ export const importProjects = async (
       const receiveNumber = await getReceiveNumber(tx);
       const createdProject = await tx.project.create({
         data: {
-          ...project,
+          ...projectData,
           status: ProjectStatus.UNASSIGNED,
           current_workflow_type: project.procurement_type,
           responsible_unit_id: responsibleUnit.id,
           receive_no: receiveNumber,
           created_by: user.id,
-          budget_plan_id: undefined,
         },
       });
 
