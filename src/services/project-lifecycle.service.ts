@@ -6,7 +6,7 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { CONTRACT_UNIT_ID } from '../lib/constant';
+import { CONTRACT_UNIT_ID, IN_PROGRESS_STATUSES } from '../lib/constant';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import {
@@ -360,8 +360,15 @@ export const closeProject = async (
     if (!project) {
       throw new NotFoundError('Project not found');
     }
-    if (project.status !== ProjectStatus.IN_PROGRESS) {
-      throw new BadRequestError('Project is not in IN_PROGRESS status');
+    const closableStatuses: ProjectStatus[] = [
+      ProjectStatus.IN_PROGRESS,
+      ProjectStatus.REQUEST_EDIT,
+    ];
+
+    if (!closableStatuses.includes(project.status)) {
+      throw new BadRequestError(
+        'Project cannot be closed unless it is in IN_PROGRESS or REQUEST_EDIT status'
+      );
     }
     if (project.contract_status !== ProjectPhaseStatus.COMPLETED) {
       throw new BadRequestError('Contract phase is not in COMPLETED status');
