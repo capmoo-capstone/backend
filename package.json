@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node --env-file=.env dist/local.js",
     "dev": "npm run swagger && tsx --watch --env-file=.env src/local.ts",
+    "postinstall": "prisma generate",
+    "deploy": "tsc && wrangler deploy",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "migrate:reset": "prisma migrate reset",
