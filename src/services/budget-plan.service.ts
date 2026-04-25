@@ -53,6 +53,7 @@ export const importBudgetPlan = async (
     select: {
       id: true,
       activity_type_name: true,
+      budget_name: true,
       budget_amount: true,
     },
   });
@@ -74,6 +75,7 @@ export const updateProjectIdPlan = async (
     select: {
       id: true,
       activity_type_name: true,
+      budget_name: true,
       budget_amount: true,
       project_id: true,
     },

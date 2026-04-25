@@ -7,6 +7,7 @@ export const ImportBudgetPlanSchema = z.array(
     activity_type: z.string(),
     activity_type_name: z.string(),
     description: z.string().optional(),
+    budget_name: z.string().optional(),
     budget_amount: z.number(),
   })
 );
