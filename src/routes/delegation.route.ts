@@ -1,26 +1,18 @@
 import { Router } from 'express';
 import * as controller from '../controllers/delegation.controller';
-import { requireSupplyRoles } from '../middlewares/auth';
+import { requireSupplyAccess, requireSupplyRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
-const { HEAD_OF_UNIT, HEAD_OF_DEPARTMENT } = UserRole;
+const { ADMIN } = UserRole;
 
 const router = Router();
 
-router.post(
-  '/',
-  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.addDelegation
-);
-router.get(
-  '/active',
-  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getActiveDelegation
-);
-router.get('/:id', requireSupplyRoles([]), controller.getById);
+router.post('/', requireSupplyRoles([ADMIN]), controller.addDelegation);
+router.get('/active', requireSupplyAccess, controller.getActiveDelegation);
+router.get('/:id', requireSupplyAccess, controller.getById);
 router.patch(
   '/:id/cancel',
-  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  requireSupplyRoles([ADMIN]),
   controller.cancelDelegation
 );
 

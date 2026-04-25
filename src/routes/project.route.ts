@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import * as controller from '../controllers/project.controller';
-import { requireRoles, requireSupplyRoles } from '../middlewares/auth';
+import {
+  requireRoles,
+  requireSuperAdmin,
+  requireSupplyRoles,
+} from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
@@ -41,7 +45,7 @@ router.get(
 );
 router.get(
   '/workload',
-  requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT, GENERAL_STAFF]),
+  requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT]),
   controller.getWorkload
 );
 
@@ -53,7 +57,7 @@ router.post(
 );
 router.post(
   '/import',
-  requireSupplyRoles([DOCUMENT_STAFF, FINANCE_STAFF]),
+  requireSupplyRoles([DOCUMENT_STAFF]),
   controller.importProjects
 );
 
@@ -95,7 +99,12 @@ router.patch(
 
 router.patch(
   '/:id/cancel',
-  requireSupplyRoles([GENERAL_STAFF, DOCUMENT_STAFF]),
+  requireSupplyRoles([
+    GENERAL_STAFF,
+    DOCUMENT_STAFF,
+    HEAD_OF_UNIT,
+    HEAD_OF_DEPARTMENT,
+  ]),
   controller.cancelProject
 );
 router.patch(
@@ -111,45 +120,31 @@ router.patch(
 
 router.patch(
   '/:id/complete-procurement',
-  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT]),
+  requireSupplyRoles([GENERAL_STAFF]),
   controller.completeProcurement
 );
 router.patch(
   '/:id/complete-contract',
-  requireSupplyRoles([
-    GENERAL_STAFF,
-    DOCUMENT_STAFF,
-    FINANCE_STAFF,
-    HEAD_OF_UNIT,
-  ]),
+  requireSupplyRoles([FINANCE_STAFF]),
   controller.completeContract
 );
 router.patch(
   '/:id/close',
-  requireSupplyRoles([DOCUMENT_STAFF, FINANCE_STAFF, HEAD_OF_UNIT]),
+  requireSupplyRoles([FINANCE_STAFF]),
   controller.closeProject
 );
 
 router.patch(
   '/:id/request-edit',
-  requireSupplyRoles([DOCUMENT_STAFF, FINANCE_STAFF, HEAD_OF_UNIT]),
+  requireSupplyRoles([FINANCE_STAFF]),
   controller.requestEditProject
 );
 router.patch(
   '/:id/update',
-  requireSupplyRoles([
-    GENERAL_STAFF,
-    DOCUMENT_STAFF,
-    FINANCE_STAFF,
-    HEAD_OF_UNIT,
-  ]),
+  requireSupplyRoles([GENERAL_STAFF, DOCUMENT_STAFF, HEAD_OF_UNIT]),
   controller.updateProject
 );
 
-router.delete(
-  '/:id',
-  requireSupplyRoles([HEAD_OF_DEPARTMENT]),
-  controller.removeProject
-);
+router.delete('/:id', requireSuperAdmin, controller.removeProject);
 
 export default router;

@@ -3,7 +3,7 @@ import * as controller from '../controllers/unit.controller';
 import { requireSupplyRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
-const { ADMIN, HEAD_OF_UNIT } = UserRole;
+const { ADMIN } = UserRole;
 
 const router = Router();
 
@@ -13,7 +13,7 @@ router.get('/:id', controller.getById);
 router.get('/:id/rep', controller.getRepresentative);
 router.patch(
   '/:id/users',
-  requireSupplyRoles([ADMIN, HEAD_OF_UNIT]),
+  requireSupplyRoles([ADMIN]),
   controller.updateUnitUsers
 );
 router.patch(
@@ -21,11 +21,7 @@ router.patch(
   requireSupplyRoles([ADMIN]),
   controller.updateRepresentative
 );
-router.patch(
-  '/:id/update',
-  requireSupplyRoles([ADMIN, HEAD_OF_UNIT]),
-  controller.updateUnit
-);
+router.patch('/:id/update', requireSupplyRoles([ADMIN]), controller.updateUnit);
 router.delete('/:id', requireSupplyRoles([ADMIN]), controller.removeUnit);
 
 export default router;

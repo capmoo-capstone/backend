@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as controller from '../controllers/user.controller';
-import { requireRoles, requireSupplyRoles } from '../middlewares/auth';
+import { requireSuperAdmin, requireSupplyRoles } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
 const { HEAD_OF_UNIT, HEAD_OF_DEPARTMENT, ADMIN } = UserRole;
@@ -14,8 +14,8 @@ router.patch(
   requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT, ADMIN]),
   controller.updateSupplyRole
 );
-router.post('/:id/role', requireRoles([]), controller.addRole);
-router.patch('/:id/role/remove', requireRoles([]), controller.removeRole);
-router.delete('/:id', requireRoles([]), controller.removeUser);
+router.post('/:id/role', requireSuperAdmin, controller.addRole);
+router.patch('/:id/role/remove', requireSuperAdmin, controller.removeRole);
+router.delete('/:id', requireSuperAdmin, controller.removeUser);
 
 export default router;

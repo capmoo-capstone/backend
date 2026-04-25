@@ -78,13 +78,19 @@ export const protect = async (
   }
 };
 
-export const authorize = (allowedRoles: UserRole[]) => {
+const hasSuperAdminRole = (req: AuthenticatedRequest): boolean =>
+  !!req.user?.roles.some((r) => r.role === UserRole.SUPER_ADMIN);
+
+export const authorize = (allowedRoles: UserRole[] = []) => {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     try {
       if (!req.user) throw new UnauthorizedError('Not authenticated');
 
-      if (req.user.roles.some((r) => r.role === UserRole.SUPER_ADMIN))
-        return next();
+      if (hasSuperAdminRole(req)) return next();
+
+      if (allowedRoles.length === 0) {
+        throw new ForbiddenError('This action requires Super Admin authority.');
+      }
 
       const hasPermission = req.user.roles.some((r) =>
         allowedRoles.includes(r.role as UserRole)
@@ -100,13 +106,13 @@ export const authorize = (allowedRoles: UserRole[]) => {
     }
   };
 };
-export const authorizeSupply = (allowedRoles: UserRole[]) => {
+
+export const authorizeSupply = (allowedRoles: UserRole[] = []) => {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     try {
       if (!req.user) throw new UnauthorizedError('Not authenticated');
 
-      if (req.user.roles.some((r) => r.role === UserRole.SUPER_ADMIN))
-        return next();
+      if (hasSuperAdminRole(req)) return next();
 
       const hasSupplyPermission = req.user.roles.some(
         (r) =>
@@ -117,7 +123,9 @@ export const authorizeSupply = (allowedRoles: UserRole[]) => {
 
       if (!hasSupplyPermission) {
         throw new ForbiddenError(
-          'This action requires Supply Department authority.'
+          allowedRoles.length === 0
+            ? 'This action requires Supply Department access.'
+            : 'This action requires one of the allowed Supply Department roles.'
         );
       }
 
@@ -130,3 +138,5 @@ export const authorizeSupply = (allowedRoles: UserRole[]) => {
 
 export const requireRoles = authorize;
 export const requireSupplyRoles = authorizeSupply;
+export const requireSuperAdmin = authorize();
+export const requireSupplyAccess = authorizeSupply();
