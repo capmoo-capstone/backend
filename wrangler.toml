@@ -1,2 +1,2 @@
-compatibility_flags = ["nodejs_compat"]
+name = "backend"compatibility_flags = ["nodejs_compat"]
 compatibility_date = "2026-04-25"
