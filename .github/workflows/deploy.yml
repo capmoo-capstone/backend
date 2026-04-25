@@ -18,14 +18,12 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: backend
         run: npm ci
 
       - name: Build application
-        working-directory: backend
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
