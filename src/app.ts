@@ -28,7 +28,32 @@ app.use(
     },
   })
 );
-app.use(cors({ origin: '*' }));
+const allowedOrigins = [
+  'http://localhost:5173', // Vite local dev
+  'http://localhost:3000', // Express local dev
+  'https://nexus-procure.pages.dev', // Cloudflare Pages production
+  'https://dev-nexus-procure.pages.dev', // Cloudflare Pages development
+  'https://nexus-procure.vercel.app', // Vercel production
+  'https://dev-nexus-procure.vercel.app', // Vercel development
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
+app.options('/{*path}', cors());
 app.use(express.json());
 
 // Import API v1 routes
