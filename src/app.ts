@@ -3,10 +3,32 @@ import helmet from 'helmet';
 import cors from 'cors';
 import apiV1Routes from './routes/index';
 import { errorHandler } from './middlewares/error';
+import swaggerUi from 'swagger-ui-express';
+import swaggerDocument from '../swagger-output.json';
+
+const NODE_ENV = process.env.NODE_ENV || 'local';
+const PORT = process.env.PORT || 3000;
 
 const app = express();
-app.use(helmet());
-app.use(cors());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          'https://cdnjs.cloudflare.com',
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"],
+      },
+    },
+  })
+);
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 // Import API v1 routes
@@ -15,6 +37,37 @@ app.get('/', (req, res, next) => {
 });
 app.use('/api/v1', apiV1Routes);
 
+const swaggerUiOptions: swaggerUi.SwaggerUiOptions = {
+  customCssUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.min.css',
+  customJs: [
+    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-standalone-preset.min.js',
+  ],
+};
+
+const serverUrl =
+  process.env.NODE_ENV === 'production'
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/v1`
+    : process.env.NODE_ENV === 'development'
+      ? `https://dev-nexus-procure-backend.vercel.app/api/v1`
+      : 'http://localhost:3000/api/v1';
+
+(swaggerDocument as any).servers = [{ url: serverUrl }];
+
+app.use(
+  '/api-docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, swaggerUiOptions)
+);
+
 app.use(errorHandler);
+
+// Only listen locally — Vercel handles the server itself
+if (NODE_ENV === 'local') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  });
+}
 
 export default app;
