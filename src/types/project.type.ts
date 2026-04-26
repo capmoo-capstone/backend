@@ -55,7 +55,8 @@ export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
 export interface ProjectDetailsResponse {
   id: string;
   procurement_type: ProcurementType;
-  current_workflow_type: string;
+  current_workflow_type: UnitResponsibleType;
+  responsible_unit_id: string;
   is_urgent: UrgentType;
   title: string;
   description: string | null;

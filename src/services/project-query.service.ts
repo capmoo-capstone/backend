@@ -303,6 +303,7 @@ export const getById = async (
       id: projectData.id,
       procurement_type: projectData.procurement_type,
       current_workflow_type: projectData.current_workflow_type,
+      responsible_unit_id: projectData.responsible_unit_id,
       is_urgent: projectData.is_urgent,
       title: projectData.title,
       description: projectData.description,
