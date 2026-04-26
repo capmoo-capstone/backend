@@ -32,7 +32,7 @@ const allowedOrigins = [
   'http://localhost:5173', // Vite local dev
   'http://localhost:3000', // Express local dev
   'https://nexus-procure.pages.dev', // Cloudflare Pages production
-  'https://dev-nexus-procure.pages.dev', // Cloudflare Pages development
+  'https://dev.nexus-procure.pages.dev', // Cloudflare Pages development
   'https://nexus-procure.vercel.app', // Vercel production
   'https://dev-nexus-procure.vercel.app', // Vercel development
 ];
