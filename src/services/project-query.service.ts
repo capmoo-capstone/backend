@@ -29,6 +29,7 @@ import {
 } from '../types/project.type';
 import {
   CONTRACT_UNIT_ID,
+  IN_PROGRESS_STATUSES,
   OPS_DEPT_ID,
   PROC1_UNIT_ID,
   PROC2_UNIT_ID,
@@ -913,11 +914,7 @@ export const getSummaryCards = async (
           OR: [
             {
               status: {
-                in: [
-                  ProjectStatus.IN_PROGRESS,
-                  ProjectStatus.WAITING_CANCEL,
-                  ProjectStatus.REQUEST_EDIT,
-                ],
+                in: IN_PROGRESS_STATUSES,
               },
             },
             {

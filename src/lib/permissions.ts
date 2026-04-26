@@ -25,3 +25,11 @@ export const getDeptIdsForUser = (user: AuthPayload): string[] => {
   });
   return Array.from(deptIds);
 };
+
+export const getUnitIdsForUser = (user: AuthPayload): string[] => {
+  const unitIds = new Set<string>();
+  user.roles.forEach((r) => {
+    if (r.unit_id) unitIds.add(r.unit_id);
+  });
+  return Array.from(unitIds);
+};

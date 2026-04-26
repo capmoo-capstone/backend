@@ -1,12 +1,11 @@
 import {
-  UserRole,
   ProjectStatus,
   LogActionType,
   ProjectPhaseStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { CONTRACT_UNIT_ID, IN_PROGRESS_STATUSES } from '../lib/constant';
+import { CONTRACT_UNIT_ID } from '../lib/constant';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import {

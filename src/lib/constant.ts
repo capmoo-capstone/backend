@@ -1,4 +1,8 @@
-import { ProjectStatus, UnitResponsibleType } from '@prisma/client';
+import {
+  ProjectPhaseStatus,
+  ProjectStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 
 export const OPS_DEPT_ID = 'DEPT-SUP-OPS';
 export const PROC1_UNIT_ID = 'UNIT-PROC-1';
@@ -21,4 +25,28 @@ export const WORKLOAD_STATUSES = [
   ProjectStatus.IN_PROGRESS,
   ProjectStatus.WAITING_CANCEL,
   ProjectStatus.REQUEST_EDIT,
+];
+
+export const IN_PROGRESS_STATUSES: ProjectStatus[] = [
+  ProjectStatus.IN_PROGRESS,
+  ProjectStatus.REQUEST_EDIT,
+  ProjectStatus.WAITING_CANCEL,
+];
+
+export const IN_PROGRESS_PHASE_STATUSES = [
+  ProjectPhaseStatus.IN_PROGRESS,
+  ProjectPhaseStatus.WAITING_APPROVAL,
+  ProjectPhaseStatus.WAITING_PROPOSAL,
+  ProjectPhaseStatus.WAITING_SIGNATURE,
+  ProjectPhaseStatus.NOT_EXPORTED,
+  ProjectPhaseStatus.REJECTED,
+];
+
+export const PROCUREMENT_WORKFLOW_TYPES = [
+  UnitResponsibleType.LT100K,
+  UnitResponsibleType.LT500K,
+  UnitResponsibleType.MT500K,
+  UnitResponsibleType.SELECTION,
+  UnitResponsibleType.EBIDDING,
+  UnitResponsibleType.INTERNAL,
 ];
