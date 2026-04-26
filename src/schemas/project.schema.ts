@@ -78,6 +78,7 @@ export const ProjectFilterQuerySchema = z
     contractStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),
     urgentStatus: z.array(z.enum(UrgentType)).optional(),
     assignees: z.array(z.string()).optional(),
+    departments: z.array(z.string()).optional(),
     units: z.array(z.string()).optional(),
     myTasks: z.boolean().optional(),
     sortBy: z.string().optional(),

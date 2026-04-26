@@ -147,7 +147,9 @@ const buildWhereClause = (
   if (filters?.units?.length) {
     and.push({ requesting_unit_id: { in: filters.units } });
   }
-
+  if (filters?.departments?.length) {
+    and.push({ requesting_dept_id: { in: filters.departments } });
+  }
   // ── Assignees (OR across both relations + myTasks shortcut) ───────────────
   const assigneeIds = new Set<string>(filters?.assignees ?? []);
   if (filters?.myTasks) {
