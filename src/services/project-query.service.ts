@@ -93,6 +93,26 @@ const buildWhereClause = (
             mode: Prisma.QueryMode.insensitive,
           },
         },
+        {
+          assignee_procurement: {
+            some: {
+              full_name: {
+                contains: searchTerm,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+          },
+        },
+        {
+          assignee_contract: {
+            some: {
+              full_name: {
+                contains: searchTerm,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+          },
+        },
       ],
     });
   }
@@ -105,17 +125,11 @@ const buildWhereClause = (
   }
 
   if (filters?.fiscalYear !== undefined) {
-    const lastTwoDigits = String(filters.fiscalYear).slice(-2);
     and.push({
       OR: [
         {
           receive_no: {
-            endsWith: `${filters.fiscalYear}`,
-          },
-        },
-        {
-          receive_no: {
-            endsWith: `${lastTwoDigits}`,
+            startsWith: `${filters.fiscalYear}`,
           },
         },
       ],
