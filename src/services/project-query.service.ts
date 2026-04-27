@@ -16,6 +16,7 @@ import {
   isHeadOfSupplyDept,
   isHeadOfSupplyUnit,
   isSuperAdmin,
+  getUnitIdsForUser,
 } from '../lib/permissions';
 import { AuthPayload } from '../types/auth.type';
 import {
@@ -677,13 +678,32 @@ export const getOwnProjects = async (
   page: number,
   limit: number
 ): Promise<PaginatedProjects> => {
+  const unitIds = getUnitIdsForUser(user);
+  const userUnits =
+    unitIds.length > 0
+      ? await prisma.unit.findMany({
+          where: { id: { in: unitIds } },
+          select: { type: true },
+        })
+      : [];
+  const isInProcurementUnit = userUnits.some((unit) =>
+    unit.type.some((type) => type !== UnitResponsibleType.CONTRACT)
+  );
+
   const skip = (page - 1) * limit;
-  const where = {
-    OR: [
-      { assignee_procurement: { some: { id: user.id } } },
-      { assignee_contract: { some: { id: user.id } } },
-    ],
-  };
+  const where: any = {};
+  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
+    if (isHeadOfSupplyUnit(user)) {
+      where.responsible_unit_id = { in: unitIds };
+    } else if (isInProcurementUnit) {
+      where.assignee_procurement = { some: { id: user.id } };
+      where.procurement_status = { not: ProjectPhaseStatus.COMPLETED };
+    } else if (!isInProcurementUnit) {
+      where.assignee_contract = { some: { id: user.id } };
+      where.procurement_step = ProjectPhaseStatus.COMPLETED;
+      where.contract_status = { not: ProjectPhaseStatus.COMPLETED };
+    }
+  }
 
   const [projects, total] = await Promise.all([
     prisma.project.findMany({
