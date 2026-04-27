@@ -10,6 +10,7 @@ export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   budget: z.number(),
+  budget_year: z.number().optional(),
   budget_plan_id: z.array(z.string()).optional(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),

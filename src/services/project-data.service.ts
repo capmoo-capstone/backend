@@ -1,6 +1,7 @@
 import { Prisma, ProjectStatus, LogActionType } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError, BadRequestError } from '../lib/errors';
+import { NotFoundError, BadRequestError, AppError } from '../lib/errors';
+import { getProcurementTypeToUnitIdMap } from '../lib/unit-type';
 import { AuthPayload } from '../types/auth.type';
 import { CreateProjectDto, UpdateProjectDto } from '../schemas/project.schema';
 import {
@@ -9,19 +10,73 @@ import {
   UpdateProjectDataResponse,
 } from '../types/project.type';
 
-const getReceiveNumber = async (
-  tx: Prisma.TransactionClient,
-  budget_year?: number
-) => {
+const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
-  const count = await tx.project.count();
-  budget_year = 2569;
-  const format = budget_year
+};
+
+const getReceiveNumberSync = async (
+  tx: Prisma.TransactionClient,
+  budget_year?: number,
+  buffer = 0
+): Promise<string> => {
+  if (!budget_year) {
+    const thisYear = new Date().getFullYear() + 543;
+    const currentMonth = new Date().getMonth() + 1;
+    budget_year = currentMonth >= 10 ? thisYear + 1 : thisYear;
+  }
+  const count = await tx.project.count({
+    where: {
+      receive_no: {
+        startsWith: budget_year.toString(),
+      },
+    },
+  });
+
+  return budget_year
     .toString()
     .concat('/')
-    .concat((count + 1).toString().padStart(5, '0'));
+    .concat((count + 1 + buffer).toString().padStart(5, '0'));
+};
 
-  return format;
+const checkRefNumberDuplication = async (
+  tx: Prisma.TransactionClient,
+  pr_no: string[] = [],
+  less_no: string[] = [],
+  excludeProjectId?: string
+) => {
+  if (pr_no.length === 0 && less_no.length === 0) return;
+  if (pr_no.length > 1 && new Set(pr_no).size !== pr_no.length) {
+    throw new BadRequestError('Duplicate PR numbers in request');
+  }
+  if (less_no.length > 1 && new Set(less_no).size !== less_no.length) {
+    throw new BadRequestError('Duplicate LESS numbers in request');
+  }
+
+  const whereClause: any = {
+    OR: [],
+  };
+  if (pr_no.length > 0) {
+    whereClause.OR.push({ pr_no: { in: pr_no } });
+  }
+  if (less_no.length > 0) {
+    whereClause.OR.push({ less_no: { in: less_no } });
+  }
+  if (excludeProjectId) {
+    whereClause.NOT = { id: excludeProjectId };
+  }
+
+  const existing = await tx.project.findFirst({
+    where: whereClause,
+    select: { id: true, pr_no: true, less_no: true },
+  });
+  if (existing) {
+    if (pr_no.includes(existing.pr_no)) {
+      throw new AppError(`Duplicate PR number: ${existing.pr_no}`, 409);
+    }
+    if (less_no.includes(existing.less_no)) {
+      throw new AppError(`Duplicate LESS number: ${existing.less_no}`, 409);
+    }
+  }
 };
 
 export const createProject = async (
@@ -29,15 +84,14 @@ export const createProject = async (
   data: CreateProjectDto
 ): Promise<CreateProjectResponse> => {
   return await prisma.$transaction(async (tx) => {
-    const { budget_plan_id, ...projectData } = data;
+    await acquireProjectCreationLock(tx);
 
-    const responsibleUnit = await tx.unit.findFirst({
-      where: { type: { has: data.procurement_type } },
-      select: { id: true },
-    });
-    if (!responsibleUnit) {
-      throw new NotFoundError('Responsible unit not found');
-    }
+    await checkRefNumberDuplication(
+      tx,
+      data.pr_no ? [data.pr_no] : [],
+      data.less_no ? [data.less_no] : []
+    );
+
     if (data.budget_plan_id && data.budget_plan_id.length > 0) {
       const budgetPlans = await tx.budgetPlan.findMany({
         where: { id: { in: data.budget_plan_id } },
@@ -48,13 +102,22 @@ export const createProject = async (
       }
     }
 
-    const receiveNumber = await getReceiveNumber(tx);
+    const receiveNumber = await getReceiveNumberSync(tx, data.budget_year);
+
+    const unitType = await getProcurementTypeToUnitIdMap(tx);
+    if (unitType.get(data.procurement_type) == null) {
+      throw new NotFoundError(
+        `Responsible unit not found for procurement type ${data.procurement_type}`
+      );
+    }
+
+    const { budget_plan_id, budget_year, ...projectData } = data;
     const project = await tx.project.create({
       data: {
         ...projectData,
         status: ProjectStatus.UNASSIGNED,
         current_workflow_type: data.procurement_type,
-        responsible_unit_id: responsibleUnit.id,
+        responsible_unit_id: unitType.get(data.procurement_type),
         receive_no: receiveNumber,
         created_by: user.id,
       },
@@ -76,53 +139,43 @@ export const importProjects = async (
   data: CreateProjectDto[]
 ): Promise<ProjectsListResponse> => {
   return await prisma.$transaction(async (tx) => {
-    const createdProjects = [];
+    await acquireProjectCreationLock(tx);
 
-    for (const project of data) {
-      const { budget_plan_id, ...projectData } = project;
+    await checkRefNumberDuplication(
+      tx,
+      data.map((d) => d.pr_no).filter((n): n is string => !!n),
+      data.map((d) => d.less_no).filter((n): n is string => !!n)
+    );
 
-      const responsibleUnit = await tx.unit.findFirst({
-        where: { type: { has: project.procurement_type } },
-        select: { id: true },
-      });
-      if (!responsibleUnit) {
+    const unitType = await getProcurementTypeToUnitIdMap(tx);
+
+    const baseCount = await tx.project.count();
+    const receiveNumbers = await Promise.all(
+      data.map((d, i) => getReceiveNumberSync(tx, d.budget_year, i))
+    );
+
+    // 5. Bulk create projects (createManyAndReturn)
+    for (const d of data) {
+      if (unitType.get(d.procurement_type) == null) {
         throw new NotFoundError(
-          `Responsible unit not found for procurement type ${project.procurement_type}`
+          `Responsible unit not found for procurement type ${d.procurement_type} in project ${d.title}`
         );
       }
+    }
 
-      if (project.budget_plan_id && project.budget_plan_id.length > 0) {
-        const budgetPlans = await tx.budgetPlan.findMany({
-          where: { id: { in: project.budget_plan_id } },
-          select: { id: true },
-        });
-
-        if (budgetPlans.length !== project.budget_plan_id.length) {
-          throw new NotFoundError('One or more budget plans not found');
-        }
-      }
-
-      const receiveNumber = await getReceiveNumber(tx);
-      const createdProject = await tx.project.create({
-        data: {
+    const createdProjects = await tx.project.createManyAndReturn({
+      data: data.map((d, i) => {
+        const { budget_plan_id, budget_year, ...projectData } = d;
+        return {
           ...projectData,
           status: ProjectStatus.UNASSIGNED,
-          current_workflow_type: project.procurement_type,
-          responsible_unit_id: responsibleUnit.id,
-          receive_no: receiveNumber,
+          current_workflow_type: d.procurement_type,
+          responsible_unit_id: unitType.get(d.procurement_type)!,
+          receive_no: receiveNumbers[i],
           created_by: user.id,
-        },
-      });
-
-      if (project.budget_plan_id && project.budget_plan_id.length > 0) {
-        await tx.budgetPlan.updateMany({
-          where: { id: { in: project.budget_plan_id } },
-          data: { project_id: createdProject.id },
-        });
-      }
-
-      createdProjects.push(createdProject);
-    }
+        };
+      }),
+    });
 
     return {
       total: createdProjects.length,
@@ -145,6 +198,14 @@ export const updateProjectData = async (
     if (!current) {
       throw new NotFoundError('Project not found');
     }
+
+    await checkRefNumberDuplication(
+      tx,
+      data.updateData.pr_no ? [data.updateData.pr_no] : [],
+      data.updateData.less_no ? [data.updateData.less_no] : [],
+      current.id
+    );
+
     const oldValue: any = {};
     Object.keys(data.updateData).forEach((key) => {
       oldValue[key] = (current as any)[key];
