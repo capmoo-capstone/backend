@@ -313,7 +313,7 @@ model BudgetPlan {
   id                 String   @id @default(uuid())
   budget_year        Int
   unit_id            String
-  activity_type      String
+  activity_type      Int
   activity_type_name String
   description        String?
   budget_name        String?
