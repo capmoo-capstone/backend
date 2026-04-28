@@ -12,7 +12,7 @@ router.get('/:projectId', controller.getProjectSubmissions);
 router.post(
   '/',
   requireSupplyRoles([GENERAL_STAFF]),
-  controller.createSubmission
+  controller.createStaffSubmission
 );
 
 router.patch(
