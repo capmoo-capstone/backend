@@ -6,7 +6,8 @@ export const CreateStaffSubmissionSchema = z.object({
   type: z.literal(SubmissionType.STAFF),
   step_order: z.number(),
   workflow_type: z.enum(UnitResponsibleType),
-  require_approval: z.boolean(),
+  required_approval: z.boolean(),
+  required_updating: z.boolean(),
   meta_data: z
     .array(
       z.object({
@@ -54,6 +55,22 @@ export const ApproveSubmissionSchema = z.object({
   required_signature: z.boolean(),
 });
 
+export const CompleteSubmissionSchema = z.object({
+  id: z.uuid(),
+  required_updating: z.boolean(),
+});
+
+export const UpdateProjectForSubmissionSchema = z.object({
+  pr_no: z.string().optional(),
+  po_no: z.string().optional(),
+  less_no: z.string().optional(),
+  contract_no: z.string().optional(),
+  migo_no: z.string().optional(),
+  asset_code: z.boolean().optional(),
+  vendor_name: z.string().optional(),
+  vendor_email: z.string().optional(),
+});
+
 export const RejectSubmissionSchema = z.object({
   id: z.uuid(),
   comment: z.string(),
@@ -66,6 +83,10 @@ export type CreateVendorSubmissionDto = z.infer<
   typeof CreateVendorSubmissionSchema
 >;
 export type ApproveSubmissionDto = z.infer<typeof ApproveSubmissionSchema>;
+export type CompleteSubmissionDto = z.infer<typeof CompleteSubmissionSchema>;
+export type UpdateProjectForSubmissionDto = z.infer<
+  typeof UpdateProjectForSubmissionSchema
+>;
 export type RejectSubmissionDto = z.infer<typeof RejectSubmissionSchema>;
 export type VendorSubmissionFilterQuery = z.infer<
   typeof VendorSubmissionFilterQuerySchema

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { LogActionType, Prisma, Project } from '@prisma/client';
 import {
   SubmissionStatus,
   SubmissionType,
@@ -9,9 +9,11 @@ import { BadRequestError, NotFoundError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import {
   ApproveSubmissionDto,
+  CompleteSubmissionDto,
   CreateStaffSubmissionDto,
   CreateVendorSubmissionDto,
   RejectSubmissionDto,
+  UpdateProjectForSubmissionSchema,
   VendorSubmissionFilterQuery,
 } from '../schemas/submission.schema';
 import { syncProjectPhases } from '../lib/phase-status';
@@ -47,6 +49,47 @@ const getSubmissionRound = async (
     .then((s) => s?.submission_round ?? 0);
 
   return lastSubmission + 1;
+};
+
+const updateProjectForSubmission = async (
+  tx: Prisma.TransactionClient,
+  project: Partial<Project>,
+  meta_data = [],
+  userId: string
+) => {
+  const dataToUpdate = {};
+  meta_data.forEach((item) => {
+    if (item.field_key && item.value) {
+      dataToUpdate[item.field_key] = item.value;
+    }
+  });
+
+  const validated = UpdateProjectForSubmissionSchema.safeParse(dataToUpdate);
+  if (!validated.success) {
+    throw new BadRequestError(
+      'Meta data contains invalid fields for project update'
+    );
+  }
+
+  const oldValue = {};
+  Object.keys(validated.data).forEach((key) => {
+    oldValue[key] = project[key];
+  });
+
+  await tx.project.update({
+    where: { id: project.id },
+    data: validated.data,
+  });
+
+  await tx.projectHistory.create({
+    data: {
+      project_id: project.id,
+      action: LogActionType.INFORMATION_UPDATE,
+      old_value: oldValue,
+      new_value: validated.data,
+      changed_by: userId,
+    },
+  });
 };
 
 export const getProjectSubmissions = async (
@@ -233,7 +276,17 @@ export const createStaffSubmissionsProject = async (
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.project_id },
-      select: { id: true },
+      select: {
+        id: true,
+        pr_no: true,
+        po_no: true,
+        less_no: true,
+        contract_no: true,
+        migo_no: true,
+        asset_code: true,
+        vendor_name: true,
+        vendor_email: true,
+      },
     });
     if (!project) {
       throw new NotFoundError('Project not found');
@@ -245,7 +298,7 @@ export const createStaffSubmissionsProject = async (
       step_order: data.step_order,
       workflow_type: data.workflow_type,
     });
-    const nextStatus: SubmissionStatus = data.require_approval
+    const nextStatus: SubmissionStatus = data.required_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
 
@@ -276,11 +329,16 @@ export const createStaffSubmissionsProject = async (
         status: true,
       },
     });
+
     await syncProjectPhases(
       tx,
       submission.workflow_type,
       submission.project_id
     );
+
+    if (nextStatus === SubmissionStatus.COMPLETED && data.required_updating) {
+      await updateProjectForSubmission(tx, project, data.meta_data, user.id);
+    }
     return submission;
   });
 };
@@ -466,12 +524,12 @@ export const proposeSubmission = async (
 
 export const signAndCompleteSubmission = async (
   user: AuthPayload,
-  id: string
+  data: CompleteSubmissionDto
 ): Promise<CompletedSubmissionResponse> => {
   return await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
-      where: { id },
-      select: { status: true, submitted_by: true },
+      where: { id: data.id },
+      select: { status: true, submitted_by: true, meta_data: true },
     });
 
     if (!submission) {
@@ -484,7 +542,7 @@ export const signAndCompleteSubmission = async (
     }
 
     const updated = await tx.projectSubmission.update({
-      where: { id },
+      where: { id: data.id },
       data: {
         status: SubmissionStatus.COMPLETED,
         completed_at: new Date(),
@@ -502,6 +560,28 @@ export const signAndCompleteSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    if (data.required_updating) {
+      const project = await tx.project.findUnique({
+        where: { id: updated.project_id },
+        select: {
+          id: true,
+          pr_no: true,
+          po_no: true,
+          less_no: true,
+          contract_no: true,
+          migo_no: true,
+          asset_code: true,
+          vendor_name: true,
+          vendor_email: true,
+        },
+      });
+      await updateProjectForSubmission(
+        tx,
+        project,
+        submission.meta_data,
+        user.id
+      );
+    }
     return updated;
   });
 };
