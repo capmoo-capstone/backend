@@ -197,7 +197,6 @@ export const getVendorSubmissions = async (
             title: true,
             vendor_name: true,
             requesting_dept: { select: { id: true, name: true } },
-            po_no: true,
           },
         },
       },
@@ -212,7 +211,7 @@ export const getVendorSubmissions = async (
     totalPages: Math.ceil(total / limit),
     data: submissions.map((s) => ({
       id: s.id,
-      po_no: s.project.po_no,
+      po_no: s.po_no,
       submitted_at: s.submitted_at,
       documents: s.documents,
       project_id: s.project.id,
@@ -309,16 +308,14 @@ export const createVendorSubmissionsProject = async (
     const submission = await tx.projectSubmission.create({
       data: {
         project_id: project.id,
-        submitted_by: 'VENDOR',
+        submitted_by: null,
         step_order: data.step_order,
         workflow_type: data.workflow_type,
         submission_round,
         submission_type: SubmissionType.VENDOR,
         status: SubmissionStatus.COMPLETED,
-        meta_data: [
-          { installment: data.installment ?? '-' },
-          { po_no: data.po_no },
-        ],
+        po_no: data.po_no,
+        meta_data: [{ installment: data.installment ?? '-' }],
         documents: {
           create: data.files?.map((file) => ({
             field_key: file.field_key,
