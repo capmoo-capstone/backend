@@ -133,6 +133,20 @@ export const getVendorSubmissions = async (
                   mode: Prisma.QueryMode.insensitive,
                 },
               },
+              {
+                title: {
+                  contains: term,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                requesting_dept: {
+                  name: {
+                    contains: term,
+                    mode: Prisma.QueryMode.insensitive,
+                  },
+                },
+              },
             ],
           },
         },

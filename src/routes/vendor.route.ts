@@ -3,7 +3,11 @@ import {
   createVendorSubmission,
   getVendorSubmissions,
 } from '../controllers/submission.controller';
-import { protect, requireSupplyRoles } from '../middlewares/auth';
+import {
+  protect,
+  requireSupplyAccess,
+  requireSupplyRoles,
+} from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
 const { HEAD_OF_UNIT, GENERAL_STAFF } = UserRole;
@@ -11,11 +15,6 @@ const { HEAD_OF_UNIT, GENERAL_STAFF } = UserRole;
 const router = Router();
 
 router.post('/', createVendorSubmission);
-router.get(
-  '/vendors',
-  protect,
-  requireSupplyRoles([HEAD_OF_UNIT, GENERAL_STAFF]),
-  getVendorSubmissions
-);
+router.get('/vendors', protect, requireSupplyAccess, getVendorSubmissions);
 
 export default router;
