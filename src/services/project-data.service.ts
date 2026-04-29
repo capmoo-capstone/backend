@@ -149,7 +149,6 @@ export const importProjects = async (
 
     const unitType = await getProcurementTypeToUnitIdMap(tx);
 
-    const baseCount = await tx.project.count();
     const receiveNumbers = await Promise.all(
       data.map((d, i) => getReceiveNumberSync(tx, d.budget_year, i))
     );
