@@ -14,7 +14,11 @@ export const isHeadOfSupplyDept = (user: AuthPayload): boolean =>
   ) ||
   (user.is_delegated &&
     user.delegated_by.some((r) =>
-      r.roles.some(role => role.role === UserRole.HEAD_OF_DEPARTMENT && role.dept_id === OPS_DEPT_ID)
+      r.roles.some(
+        (role) =>
+          role.role === UserRole.HEAD_OF_DEPARTMENT &&
+          role.dept_id === OPS_DEPT_ID
+      )
     ));
 
 export const isHeadOfSupplyUnit = (user: AuthPayload): boolean =>
@@ -23,7 +27,10 @@ export const isHeadOfSupplyUnit = (user: AuthPayload): boolean =>
   ) ||
   (user.is_delegated &&
     user.delegated_by.some((r) =>
-      r.roles.some((role) => role.role === UserRole.HEAD_OF_UNIT && role.dept_id === OPS_DEPT_ID)
+      r.roles.some(
+        (role) =>
+          role.role === UserRole.HEAD_OF_UNIT && role.dept_id === OPS_DEPT_ID
+      )
     ));
 
 export const getDeptIdsForUser = (user: AuthPayload): string[] => {

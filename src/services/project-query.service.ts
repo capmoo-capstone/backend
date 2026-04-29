@@ -679,29 +679,27 @@ export const getOwnProjects = async (
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
-
-  const unitIds = getUnitIdsForUser(user);
-  const userUnits =
-    unitIds.length > 0
-      ? await prisma.unit.findMany({
-          where: { id: { in: unitIds } },
-          select: { id: true, type: true },
-        })
-      : [];
-
-  const procurementUnitIds = userUnits
-    .filter((u) => u.type.some((t) => t !== UnitResponsibleType.CONTRACT))
-    .map((u) => u.id);
-
-  const contractUnitIds = userUnits
-    .filter((u) => u.type.includes(UnitResponsibleType.CONTRACT))
-    .map((u) => u.id);
-
   let where: Prisma.ProjectWhereInput = {};
 
   if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
     where = {};
   } else {
+    const unitIds = getUnitIdsForUser(user);
+    const userUnits =
+      unitIds.length > 0
+        ? await prisma.unit.findMany({
+            where: { id: { in: unitIds } },
+            select: { id: true, type: true },
+          })
+        : [];
+
+    const procurementUnitIds = userUnits
+      .filter((u) => u.type.some((t) => t !== UnitResponsibleType.CONTRACT))
+      .map((u) => u.id);
+
+    const contractUnitIds = userUnits
+      .filter((u) => u.type.includes(UnitResponsibleType.CONTRACT))
+      .map((u) => u.id);
     const orClauses: Prisma.ProjectWhereInput[] = [];
 
     if (isHeadOfSupplyUnit(user) && procurementUnitIds.length > 0) {
