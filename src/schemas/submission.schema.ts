@@ -27,7 +27,6 @@ export const CreateStaffSubmissionSchema = z.object({
 });
 
 export const CreateVendorSubmissionSchema = z.object({
-  project_id: z.uuid().optional(),
   type: z.literal(SubmissionType.VENDOR),
   workflow_type: z.literal(UnitResponsibleType.CONTRACT),
   step_order: z.number().default(2),
@@ -45,8 +44,8 @@ export const CreateVendorSubmissionSchema = z.object({
 export const VendorSubmissionFilterQuerySchema = z
   .object({
     search: z.string().optional(),
-    dateFrom: z.string().optional(),
-    dateTo: z.string().optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
   })
   .optional();
 

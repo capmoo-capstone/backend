@@ -30,22 +30,27 @@ const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
   data: GetSubmissionRoundDto
 ) => {
-  const lockKey = `:${data.step_order ?? 'null'}:${data.type}`;
+  const lockKey = `${data.project_id}:${data.workflow_type}:${data.step_order}:${data.type}`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-  const lastSubmission = await tx.projectSubmission.count({
-    where: {
-      project_id: data.project_id,
-      step_order: data.step_order,
-      workflow_type: data.workflow_type,
-      submission_type: data.type,
-    },
-  });
+  const lastSubmission = await tx.projectSubmission
+    .findFirst({
+      where: {
+        project_id: data.project_id,
+        step_order: data.step_order,
+        workflow_type: data.workflow_type,
+        submission_type: data.type,
+      },
+      orderBy: { submission_round: 'desc' },
+      select: { submission_round: true },
+    })
+    .then((s) => s?.submission_round ?? 0);
+
   return lastSubmission + 1;
 };
 
 export const getProjectSubmissions = async (
-  user: AuthPayload,
+  _user: AuthPayload,
   projectId: string
 ): Promise<ProjectSubmissionsResponse> => {
   const project = await prisma.project
@@ -98,7 +103,7 @@ export const getProjectSubmissions = async (
 };
 
 export const getVendorSubmissions = async (
-  user: AuthPayload,
+  _user: AuthPayload,
   page: number,
   limit: number,
   filter: VendorSubmissionFilterQuery
@@ -182,7 +187,6 @@ export const getVendorSubmissions = async (
         id: true,
         po_no: true,
         submitted_at: true,
-        status: true,
         documents: {
           select: { field_key: true, file_name: true, file_path: true },
         },
@@ -193,6 +197,7 @@ export const getVendorSubmissions = async (
             title: true,
             vendor_name: true,
             requesting_dept: { select: { id: true, name: true } },
+            po_no: true,
           },
         },
       },
@@ -207,9 +212,8 @@ export const getVendorSubmissions = async (
     totalPages: Math.ceil(total / limit),
     data: submissions.map((s) => ({
       id: s.id,
-      po_no: s.po_no,
+      po_no: s.project.po_no,
       submitted_at: s.submitted_at,
-      status: s.status,
       documents: s.documents,
       project_id: s.project.id,
       receive_no: s.project.receive_no,
@@ -283,7 +287,6 @@ export const createStaffSubmissionsProject = async (
 };
 
 export const createVendorSubmissionsProject = async (
-  user: AuthPayload,
   data: CreateVendorSubmissionDto
 ): Promise<SubmissionActionResponse> => {
   return await prisma.$transaction(async (tx) => {
@@ -306,7 +309,7 @@ export const createVendorSubmissionsProject = async (
     const submission = await tx.projectSubmission.create({
       data: {
         project_id: project.id,
-        submitted_by: user.id,
+        submitted_by: 'VENDOR',
         step_order: data.step_order,
         workflow_type: data.workflow_type,
         submission_round,
