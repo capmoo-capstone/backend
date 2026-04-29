@@ -467,7 +467,7 @@ export const getAssignedProjects = async (
   const endOfDay = new Date(targetDate);
   endOfDay.setHours(23, 59, 59, 999);
 
-  let where: any = {
+  const where: any = {
     AND: [
       {
         status: {
@@ -679,7 +679,7 @@ export const getOwnProjects = async (
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
-  let where: Prisma.ProjectWhereInput = {};
+  let where: Prisma.ProjectWhereInput;
 
   if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
     where = {};

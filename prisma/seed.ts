@@ -566,7 +566,7 @@ async function main() {
     },
   ];
 
-  let createdProject = [];
+  const createdProject = [];
 
   for (const p of projects) {
     const created = await prisma.project.create({ data: p });
@@ -605,7 +605,7 @@ async function main() {
     }
 
     // 2. Determine how many steps are "Done"
-    let stepsToComplete = 0;
+    let stepsToComplete;
 
     if (project.status === ProjectStatus.CLOSED) {
       // If project is done, ALL steps must be completed
@@ -658,11 +658,11 @@ async function main() {
     data: {
       unit_id: 'UNIT-SUP',
       unit_no: '1010803000',
-      activity_type: 'ระบบติตดาม',
+      activity_type: 123456,
       activity_type_name: 'ระบบติดตามสถานะการจัดซื้อจัดจ้าง',
       description: 'ระบบติดตามสถานะการจัดซื้อจัดจ้างและการบริหารสัญญา',
       budget_amount: 1000000,
-      budget_year: '2026',
+      budget_year: 2569,
       created_by: superAdmin.id,
     },
   });

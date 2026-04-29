@@ -9,7 +9,7 @@ import { AuthPayload } from '../types/auth.type';
 import { DepartmentsListResponse } from '../types/department.type';
 
 export const listDepartments = async (
-  user: AuthPayload
+  _user: AuthPayload
 ): Promise<DepartmentsListResponse> => {
   const [departments, total] = await prisma.$transaction([
     prisma.department.findMany({

@@ -57,7 +57,7 @@ app.options('/{*path}', cors());
 app.use(express.json());
 
 // Import API v1 routes
-app.get('/', (req, res, next) => {
+app.get('/', (req, res, _next) => {
   res.status(200).send('Welcome to the API');
 });
 app.use('/api/v1', apiV1Routes);

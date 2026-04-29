@@ -86,4 +86,5 @@ export interface VendorSubmissionDetailResponse {
   documents: Omit<ProjectDocument, 'id' | 'submission_id'>[];
 }
 
-export interface VendorSubmissionsResponse extends PaginatedResponse<VendorSubmissionDetailResponse> {}
+export type VendorSubmissionsResponse =
+  PaginatedResponse<VendorSubmissionDetailResponse>;
