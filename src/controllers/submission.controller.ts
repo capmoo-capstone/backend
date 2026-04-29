@@ -3,6 +3,7 @@ import * as SubmissionService from '../services/submission.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 import {
   ApproveSubmissionSchema,
+  CompleteSubmissionSchema,
   CreateStaffSubmissionSchema,
   CreateVendorSubmissionSchema,
   RejectSubmissionSchema,
@@ -122,9 +123,13 @@ export const signAndCompleteSubmission = async (
   const payload = req.user!;
   const submissionId = req.params.id as string;
 
+  const validateData = CompleteSubmissionSchema.parse({
+    id: submissionId,
+    ...req.body,
+  });
   const submission = await SubmissionService.signAndCompleteSubmission(
     payload,
-    submissionId
+    validateData
   );
   res.status(200).json(submission);
 };
