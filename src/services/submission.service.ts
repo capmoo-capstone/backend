@@ -9,41 +9,48 @@ import { BadRequestError, NotFoundError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import {
   ApproveSubmissionDto,
-  CreateSubmissionDto,
+  CreateStaffSubmissionDto,
+  CreateVendorSubmissionDto,
   RejectSubmissionDto,
+  VendorSubmissionFilterQuery,
 } from '../schemas/submission.schema';
 import { syncProjectPhases } from '../lib/phase-status';
 import {
   ApprovedSubmissionResponse,
   CompletedSubmissionResponse,
+  GetSubmissionRoundDto,
   ProjectSubmissionsResponse,
   ProposedSubmissionResponse,
   RejectedSubmissionResponse,
   SubmissionActionResponse,
+  VendorSubmissionsResponse,
 } from '../types/submission.type';
 
 const getSubmissionRound = async (
-  data: CreateSubmissionDto,
-  tx: Prisma.TransactionClient
+  tx: Prisma.TransactionClient,
+  data: GetSubmissionRoundDto
 ) => {
-  const lockKey = `${data.project_id}:${data.step_order ?? 'null'}:${SubmissionType.STAFF}`;
+  const lockKey = `${data.project_id}:${data.workflow_type}:${data.step_order}:${data.type}`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-  const lastSubmission = await tx.projectSubmission.findFirst({
-    where: {
-      project_id: data.project_id,
-      step_order: data.step_order,
-      workflow_type: data.workflow_type,
-      submission_type: SubmissionType.STAFF,
-    },
-    orderBy: { submitted_at: 'desc' },
-    select: { submission_round: true },
-  });
-  return lastSubmission ? (lastSubmission.submission_round || 0) + 1 : 1;
+  const lastSubmission = await tx.projectSubmission
+    .findFirst({
+      where: {
+        project_id: data.project_id,
+        step_order: data.step_order,
+        workflow_type: data.workflow_type,
+        submission_type: data.type,
+      },
+      orderBy: { submission_round: 'desc' },
+      select: { submission_round: true },
+    })
+    .then((s) => s?.submission_round ?? 0);
+
+  return lastSubmission + 1;
 };
 
 export const getProjectSubmissions = async (
-  user: AuthPayload,
+  _user: AuthPayload,
   projectId: string
 ): Promise<ProjectSubmissionsResponse> => {
   const project = await prisma.project
@@ -95,14 +102,134 @@ export const getProjectSubmissions = async (
   };
 };
 
-export const createStaffSubmissionsProject = async (
-  user: AuthPayload,
-  data: CreateSubmissionDto
-): Promise<SubmissionActionResponse> => {
-  if (data.type !== SubmissionType.STAFF) {
-    throw new BadRequestError('Invalid submission type for staff submission');
+export const getVendorSubmissions = async (
+  _user: AuthPayload,
+  page: number,
+  limit: number,
+  filter: VendorSubmissionFilterQuery
+): Promise<VendorSubmissionsResponse> => {
+  const and: Prisma.ProjectSubmissionWhereInput[] = [
+    { submission_type: SubmissionType.VENDOR },
+    { workflow_type: UnitResponsibleType.CONTRACT },
+  ];
+
+  if (filter?.search?.trim()) {
+    const term = filter.search.trim();
+    and.push({
+      OR: [
+        {
+          project: {
+            OR: [
+              {
+                po_no: {
+                  contains: term,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                vendor_name: {
+                  contains: term,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                receive_no: {
+                  contains: term,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                title: {
+                  contains: term,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                requesting_dept: {
+                  name: {
+                    contains: term,
+                    mode: Prisma.QueryMode.insensitive,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
   }
 
+  if (filter?.dateFrom || filter?.dateTo) {
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (filter.dateFrom) {
+      const from = new Date(filter.dateFrom);
+      from.setHours(0, 0, 0, 0);
+      dateFilter.gte = from;
+    }
+    if (filter.dateTo) {
+      const to = new Date(filter.dateTo);
+      to.setHours(23, 59, 59, 999);
+      dateFilter.lte = to;
+    }
+    and.push({ submitted_at: dateFilter });
+  }
+
+  const where: Prisma.ProjectSubmissionWhereInput = { AND: and };
+  const skip = (page - 1) * limit;
+
+  const [submissions, total] = await prisma.$transaction([
+    prisma.projectSubmission.findMany({
+      where,
+      orderBy: { submitted_at: 'desc' },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        po_no: true,
+        submitted_at: true,
+        documents: {
+          select: { field_key: true, file_name: true, file_path: true },
+        },
+        project: {
+          select: {
+            id: true,
+            receive_no: true,
+            title: true,
+            vendor_name: true,
+            requesting_dept: { select: { id: true, name: true } },
+          },
+        },
+      },
+    }),
+    prisma.projectSubmission.count({ where }),
+  ]);
+
+  return {
+    total,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
+    data: submissions.map((s) => ({
+      id: s.id,
+      po_no: s.po_no,
+      submitted_at: s.submitted_at,
+      documents: s.documents,
+      project_id: s.project.id,
+      receive_no: s.project.receive_no,
+      title: s.project.title,
+      vendor_name: s.project.vendor_name,
+      requester: {
+        dept_id: s.project.requesting_dept.id,
+        dept_name: s.project.requesting_dept.name,
+      },
+    })),
+  };
+};
+
+export const createStaffSubmissionsProject = async (
+  user: AuthPayload,
+  data: CreateStaffSubmissionDto
+): Promise<SubmissionActionResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.project_id },
@@ -112,7 +239,12 @@ export const createStaffSubmissionsProject = async (
       throw new NotFoundError('Project not found');
     }
 
-    const submission_round = await getSubmissionRound(data, tx);
+    const submission_round = await getSubmissionRound(tx, {
+      project_id: data.project_id,
+      type: data.type,
+      step_order: data.step_order,
+      workflow_type: data.workflow_type,
+    });
     const nextStatus: SubmissionStatus = data.require_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
@@ -127,6 +259,63 @@ export const createStaffSubmissionsProject = async (
         submission_type: SubmissionType.STAFF,
         status: nextStatus,
         meta_data: data.meta_data,
+        documents: {
+          create: data.files?.map((file) => ({
+            field_key: file.field_key,
+            file_name: file.file_name,
+            file_path: file.file_path,
+          })),
+        },
+      },
+      select: {
+        id: true,
+        project_id: true,
+        workflow_type: true,
+        step_order: true,
+        submission_round: true,
+        status: true,
+      },
+    });
+    await syncProjectPhases(
+      tx,
+      submission.workflow_type,
+      submission.project_id
+    );
+    return submission;
+  });
+};
+
+export const createVendorSubmissionsProject = async (
+  data: CreateVendorSubmissionDto
+): Promise<SubmissionActionResponse> => {
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project
+      .findFirstOrThrow({
+        where: { po_no: data.po_no },
+        select: { id: true },
+      })
+      .catch(() => {
+        throw new NotFoundError('Project not found');
+      });
+
+    const submission_round = await getSubmissionRound(tx, {
+      project_id: project.id,
+      type: data.type,
+      step_order: data.step_order,
+      workflow_type: data.workflow_type,
+    });
+
+    const submission = await tx.projectSubmission.create({
+      data: {
+        project_id: project.id,
+        submitted_by: null,
+        step_order: data.step_order,
+        workflow_type: data.workflow_type,
+        submission_round,
+        submission_type: SubmissionType.VENDOR,
+        status: SubmissionStatus.COMPLETED,
+        po_no: data.po_no,
+        meta_data: [{ installment: data.installment ?? '-' }],
         documents: {
           create: data.files?.map((file) => ({
             field_key: file.field_key,

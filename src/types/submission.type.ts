@@ -4,6 +4,7 @@ import {
   SubmissionType,
   UnitResponsibleType,
 } from '@prisma/client';
+import { PaginatedResponse } from './common.type';
 
 export interface SubmissionActionResponse {
   id: string;
@@ -12,6 +13,13 @@ export interface SubmissionActionResponse {
   step_order: number;
   submission_round: number;
   status: SubmissionStatus;
+}
+
+export interface GetSubmissionRoundDto {
+  project_id: string;
+  type: SubmissionType;
+  step_order: number;
+  workflow_type: UnitResponsibleType;
 }
 
 export interface RejectedSubmissionResponse extends SubmissionActionResponse {
@@ -62,3 +70,20 @@ export interface ProjectSubmissionsResponse {
   procurement: SubmissionDetailResponse[];
   contract: SubmissionDetailResponse[];
 }
+
+export interface VendorSubmissionDetailResponse {
+  id: string;
+  project_id: string;
+  title: string;
+  receive_no: string;
+  po_no: string;
+  vendor_name: string;
+  requester: {
+    dept_id: string;
+    dept_name: string;
+  };
+  submitted_at: Date;
+  documents: Omit<ProjectDocument, 'id' | 'submission_id'>[];
+}
+
+export interface VendorSubmissionsResponse extends PaginatedResponse<VendorSubmissionDetailResponse> {}
