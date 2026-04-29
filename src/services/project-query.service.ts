@@ -340,7 +340,8 @@ export const getById = async (
       pr_no: projectData.pr_no,
       po_no: projectData.po_no,
       contract_no: projectData.contract_no,
-      migo_no: projectData.migo_no,
+      migo_103_no: projectData.migo_103_no,
+      migo_105_no: projectData.migo_105_no,
       asset_code: projectData.asset_code,
       expected_approval_date: projectData.expected_approval_date,
       expected_completion_procurement_date:

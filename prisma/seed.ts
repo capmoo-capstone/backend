@@ -478,7 +478,8 @@ const createProject = async (data: {
   poNo?: string;
   lessNo?: string;
   contractNo?: string;
-  migoNo?: string;
+  migo103No?: string;
+  migo105No?: string;
   vendorName?: string;
   vendorEmail?: string;
   requestEditReason?: string;
@@ -525,7 +526,8 @@ const createProject = async (data: {
       po_no: data.poNo,
       less_no: data.lessNo,
       contract_no: data.contractNo,
-      migo_no: data.migoNo,
+      migo_103_no: data.migo103No,
+      migo_105_no: data.migo105No,
       vendor_name: data.vendorName,
       vendor_email: data.vendorEmail,
       request_edit_reason: data.requestEditReason,
@@ -861,7 +863,8 @@ const seedProjects = async () => {
     prNo: `${fy}-PR-UT-90008`,
     poNo: `${fy}-PO-UT-90008`,
     contractNo: `${fy}-CON-UT-90008`,
-    migoNo: `${fy}-MIGO-UT-90008`,
+    migo103No: `${fy}-MIGO-UT-90008`,
+    migo105No: `${fy}-MIGO-UT-90008`,
     vendorName: 'Tablet Supply User Testing Co.',
     vendorEmail: 'vendor.tablet@example.test',
     procurementAssigneeIds: [ids.users.procurementLt],

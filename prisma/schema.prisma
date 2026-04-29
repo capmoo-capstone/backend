@@ -202,7 +202,8 @@ model Project {
   po_no                  String?
   less_no                String?
   contract_no            String?
-  migo_no                String?
+  migo_103_no                String?
+  migo_105_no                String?
   asset_code             Boolean?
   vendor_name            String?
   vendor_email           String?
