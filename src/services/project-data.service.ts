@@ -206,22 +206,31 @@ export const updateProjectData = async (
       current.id
     );
 
-    const oldValue: any = {};
-    Object.keys(data.updateData).forEach((key) => {
-      oldValue[key] = (current as any)[key];
+    const { budget_plan_id, ...projectData } = data.updateData;
+
+    const oldValue = {};
+    Object.keys(projectData).forEach((key) => {
+      oldValue[key] = current[key];
     });
 
     const updated = await tx.project.update({
       where: { id: data.id },
-      data: { ...data.updateData },
+      data: { ...projectData },
     });
+
+    if (budget_plan_id.length > 0) {
+      await tx.budgetPlan.updateMany({
+        where: { id: { in: budget_plan_id } },
+        data: { project_id: data.id },
+      });
+    }
 
     await tx.projectHistory.create({
       data: {
         project_id: data.id,
         action: LogActionType.INFORMATION_UPDATE,
         old_value: { ...oldValue },
-        new_value: { ...data.updateData },
+        new_value: { ...projectData },
         changed_by: user.id,
       },
     });
