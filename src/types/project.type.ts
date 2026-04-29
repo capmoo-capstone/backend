@@ -75,6 +75,7 @@ export interface ProjectDetailsResponse {
   po_no: string | null;
   contract_no: string | null;
   migo_no: string | null;
+  asset_code: boolean | null;
   expected_approval_date: Date | null;
   expected_completion_procurement_date: Date | null;
   request_edit_reason: string | null;
@@ -82,7 +83,6 @@ export interface ProjectDetailsResponse {
   updated_at: Date | null;
   vendor: {
     name: string | null;
-    tax_id: string | null;
     email: string | null;
   };
   requester: {

@@ -341,6 +341,7 @@ export const getById = async (
       po_no: projectData.po_no,
       contract_no: projectData.contract_no,
       migo_no: projectData.migo_no,
+      asset_code: projectData.asset_code,
       expected_approval_date: projectData.expected_approval_date,
       expected_completion_procurement_date:
         projectData.expected_completion_procurement_date,
@@ -349,7 +350,6 @@ export const getById = async (
       updated_at: projectData.updated_at,
       vendor: {
         name: projectData.vendor_name,
-        tax_id: projectData.vendor_tax_id,
         email: projectData.vendor_email,
       },
       requester: {

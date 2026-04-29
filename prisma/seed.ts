@@ -480,7 +480,6 @@ const createProject = async (data: {
   contractNo?: string;
   migoNo?: string;
   vendorName?: string;
-  vendorTaxId?: string;
   vendorEmail?: string;
   requestEditReason?: string;
   procurementAssigneeIds?: string[];
@@ -528,7 +527,6 @@ const createProject = async (data: {
       contract_no: data.contractNo,
       migo_no: data.migoNo,
       vendor_name: data.vendorName,
-      vendor_tax_id: data.vendorTaxId,
       vendor_email: data.vendorEmail,
       request_edit_reason: data.requestEditReason,
       assignee_procurement:
@@ -785,7 +783,6 @@ const seedProjects = async () => {
     poNo: `${fy}-PO-UT-90006`,
     lessNo: `${fy}-LESS-UT-90006`,
     vendorName: 'SecureWorks User Testing Co., Ltd.',
-    vendorTaxId: '0105566009006',
     vendorEmail: 'vendor.security@example.test',
     procurementAssigneeIds: [ids.users.procurementHigh],
     contractAssigneeIds: [ids.users.contractStaff],
@@ -816,7 +813,6 @@ const seedProjects = async () => {
     lessNo: `${fy}-LESS-UT-90007`,
     contractNo: `${fy}-CON-UT-90007`,
     vendorName: 'Maintain Plus User Testing Ltd.',
-    vendorTaxId: '0105566009007',
     vendorEmail: 'vendor.maintenance@example.test',
     procurementAssigneeIds: [ids.users.procurementHigh],
     contractAssigneeIds: [ids.users.contractStaff],
@@ -867,7 +863,6 @@ const seedProjects = async () => {
     contractNo: `${fy}-CON-UT-90008`,
     migoNo: `${fy}-MIGO-UT-90008`,
     vendorName: 'Tablet Supply User Testing Co.',
-    vendorTaxId: '0105566009008',
     vendorEmail: 'vendor.tablet@example.test',
     procurementAssigneeIds: [ids.users.procurementLt],
     contractAssigneeIds: [ids.users.contractStaff],
