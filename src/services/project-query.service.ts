@@ -16,6 +16,7 @@ import {
   isHeadOfSupplyDept,
   isHeadOfSupplyUnit,
   isSuperAdmin,
+  getUnitIdsForUser,
 } from '../lib/permissions';
 import { AuthPayload } from '../types/auth.type';
 import {
@@ -678,17 +679,106 @@ export const getOwnProjects = async (
   limit: number
 ): Promise<PaginatedProjects> => {
   const skip = (page - 1) * limit;
-  const where = {
-    OR: [
-      { assignee_procurement: { some: { id: user.id } } },
-      { assignee_contract: { some: { id: user.id } } },
-    ],
-  };
+  let where: Prisma.ProjectWhereInput = {};
+
+  if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
+    where = {};
+  } else {
+    const unitIds = getUnitIdsForUser(user);
+    const userUnits =
+      unitIds.length > 0
+        ? await prisma.unit.findMany({
+            where: { id: { in: unitIds } },
+            select: { id: true, type: true },
+          })
+        : [];
+
+    const procurementUnitIds = userUnits
+      .filter((u) => u.type.some((t) => t !== UnitResponsibleType.CONTRACT))
+      .map((u) => u.id);
+
+    const contractUnitIds = userUnits
+      .filter((u) => u.type.includes(UnitResponsibleType.CONTRACT))
+      .map((u) => u.id);
+    const orClauses: Prisma.ProjectWhereInput[] = [];
+
+    if (isHeadOfSupplyUnit(user) && procurementUnitIds.length > 0) {
+      orClauses.push({
+        AND: [
+          { responsible_unit_id: { in: procurementUnitIds } },
+          {
+            procurement_status: {
+              notIn: [
+                ProjectPhaseStatus.COMPLETED,
+                ProjectPhaseStatus.NOT_STARTED,
+              ],
+            },
+          },
+        ],
+      });
+    }
+
+    if (isHeadOfSupplyUnit(user) && contractUnitIds.length > 0) {
+      orClauses.push({
+        AND: [
+          { responsible_unit_id: { in: contractUnitIds } },
+          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
+          {
+            contract_status: {
+              notIn: [
+                ProjectPhaseStatus.COMPLETED,
+                ProjectPhaseStatus.NOT_EXPORTED,
+                ProjectPhaseStatus.NOT_STARTED,
+              ],
+            },
+          },
+        ],
+      });
+    }
+
+    if (
+      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
+      procurementUnitIds.length > 0
+    ) {
+      orClauses.push({
+        AND: [
+          { assignee_procurement: { some: { id: user.id } } },
+          {
+            procurement_status: {
+              not: ProjectPhaseStatus.COMPLETED,
+            },
+          },
+        ],
+      });
+    }
+
+    if (
+      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
+      contractUnitIds.length > 0
+    ) {
+      orClauses.push({
+        AND: [
+          { assignee_contract: { some: { id: user.id } } },
+          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
+          {
+            contract_status: {
+              notIn: [
+                ProjectPhaseStatus.COMPLETED,
+                ProjectPhaseStatus.NOT_EXPORTED,
+              ],
+            },
+          },
+        ],
+      });
+    }
+
+    where = orClauses.length > 0 ? { OR: orClauses } : { id: 'none' };
+  }
 
   const [projects, total] = await Promise.all([
     prisma.project.findMany({
       where,
-      skip: skip,
+      skip,
       take: limit,
       orderBy: [{ receive_no: 'desc' }],
       select: {
