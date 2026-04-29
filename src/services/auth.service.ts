@@ -73,7 +73,15 @@ export const fetchAndFormatUserDetails = async (
   const delegatedBy = user.delegations_received.map((d) => ({
     id: d.delegator.id,
     full_name: d.delegator.full_name,
-    roles: d.delegator.roles.map((r) => r.role),
+    roles: d.delegator.roles.map((r) => {
+      return {
+        role: r.role,
+        dept_id: r.department.id,
+        dept_name: r.department.name,
+        unit_id: r.unit?.id || null,
+        unit_name: r.unit?.name || null,
+      };
+    }),
   }));
 
   return {

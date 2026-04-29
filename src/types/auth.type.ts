@@ -12,7 +12,7 @@ export interface AuthRoleDetail {
 export interface DelegatedByUser {
   id: string;
   full_name: string;
-  roles: UserRole[];
+  roles: AuthRoleDetail[];
 }
 
 export interface LoginResponse {
