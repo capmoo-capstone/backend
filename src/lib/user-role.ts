@@ -21,15 +21,28 @@ export const addRoleInternal = async (
 ): Promise<UpdateUserRoleResponse> => {
   const { userId, role, deptId, unitId } = params;
 
-  const existingRoles = await tx.userOrganizationRole.findMany({
+  //Handle creating the same role in same unit and same dept
+  const existingSameRecord = await tx.userOrganizationRole.findFirst({
+    where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
+  });
+  if (existingSameRecord) {
+    throw new BadRequestError(
+      `User already has role ${role} in the specified dept/unit`
+    );
+  }
+
+  const existingDeptRoles = await tx.userOrganizationRole.findMany({
     where: { user_id: userId, dept_id: deptId },
     select: { id: true, role: true, unit_id: true },
   });
 
   const sameUnitSlot =
-    unitId !== null ? existingRoles.find((r) => r.unit_id === unitId) : null;
+    unitId !== null
+      ? existingDeptRoles.find((r) => r.unit_id === unitId)
+      : null;
   const onlyGuest =
-    existingRoles.length === 1 && existingRoles[0].role === UserRole.GUEST;
+    existingDeptRoles.length === 1 &&
+    existingDeptRoles[0].role === UserRole.GUEST;
 
   let result: UpdateUserRoleResponse;
 
@@ -42,7 +55,7 @@ export const addRoleInternal = async (
   } else if (onlyGuest) {
     // GUEST เดียวใน dept → replace
     result = await tx.userOrganizationRole.update({
-      where: { id: existingRoles[0].id },
+      where: { id: existingDeptRoles[0].id },
       data: { role, unit_id: unitId },
     });
   } else {
