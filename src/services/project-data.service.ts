@@ -149,8 +149,25 @@ export const importProjects = async (
 
     const unitType = await getProcurementTypeToUnitIdMap(tx);
 
+    // Track per-year offsets to avoid gaps when multiple budget_year values are present
+    const bufferByYear = new Map<number, number>();
+
     const receiveNumbers = await Promise.all(
-      data.map((d, i) => getReceiveNumberSync(tx, d.budget_year, i))
+      data.map((d) => {
+        const year =
+          d.budget_year ||
+          (() => {
+            const thisYear = new Date().getFullYear() + 543;
+            const currentMonth = new Date().getMonth() + 1;
+            return currentMonth >= 10 ? thisYear + 1 : thisYear;
+          })();
+
+        const currentBuffer = bufferByYear.get(year) ?? 0;
+
+        bufferByYear.set(year, currentBuffer + 1);
+
+        return getReceiveNumberSync(tx, d.budget_year, currentBuffer);
+      })
     );
 
     // 5. Bulk create projects (createManyAndReturn)

@@ -33,14 +33,11 @@ type ProjectCancellationWithRelations = ProjectCancellation & {
   approver: BasicUser | null;
 };
 
-type UserDelegationWithUsers = UserDelegation & {
+type UserDelegationWithRelations = UserDelegation & {
   delegator: BasicUser;
   delegatee: BasicUser;
-};
-
-type DateRange = {
-  from?: Date;
-  to?: Date;
+  creator: BasicUser;
+  canceller?: BasicUser | null;
 };
 
 const toIsoStringOrNull = (date: Date | null) => date?.toISOString() ?? null;
@@ -54,40 +51,6 @@ const buildProjectTarget = (project: BasicProject): AuditTarget => ({
   name: project.title,
   refNo: project.receive_no,
 });
-
-const buildDateRange = (query: AuditLogsQuery): DateRange => ({
-  from: query.dateFrom
-    ? new Date(
-        query.dateFrom.getFullYear(),
-        query.dateFrom.getMonth(),
-        query.dateFrom.getDate(),
-        0,
-        0,
-        0,
-        0
-      )
-    : undefined,
-  to: query.dateTo
-    ? new Date(
-        query.dateTo.getFullYear(),
-        query.dateTo.getMonth(),
-        query.dateTo.getDate(),
-        23,
-        59,
-        59,
-        999
-      )
-    : undefined,
-});
-
-const isWithinDateRange = (item: AuditLogItem, range: DateRange) => {
-  const occurredAt = new Date(item.occurredAt);
-
-  if (range.from && occurredAt < range.from) return false;
-  if (range.to && occurredAt > range.to) return false;
-
-  return true;
-};
 
 const matchesSearch = (item: AuditLogItem, query?: string) => {
   if (!query) return true;
@@ -178,17 +141,21 @@ const mapProjectCancellation = (
 };
 
 const mapUserDelegation = (
-  delegation: UserDelegationWithUsers
+  delegation: UserDelegationWithRelations
 ): AuditLogItem[] => {
   const wasCancelled = delegation.cancelled_at !== null;
   const delegator = buildActor(delegation.delegator)!;
   const delegatee = buildActor(delegation.delegatee)!;
+  const creator = buildActor(delegation.creator)!;
+  const canceller = buildActor(delegation.canceller ?? null);
+
   const commonTarget: AuditTarget = {
     id: delegation.id,
     type: 'USER_DELEGATION',
     name: `${delegator.name} -> ${delegatee.name}`,
     refNo: null,
   };
+
   const commonDetails = {
     delegator,
     delegatee,
@@ -196,15 +163,22 @@ const mapUserDelegation = (
     endDate: toIsoStringOrNull(delegation.end_date),
     isActive: delegation.is_active,
     cancelledAt: toIsoStringOrNull(delegation.cancelled_at),
+    createdBy: delegation.creator.full_name,
+    cancelledBy: delegation.canceller?.full_name ?? null,
   };
+
+  const createdDescription =
+    delegation.creator.id === delegation.delegator_id
+      ? `${delegator.name} delegated access to ${delegatee.name}`
+      : `${delegation.creator.full_name} created delegation for ${delegator.name} to ${delegatee.name}`;
 
   const createdLog: AuditLogItem = {
     id: `${delegation.id}:created`,
     kind: AuditLogType.USER_DELEGATION,
     occurredAt: delegation.created_at.toISOString(),
     title: 'User delegation created',
-    description: `${delegator.name} delegated access to ${delegatee.name}`,
-    actor: delegator,
+    description: createdDescription,
+    actor: creator,
     target: commonTarget,
     details: {
       ...commonDetails,
@@ -216,10 +190,14 @@ const mapUserDelegation = (
     ? {
         id: `${delegation.id}:cancelled`,
         kind: AuditLogType.USER_DELEGATION,
-        occurredAt: delegation.cancelled_at.toISOString(),
+        occurredAt: delegation.cancelled_at!.toISOString(),
         title: 'User delegation cancelled',
-        description: `${delegator.name} cancelled delegation to ${delegatee.name}`,
-        actor: null,
+        description: delegation.canceller
+          ? delegation.canceller.id === delegation.delegator_id
+            ? `${delegator.name} cancelled delegation to ${delegatee.name}`
+            : `${delegation.canceller!.full_name} cancelled delegation for ${delegator.name} to ${delegatee.name}`
+          : `${delegator.name} cancelled delegation to ${delegatee.name}`,
+        actor: canceller ?? null,
         target: commonTarget,
         details: {
           ...commonDetails,
@@ -249,6 +227,14 @@ export const listAuditLogs = async (
     await Promise.all([
       shouldFetchProjectHistory
         ? prisma.projectHistory.findMany({
+            where: {
+              changed_at: {
+                gte: query.dateFrom,
+                lte: query.dateTo,
+              },
+            },
+            skip,
+            take: limit,
             include: {
               project: {
                 select: { id: true, title: true, receive_no: true },
@@ -258,6 +244,30 @@ export const listAuditLogs = async (
         : Promise.resolve([]),
       shouldFetchProjectCancellation
         ? prisma.projectCancellation.findMany({
+            where: {
+              OR: [
+                {
+                  requested_at: {
+                    gte: query.dateFrom,
+                    lte: query.dateTo,
+                  },
+                },
+                {
+                  approved_at: {
+                    gte: query.dateFrom,
+                    lte: query.dateTo,
+                  },
+                },
+                {
+                  cancelled_at: {
+                    gte: query.dateFrom,
+                    lte: query.dateTo,
+                  },
+                },
+              ],
+            },
+            skip,
+            take: limit,
             include: {
               project: {
                 select: { id: true, title: true, receive_no: true },
@@ -269,9 +279,29 @@ export const listAuditLogs = async (
         : Promise.resolve([]),
       shouldFetchUserDelegation
         ? prisma.userDelegation.findMany({
+            where: {
+              OR: [
+                {
+                  created_at: {
+                    gte: query.dateFrom,
+                    lte: query.dateTo,
+                  },
+                },
+                {
+                  cancelled_at: {
+                    gte: query.dateFrom,
+                    lte: query.dateTo,
+                  },
+                },
+              ],
+            },
+            skip,
+            take: limit,
             include: {
               delegator: { select: { id: true, full_name: true } },
               delegatee: { select: { id: true, full_name: true } },
+              creator: { select: { id: true, full_name: true } },
+              canceller: { select: { id: true, full_name: true } },
             },
           })
         : Promise.resolve([]),
@@ -289,7 +319,6 @@ export const listAuditLogs = async (
       : [];
   const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
 
-  const dateRange = buildDateRange(query);
   const searchQuery = query.q?.trim();
 
   const allLogs = [
@@ -297,7 +326,6 @@ export const listAuditLogs = async (
     ...projectCancellations.map(mapProjectCancellation),
     ...userDelegations.flatMap(mapUserDelegation),
   ]
-    .filter((item) => isWithinDateRange(item, dateRange))
     .filter((item) => matchesSearch(item, searchQuery))
     .sort(
       (a, b) =>

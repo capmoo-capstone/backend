@@ -12,7 +12,10 @@ export const CreateStaffSubmissionSchema = z.object({
     .array(
       z.object({
         field_key: z.string().optional(),
-        value: z.string().optional(),
+        value: z
+          .union([z.string(), z.boolean(), z.number()])
+          .optional()
+          .nullable(),
       })
     )
     .default([]),
@@ -67,7 +70,7 @@ export const UpdateProjectForSubmissionSchema = z.object({
   contract_no: z.string().optional(),
   migo_103_no: z.string().optional(),
   migo_105_no: z.string().optional(),
-  asset_code: z.boolean().optional(),
+  asset_code: z.coerce.boolean().optional().nullable(),
   vendor_name: z.string().optional(),
   vendor_email: z.string().optional(),
 });
