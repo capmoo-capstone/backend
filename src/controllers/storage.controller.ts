@@ -1,13 +1,15 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../types/auth.type';
 import {
   PresignUploadSchema,
   PresignDownloadSchema,
+  VendorPresignUploadSchema,
 } from '../schemas/storage.schema';
 import {
   buildObjectKey,
   generatePresignedUploadUrl,
   generatePresignedDownloadUrl,
+  buildVendorObjectKey,
 } from '../services/storage.service';
 
 // Client calls this BEFORE uploading — gets back a URL + the key to save later
@@ -30,8 +32,25 @@ export const presignUpload = async (
   const uploadUrl = await generatePresignedUploadUrl(key, data.contentType);
 
   res.status(200).json({
-    uploadUrl, // PUT your file here
-    key, // save this — you'll pass it as file_path when creating the submission
+    uploadUrl,
+    key,
+    expiresIn: 300,
+  });
+};
+
+export const vendorPresignUpload = async (req: Request, res: Response) => {
+  const data = VendorPresignUploadSchema.parse(req.body);
+
+  const key = buildVendorObjectKey({
+    poNo: data.poNo,
+    fileName: data.fileName,
+  });
+
+  const uploadUrl = await generatePresignedUploadUrl(key, data.contentType);
+
+  res.status(200).json({
+    uploadUrl,
+    key,
     expiresIn: 300,
   });
 };

@@ -22,7 +22,16 @@ export const buildObjectKey = (params: {
 }): string => {
   const { projectId, workflowType, stepOrder, fileName } = params;
   const safe = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_'); // sanitize filename
-  return `submissions/${projectId}/${workflowType}/step${stepOrder}/${safe}`;
+  return `${projectId}/submissions/${workflowType}/step${stepOrder}/${safe}`;
+};
+
+export const buildVendorObjectKey = (params: {
+  poNo: string;
+  fileName: string;
+}): string => {
+  const { poNo, fileName } = params;
+  const safe = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  return `vendors/${poNo}/${safe}`;
 };
 
 // Returns a short-lived URL the client can PUT a file to directly

@@ -18,6 +18,14 @@ export const PresignUploadSchema = z.object({
   contentType: z.enum(ALLOWED_TYPES),
 });
 
+export const VendorPresignUploadSchema = z.object({
+  poNo: z.string().min(1),
+  fileName: z.string().min(1),
+  contentType: z.enum(ALLOWED_TYPES),
+});
+
+export type VendorPresignUploadDto = z.infer<typeof VendorPresignUploadSchema>;
+
 export const PresignDownloadSchema = z.object({
   key: z.string().min(1),
 });
