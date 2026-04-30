@@ -39,10 +39,11 @@ import {
 import { ProjectFilterQuery } from '../schemas/project.schema';
 
 const SORTABLE_FIELDS = new Set([
-  'receive_no',
+  'receiveNo',
   'title',
   'created_at',
   'status',
+  'procurement_type',
   'procurement_status',
   'contract_status',
 ]);
@@ -236,12 +237,32 @@ export const listProjects = async (
     prisma.project.count({ where }),
   ]);
 
+  let result = projects;
+
+  if (filters?.sortBy == 'responsible_users') {
+    const sortedProjects = projects.sort((a, b) => {
+      let aAssignees: string, bAssignees: string;
+      if (a.current_workflow_type !== UnitResponsibleType.CONTRACT) {
+        aAssignees = a.assignee_procurement.map((u) => u.full_name).join(', ');
+        bAssignees = b.assignee_procurement.map((u) => u.full_name).join(', ');
+      } else {
+        aAssignees = a.assignee_contract.map((u) => u.full_name).join(', ');
+        bAssignees = b.assignee_contract.map((u) => u.full_name).join(', ');
+      }
+      if (filters.sortOrder === 'asc') {
+        return aAssignees.localeCompare(bAssignees);
+      } else {
+        return bAssignees.localeCompare(aAssignees);
+      }
+    });
+    result = sortedProjects;
+  }
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: projects,
+    data: result,
   };
 };
 
