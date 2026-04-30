@@ -1,9 +1,16 @@
 import { Router } from 'express';
 import * as controller from '../controllers/admin.controller';
-import { requireSuperAdmin } from '../middlewares/auth';
+import { requireSupplyRoles } from '../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
+const { HEAD_OF_DEPARTMENT } = UserRole;
 
 const router = Router();
 
-router.get('/audit-logs', requireSuperAdmin, controller.getAuditLogs);
+router.get(
+  '/audit-logs',
+  requireSupplyRoles([HEAD_OF_DEPARTMENT]),
+  controller.getAuditLogs
+);
 
 export default router;
