@@ -1,10 +1,16 @@
 import {
-  ProjectDocument,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
 } from '@prisma/client';
 import { PaginatedResponse } from './common.type';
+
+export interface ProjectDocument {
+  field_key: string;
+  file_name: string;
+  file_path: string;
+  download_url: string;
+}
 
 export interface SubmissionActionResponse {
   id: string;
@@ -83,7 +89,7 @@ export interface VendorSubmissionDetailResponse {
     dept_name: string;
   };
   submitted_at: Date;
-  documents: Omit<ProjectDocument, 'id' | 'submission_id'>[];
+  documents: ProjectDocument[];
 }
 
 export type VendorSubmissionsResponse =
