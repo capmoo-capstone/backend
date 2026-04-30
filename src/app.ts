@@ -63,7 +63,6 @@ app.get('/', (req, res, _next) => {
   res.status(200).send('Welcome to the API');
 });
 app.use('/api/v1', apiV1Routes);
-app.use('/api/admin', protect, adminRoutes);
 
 const swaggerUiOptions: swaggerUi.SwaggerUiOptions = {
   customCssUrl:
