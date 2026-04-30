@@ -205,20 +205,20 @@ const buildOrderBy = (filters?: ProjectFilterQuery) => {
     if (filters.sortBy === 'procurement_status') {
       return [
         {
-          status: filters.sortOrder ?? 'desc',
+          procurement_status: filters.sortOrder ?? 'desc',
         },
         {
-          procurement_status: filters.sortOrder ?? 'desc',
-        } as Prisma.ProjectOrderByWithRelationInput,
+          status: filters.sortOrder ?? 'desc',
+        },
       ];
     } else if (filters.sortBy === 'contract_status') {
       return [
         {
-          status: filters.sortOrder ?? 'desc',
+          contract_status: filters.sortOrder ?? 'desc',
         },
         {
-          contract_status: filters.sortOrder ?? 'desc',
-        } as Prisma.ProjectOrderByWithRelationInput,
+          status: filters.sortOrder ?? 'desc',
+        },
       ];
     } else
       return [
@@ -256,32 +256,12 @@ export const listProjects = async (
     prisma.project.count({ where }),
   ]);
 
-  let result = projects;
-
-  if (filters?.sortBy == 'responsible_users') {
-    const sortedProjects = projects.sort((a, b) => {
-      let aAssignees: string, bAssignees: string;
-      if (a.current_workflow_type !== UnitResponsibleType.CONTRACT) {
-        aAssignees = a.assignee_procurement.map((u) => u.full_name).join(', ');
-        bAssignees = b.assignee_procurement.map((u) => u.full_name).join(', ');
-      } else {
-        aAssignees = a.assignee_contract.map((u) => u.full_name).join(', ');
-        bAssignees = b.assignee_contract.map((u) => u.full_name).join(', ');
-      }
-      if (filters.sortOrder === 'asc') {
-        return aAssignees.localeCompare(bAssignees);
-      } else {
-        return bAssignees.localeCompare(aAssignees);
-      }
-    });
-    result = sortedProjects;
-  }
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: result,
+    data: projects,
   };
 };
 
