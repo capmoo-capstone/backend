@@ -104,15 +104,16 @@ export const getById = async (id: string): Promise<DelegationDetail> => {
   return delegation;
 };
 
-export const getActiveDelegationByUnit = async (
-  unitId: string
+export const getActiveDelegation = async (
+  role: UserRole,
+  unitId: string | null
 ): Promise<DelegationDetail | null> => {
   const delegation = await prisma.userDelegation.findFirst({
     where: {
       delegator: {
         roles: {
           some: {
-            role: UserRole.HEAD_OF_UNIT,
+            role,
             unit_id: unitId,
           },
         },
