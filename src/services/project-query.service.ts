@@ -202,11 +202,30 @@ const buildWhereClause = (
 
 const buildOrderBy = (filters?: ProjectFilterQuery) => {
   if (filters?.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
-    return [
-      {
-        [filters.sortBy]: filters.sortOrder ?? 'desc',
-      } as Prisma.ProjectOrderByWithRelationInput,
-    ];
+    if (filters.sortBy === 'procurement_status') {
+      return [
+        {
+          status: filters.sortOrder ?? 'desc',
+        },
+        {
+          procurement_status: filters.sortOrder ?? 'desc',
+        } as Prisma.ProjectOrderByWithRelationInput,
+      ];
+    } else if (filters.sortBy === 'contract_status') {
+      return [
+        {
+          status: filters.sortOrder ?? 'desc',
+        },
+        {
+          contract_status: filters.sortOrder ?? 'desc',
+        } as Prisma.ProjectOrderByWithRelationInput,
+      ];
+    } else
+      return [
+        {
+          [filters.sortBy]: filters.sortOrder ?? 'desc',
+        } as Prisma.ProjectOrderByWithRelationInput,
+      ];
   }
   return [{ receive_no: 'desc' as Prisma.SortOrder }];
 };
