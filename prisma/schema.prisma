@@ -45,7 +45,13 @@ enum UnitResponsibleType {
   CONTRACT
 }
 
-enum LogActionType {
+enum AuditLogType {
+  PROJECT_HISTORY
+  PROJECT_CANCELLATION
+  USER_DELEGATION
+}
+
+enum ProjectActionType {
   INFORMATION_UPDATE
   STATUS_UPDATE
   ASSIGNEE_UPDATE
@@ -144,6 +150,8 @@ model User {
   completed_submissions  ProjectSubmission[]   @relation("CompletedBy")
   cancellation_requests  ProjectCancellation[] @relation("CancelRequester")
   cancellation_approvals ProjectCancellation[] @relation("CancelApprover")
+  delegation_creations UserDelegation[] @relation("DelegationCreator")
+  delegation_cancellations UserDelegation[] @relation("DelegationCanceller")
 
   @@map("users")
 }
@@ -156,10 +164,14 @@ model UserDelegation {
   end_date     DateTime?
   is_active    Boolean   @default(true)
   created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
+  created_by   String
+  cancelled_at DateTime?
+  cancelled_by String?
 
   delegator User @relation("Delegator", fields: [delegator_id], references: [id])
   delegatee User @relation("Delegatee", fields: [delegatee_id], references: [id])
+  creator   User @relation("DelegationCreator", fields: [created_by], references: [id])
+  canceller User? @relation("DelegationCanceller", fields: [cancelled_by], references: [id])
 
   @@map("user_delegations")
 }
@@ -252,7 +264,7 @@ model ProjectCancellation {
 model ProjectHistory {
   id         String        @id @default(uuid())
   project_id String
-  action     LogActionType
+  action     ProjectActionType
   old_value  Json
   new_value  Json
   comment    String?

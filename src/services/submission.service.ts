@@ -1,4 +1,4 @@
-import { LogActionType, Prisma, Project } from '@prisma/client';
+import { ProjectActionType, Prisma, Project } from '@prisma/client';
 import {
   SubmissionStatus,
   SubmissionType,
@@ -84,7 +84,7 @@ const updateProjectForSubmission = async (
   await tx.projectHistory.create({
     data: {
       project_id: project.id,
-      action: LogActionType.INFORMATION_UPDATE,
+      action: ProjectActionType.INFORMATION_UPDATE,
       old_value: oldValue,
       new_value: validated.data,
       changed_by: userId,

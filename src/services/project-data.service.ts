@@ -1,4 +1,4 @@
-import { Prisma, ProjectStatus, LogActionType } from '@prisma/client';
+import { Prisma, ProjectStatus, ProjectActionType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError, AppError } from '../lib/errors';
 import { getProcurementTypeToUnitIdMap } from '../lib/unit-type';
@@ -227,7 +227,7 @@ export const updateProjectData = async (
     await tx.projectHistory.create({
       data: {
         project_id: data.id,
-        action: LogActionType.INFORMATION_UPDATE,
+        action: ProjectActionType.INFORMATION_UPDATE,
         old_value: { ...oldValue },
         new_value: { ...projectData },
         changed_by: user.id,

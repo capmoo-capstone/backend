@@ -1,5 +1,5 @@
 import {
-  LogActionType,
+  ProjectActionType,
   ProcurementType,
   ProjectPhaseStatus,
   ProjectStatus,
@@ -451,6 +451,7 @@ const seedUsers = async () => {
       start_date: daysFromNow(-1),
       end_date: daysFromNow(14),
       is_active: true,
+      created_by: ids.users.admin,
     },
   });
 };
@@ -976,7 +977,7 @@ const seedCancellationsAndHistory = async () => {
     data: [
       {
         project_id: ids.projects.waitingAccept,
-        action: LogActionType.ASSIGNEE_UPDATE,
+        action: ProjectActionType.ASSIGNEE_UPDATE,
         old_value: { status: ProjectStatus.UNASSIGNED, assignees: [] },
         new_value: {
           status: ProjectStatus.WAITING_ACCEPT,
@@ -987,7 +988,7 @@ const seedCancellationsAndHistory = async () => {
       },
       {
         project_id: ids.projects.waitingApproval,
-        action: LogActionType.STEP_UPDATE,
+        action: ProjectActionType.STEP_UPDATE,
         old_value: { procurement_step: 1 },
         new_value: { procurement_step: 2 },
         changed_by: ids.users.procurementLt,
@@ -995,7 +996,7 @@ const seedCancellationsAndHistory = async () => {
       },
       {
         project_id: ids.projects.waitingCancel,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: ProjectStatus.IN_PROGRESS },
         new_value: { status: ProjectStatus.WAITING_CANCEL },
         changed_by: ids.users.facilitiesRep,
@@ -1003,7 +1004,7 @@ const seedCancellationsAndHistory = async () => {
       },
       {
         project_id: ids.projects.cancelled,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: ProjectStatus.WAITING_CANCEL },
         new_value: { status: ProjectStatus.CANCELLED },
         changed_by: ids.users.supplyHead,
@@ -1011,7 +1012,7 @@ const seedCancellationsAndHistory = async () => {
       },
       {
         project_id: ids.projects.requestEdit,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: ProjectStatus.CLOSED },
         new_value: {
           status: ProjectStatus.REQUEST_EDIT,

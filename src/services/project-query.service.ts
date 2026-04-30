@@ -1,12 +1,12 @@
 import {
   Prisma,
   ProjectStatus,
-  LogActionType,
   UserRole,
   UnitResponsibleType,
   UrgentType,
   ProcurementType,
   ProjectPhaseStatus,
+  ProjectActionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
@@ -488,8 +488,8 @@ export const getAssignedProjects = async (
                 AND: [
                   {
                     OR: [
-                      { action: LogActionType.STATUS_UPDATE },
-                      { action: LogActionType.ASSIGNEE_UPDATE },
+                      { action: ProjectActionType.STATUS_UPDATE },
+                      { action: ProjectActionType.ASSIGNEE_UPDATE },
                     ],
                   },
                   { changed_at: { gte: startOfDay, lte: endOfDay } },

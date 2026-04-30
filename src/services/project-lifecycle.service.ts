@@ -1,6 +1,6 @@
 import {
   ProjectStatus,
-  LogActionType,
+  ProjectActionType,
   ProjectPhaseStatus,
   UnitResponsibleType,
 } from '@prisma/client';
@@ -64,7 +64,7 @@ export const cancelProject = async (
       await tx.projectHistory.create({
         data: {
           project_id: data.id,
-          action: LogActionType.STATUS_UPDATE,
+          action: ProjectActionType.STATUS_UPDATE,
           old_value: { status: project.status },
           new_value: { status: updated.status },
           changed_by: user.id,
@@ -95,7 +95,7 @@ export const cancelProject = async (
     await tx.projectHistory.create({
       data: {
         project_id: data.id,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: project.status },
         new_value: { status: ProjectStatus.CANCELLED },
         changed_by: user.id,
@@ -153,7 +153,7 @@ export const approveCancellation = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: project.status },
         new_value: { status: updated.status },
         changed_by: user.id,
@@ -182,7 +182,7 @@ export const rejectCancellation = async (
     const lastHistory = await tx.projectHistory.findFirst({
       where: {
         project_id: projectId,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         new_value: {
           path: ['status'],
           equals: ProjectStatus.WAITING_CANCEL,
@@ -214,7 +214,7 @@ export const rejectCancellation = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: project.status },
         new_value: { status: updated.status },
         changed_by: user.id,
@@ -269,7 +269,7 @@ export const completeProcurementPhase = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: {
           status: project.status,
           current_workflow_type: project.current_workflow_type,
@@ -328,7 +328,7 @@ export const completeContractPhase = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: {
           contract_status: project.contract_status,
         },
@@ -386,7 +386,7 @@ export const closeProject = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: {
           status: project.status,
         },
@@ -429,7 +429,7 @@ export const requestEditProject = async (
     await tx.projectHistory.create({
       data: {
         project_id: data.id,
-        action: LogActionType.STATUS_UPDATE,
+        action: ProjectActionType.STATUS_UPDATE,
         old_value: { status: project.status },
         new_value: { status: updated.status, request_edit_reason: data.reason },
         changed_by: user.id,
