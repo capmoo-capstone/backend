@@ -39,7 +39,7 @@ import {
 import { ProjectFilterQuery } from '../schemas/project.schema';
 
 const SORTABLE_FIELDS = new Set([
-  'receiveNo',
+  'receive_no',
   'title',
   'created_at',
   'status',
