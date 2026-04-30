@@ -10,6 +10,7 @@ import {
   generatePresignedUploadUrl,
   generatePresignedDownloadUrl,
   buildVendorObjectKey,
+  deleteObject,
 } from '../services/storage.service';
 
 // Client calls this BEFORE uploading — gets back a URL + the key to save later
@@ -66,4 +67,13 @@ export const presignDownload = async (
   const data = PresignDownloadSchema.parse(req.body);
   const downloadUrl = await generatePresignedDownloadUrl(data.key);
   res.status(200).json({ downloadUrl, expiresIn: 3600 });
+};
+
+export const deleteFile = async (req: AuthenticatedRequest, res: Response) => {
+  // #swagger.tags = ['Storage']
+  // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/PresignDownload' } }
+  const data = PresignDownloadSchema.parse(req.body);
+  await deleteObject(data.key);
+  res.status(204).send();
 };
