@@ -2,7 +2,9 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import apiV1Routes from './routes/index';
+import adminRoutes from './routes/admin.route';
 import { errorHandler } from './middlewares/error';
+import { protect } from './middlewares/auth';
 import swaggerUi from 'swagger-ui-express';
 import swaggerDocument from '../swagger-output.json';
 
@@ -57,7 +59,7 @@ app.options('/{*path}', cors());
 app.use(express.json());
 
 // Import API v1 routes
-app.get('/', (req, res, next) => {
+app.get('/', (req, res, _next) => {
   res.status(200).send('Welcome to the API');
 });
 app.use('/api/v1', apiV1Routes);

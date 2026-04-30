@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from 'express';
+import { NextFunction, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { ForbiddenError, UnauthorizedError } from '../lib/errors';
 import { UserRole } from '@prisma/client';

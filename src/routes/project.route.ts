@@ -12,6 +12,7 @@ const router = Router();
 const {
   HEAD_OF_UNIT,
   HEAD_OF_DEPARTMENT,
+  ADMIN,
   GENERAL_STAFF,
   REPRESENTATIVE,
   DOCUMENT_STAFF,
@@ -88,7 +89,7 @@ router.patch(
 );
 router.patch(
   '/:id/add-assignee',
-  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT]),
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, ADMIN]),
   controller.addAssignee
 );
 router.patch(

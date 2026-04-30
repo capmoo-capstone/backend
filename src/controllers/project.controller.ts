@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import * as ProjectQueryService from '../services/project-query.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
 import * as ProjectDataService from '../services/project-data.service';

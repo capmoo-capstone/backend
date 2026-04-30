@@ -1,7 +1,7 @@
 import {
   UnitResponsibleType,
   ProjectStatus,
-  LogActionType,
+  ProjectActionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError } from '../lib/errors';
@@ -90,11 +90,11 @@ export const assignProjectsToUser = async (
         tx.projectHistory.create({
           data: {
             project_id: id,
-            action: LogActionType.ASSIGNEE_UPDATE,
+            action: ProjectActionType.ASSIGNEE_UPDATE,
             old_value: { status: project.status, [assigneeField]: [] },
             new_value: {
               status: ProjectStatus.WAITING_ACCEPT,
-              [assigneeField]: [assigneeId],
+              [assigneeField]: [assignee.full_name],
             },
             changed_by: user.id,
           },
@@ -157,11 +157,11 @@ export const changeAssignee = async (
     await tx.projectHistory.create({
       data: {
         project_id: id,
-        action: LogActionType.ASSIGNEE_UPDATE,
+        action: ProjectActionType.ASSIGNEE_UPDATE,
         old_value: {
-          [assigneeField]: [(project as any)[assigneeField]?.[0]?.id],
+          [assigneeField]: [project[assigneeField]?.[0]?.full_name ?? null],
         },
-        new_value: { [assigneeField]: [newAssigneeId] },
+        new_value: { [assigneeField]: [newAssignee.full_name] },
         changed_by: user.id,
       },
     });
@@ -209,9 +209,12 @@ export const claimProject = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.ASSIGNEE_UPDATE,
+        action: ProjectActionType.ASSIGNEE_UPDATE,
         old_value: { status: project.status, [assigneeField]: [] },
-        new_value: { status: updated.status, [assigneeField]: [user.id] },
+        new_value: {
+          status: updated.status,
+          [assigneeField]: [user.full_name],
+        },
         changed_by: user.id,
       },
     });
@@ -271,7 +274,7 @@ export const acceptProjects = async (
         tx.projectHistory.create({
           data: {
             project_id: project.id,
-            action: LogActionType.STATUS_UPDATE,
+            action: ProjectActionType.STATUS_UPDATE,
             old_value: { status: ProjectStatus.WAITING_ACCEPT },
             new_value: { status: ProjectStatus.IN_PROGRESS },
             changed_by: user.id,
@@ -352,9 +355,13 @@ export const addAssignee = async (
     await tx.projectHistory.create({
       data: {
         project_id: data.id,
-        action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { [assigneeField]: project[assigneeField].map((u) => u.id) },
-        new_value: { [assigneeField]: updated[assigneeField].map((u) => u.id) },
+        action: ProjectActionType.ASSIGNEE_UPDATE,
+        old_value: {
+          [assigneeField]: project[assigneeField].map((u) => u.full_name),
+        },
+        new_value: {
+          [assigneeField]: updated[assigneeField].map((u) => u.full_name),
+        },
         changed_by: user.id,
       },
     });
@@ -413,8 +420,11 @@ export const returnProject = async (
     await tx.projectHistory.create({
       data: {
         project_id: projectId,
-        action: LogActionType.ASSIGNEE_UPDATE,
-        old_value: { status: project.status, [assigneeField]: [user.id] },
+        action: ProjectActionType.ASSIGNEE_UPDATE,
+        old_value: {
+          status: project.status,
+          [assigneeField]: [user.full_name],
+        },
         new_value: { status: updated.status, [assigneeField]: [] },
         changed_by: user.id,
       },

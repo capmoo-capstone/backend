@@ -1,7 +1,10 @@
 import {
-  ProjectStatus,
+  ProjectActionType,
   ProcurementType,
+  ProjectPhaseStatus,
+  ProjectStatus,
   SubmissionStatus,
+  SubmissionType,
   UnitResponsibleType,
   UserRole,
   UrgentType,
@@ -10,669 +13,1086 @@ import { prisma } from '../src/config/prisma';
 import { WORKFLOW_STEP_ORDERS } from '../src/lib/constant';
 import { syncProjectPhases } from '../src/lib/phase-status';
 
-async function main() {
-  console.log('--- Start Seeding ---');
+const DAY_MS = 24 * 60 * 60 * 1000;
+const now = new Date();
 
-  // ---------------------------------------------------------
-  // 1. CLEANUP (Order matters to avoid Foreign Key errors)
-  // ---------------------------------------------------------
-  await prisma.userDelegation.deleteMany();
-  await prisma.userOrganizationRole.deleteMany();
+const daysFromNow = (days: number) => new Date(now.getTime() + days * DAY_MS);
+
+const fiscalYear = (date = now) => {
+  const thaiYear = date.getFullYear() + 543;
+  return date.getMonth() + 1 >= 10 ? thaiYear + 1 : thaiYear;
+};
+
+const ids = {
+  users: {
+    superAdmin: '00000000-0000-4000-8000-000000000001',
+    admin: '00000000-0000-4000-8000-000000000002',
+    supplyHead: '00000000-0000-4000-8000-000000000003',
+    procHeadLt: '00000000-0000-4000-8000-000000000004',
+    procHeadHigh: '00000000-0000-4000-8000-000000000005',
+    contractHead: '00000000-0000-4000-8000-000000000006',
+    procurementLt: '00000000-0000-4000-8000-000000000007',
+    procurementHigh: '00000000-0000-4000-8000-000000000008',
+    contractStaff: '00000000-0000-4000-8000-000000000009',
+    financeStaff: '00000000-0000-4000-8000-000000000010',
+    documentStaff: '00000000-0000-4000-8000-000000000011',
+    facilitiesRep: '00000000-0000-4000-8000-000000000012',
+    maintenanceRep: '00000000-0000-4000-8000-000000000013',
+    itRep: '00000000-0000-4000-8000-000000000014',
+    libraryStaff: '00000000-0000-4000-8000-000000000015',
+    delegatedStaff: '00000000-0000-4000-8000-000000000016',
+    guest: '00000000-0000-4000-8000-000000000017',
+  },
+  projects: {
+    unassigned: '10000000-0000-4000-8000-000000000001',
+    waitingAccept: '10000000-0000-4000-8000-000000000002',
+    waitingApproval: '10000000-0000-4000-8000-000000000003',
+    waitingProposal: '10000000-0000-4000-8000-000000000004',
+    procurementComplete: '10000000-0000-4000-8000-000000000005',
+    contractActive: '10000000-0000-4000-8000-000000000006',
+    contractReadyExport: '10000000-0000-4000-8000-000000000007',
+    closed: '10000000-0000-4000-8000-000000000008',
+    waitingCancel: '10000000-0000-4000-8000-000000000009',
+    cancelled: '10000000-0000-4000-8000-000000000010',
+    requestEdit: '10000000-0000-4000-8000-000000000011',
+    internal: '10000000-0000-4000-8000-000000000012',
+  },
+};
+
+const workflowUnitByProcurement: Record<ProcurementType, string> = {
+  [ProcurementType.LT100K]: 'UNIT-PROC-1',
+  [ProcurementType.LT500K]: 'UNIT-PROC-1',
+  [ProcurementType.MT500K]: 'UNIT-PROC-2',
+  [ProcurementType.SELECTION]: 'UNIT-PROC-2',
+  [ProcurementType.EBIDDING]: 'UNIT-PROC-2',
+  [ProcurementType.INTERNAL]: 'UNIT-PROC-2',
+};
+
+const cleanup = async () => {
   await prisma.projectDocument.deleteMany();
   await prisma.projectSubmission.deleteMany();
+  await prisma.projectCancellation.deleteMany();
+  await prisma.projectHistory.deleteMany();
+  await prisma.budgetPlan.deleteMany();
   await prisma.project.deleteMany();
+  await prisma.userDelegation.deleteMany();
+  await prisma.userOrganizationRole.deleteMany();
   await prisma.user.deleteMany();
   await prisma.unit.deleteMany();
   await prisma.department.deleteMany();
-  await prisma.budgetPlan.deleteMany();
-  console.log('--- Database Cleaned ---');
+};
 
-  // ---------------------------------------------------------
-  // 3. ORGANIZATIONAL STRUCTURE
-  // ---------------------------------------------------------
+const seedOrganization = async () => {
+  await prisma.department.createMany({
+    data: [
+      { id: 'DEPT-SUP-OPS', name: 'Supply Operation' },
+      { id: 'DEPT-FIN', name: 'สำนักงานบริหารการเงิน การบัญชี และการพัสดุ' },
+      { id: 'DEPT-REG', name: 'สำนักงานทะเบียน' },
+      { id: 'DEPT-LOC', name: 'สำนักงานบริหารระบบกายภาพ' },
+      { id: 'DEPT-STUAFF', name: 'สำนักงานบริหารกิจการนิสิต' },
+    ],
+  });
 
-  const deptFIN = await prisma.department.create({
-    data: {
-      id: 'DEPT-FIN',
-      name: 'สำนักงานบริหารการเงิน การบัญชี และการพัสดุ',
-      units: {
-        create: [
-          {
-            id: 'UNIT-FIN',
-            name: 'ฝ่ายการเงิน',
-            type: [],
-          },
-          {
-            id: 'UNIT-ACC',
-            name: 'ฝ่ายการบัญชี',
-            type: [],
-          },
-          {
-            id: 'UNIT-SUP',
-            name: 'ฝ่ายการพัสดุ',
-            type: [],
-          },
+  await prisma.unit.createMany({
+    data: [
+      {
+        id: 'UNIT-PROC-1',
+        dept_id: 'DEPT-SUP-OPS',
+        name: 'กลุ่มงานจัดซื้อจัดจ้าง 1',
+        type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
+      },
+      {
+        id: 'UNIT-PROC-2',
+        dept_id: 'DEPT-SUP-OPS',
+        name: 'กลุ่มงานจัดซื้อจัดจ้าง 2',
+        type: [
+          UnitResponsibleType.MT500K,
+          UnitResponsibleType.SELECTION,
+          UnitResponsibleType.EBIDDING,
+          UnitResponsibleType.INTERNAL,
         ],
       },
-    },
-    select: {
-      id: true,
-      units: {
-        select: {
-          id: true,
-        },
+      {
+        id: 'UNIT-CONT',
+        dept_id: 'DEPT-SUP-OPS',
+        name: 'กลุ่มงานบริหารสัญญา',
+        type: [UnitResponsibleType.CONTRACT],
       },
-    },
+      {
+        id: 'UNIT-FIN',
+        dept_id: 'DEPT-FIN',
+        name: 'ฝ่ายการเงิน',
+        type: [],
+      },
+      {
+        id: 'UNIT-ACC',
+        dept_id: 'DEPT-FIN',
+        name: 'ฝ่ายการบัญชี',
+        type: [],
+      },
+      {
+        id: 'UNIT-SUP',
+        dept_id: 'DEPT-FIN',
+        name: 'ฝ่ายการพัสดุ',
+        type: [],
+      },
+      {
+        id: 'UNIT-BUILD',
+        dept_id: 'DEPT-LOC',
+        name: 'ฝ่ายอาคารสถานที่',
+        type: [],
+      },
+      {
+        id: 'UNIT-MAINT',
+        dept_id: 'DEPT-LOC',
+        name: 'ฝ่ายซ่อมบำรุง',
+        type: [],
+      },
+      {
+        id: 'UNIT-EDU',
+        dept_id: 'DEPT-STUAFF',
+        name: 'ฝ่ายทุนการศึกษาและบริการนิสิต',
+        type: [],
+      },
+      {
+        id: 'UNIT-NET',
+        dept_id: 'DEPT-STUAFF',
+        name: 'ฝ่ายประสานงานและเครือข่ายกิจการนิสิต',
+        type: [],
+      },
+    ],
+  });
+};
+
+const seedUsers = async () => {
+  await prisma.user.createMany({
+    data: [
+      {
+        id: ids.users.superAdmin,
+        username: 'super_admin',
+        email: 'super_admin@example.test',
+        full_name: 'Super Admin',
+      },
+      {
+        id: ids.users.admin,
+        username: 'admin',
+        email: 'admin@example.test',
+        full_name: 'Admin',
+      },
+      {
+        id: ids.users.supplyHead,
+        username: 'supply_head',
+        email: 'supply_head@example.test',
+        full_name: 'Supply Head',
+      },
+      {
+        id: ids.users.procHeadLt,
+        username: 'proc_head1',
+        email: 'proc_head1@example.test',
+        full_name: 'Procurement Head1',
+      },
+      {
+        id: ids.users.procHeadHigh,
+        username: 'proc_head2',
+        email: 'proc_head2@example.test',
+        full_name: 'Procurement Head2',
+      },
+      {
+        id: ids.users.contractHead,
+        username: 'contract_head',
+        email: 'contract_head@example.test',
+        full_name: 'Contract Head',
+      },
+      {
+        id: ids.users.procurementLt,
+        username: 'procurement1',
+        email: 'procurement1@example.test',
+        full_name: 'Procurement1',
+      },
+      {
+        id: ids.users.procurementHigh,
+        username: 'procurement2',
+        email: 'procurement2@example.test',
+        full_name: 'Procurement2',
+      },
+      {
+        id: ids.users.contractStaff,
+        username: 'contract',
+        email: 'contract@example.test',
+        full_name: 'Contract',
+      },
+      {
+        id: ids.users.financeStaff,
+        username: 'finance_staff',
+        email: 'finance_staff@example.test',
+        full_name: 'Finance Staff',
+      },
+      {
+        id: ids.users.documentStaff,
+        username: 'document_staff',
+        email: 'document_staff@example.test',
+        full_name: 'Document Staff',
+      },
+      {
+        id: ids.users.facilitiesRep,
+        username: 'facilities_rep',
+        email: 'facilities_rep@example.test',
+        full_name: 'Facilities Rep',
+      },
+      {
+        id: ids.users.maintenanceRep,
+        username: 'maintenance_rep',
+        email: 'maintenance_rep@example.test',
+        full_name: 'Maintenance Rep',
+      },
+      {
+        id: ids.users.itRep,
+        username: 'registration_staff',
+        email: 'registration_staff@example.test',
+        full_name: 'Registration Staff',
+      },
+      {
+        id: ids.users.libraryStaff,
+        username: 'student_affairs_staff',
+        email: 'student_affairs_staff@example.test',
+        full_name: 'Student Affairs Staff',
+      },
+      {
+        id: ids.users.delegatedStaff,
+        username: 'delegated_staff',
+        email: 'delegated_staff@example.test',
+        full_name: 'Delegated Staff',
+      },
+      {
+        id: ids.users.guest,
+        username: 'guest',
+        email: 'guest@example.test',
+        full_name: 'Guest',
+      },
+    ],
   });
 
-  const deptSUPOPS = await prisma.department.create({
-    data: {
-      id: 'DEPT-SUP-OPS',
-      name: 'Supply Operation',
-      units: {
-        create: [
-          {
-            id: 'UNIT-PROC-1',
-            name: 'กลุ่มงานจัดซื้อจัดจ้าง 1',
-            type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
-          },
-          {
-            id: 'UNIT-PROC-2',
-            name: 'กลุ่มงานจัดซื้อจัดจ้าง 2',
-            type: [
-              UnitResponsibleType.MT500K,
-              UnitResponsibleType.SELECTION,
-              UnitResponsibleType.EBIDDING,
-              UnitResponsibleType.INTERNAL,
-            ],
-          },
-          {
-            id: 'UNIT-CONT',
-            name: 'กลุ่มงานบริหารสัญญา',
-            type: [UnitResponsibleType.CONTRACT],
-          },
-        ],
+  await prisma.userOrganizationRole.createMany({
+    data: [
+      {
+        user_id: ids.users.superAdmin,
+        role: UserRole.SUPER_ADMIN,
+        dept_id: 'DEPT-SUP-OPS',
       },
-    },
-    select: {
-      id: true,
-      units: {
-        select: {
-          id: true,
-        },
+      {
+        user_id: ids.users.admin,
+        role: UserRole.ADMIN,
+        dept_id: 'DEPT-SUP-OPS',
       },
-    },
+      {
+        user_id: ids.users.supplyHead,
+        role: UserRole.HEAD_OF_DEPARTMENT,
+        dept_id: 'DEPT-SUP-OPS',
+      },
+      {
+        user_id: ids.users.procHeadLt,
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-PROC-1',
+      },
+      {
+        user_id: ids.users.procHeadHigh,
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-PROC-2',
+      },
+      {
+        user_id: ids.users.contractHead,
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-CONT',
+      },
+      {
+        user_id: ids.users.procurementLt,
+        role: UserRole.GENERAL_STAFF,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-PROC-1',
+      },
+      {
+        user_id: ids.users.procurementHigh,
+        role: UserRole.GENERAL_STAFF,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-PROC-2',
+      },
+      {
+        user_id: ids.users.contractStaff,
+        role: UserRole.GENERAL_STAFF,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-CONT',
+      },
+      {
+        user_id: ids.users.financeStaff,
+        role: UserRole.FINANCE_STAFF,
+        dept_id: 'DEPT-SUP-OPS',
+      },
+      {
+        user_id: ids.users.documentStaff,
+        role: UserRole.DOCUMENT_STAFF,
+        dept_id: 'DEPT-SUP-OPS',
+      },
+      {
+        user_id: ids.users.facilitiesRep,
+        role: UserRole.REPRESENTATIVE,
+        dept_id: 'DEPT-LOC',
+        unit_id: 'UNIT-BUILD',
+      },
+      {
+        user_id: ids.users.maintenanceRep,
+        role: UserRole.REPRESENTATIVE,
+        dept_id: 'DEPT-LOC',
+        unit_id: 'UNIT-MAINT',
+      },
+      {
+        user_id: ids.users.itRep,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-REG',
+      },
+      {
+        user_id: ids.users.libraryStaff,
+        role: UserRole.REPRESENTATIVE,
+        dept_id: 'DEPT-STUAFF',
+        unit_id: 'UNIT-EDU',
+      },
+      {
+        user_id: ids.users.libraryStaff,
+        role: UserRole.REPRESENTATIVE,
+        dept_id: 'DEPT-STUAFF',
+        unit_id: 'UNIT-NET',
+      },
+      {
+        user_id: ids.users.delegatedStaff,
+        role: UserRole.GENERAL_STAFF,
+        dept_id: 'DEPT-SUP-OPS',
+        unit_id: 'UNIT-PROC-1',
+      },
+      {
+        user_id: ids.users.admin,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.supplyHead,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.procHeadLt,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.procHeadHigh,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.contractHead,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.procurementLt,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.procurementHigh,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.contractStaff,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.financeStaff,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.documentStaff,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.delegatedStaff,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-FIN',
+        unit_id: 'UNIT-SUP',
+      },
+      {
+        user_id: ids.users.guest,
+        role: UserRole.GUEST,
+        dept_id: 'DEPT-REG',
+      },
+    ],
   });
 
-  const deptREG = await prisma.department.create({
-    data: {
-      id: 'DEPT-REG',
-      name: 'สำนักงานทะเบียน',
-    },
-  });
-
-  const deptLOC = await prisma.department.create({
-    data: {
-      id: 'DEPT-LOC',
-      name: 'สำนักงานบริหารระบบกายภาพ',
-      units: {
-        create: [
-          { id: 'UNIT-BUILD', name: 'ฝ่ายอาคารสถานที่', type: [] },
-          { id: 'UNIT-MAINT', name: 'ฝ่ายซ่อมบำรุง', type: [] },
-        ],
-      },
-    },
-  });
-
-  const deptSTUAFF = await prisma.department.create({
-    data: {
-      id: 'DEPT-STUAFF',
-      name: 'สำนักบริหารกิจการนิสิต',
-      units: {
-        create: [
-          { id: 'UNIT-EDU', name: 'ฝ่ายทุนการศึกษาและบริการนิสิต', type: [] },
-          {
-            id: 'UNIT-NET',
-            name: 'ฝ่ายประสานงานและเครือข่ายกิจการนิสิต',
-            type: [],
-          },
-        ],
-      },
-    },
-  });
-
-  // ---------------------------------------------------------
-  // 4. USERS & ROLE ASSIGNMENTS
-  // ---------------------------------------------------------
-
-  // Helper to quickly assign roles
-  const assignRole = async (
-    username: string,
-    fullName: string,
-    roleName: UserRole,
-    deptId: string,
-    unitId: string | null = null
-  ) => {
-    const existingUser = await prisma.user.findUnique({
-      where: { username },
-    });
-    const user = existingUser
-      ? existingUser
-      : await prisma.user.create({
-          data: { username, full_name: fullName },
-        });
-    await prisma.userOrganizationRole.create({
-      data: {
-        user_id: user.id,
-        role: roleName,
-        dept_id: deptId,
-        unit_id: unitId,
-      },
-    });
-    return user;
-  };
-
-  // Supply Roles (Unit-less Department roles)
-  const superAdmin = await prisma.user.create({
-    data: {
-      username: 'super_admin',
-      full_name: 'Super Admin',
-      roles: {
-        create: [
-          {
-            role: UserRole.SUPER_ADMIN,
-            dept_id: 'DEPT-SUP-OPS',
-            unit_id: null,
-          },
-        ],
-      },
-    },
-  });
-
-  const headDept = await assignRole(
-    'boss_mike',
-    'Mike Bossman',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  await assignRole(
-    'boss_mike',
-    'Mike Bossman',
-    UserRole.HEAD_OF_DEPARTMENT,
-    deptSUPOPS.id
-  );
-
-  const headUnit1 = await assignRole(
-    'head_proc1',
-    'Bee Procurement',
-    UserRole.HEAD_OF_UNIT,
-    deptSUPOPS.id,
-    'UNIT-PROC-1'
-  );
-
-  await assignRole(
-    'head_proc1',
-    'Bee Procurement',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  const finStaff = await assignRole(
-    'fin_lisa',
-    'Lisa Finance',
-    UserRole.FINANCE_STAFF,
-    deptSUPOPS.id
-  );
-
-  await assignRole(
-    'fin_lisa',
-    'Lisa Finance',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  const docStaff = await assignRole(
-    'doc_mary',
-    'Mary Document',
-    UserRole.DOCUMENT_STAFF,
-    deptSUPOPS.id
-  );
-
-  await assignRole(
-    'doc_mary',
-    'Mary Document',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  const adminJane = await assignRole(
-    'admin_jane',
-    'Jane Doe',
-    UserRole.ADMIN,
-    deptSUPOPS.id
-  );
-
-  await assignRole(
-    'admin_jane',
-    'Jane Doe',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  // Supply Roles (Unit-specific)
-  const staffBob = await assignRole(
-    'staff_bob',
-    'Bob Smith',
-    UserRole.GENERAL_STAFF,
-    deptSUPOPS.id,
-    'UNIT-PROC-1'
-  );
-
-  await assignRole(
-    'staff_bob',
-    'Bob Smith',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  const staffAlice = await assignRole(
-    'staff_alice',
-    'Alice Jones',
-    UserRole.GENERAL_STAFF,
-    deptSUPOPS.id,
-    'UNIT-PROC-2'
-  );
-
-  await assignRole(
-    'staff_alice',
-    'Alice Jones',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  const staffCathy = await assignRole(
-    'staff_cathy',
-    'Cathy Williams',
-    UserRole.GENERAL_STAFF,
-    deptSUPOPS.id,
-    'UNIT-CONT'
-  );
-
-  await assignRole(
-    'staff_cathy',
-    'Cathy Williams',
-    UserRole.GUEST,
-    'DEPT-FIN',
-    'UNIT-SUP'
-  );
-
-  // External Roles
-  const repCharlie = await assignRole(
-    'rep_charlie',
-    'Charlie Rep',
-    UserRole.REPRESENTATIVE,
-    deptLOC.id,
-    'UNIT-BUILD'
-  );
-
-  const rep_kevin = await assignRole(
-    'rep_kevin',
-    'Kevin Rep',
-    UserRole.REPRESENTATIVE,
-    deptLOC.id,
-    'UNIT-MAINT'
-  );
-
-  const regSam = await assignRole(
-    'reg_sam',
-    'Sam Registration',
-    UserRole.GENERAL_STAFF,
-    deptREG.id
-  );
-
-  const stuAffEmily = await assignRole(
-    'stu_emily',
-    'Emily StudentAffairs',
-    UserRole.REPRESENTATIVE,
-    deptSTUAFF.id,
-    'UNIT-EDU'
-  );
-
-  await assignRole(
-    'stu_emily',
-    'Emily StudentAffairs',
-    UserRole.REPRESENTATIVE,
-    deptSTUAFF.id,
-    'UNIT-NET'
-  );
-
-  // ---------------------------------------------------------
-  // 5. DELEGATION (Mike delegates to Lisa for 7 days)
-  // ---------------------------------------------------------
   await prisma.userDelegation.create({
     data: {
-      delegator_id: headUnit1.id,
-      delegatee_id: staffBob.id,
-      start_date: new Date(),
-      end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      delegator_id: ids.users.procHeadLt,
+      delegatee_id: ids.users.delegatedStaff,
+      start_date: daysFromNow(-1),
+      end_date: daysFromNow(14),
+      is_active: true,
+      created_by: ids.users.admin,
     },
   });
+};
 
-  // ---------------------------------------------------------
-  // 6. PROJECTS & WORKFLOW
-  // ---------------------------------------------------------
-  const projects = [
-    // ---------------------------------------------------------
-    // 1. New Server Purchase 2026
-    // Requesting: DEPT-LOC / UNIT-BUILD (Charlie)
-    // ---------------------------------------------------------
-    {
-      title: 'New Server Purchase 2026',
-      receive_no: '1',
-      budget: 150000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.LT500K,
-      current_workflow_type: UnitResponsibleType.LT500K,
-      responsible_unit_id: 'UNIT-PROC-1',
-      requesting_dept_id: deptLOC.id,
-      requesting_unit_id: 'UNIT-BUILD',
-      created_by: repCharlie.id, // Updated: Charlie requests for Building
-      assignee_procurement: { connect: [{ id: staffBob.id }] },
-      is_urgent: UrgentType.URGENT,
-      expected_approval_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    },
+const createProject = async (data: {
+  id: string;
+  receiveSuffix: number;
+  title: string;
+  description: string;
+  budget: number;
+  status: ProjectStatus;
+  procurementType: ProcurementType;
+  workflowType?: UnitResponsibleType;
+  requestingDeptId: string;
+  requestingUnitId?: string | null;
+  createdBy: string;
+  urgent?: UrgentType;
+  expectedApprovalDays?: number;
+  expectedCompletionDays?: number;
+  procurementStatus?: ProjectPhaseStatus;
+  procurementStep?: number | null;
+  contractStatus?: ProjectPhaseStatus;
+  contractStep?: number | null;
+  prNo?: string;
+  poNo?: string;
+  lessNo?: string;
+  contractNo?: string;
+  migo103No?: string;
+  migo105No?: string;
+  vendorName?: string;
+  vendorEmail?: string;
+  requestEditReason?: string;
+  procurementAssigneeIds?: string[];
+  contractAssigneeIds?: string[];
+}) => {
+  const workflowType = data.workflowType ?? data.procurementType;
+  const responsibleUnitId =
+    workflowType === UnitResponsibleType.CONTRACT
+      ? 'UNIT-CONT'
+      : workflowUnitByProcurement[data.procurementType];
 
-    // ---------------------------------------------------------
-    // 2. Cloud Infrastructure Upgrade
-    // Requesting: DEPT-FIN / UNIT-SUP (Lisa - Finance Proxy)
-    // ---------------------------------------------------------
-    {
-      title: 'Cloud Infrastructure Upgrade',
-      receive_no: '2',
-      budget: 750000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.MT500K,
-      current_workflow_type: UnitResponsibleType.MT500K,
-      responsible_unit_id: 'UNIT-PROC-2',
-      requesting_dept_id: deptFIN.id,
-      requesting_unit_id: 'UNIT-SUP',
-      created_by: finStaff.id, // Updated: Lisa (Finance Staff) requests
-      assignee_procurement: { connect: [{ id: staffAlice.id }] },
-      is_urgent: UrgentType.NORMAL,
-    },
-
-    // ---------------------------------------------------------
-    // 3. Office Renovation
-    // Requesting: DEPT-STUAFF / UNIT-EDU (Emily)
-    // ---------------------------------------------------------
-    {
-      title: 'Office Renovation',
-      receive_no: '3',
-      budget: 750000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.SELECTION,
-      current_workflow_type: UnitResponsibleType.CONTRACT,
-      responsible_unit_id: 'UNIT-CONT',
-      requesting_dept_id: deptSTUAFF.id,
-      requesting_unit_id: 'UNIT-EDU',
-      created_by: stuAffEmily.id, // Updated: Emily requests for Student Affairs
-      assignee_procurement: { connect: [{ id: staffAlice.id }] },
-      assignee_contract: { connect: [{ id: staffCathy.id }] },
-      is_urgent: UrgentType.NORMAL,
-    },
-
-    // ---------------------------------------------------------
-    // 4. Quarterly Cleaning Supplies 2026
-    // Requesting: DEPT-LOC / UNIT-MAINT (Kevin)
-    // ---------------------------------------------------------
-    {
-      title: 'Quarterly Cleaning Supplies 2026',
-      receive_no: '4',
-      budget: 45000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.LT100K,
-      current_workflow_type: UnitResponsibleType.LT100K,
-      responsible_unit_id: 'UNIT-PROC-1',
-      requesting_dept_id: deptLOC.id,
-      requesting_unit_id: 'UNIT-MAINT',
-      created_by: rep_kevin.id, // Updated: Kevin requests for Maintenance
-      assignee_procurement: { connect: [{ id: staffBob.id }] },
-      is_urgent: UrgentType.NORMAL,
-    },
-
-    // ---------------------------------------------------------
-    // 5. Annual Student Festival Stage Construction
-    // Requesting: DEPT-STUAFF / UNIT-NET (Emily)
-    // ---------------------------------------------------------
-    {
-      title: 'Annual Student Festival Stage Construction',
-      receive_no: '5',
-      budget: 1200000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.EBIDDING,
-      current_workflow_type: UnitResponsibleType.EBIDDING,
-      responsible_unit_id: 'UNIT-PROC-2',
-      requesting_dept_id: deptSTUAFF.id,
-      requesting_unit_id: 'UNIT-NET',
-      created_by: stuAffEmily.id, // Updated: Emily requests
-      assignee_procurement: { connect: [{ id: staffAlice.id }] },
-      is_urgent: UrgentType.NORMAL,
-      expected_approval_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    },
-
-    // ---------------------------------------------------------
-    // 6. Emergency Pipe Repair - Building A
-    // Requesting: DEPT-LOC / UNIT-BUILD (Charlie)
-    // ---------------------------------------------------------
-    {
-      title: 'Emergency Pipe Repair - Building A',
-      receive_no: '6',
-      budget: 85000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.LT100K,
-      current_workflow_type: UnitResponsibleType.LT100K,
-      responsible_unit_id: 'UNIT-PROC-1',
-      requesting_dept_id: deptLOC.id,
-      requesting_unit_id: 'UNIT-BUILD',
-      created_by: repCharlie.id, // Updated: Charlie requests
-      assignee_procurement: { connect: [{ id: staffBob.id }] },
-      is_urgent: UrgentType.URGENT,
-    },
-
-    // ---------------------------------------------------------
-    // 7. Security Guard Services Outsourcing
-    // Requesting: DEPT-LOC / UNIT-BUILD (Charlie)
-    // ---------------------------------------------------------
-    {
-      title: 'Security Guard Services Outsourcing 2026-2027',
-      receive_no: '7',
-      budget: 2400000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.SELECTION,
-      current_workflow_type: UnitResponsibleType.CONTRACT,
-      responsible_unit_id: 'UNIT-CONT',
-      requesting_dept_id: deptLOC.id,
-      requesting_unit_id: 'UNIT-BUILD',
-      created_by: repCharlie.id, // Updated: Charlie requests
-      assignee_procurement: { connect: [{ id: staffAlice.id }] },
-      assignee_contract: { connect: [{ id: staffCathy.id }] },
-      is_urgent: UrgentType.NORMAL,
-    },
-
-    // ---------------------------------------------------------
-    // 8. A4 Paper Bulk Order
-    // Requesting: DEPT-REG (Sam)
-    // ---------------------------------------------------------
-    {
-      title: 'A4 Paper Bulk Order for Registration',
-      receive_no: '8',
-      budget: 200000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.LT500K,
-      current_workflow_type: UnitResponsibleType.LT500K,
-      responsible_unit_id: 'UNIT-PROC-1',
-      requesting_dept_id: deptREG.id,
-      requesting_unit_id: null,
-      created_by: regSam.id, // Updated: Sam requests for Registration
-      assignee_procurement: { connect: [{ id: staffBob.id }] },
-      is_urgent: UrgentType.NORMAL,
-    },
-
-    // ---------------------------------------------------------
-    // 9. ERP System License Renewal
-    // Requesting: DEPT-FIN / UNIT-ACC (Lisa)
-    // ---------------------------------------------------------
-    {
-      title: 'ERP System License Renewal',
-      receive_no: '9',
-      budget: 650000.0,
-      status: ProjectStatus.IN_PROGRESS,
-      procurement_type: ProcurementType.SELECTION,
-      current_workflow_type: UnitResponsibleType.SELECTION,
-      responsible_unit_id: 'UNIT-PROC-2',
-      requesting_dept_id: deptFIN.id,
-      requesting_unit_id: 'UNIT-ACC',
-      created_by: finStaff.id, // Updated: Lisa requests
-      assignee_procurement: { connect: [{ id: staffAlice.id }] },
-      is_urgent: UrgentType.NORMAL,
-    },
-
-    // ---------------------------------------------------------
-    // 10. Freshmen Orientation Welcome Kits
-    // Requesting: DEPT-STUAFF / UNIT-EDU (Emily)
-    // ---------------------------------------------------------
-    {
-      title: 'Freshmen Orientation Welcome Kits',
-      receive_no: '10',
-      budget: 120000.0,
-      status: ProjectStatus.CLOSED,
-      procurement_type: ProcurementType.LT500K,
-      current_workflow_type: UnitResponsibleType.LT500K,
-      responsible_unit_id: 'UNIT-PROC-1',
-      requesting_dept_id: deptSTUAFF.id,
-      requesting_unit_id: 'UNIT-EDU',
-      created_by: stuAffEmily.id, // Updated: Emily requests
-      assignee_procurement: { connect: [{ id: staffBob.id }] },
-      is_urgent: UrgentType.NORMAL,
-      expected_approval_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    },
-  ];
-
-  let createdProject = [];
-
-  for (const p of projects) {
-    const created = await prisma.project.create({ data: p });
-    createdProject.push(created);
-  }
-
-  // 7. SUBMISSIONS & DOCUMENTS
-  // ---------------------------------------------------------
-  // 7. SEED SUBMISSIONS (HISTORY)
-  // ---------------------------------------------------------
-
-  // Fetch projects with their assignees to determine "who" submitted
-  const allProjects = await prisma.project.findMany({
-    include: {
-      assignee_procurement: true,
-      assignee_contract: true,
-    },
-  });
-
-  for (const project of allProjects) {
-    const wfType = project.current_workflow_type as UnitResponsibleType;
-    const steps = WORKFLOW_STEP_ORDERS[wfType] || [];
-
-    // 1. Determine the Submitter
-    // Logic: If in Contract phase, the Contract Staff submits. Otherwise, Procurement Staff.
-    let submitterId = project.created_by; // Fallback to creator
-
-    if (wfType === UnitResponsibleType.CONTRACT) {
-      if (project.assignee_contract.length > 0) {
-        submitterId = project.assignee_contract[0].id; // e.g., Cathy
-      }
-    } else {
-      if (project.assignee_procurement.length > 0) {
-        submitterId = project.assignee_procurement[0].id; // e.g., Bob or Alice
-      }
-    }
-
-    // 2. Determine how many steps are "Done"
-    let stepsToComplete = 0;
-
-    if (project.status === ProjectStatus.CLOSED) {
-      // If project is done, ALL steps must be completed
-      stepsToComplete = steps.length;
-    } else {
-      // If in progress, randomize progress (e.g., complete 1 to N-1 steps)
-      // ensuring at least 1 step is done, but not all (so it stays in progress)
-      if (steps.length > 1) {
-        stepsToComplete = Math.floor(Math.random() * (steps.length - 1)) + 1;
-      } else {
-        stepsToComplete = 0; // Just started, no steps done
-      }
-    }
-
-    // 3. Create the Submission Records
-    for (let i = 0; i < stepsToComplete; i++) {
-      const stepNum = steps[i];
-
-      await prisma.projectSubmission.create({
-        data: {
-          project_id: project.id,
-          workflow_type: wfType,
-          step_order: stepNum,
-          submission_round: 1, // Default to round 1
-          status: SubmissionStatus.COMPLETED,
-          submitted_by: submitterId,
-          // Mock a document for every step
-          documents: {
-            create: [
-              {
-                file_name: `doc_step_${stepNum}.pdf`,
-                file_path: `/uploads/${project.receive_no}/${wfType}/step_${stepNum}.pdf`,
-              },
-            ],
-          },
-        },
-      });
-    }
-    await prisma.$transaction(
-      async (tx) => await syncProjectPhases(tx, wfType, project.id)
-    );
-  }
-
-  // ---------------------------------------------------------
-  // 8. BUDGET PLANS (Optional, can be expanded similarly)
-  // ---------------------------------------------------------
-
-  // Example: Create some budget plans (optional)
-  await prisma.budgetPlan.create({
+  return await prisma.project.create({
     data: {
-      unit_id: 'UNIT-SUP',
-      unit_no: '1010803000',
-      activity_type: 'ระบบติตดาม',
-      activity_type_name: 'ระบบติดตามสถานะการจัดซื้อจัดจ้าง',
-      description: 'ระบบติดตามสถานะการจัดซื้อจัดจ้างและการบริหารสัญญา',
-      budget_amount: 1000000,
-      budget_year: '2026',
-      created_by: superAdmin.id,
+      id: data.id,
+      receive_no: `${fiscalYear()}/${data.receiveSuffix
+        .toString()
+        .padStart(5, '0')}`,
+      title: data.title,
+      description: data.description,
+      budget: data.budget,
+      status: data.status,
+      procurement_type: data.procurementType,
+      current_workflow_type: workflowType,
+      responsible_unit_id: responsibleUnitId,
+      requesting_dept_id: data.requestingDeptId,
+      requesting_unit_id: data.requestingUnitId ?? null,
+      created_by: data.createdBy,
+      is_urgent: data.urgent ?? UrgentType.NORMAL,
+      expected_approval_date:
+        data.expectedApprovalDays === undefined
+          ? null
+          : daysFromNow(data.expectedApprovalDays),
+      expected_completion_procurement_date:
+        data.expectedCompletionDays === undefined
+          ? null
+          : daysFromNow(data.expectedCompletionDays),
+      procurement_status:
+        data.procurementStatus ?? ProjectPhaseStatus.NOT_STARTED,
+      procurement_step: data.procurementStep ?? null,
+      contract_status: data.contractStatus ?? ProjectPhaseStatus.NOT_STARTED,
+      contract_step: data.contractStep ?? null,
+      pr_no: data.prNo,
+      po_no: data.poNo,
+      less_no: data.lessNo,
+      contract_no: data.contractNo,
+      migo_103_no: data.migo103No,
+      migo_105_no: data.migo105No,
+      vendor_name: data.vendorName,
+      vendor_email: data.vendorEmail,
+      request_edit_reason: data.requestEditReason,
+      assignee_procurement:
+        data.procurementAssigneeIds && data.procurementAssigneeIds.length > 0
+          ? {
+              connect: data.procurementAssigneeIds.map((id) => ({ id })),
+            }
+          : undefined,
+      assignee_contract:
+        data.contractAssigneeIds && data.contractAssigneeIds.length > 0
+          ? {
+              connect: data.contractAssigneeIds.map((id) => ({ id })),
+            }
+          : undefined,
     },
   });
+};
 
-  console.log('--- Seeding Completed Successfully ---');
+const createSubmission = async (data: {
+  projectId: string;
+  workflowType: UnitResponsibleType;
+  stepOrder: number;
+  status: SubmissionStatus;
+  submittedBy?: string | null;
+  approvedBy?: string | null;
+  proposedBy?: string | null;
+  completedBy?: string | null;
+  submittedDaysAgo?: number;
+  submissionType?: SubmissionType;
+  poNo?: string;
+  comment?: string;
+  fieldKey?: string;
+  fileName?: string;
+}) => {
+  const submittedAt = daysFromNow(-(data.submittedDaysAgo ?? data.stepOrder));
+
+  return await prisma.projectSubmission.create({
+    data: {
+      project_id: data.projectId,
+      workflow_type: data.workflowType,
+      step_order: data.stepOrder,
+      submission_type: data.submissionType ?? SubmissionType.STAFF,
+      submission_round: 1,
+      po_no: data.poNo,
+      status: data.status,
+      submitted_by: data.submittedBy ?? null,
+      submitted_at: submittedAt,
+      approved_by: data.approvedBy ?? null,
+      approved_at: data.approvedBy ? daysFromNow(-1) : null,
+      proposing_by: data.proposedBy ?? null,
+      proposing_at: data.proposedBy ? daysFromNow(-1) : null,
+      completed_by: data.completedBy ?? null,
+      completed_at: data.completedBy ? daysFromNow(-1) : null,
+      comment: data.comment,
+      meta_data: [
+        {
+          seeded_for: 'user-testing',
+          workflow_type: data.workflowType,
+          step_order: data.stepOrder,
+        },
+      ],
+      documents: {
+        create: [
+          {
+            field_key: data.fieldKey ?? `step_${data.stepOrder}`,
+            file_name:
+              data.fileName ??
+              `ut_${data.workflowType.toLowerCase()}_step_${data.stepOrder}.pdf`,
+            file_path: `/uploads/user-testing/${data.projectId}/${data.workflowType}/step_${data.stepOrder}.pdf`,
+          },
+        ],
+      },
+    },
+  });
+};
+
+const seedCompletedSteps = async (
+  projectId: string,
+  workflowType: UnitResponsibleType,
+  submitterId: string,
+  completedById: string,
+  count: number
+) => {
+  const steps = WORKFLOW_STEP_ORDERS[workflowType].slice(0, count);
+  const approverId =
+    workflowType === UnitResponsibleType.CONTRACT
+      ? ids.users.contractHead
+      : workflowType === UnitResponsibleType.LT100K ||
+          workflowType === UnitResponsibleType.LT500K
+        ? ids.users.procHeadLt
+        : ids.users.procHeadHigh;
+
+  for (const stepOrder of steps) {
+    await createSubmission({
+      projectId,
+      workflowType,
+      stepOrder,
+      status: SubmissionStatus.COMPLETED,
+      submittedBy: submitterId,
+      approvedBy: approverId,
+      completedBy: completedById,
+      submittedDaysAgo: count - stepOrder + 2,
+    });
+  }
+};
+
+const seedProjects = async () => {
+  const fy = fiscalYear();
+
+  await createProject({
+    id: ids.projects.unassigned,
+    receiveSuffix: 90001,
+    title: 'User Testing - New chairs for reading room',
+    description: 'UNASSIGNED LT100K project for claim and assignment testing.',
+    budget: 75000,
+    status: ProjectStatus.UNASSIGNED,
+    procurementType: ProcurementType.LT100K,
+    requestingDeptId: 'DEPT-STUAFF',
+    requestingUnitId: 'UNIT-EDU',
+    createdBy: ids.users.libraryStaff,
+    expectedApprovalDays: 7,
+  });
+
+  await createProject({
+    id: ids.projects.waitingAccept,
+    receiveSuffix: 90002,
+    title: 'User Testing - Replacement laptops',
+    description: 'WAITING_ACCEPT project assigned to Procurement Team 1.',
+    budget: 320000,
+    status: ProjectStatus.WAITING_ACCEPT,
+    procurementType: ProcurementType.LT500K,
+    requestingDeptId: 'DEPT-REG',
+    requestingUnitId: null,
+    createdBy: ids.users.itRep,
+    expectedApprovalDays: 10,
+    procurementAssigneeIds: [ids.users.procurementLt],
+  });
+
+  await createProject({
+    id: ids.projects.waitingApproval,
+    receiveSuffix: 90003,
+    title: 'User Testing - Network monitoring sensors',
+    description:
+      'IN_PROGRESS project with a staff submission waiting approval.',
+    budget: 460000,
+    status: ProjectStatus.IN_PROGRESS,
+    procurementType: ProcurementType.LT500K,
+    requestingDeptId: 'DEPT-REG',
+    requestingUnitId: null,
+    createdBy: ids.users.itRep,
+    urgent: UrgentType.URGENT,
+    expectedApprovalDays: 3,
+    procurementStatus: ProjectPhaseStatus.WAITING_APPROVAL,
+    procurementStep: 2,
+    procurementAssigneeIds: [ids.users.procurementLt],
+  });
+  await seedCompletedSteps(
+    ids.projects.waitingApproval,
+    UnitResponsibleType.LT500K,
+    ids.users.procurementLt,
+    ids.users.procurementLt,
+    1
+  );
+  await createSubmission({
+    projectId: ids.projects.waitingApproval,
+    workflowType: UnitResponsibleType.LT500K,
+    stepOrder: 2,
+    status: SubmissionStatus.WAITING_APPROVAL,
+    submittedBy: ids.users.procurementLt,
+    fieldKey: 'approval_pack',
+  });
+
+  await createProject({
+    id: ids.projects.waitingProposal,
+    receiveSuffix: 90004,
+    title: 'User Testing - Accounting software renewal',
+    description:
+      'IN_PROGRESS MT500K project with a submission waiting proposal/signature flow.',
+    budget: 690000,
+    status: ProjectStatus.IN_PROGRESS,
+    procurementType: ProcurementType.MT500K,
+    requestingDeptId: 'DEPT-FIN',
+    requestingUnitId: 'UNIT-ACC',
+    createdBy: ids.users.financeStaff,
+    procurementStatus: ProjectPhaseStatus.WAITING_PROPOSAL,
+    procurementStep: 3,
+    prNo: `${fy}-PR-UT-90004`,
+    procurementAssigneeIds: [ids.users.procurementHigh],
+  });
+  await seedCompletedSteps(
+    ids.projects.waitingProposal,
+    UnitResponsibleType.MT500K,
+    ids.users.procurementHigh,
+    ids.users.procurementHigh,
+    2
+  );
+  await createSubmission({
+    projectId: ids.projects.waitingProposal,
+    workflowType: UnitResponsibleType.MT500K,
+    stepOrder: 3,
+    status: SubmissionStatus.WAITING_PROPOSAL,
+    submittedBy: ids.users.procurementHigh,
+    approvedBy: ids.users.procHeadHigh,
+    fieldKey: 'proposal_request',
+  });
+
+  await createProject({
+    id: ids.projects.procurementComplete,
+    receiveSuffix: 90005,
+    title: 'User Testing - Data center UPS upgrade',
+    description:
+      'EBIDDING project with procurement phase completed and ready to move to contract.',
+    budget: 1800000,
+    status: ProjectStatus.IN_PROGRESS,
+    procurementType: ProcurementType.EBIDDING,
+    requestingDeptId: 'DEPT-REG',
+    requestingUnitId: null,
+    createdBy: ids.users.itRep,
+    expectedCompletionDays: 20,
+    prNo: `${fy}-PR-UT-90005`,
+    procurementAssigneeIds: [ids.users.procurementHigh],
+  });
+  await seedCompletedSteps(
+    ids.projects.procurementComplete,
+    UnitResponsibleType.EBIDDING,
+    ids.users.procurementHigh,
+    ids.users.procurementHigh,
+    WORKFLOW_STEP_ORDERS[UnitResponsibleType.EBIDDING].length
+  );
+  await prisma.$transaction((tx) =>
+    syncProjectPhases(
+      tx,
+      UnitResponsibleType.EBIDDING,
+      ids.projects.procurementComplete
+    )
+  );
+
+  await createProject({
+    id: ids.projects.contractActive,
+    receiveSuffix: 90006,
+    title: 'User Testing - Security service contract',
+    description: 'CONTRACT workflow currently in progress.',
+    budget: 2400000,
+    status: ProjectStatus.IN_PROGRESS,
+    procurementType: ProcurementType.SELECTION,
+    workflowType: UnitResponsibleType.CONTRACT,
+    requestingDeptId: 'DEPT-LOC',
+    requestingUnitId: 'UNIT-BUILD',
+    createdBy: ids.users.facilitiesRep,
+    procurementStatus: ProjectPhaseStatus.COMPLETED,
+    contractStatus: ProjectPhaseStatus.IN_PROGRESS,
+    contractStep: 2,
+    prNo: `${fy}-PR-UT-90006`,
+    poNo: `${fy}-PO-UT-90006`,
+    lessNo: `${fy}-LESS-UT-90006`,
+    vendorName: 'SecureWorks User Testing Co., Ltd.',
+    vendorEmail: 'vendor.security@example.test',
+    procurementAssigneeIds: [ids.users.procurementHigh],
+    contractAssigneeIds: [ids.users.contractStaff],
+  });
+  await seedCompletedSteps(
+    ids.projects.contractActive,
+    UnitResponsibleType.CONTRACT,
+    ids.users.contractStaff,
+    ids.users.contractStaff,
+    1
+  );
+
+  await createProject({
+    id: ids.projects.contractReadyExport,
+    receiveSuffix: 90007,
+    title: 'User Testing - Building maintenance contract',
+    description: 'CONTRACT workflow with all contract steps submitted.',
+    budget: 1250000,
+    status: ProjectStatus.IN_PROGRESS,
+    procurementType: ProcurementType.SELECTION,
+    workflowType: UnitResponsibleType.CONTRACT,
+    requestingDeptId: 'DEPT-LOC',
+    requestingUnitId: 'UNIT-MAINT',
+    createdBy: ids.users.maintenanceRep,
+    procurementStatus: ProjectPhaseStatus.COMPLETED,
+    prNo: `${fy}-PR-UT-90007`,
+    poNo: `${fy}-PO-UT-90007`,
+    lessNo: `${fy}-LESS-UT-90007`,
+    contractNo: `${fy}-CON-UT-90007`,
+    vendorName: 'Maintain Plus User Testing Ltd.',
+    vendorEmail: 'vendor.maintenance@example.test',
+    procurementAssigneeIds: [ids.users.procurementHigh],
+    contractAssigneeIds: [ids.users.contractStaff],
+  });
+  await seedCompletedSteps(
+    ids.projects.contractReadyExport,
+    UnitResponsibleType.CONTRACT,
+    ids.users.contractStaff,
+    ids.users.contractStaff,
+    WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].length
+  );
+  await prisma.$transaction((tx) =>
+    syncProjectPhases(
+      tx,
+      UnitResponsibleType.CONTRACT,
+      ids.projects.contractReadyExport
+    )
+  );
+  await createSubmission({
+    projectId: ids.projects.contractReadyExport,
+    workflowType: UnitResponsibleType.CONTRACT,
+    stepOrder: 4,
+    status: SubmissionStatus.COMPLETED,
+    submittedBy: null,
+    completedBy: ids.users.contractStaff,
+    submissionType: SubmissionType.VENDOR,
+    poNo: `${fy}-PO-UT-90007`,
+    fieldKey: 'vendor_invoice',
+    fileName: 'vendor_invoice_90007.pdf',
+  });
+
+  await createProject({
+    id: ids.projects.closed,
+    receiveSuffix: 90008,
+    title: 'User Testing - Completed tablet procurement',
+    description: 'CLOSED project for request-edit and history testing.',
+    budget: 285000,
+    status: ProjectStatus.CLOSED,
+    procurementType: ProcurementType.LT500K,
+    workflowType: UnitResponsibleType.CONTRACT,
+    requestingDeptId: 'DEPT-STUAFF',
+    requestingUnitId: 'UNIT-EDU',
+    createdBy: ids.users.libraryStaff,
+    procurementStatus: ProjectPhaseStatus.COMPLETED,
+    contractStatus: ProjectPhaseStatus.COMPLETED,
+    prNo: `${fy}-PR-UT-90008`,
+    poNo: `${fy}-PO-UT-90008`,
+    contractNo: `${fy}-CON-UT-90008`,
+    migo103No: `${fy}-MIGO-UT-90008`,
+    migo105No: `${fy}-MIGO-UT-90008`,
+    vendorName: 'Tablet Supply User Testing Co.',
+    vendorEmail: 'vendor.tablet@example.test',
+    procurementAssigneeIds: [ids.users.procurementLt],
+    contractAssigneeIds: [ids.users.contractStaff],
+  });
+
+  await createProject({
+    id: ids.projects.waitingCancel,
+    receiveSuffix: 90009,
+    title: 'User Testing - Air purifier order',
+    description: 'WAITING_CANCEL project with an active cancellation request.',
+    budget: 98000,
+    status: ProjectStatus.WAITING_CANCEL,
+    procurementType: ProcurementType.LT100K,
+    requestingDeptId: 'DEPT-LOC',
+    requestingUnitId: 'UNIT-BUILD',
+    createdBy: ids.users.facilitiesRep,
+    urgent: UrgentType.VERY_URGENT,
+    procurementStatus: ProjectPhaseStatus.IN_PROGRESS,
+    procurementStep: 1,
+    procurementAssigneeIds: [ids.users.procurementLt],
+  });
+
+  await createProject({
+    id: ids.projects.cancelled,
+    receiveSuffix: 90010,
+    title: 'User Testing - Cancelled printer repair',
+    description: 'CANCELLED project for archive/list filtering tests.',
+    budget: 43000,
+    status: ProjectStatus.CANCELLED,
+    procurementType: ProcurementType.LT100K,
+    requestingDeptId: 'DEPT-LOC',
+    requestingUnitId: 'UNIT-MAINT',
+    createdBy: ids.users.maintenanceRep,
+    procurementAssigneeIds: [ids.users.procurementLt],
+  });
+
+  await createProject({
+    id: ids.projects.requestEdit,
+    receiveSuffix: 90011,
+    title: 'User Testing - Edited projector purchase',
+    description: 'REQUEST_EDIT project with a requester-provided reason.',
+    budget: 155000,
+    status: ProjectStatus.REQUEST_EDIT,
+    procurementType: ProcurementType.LT500K,
+    workflowType: UnitResponsibleType.CONTRACT,
+    requestingDeptId: 'DEPT-STUAFF',
+    requestingUnitId: 'UNIT-NET',
+    createdBy: ids.users.libraryStaff,
+    procurementStatus: ProjectPhaseStatus.COMPLETED,
+    contractStatus: ProjectPhaseStatus.COMPLETED,
+    requestEditReason: 'Requester needs to update warranty details.',
+    prNo: `${fy}-PR-UT-90011`,
+    poNo: `${fy}-PO-UT-90011`,
+    procurementAssigneeIds: [ids.users.procurementLt],
+    contractAssigneeIds: [ids.users.contractStaff],
+  });
+
+  await createProject({
+    id: ids.projects.internal,
+    receiveSuffix: 90012,
+    title: 'User Testing - Internal spare parts transfer',
+    description: 'INTERNAL procurement workflow coverage.',
+    budget: 510000,
+    status: ProjectStatus.IN_PROGRESS,
+    procurementType: ProcurementType.INTERNAL,
+    requestingDeptId: 'DEPT-FIN',
+    requestingUnitId: 'UNIT-FIN',
+    createdBy: ids.users.financeStaff,
+    procurementStatus: ProjectPhaseStatus.IN_PROGRESS,
+    procurementStep: 2,
+    procurementAssigneeIds: [ids.users.procurementHigh],
+  });
+  await seedCompletedSteps(
+    ids.projects.internal,
+    UnitResponsibleType.INTERNAL,
+    ids.users.procurementHigh,
+    ids.users.procurementHigh,
+    1
+  );
+};
+
+const seedCancellationsAndHistory = async () => {
+  await prisma.projectCancellation.createMany({
+    data: [
+      {
+        project_id: ids.projects.waitingCancel,
+        reason: 'Requester found duplicated demand in another plan.',
+        is_active: true,
+        is_cancelled: false,
+        requested_by: ids.users.facilitiesRep,
+        requested_at: daysFromNow(-2),
+      },
+      {
+        project_id: ids.projects.cancelled,
+        reason: 'Repair was no longer needed after warranty replacement.',
+        is_active: true,
+        is_cancelled: true,
+        requested_by: ids.users.maintenanceRep,
+        requested_at: daysFromNow(-8),
+        approved_by: ids.users.supplyHead,
+        approved_at: daysFromNow(-7),
+        cancelled_at: daysFromNow(-7),
+      },
+    ],
+  });
+
+  await prisma.projectHistory.createMany({
+    data: [
+      {
+        project_id: ids.projects.waitingAccept,
+        action: ProjectActionType.ASSIGNEE_UPDATE,
+        old_value: { status: ProjectStatus.UNASSIGNED, assignees: [] },
+        new_value: {
+          status: ProjectStatus.WAITING_ACCEPT,
+          assignees: ['Procurement1'],
+        },
+        changed_by: ids.users.procHeadLt,
+        changed_at: daysFromNow(-3),
+      },
+      {
+        project_id: ids.projects.waitingApproval,
+        action: ProjectActionType.STEP_UPDATE,
+        old_value: { procurement_step: 1 },
+        new_value: { procurement_step: 2 },
+        changed_by: ids.users.procurementLt,
+        changed_at: daysFromNow(-2),
+      },
+      {
+        project_id: ids.projects.waitingCancel,
+        action: ProjectActionType.STATUS_UPDATE,
+        old_value: { status: ProjectStatus.IN_PROGRESS },
+        new_value: { status: ProjectStatus.WAITING_CANCEL },
+        changed_by: ids.users.facilitiesRep,
+        changed_at: daysFromNow(-2),
+      },
+      {
+        project_id: ids.projects.cancelled,
+        action: ProjectActionType.STATUS_UPDATE,
+        old_value: { status: ProjectStatus.WAITING_CANCEL },
+        new_value: { status: ProjectStatus.CANCELLED },
+        changed_by: ids.users.supplyHead,
+        changed_at: daysFromNow(-7),
+      },
+      {
+        project_id: ids.projects.requestEdit,
+        action: ProjectActionType.STATUS_UPDATE,
+        old_value: { status: ProjectStatus.CLOSED },
+        new_value: {
+          status: ProjectStatus.REQUEST_EDIT,
+          request_edit_reason: 'Requester needs to update warranty details.',
+        },
+        changed_by: ids.users.libraryStaff,
+        changed_at: daysFromNow(-4),
+      },
+    ],
+  });
+};
+
+const seedBudgetPlans = async () => {
+  await prisma.budgetPlan.createMany({
+    data: [
+      {
+        budget_year: fiscalYear(),
+        unit_id: 'UNIT-EDU',
+        activity_type: 101,
+        activity_type_name: 'Student service improvement',
+        description: 'Furniture and device purchases for student services.',
+        budget_name: 'Student affairs user-testing budget',
+        budget_amount: 650000,
+        project_id: ids.projects.unassigned,
+        created_by: ids.users.libraryStaff,
+      },
+      {
+        budget_year: fiscalYear(),
+        unit_id: 'UNIT-SUP',
+        activity_type: 202,
+        activity_type_name: 'Supply operation reserve',
+        description: 'Shared procurement user-testing budget.',
+        budget_name: 'Supply user-testing budget',
+        budget_amount: 2500000,
+        project_id: ids.projects.procurementComplete,
+        created_by: ids.users.itRep,
+      },
+      {
+        budget_year: fiscalYear(),
+        unit_id: 'UNIT-BUILD',
+        activity_type: 303,
+        activity_type_name: 'Facility operations',
+        description: 'Building operation and outsourced services.',
+        budget_name: 'Facility user-testing budget',
+        budget_amount: 3200000,
+        project_id: ids.projects.contractActive,
+        created_by: ids.users.facilitiesRep,
+      },
+      {
+        budget_year: fiscalYear(),
+        unit_id: 'UNIT-FIN',
+        activity_type: 404,
+        activity_type_name: 'Finance internal operations',
+        description: 'Internal transfer and finance unit operating plan.',
+        budget_name: 'Finance user-testing budget',
+        budget_amount: 900000,
+        project_id: ids.projects.internal,
+        created_by: ids.users.financeStaff,
+      },
+    ],
+  });
+};
+
+async function main() {
+  console.log('--- Start User Testing Seed ---');
+  await cleanup();
+  console.log('--- Database cleaned ---');
+
+  await seedOrganization();
+  await seedUsers();
+  await seedProjects();
+  await seedCancellationsAndHistory();
+  await seedBudgetPlans();
+
+  console.log('--- User Testing Seed Completed ---');
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error) => {
+    console.error(error);
     process.exit(1);
   })
   .finally(async () => {

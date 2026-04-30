@@ -2,9 +2,12 @@ import { Request, Response } from 'express';
 import * as SubmissionService from '../services/submission.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 import {
-  CreateSubmissionSchema,
   ApproveSubmissionSchema,
+  CompleteSubmissionSchema,
+  CreateStaffSubmissionSchema,
+  CreateVendorSubmissionSchema,
   RejectSubmissionSchema,
+  VendorSubmissionFilterQuerySchema,
 } from '../schemas/submission.schema';
 
 export const getProjectSubmissions = async (
@@ -23,7 +26,30 @@ export const getProjectSubmissions = async (
   res.status(200).json(submissions);
 };
 
-export const createSubmission = async (
+export const getVendorSubmissions = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Submission']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const { page, limit, q, from, to } = req.query;
+
+  const validatedFilters = VendorSubmissionFilterQuerySchema.parse({
+    search: q,
+    dateFrom: from,
+    dateTo: to,
+  });
+  const submissions = await SubmissionService.getVendorSubmissions(
+    payload,
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    validatedFilters
+  );
+  res.status(200).json(submissions);
+};
+
+export const createStaffSubmission = async (
   req: AuthenticatedRequest,
   res: Response
 ) => {
@@ -31,7 +57,7 @@ export const createSubmission = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
 
-  const validateData = CreateSubmissionSchema.parse(req.body);
+  const validateData = CreateStaffSubmissionSchema.parse(req.body);
   const submission = await SubmissionService.createStaffSubmissionsProject(
     payload,
     validateData
@@ -39,7 +65,19 @@ export const createSubmission = async (
   res.status(201).json(submission);
 };
 
-export const approveSubmission = async (req: AuthenticatedRequest, res: Response) => {
+export const createVendorSubmission = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Submission']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const validateData = CreateVendorSubmissionSchema.parse(req.body);
+  const submission =
+    await SubmissionService.createVendorSubmissionsProject(validateData);
+  res.status(201).json(submission);
+};
+
+export const approveSubmission = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
@@ -57,7 +95,10 @@ export const approveSubmission = async (req: AuthenticatedRequest, res: Response
   res.status(200).json(submission);
 };
 
-export const proposeSubmission = async (req: AuthenticatedRequest, res: Response) => {
+export const proposeSubmission = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
@@ -72,11 +113,9 @@ export const proposeSubmission = async (req: AuthenticatedRequest, res: Response
 };
 
 export const signAndCompleteSubmission = async (
-  
   req: AuthenticatedRequest,
- 
-  res: Response
 
+  res: Response
 ) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
@@ -84,14 +123,21 @@ export const signAndCompleteSubmission = async (
   const payload = req.user!;
   const submissionId = req.params.id as string;
 
+  const validateData = CompleteSubmissionSchema.parse({
+    id: submissionId,
+    ...req.body,
+  });
   const submission = await SubmissionService.signAndCompleteSubmission(
     payload,
-    submissionId
+    validateData
   );
   res.status(200).json(submission);
 };
 
-export const rejectSubmission = async (req: AuthenticatedRequest, res: Response) => {
+export const rejectSubmission = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }

@@ -4,8 +4,10 @@ import { NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import * as UserService from './user.service';
 import { DelegationDetail } from '../types/delegation.type';
+import { AuthPayload } from '../types/auth.type';
 
 export const addDelegation = async (
+  user: AuthPayload,
   data: AddDelegationDto
 ): Promise<UserDelegation> => {
   await Promise.all([
@@ -20,6 +22,7 @@ export const addDelegation = async (
         start_date: data.start_date,
         end_date: data.end_date ?? undefined,
         is_active: true,
+        created_by: user.id,
       },
     });
 
@@ -32,7 +35,10 @@ export const addDelegation = async (
   });
 };
 
-export const cancelDelegation = async (id: string): Promise<UserDelegation> => {
+export const cancelDelegation = async (
+  user: AuthPayload,
+  id: string
+): Promise<UserDelegation> => {
   return await prisma.$transaction(async (tx) => {
     const delegation = await tx.userDelegation.findUnique({
       where: { id },
@@ -45,6 +51,8 @@ export const cancelDelegation = async (id: string): Promise<UserDelegation> => {
       where: { id },
       data: {
         is_active: false,
+        cancelled_at: new Date(),
+        cancelled_by: user.id,
       },
     });
 
