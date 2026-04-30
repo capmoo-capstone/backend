@@ -981,7 +981,7 @@ const seedCancellationsAndHistory = async () => {
         old_value: { status: ProjectStatus.UNASSIGNED, assignees: [] },
         new_value: {
           status: ProjectStatus.WAITING_ACCEPT,
-          assignees: [ids.users.procurementLt],
+          assignees: ['Procurement1'],
         },
         changed_by: ids.users.procHeadLt,
         changed_at: daysFromNow(-3),
