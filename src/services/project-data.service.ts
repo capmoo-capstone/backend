@@ -234,7 +234,7 @@ export const updateProjectData = async (
       data: { ...projectData },
     });
 
-    if (budget_plan_id.length > 0) {
+    if (budget_plan_id && budget_plan_id.length > 0) {
       await tx.budgetPlan.updateMany({
         where: { id: { in: budget_plan_id } },
         data: { project_id: data.id },
