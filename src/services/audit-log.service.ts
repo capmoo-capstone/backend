@@ -229,8 +229,8 @@ export const listAuditLogs = async (
         ? prisma.projectHistory.findMany({
             where: {
               changed_at: {
-                gte: query.dateFrom,
-                lte: query.dateTo,
+                gte: query.dateFrom ?? undefined,
+                lte: query.dateTo ?? new Date(),
               },
             },
             skip,
@@ -248,20 +248,20 @@ export const listAuditLogs = async (
               OR: [
                 {
                   requested_at: {
-                    gte: query.dateFrom,
-                    lte: query.dateTo,
+                    gte: query.dateFrom ?? undefined,
+                    lte: query.dateTo ?? new Date(),
                   },
                 },
                 {
                   approved_at: {
-                    gte: query.dateFrom,
-                    lte: query.dateTo,
+                    gte: query.dateFrom ?? undefined,
+                    lte: query.dateTo ?? new Date(),
                   },
                 },
                 {
                   cancelled_at: {
-                    gte: query.dateFrom,
-                    lte: query.dateTo,
+                    gte: query.dateFrom ?? undefined,
+                    lte: query.dateTo ?? new Date(),
                   },
                 },
               ],
@@ -283,14 +283,14 @@ export const listAuditLogs = async (
               OR: [
                 {
                   created_at: {
-                    gte: query.dateFrom,
-                    lte: query.dateTo,
+                    gte: query.dateFrom ?? undefined,
+                    lte: query.dateTo ?? new Date(),
                   },
                 },
                 {
                   cancelled_at: {
-                    gte: query.dateFrom,
-                    lte: query.dateTo,
+                    gte: query.dateFrom ?? undefined,
+                    lte: query.dateTo ?? new Date(),
                   },
                 },
               ],

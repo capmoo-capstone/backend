@@ -3,8 +3,8 @@ import { AuditLogType } from '@prisma/client';
 
 export const AuditLogsQuerySchema = z.object({
   q: z.string().trim().optional(),
-  kind: z.enum(AuditLogType),
-  dateFrom: z.coerce.date(),
+  kind: z.enum(AuditLogType).optional(),
+  dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
 });
 
