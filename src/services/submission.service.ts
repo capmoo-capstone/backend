@@ -21,12 +21,14 @@ import {
   ApprovedSubmissionResponse,
   CompletedSubmissionResponse,
   GetSubmissionRoundDto,
+  ProjectDocument,
   ProjectSubmissionsResponse,
   ProposedSubmissionResponse,
   RejectedSubmissionResponse,
   SubmissionActionResponse,
   VendorSubmissionsResponse,
 } from '../types/submission.type';
+import { generatePresignedDownloadUrl } from './storage.service';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -117,17 +119,27 @@ export const getProjectSubmissions = async (
     },
   });
 
-  const formattedSubmissions = submissionData.map((submission) => ({
-    ...submission,
-    submitted_by: submission.submitter?.full_name ?? null,
-    approved_by: submission.approver?.full_name ?? null,
-    proposing_by: submission.proposer?.full_name ?? null,
-    completed_by: submission.completer?.full_name ?? null,
-    submitter: undefined,
-    approver: undefined,
-    proposer: undefined,
-    completer: undefined,
-  }));
+  const formattedSubmissions = await Promise.all(
+    submissionData.map(async (submission) => ({
+      ...submission,
+      submitted_by: submission.submitter?.full_name ?? null,
+      approved_by: submission.approver?.full_name ?? null,
+      proposing_by: submission.proposer?.full_name ?? null,
+      completed_by: submission.completer?.full_name ?? null,
+      documents: await Promise.all(
+        submission.documents.map(async (doc) => ({
+          field_key: doc.field_key,
+          file_name: doc.file_name,
+          file_path: doc.file_path,
+          download_url: await generatePresignedDownloadUrl(doc.file_path),
+        }))
+      ),
+      submitter: undefined,
+      approver: undefined,
+      proposer: undefined,
+      completer: undefined,
+    }))
+  );
 
   const contractSubmissions = formattedSubmissions.filter(
     (submission) => submission.workflow_type === UnitResponsibleType.CONTRACT
@@ -230,9 +242,7 @@ export const getVendorSubmissions = async (
         id: true,
         po_no: true,
         submitted_at: true,
-        documents: {
-          select: { field_key: true, file_name: true, file_path: true },
-        },
+        documents: true,
         project: {
           select: {
             id: true,
@@ -247,25 +257,35 @@ export const getVendorSubmissions = async (
     prisma.projectSubmission.count({ where }),
   ]);
 
+  const formattedSubmissions = await Promise.all(
+    submissions.map(async (submission) => ({
+      ...submission,
+      project_id: submission.project.id,
+      title: submission.project.title,
+      receive_no: submission.project.receive_no,
+      vendor_name: submission.project.vendor_name,
+      requester: {
+        dept_id: submission.project.requesting_dept.id,
+        dept_name: submission.project.requesting_dept.name,
+      },
+      documents: await Promise.all(
+        submission.documents.map(async (doc) => ({
+          field_key: doc.field_key,
+          file_name: doc.file_name,
+          file_path: doc.file_path,
+          download_url: await generatePresignedDownloadUrl(doc.file_path),
+        }))
+      ),
+      project: undefined,
+    }))
+  );
+
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: submissions.map((s) => ({
-      id: s.id,
-      po_no: s.po_no,
-      submitted_at: s.submitted_at,
-      documents: s.documents,
-      project_id: s.project.id,
-      receive_no: s.project.receive_no,
-      title: s.project.title,
-      vendor_name: s.project.vendor_name,
-      requester: {
-        dept_id: s.project.requesting_dept.id,
-        dept_name: s.project.requesting_dept.name,
-      },
-    })),
+    data: formattedSubmissions,
   };
 };
 
