@@ -258,18 +258,32 @@ export const updateProjectData = async (
 export const generateContractNumber = async (
   type: string,
   budget_year: number
-): Promise<string> => {
-  const lastContract = await prisma.project.findFirst({
+): Promise<{ id: string; contract_no: string }> => {
+  const count = await prisma.projectContractNumber.count({
     where: {
-      contract_no: { endsWith: `/${budget_year.toString()}` },
+      type,
+      contract_no: {
+        endsWith: budget_year.toString(),
+      },
     },
-    orderBy: { created_at: 'desc' },
-    select: { contract_no: true },
   });
-  const lastNumber = lastContract
-    ? parseInt(lastContract.contract_no.split('/')[0], 10)
-    : 0;
-  return `${(lastNumber + 1).toString().padStart(5, '0')}/${budget_year}`;
+  const newContract = await prisma.projectContractNumber.create({
+    data: {
+      type,
+      contract_no: `${(count + 1).toString()}/${budget_year}`,
+    },
+    select: { id: true, contract_no: true },
+  });
+  return newContract;
+};
+
+export const cancelContractNumber = async (
+  projectId: string
+): Promise<void> => {
+  await prisma.projectContractNumber.update({
+    where: { project_id: projectId },
+    data: { is_active: false },
+  });
 };
 
 export const deleteProject = async (
