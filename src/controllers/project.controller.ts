@@ -8,6 +8,7 @@ import {
   AcceptProjectsSchema,
   CancelProjectSchema,
   CreateProjectSchema,
+  GetNewContractNumberSchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditProjectSchema,
@@ -358,6 +359,7 @@ export const requestEditProject = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/RequestEditProjectDto' } }
   const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = RequestEditProjectSchema.parse({
@@ -369,6 +371,33 @@ export const requestEditProject = async (
     validatedData
   );
   res.status(200).json(project);
+};
+
+export const getNewContractNumber = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/GetNewContractNumberDto' } }
+  const { type, budget_year } = GetNewContractNumberSchema.parse(req.body);
+  const result = await ProjectDataService.generateContractNumber(
+    type,
+    budget_year
+  );
+  res.status(200).json(result);
+};
+
+export const cancelContractNumber = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const id = req.params.id as string;
+  const contractId = req.params.contractId as string;
+  const result = await ProjectDataService.cancelContractNumber(id, contractId);
+  res.status(200).json(result);
 };
 
 export const updateProject = async (

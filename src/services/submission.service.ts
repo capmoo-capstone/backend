@@ -21,7 +21,6 @@ import {
   ApprovedSubmissionResponse,
   CompletedSubmissionResponse,
   GetSubmissionRoundDto,
-  ProjectDocument,
   ProjectSubmissionsResponse,
   ProposedSubmissionResponse,
   RejectedSubmissionResponse,
@@ -53,10 +52,23 @@ const getSubmissionRound = async (
   return lastSubmission + 1;
 };
 
+type ProjectForUpdate = Pick<
+  Project,
+  | 'id'
+  | 'pr_no'
+  | 'po_no'
+  | 'less_no'
+  | 'migo_103_no'
+  | 'migo_105_no'
+  | 'asset_code'
+  | 'vendor_name'
+  | 'vendor_email'
+>;
+
 const updateProjectForSubmission = async (
   tx: Prisma.TransactionClient,
-  project: Partial<Project>,
-  meta_data = [],
+  project: ProjectForUpdate,
+  meta_data: any[],
   userId: string
 ) => {
   const dataToUpdate = {};
@@ -74,13 +86,32 @@ const updateProjectForSubmission = async (
   }
 
   const oldValue = {};
-  Object.keys(validated.data).forEach((key) => {
+  const { contract_no_id, ...otherData } = validated.data;
+  Object.keys(otherData).forEach((key) => {
     oldValue[key] = project[key];
   });
 
+  if (contract_no_id) {
+    const existingContract = await tx.projectContractNumber.findUnique({
+      where: { id: contract_no_id },
+    });
+    if (!existingContract) {
+      throw new NotFoundError(
+        'Contract not found for the provided contract_no_id'
+      );
+    }
+    const contract = await tx.projectContractNumber.update({
+      where: { id: contract_no_id },
+      data: { project_id: project.id, is_active: true },
+      select: { id: true, contract_no: true },
+    });
+    oldValue['contract_no'] = null;
+    validated['contract_no'] = contract.contract_no;
+  }
+
   await tx.project.update({
     where: { id: project.id },
-    data: validated.data,
+    data: otherData,
   });
 
   await tx.projectHistory.create({
