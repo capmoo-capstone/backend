@@ -262,18 +262,42 @@ export const generateContractNumber = async (
   return await prisma.$transaction(async (tx) => {
     const lockKey = `${budget_year}:${type}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-    const count = await prisma.projectContractNumber.count({
+    const availableContractNumber = await tx.projectContractNumber.findFirst({
       where: {
         type,
         contract_no: {
           endsWith: budget_year.toString(),
         },
+        is_active: false,
+        project_id: null,
       },
+      orderBy: { contract_no: 'asc' },
+      select: { id: true, contract_no: true },
     });
-    const newContract = await prisma.projectContractNumber.create({
+
+    if (availableContractNumber) {
+      return availableContractNumber;
+    }
+
+    const newContractNo = await tx.projectContractNumber
+      .count({
+        where: {
+          type,
+          contract_no: {
+            endsWith: budget_year.toString(),
+          },
+        },
+      })
+      .then((count) => {
+        return `${count + 1}/${budget_year}`;
+      });
+
+    const newContract = await tx.projectContractNumber.create({
       data: {
         type,
-        contract_no: `${(count + 1).toString()}/${budget_year}`,
+        contract_no: newContractNo,
+        is_active: false,
+        project_id: null,
       },
       select: { id: true, contract_no: true },
     });
