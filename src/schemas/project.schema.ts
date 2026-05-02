@@ -43,6 +43,11 @@ export const RequestEditProjectSchema = z.object({
   reason: z.string(),
 });
 
+export const GetNewContractNumberSchema = z.object({
+  type: z.string(),
+  budget_year: z.number(),
+});
+
 export const UpdateProjectSchema = z.object({
   id: z.uuid(),
   updateData: z.object({

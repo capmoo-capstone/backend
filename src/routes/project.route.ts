@@ -3,6 +3,7 @@ import * as controller from '../controllers/project.controller';
 import {
   requireRoles,
   requireSuperAdmin,
+  requireSupplyAccess,
   requireSupplyRoles,
 } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
@@ -74,8 +75,21 @@ router.patch(
   controller.acceptProjects
 );
 
+// ── Contract Number ───────────────────────────────────────────────────────────
+router.get(
+  '/gen-contract-no',
+  requireSupplyAccess,
+  controller.getNewContractNumber
+);
+
 // ── Single project ────────────────────────────────────────────────────────────
 router.get('/:id', controller.getById);
+
+router.patch(
+  '/:id/cancel-contract-no',
+  requireSupplyAccess,
+  controller.cancelContractNumber
+);
 
 router.patch(
   '/:id/claim',

@@ -279,10 +279,11 @@ export const generateContractNumber = async (
 
 export const cancelContractNumber = async (
   projectId: string
-): Promise<void> => {
-  await prisma.projectContractNumber.update({
+): Promise<{ id: string; contract_no: string }> => {
+  return await prisma.projectContractNumber.update({
     where: { project_id: projectId },
     data: { is_active: false },
+    select: { id: true, contract_no: true, is_active: true },
   });
 };
 
