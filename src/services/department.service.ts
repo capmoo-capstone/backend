@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma';
 import { Department } from '@prisma/client';
-import { AppError, NotFoundError } from '../lib/errors';
+import { NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,
   UpdateDepartmentDto,
@@ -53,16 +53,12 @@ export const getById = async (id: string): Promise<Department> => {
 export const createDepartment = async (
   data: CreateDepartmentDto
 ): Promise<Department> => {
-  const department = await prisma.department.create({
+  return await prisma.department.create({
     data: {
       id: data.id,
       name: data.name,
     },
   });
-  if (!department) {
-    throw new AppError('Failed to create department', 500);
-  }
-  return department;
 };
 
 export const updateDepartment = async (

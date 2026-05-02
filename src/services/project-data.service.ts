@@ -255,6 +255,23 @@ export const updateProjectData = async (
   });
 };
 
+export const generateContractNumber = async (
+  type: string,
+  budget_year: number
+): Promise<string> => {
+  const lastContract = await prisma.project.findFirst({
+    where: {
+      contract_no: { endsWith: `/${budget_year.toString()}` },
+    },
+    orderBy: { created_at: 'desc' },
+    select: { contract_no: true },
+  });
+  const lastNumber = lastContract
+    ? parseInt(lastContract.contract_no.split('/')[0], 10)
+    : 0;
+  return `${(lastNumber + 1).toString().padStart(5, '0')}/${budget_year}`;
+};
+
 export const deleteProject = async (
   user: AuthPayload,
   id: string

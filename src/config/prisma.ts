@@ -7,13 +7,15 @@ const connectionString = env('DATABASE_URL');
 
 const pool = new pg.Pool({
   connectionString,
-  idleTimeoutMillis: 30000, // close idle after 30s
-  connectionTimeoutMillis: 5000, // throw within 5s
+  idleTimeoutMillis: 10000, // close idle after 10s
+  connectionTimeoutMillis: 7500, // throw within 7.5s
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
-const adapter = new PrismaPg(pool as any);
+const adapter = new PrismaPg(pool);
 export const prisma = new PrismaClient({ adapter });
