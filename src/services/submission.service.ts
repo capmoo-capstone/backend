@@ -86,14 +86,14 @@ const updateProjectForSubmission = async (
   }
 
   const oldValue = {};
-  Object.keys(validated.data).forEach((key) => {
+  const { contract_no_id, ...otherData } = validated.data;
+  Object.keys(otherData).forEach((key) => {
     oldValue[key] = project[key];
   });
 
-  const { contract_no, ...otherData } = validated.data;
-  if (contract_no) {
+  if (contract_no_id) {
     const existingContract = await tx.projectContractNumber.findUnique({
-      where: { id: contract_no },
+      where: { id: contract_no_id },
     });
     if (!existingContract) {
       throw new NotFoundError(
@@ -101,10 +101,11 @@ const updateProjectForSubmission = async (
       );
     }
     const contract = await tx.projectContractNumber.update({
-      where: { id: contract_no },
+      where: { id: contract_no_id },
       data: { project_id: project.id, is_active: true },
       select: { id: true, contract_no: true },
     });
+    oldValue['contract_no'] = null;
     validated['contract_no'] = contract.contract_no;
   }
 

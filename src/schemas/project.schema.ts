@@ -10,7 +10,7 @@ export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   budget: z.number(),
-  budget_year: z.number().optional(),
+  budget_year: z.coerce.number().int().optional(),
   budget_plan_id: z.array(z.string()).optional(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),
@@ -45,7 +45,7 @@ export const RequestEditProjectSchema = z.object({
 
 export const GetNewContractNumberSchema = z.object({
   type: z.string(),
-  budget_year: z.number(),
+  budget_year: z.coerce.number().int(),
 });
 
 export const UpdateProjectSchema = z.object({
@@ -74,7 +74,7 @@ export const ProjectFilterQuerySchema = z
     title: z.string().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
-    fiscalYear: z.union([z.string(), z.number()]).optional(),
+    fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
     status: z.array(z.enum(ProjectStatus)).optional(),
     procurementStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),

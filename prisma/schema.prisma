@@ -215,6 +215,7 @@ model Project {
   less_no                              String?
   migo_103_no                          String?
   migo_105_no                          String?
+  contract_no_id                       String?
   asset_code                           Boolean?
   vendor_name                          String?
   vendor_email                         String?
@@ -223,18 +224,18 @@ model Project {
   created_at                           DateTime            @default(now())
   updated_at                           DateTime?           @updatedAt
 
-  creator          User       @relation("ProjectCreator", fields: [created_by], references: [id])
-  requesting_dept  Department @relation(fields: [requesting_dept_id], references: [id])
-  requesting_unit  Unit?      @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
-  responsible_unit Unit?      @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
+  creator          User                   @relation("ProjectCreator", fields: [created_by], references: [id])
+  requesting_dept  Department             @relation(fields: [requesting_dept_id], references: [id])
+  requesting_unit  Unit?                  @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
+  responsible_unit Unit?                  @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
+  contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id])
 
-  assignee_procurement   User[]                  @relation("ProcurementProjects")
-  assignee_contract      User[]                  @relation("ContractProjects")
-  project_cancellation   ProjectCancellation[]
-  project_histories      ProjectHistory[]
-  submissions            ProjectSubmission[]
-  budget_plans           BudgetPlan[]
-  contract_no ProjectContractNumber[]
+  assignee_procurement User[]                @relation("ProcurementProjects")
+  assignee_contract    User[]                @relation("ContractProjects")
+  project_cancellation ProjectCancellation[]
+  project_histories    ProjectHistory[]
+  submissions          ProjectSubmission[]
+  budget_plans         BudgetPlan[]
 
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
@@ -243,16 +244,16 @@ model Project {
 }
 
 model ProjectContractNumber {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   type        String
   project_id  String?
   contract_no String
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now())
+  is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  projects    Project[]
 
-  project Project? @relation(fields: [project_id], references: [id])
-
-  @@unique([project_id])
+  @@index([project_id, is_active])
+  @@unique([type, contract_no])
   @@map("project_contract_numbers")
 }
 

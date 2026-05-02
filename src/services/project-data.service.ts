@@ -259,27 +259,39 @@ export const generateContractNumber = async (
   type: string,
   budget_year: number
 ): Promise<{ id: string; contract_no: string }> => {
-  const count = await prisma.projectContractNumber.count({
-    where: {
-      type,
-      contract_no: {
-        endsWith: budget_year.toString(),
+  return await prisma.$transaction(async (tx) => {
+    const lockKey = `${budget_year}:${type}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    const count = await prisma.projectContractNumber.count({
+      where: {
+        type,
+        contract_no: {
+          endsWith: budget_year.toString(),
+        },
       },
-    },
+    });
+    const newContract = await prisma.projectContractNumber.create({
+      data: {
+        type,
+        contract_no: `${(count + 1).toString()}/${budget_year}`,
+      },
+      select: { id: true, contract_no: true },
+    });
+    return newContract;
   });
-  const newContract = await prisma.projectContractNumber.create({
-    data: {
-      type,
-      contract_no: `${(count + 1).toString()}/${budget_year}`,
-    },
-    select: { id: true, contract_no: true },
-  });
-  return newContract;
 };
 
 export const cancelContractNumber = async (
   projectId: string
-): Promise<{ id: string; contract_no: string }> => {
+): Promise<{ id: string; contract_no: string; is_active: boolean }> => {
+  const contract = await prisma.projectContractNumber.findFirst({
+    where: { project_id: projectId, is_active: true },
+  });
+  if (!contract) {
+    throw new BadRequestError(
+      'Active contract number not found for this project'
+    );
+  }
   return await prisma.projectContractNumber.update({
     where: { project_id: projectId },
     data: { is_active: false },
