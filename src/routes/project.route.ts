@@ -76,8 +76,8 @@ router.patch(
 );
 
 // ── Contract Number ───────────────────────────────────────────────────────────
-router.get(
-  '/gen-contract-no',
+router.post(
+  '/contract/new',
   requireSupplyAccess,
   controller.getNewContractNumber
 );
@@ -86,7 +86,7 @@ router.get(
 router.get('/:id', controller.getById);
 
 router.patch(
-  '/:id/cancel-contract-no',
+  '/:id/contract/:contractId/cancel',
   requireSupplyAccess,
   controller.cancelContractNumber
 );

@@ -282,10 +282,11 @@ export const generateContractNumber = async (
 };
 
 export const cancelContractNumber = async (
-  projectId: string
+  projectId: string,
+  contractId: string
 ): Promise<{ id: string; contract_no: string; is_active: boolean }> => {
   const contract = await prisma.projectContractNumber.findFirst({
-    where: { project_id: projectId, is_active: true },
+    where: { id: contractId, project_id: projectId, is_active: true },
   });
   if (!contract) {
     throw new BadRequestError(
@@ -293,7 +294,7 @@ export const cancelContractNumber = async (
     );
   }
   return await prisma.projectContractNumber.update({
-    where: { project_id: projectId },
+    where: { id: contractId, project_id: projectId },
     data: { is_active: false },
     select: { id: true, contract_no: true, is_active: true },
   });

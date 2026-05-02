@@ -395,7 +395,8 @@ export const cancelContractNumber = async (
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
-  const result = await ProjectDataService.cancelContractNumber(id);
+  const contractId = req.params.contractId as string;
+  const result = await ProjectDataService.cancelContractNumber(id, contractId);
   res.status(200).json(result);
 };
 
