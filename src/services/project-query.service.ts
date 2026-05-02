@@ -330,6 +330,10 @@ export const getById = async (
             budget_amount: true,
           },
         },
+        contract_no: {
+          where: { is_active: true },
+          select: { contract_no: true },
+        },
       },
     });
     if (!projectData) {
@@ -359,7 +363,7 @@ export const getById = async (
       less_no: projectData.less_no,
       pr_no: projectData.pr_no,
       po_no: projectData.po_no,
-      contract_no: projectData.contract_no,
+      contract_no: projectData.contract_no?.[0]?.contract_no ?? null,
       migo_103_no: projectData.migo_103_no,
       migo_105_no: projectData.migo_105_no,
       asset_code: projectData.asset_code,
