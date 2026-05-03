@@ -280,7 +280,6 @@ export const generateContractNumber = async (
       data: {
         type,
         contract_no: newContractNo,
-        project_id: null,
       },
       select: { id: true, contract_no: true },
     });
