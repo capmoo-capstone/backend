@@ -9,7 +9,7 @@ import {
   ProjectsListResponse,
   UpdateProjectDataResponse,
 } from '../types/project.type';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
@@ -261,7 +261,7 @@ export const generateContractNumber = async (
   budget_year: number
 ): Promise<{ id: string; contract_no: string }> => {
   return await prisma.$transaction(async (tx) => {
-    const lockKey = `${budget_year}:${type}:${uuidv4()}`;
+    const lockKey = `${budget_year}:${type}:${randomUUID()}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     const newContractNo = await tx.projectContractNumber
       .count({

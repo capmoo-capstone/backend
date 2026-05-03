@@ -39,6 +39,7 @@ const allowedOrigins = [
   'https://dev-nexus-procure-backend.vercel.app', // Vercel development
 ];
 
+app.options('/{*path}', cors());
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -55,7 +56,6 @@ app.use(
     credentials: true,
   })
 );
-app.options('/{*path}', cors());
 app.use(express.json());
 
 // Import API v1 routes
