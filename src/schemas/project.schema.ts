@@ -5,7 +5,6 @@ import {
   ProjectStatus,
   UrgentType,
 } from '@prisma/client';
-import { id } from 'zod/v4/locales';
 
 export const CreateProjectSchema = z.object({
   title: z.string(),
@@ -32,6 +31,13 @@ export const UpdateStatusProjectsSchema = z.array(UpdateStatusProjectSchema);
 
 export const AcceptProjectsSchema = z.object({
   id: z.array(z.uuid()),
+});
+
+export const CompleteProcurementPhaseSchema = z.object({
+  id: z.uuid(),
+  project_id: z.uuid(),
+  continue_unit_proc: z.boolean().default(false),
+  assignee_contract: z.string().optional(),
 });
 
 export const CancelProjectSchema = z.object({
@@ -101,6 +107,9 @@ export type UpdateStatusProjectsDto = z.infer<
   typeof UpdateStatusProjectsSchema
 >;
 export type AcceptProjectsDto = z.infer<typeof AcceptProjectsSchema>;
+export type CompleteProcurementPhaseDto = z.infer<
+  typeof CompleteProcurementPhaseSchema
+>;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
 export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
