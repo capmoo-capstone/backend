@@ -36,7 +36,7 @@ export const AcceptProjectsSchema = z.object({
 export const CompleteProcurementPhaseSchema = z.object({
   id: z.uuid(),
   continue_unit_proc: z.boolean().default(false),
-  assignee_contract: z.string().optional(),
+  assignee_contract: z.uuid().optional(),
 });
 
 export const CancelProjectSchema = z.object({

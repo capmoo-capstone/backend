@@ -268,7 +268,7 @@ export const generateContractNumber = async (
         where: {
           type,
           contract_no: {
-            endsWith: budget_year.toString().slice(-2),
+            endsWith: `/${budget_year.toString().slice(-2)}`,
           },
         },
       })
@@ -302,10 +302,13 @@ export const cancelContractNumber = async (
       },
     });
     if (!contract) {
-      throw new BadRequestError(
-        'Active contract number not found for this project'
-      );
+      throw new BadRequestError('Active contract number not found');
     }
+
+    if (!contract.project) {
+      throw new NotFoundError('Associated project not found');
+    }
+
     await tx.project.update({
       where: { id: contract.project.id },
       data: { contract_no_id: null },
@@ -319,6 +322,7 @@ export const cancelContractNumber = async (
         changed_by: user.id,
       },
     });
+
     return await tx.projectContractNumber.update({
       where: { id: contractId },
       data: { is_active: false, cancellation_reason: reason },

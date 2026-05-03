@@ -21,7 +21,6 @@ import {
   RequestEditProjectResponse,
 } from '../types/project.type';
 import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
-import { stat } from 'node:fs';
 
 export const cancelProject = async (
   user: AuthPayload,
@@ -263,7 +262,7 @@ export const completeProcurementPhase = async (
       dataToUpdate = {
         ...dataToUpdate,
         assignee_contract: {
-          connect: { id: project.assignee_procurement },
+          connect: project.assignee_procurement.map((u) => ({ id: u.id })),
         },
       };
     } else if (data.assignee_contract) {
@@ -300,7 +299,10 @@ export const completeProcurementPhase = async (
     await tx.projectHistory.create({
       data: {
         project_id: data.id,
-        action: ProjectActionType.STATUS_UPDATE,
+        action:
+          !data.assignee_contract && !data.continue_unit_proc
+            ? ProjectActionType.STATUS_UPDATE
+            : ProjectActionType.ASSIGNEE_UPDATE,
         old_value: oldValue,
         new_value: dataToUpdate,
         changed_by: user.id,
