@@ -9,7 +9,7 @@ import {
   PRESIGN_DOWNLOAD_EXPIRES,
   PRESIGN_UPLOAD_EXPIRES,
 } from '../lib/constant';
-import { uuid, uuidv4 } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 
 const BUCKET = process.env.R2_BUCKET_NAME!;
 

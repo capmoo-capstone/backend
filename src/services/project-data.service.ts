@@ -9,7 +9,7 @@ import {
   ProjectsListResponse,
   UpdateProjectDataResponse,
 } from '../types/project.type';
-import { uuidv4 } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 
 const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
