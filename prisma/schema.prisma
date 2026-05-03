@@ -173,6 +173,8 @@ model UserDelegation {
   creator   User  @relation("DelegationCreator", fields: [created_by], references: [id])
   canceller User? @relation("DelegationCanceller", fields: [cancelled_by], references: [id])
 
+  @@index([delegatee_id, is_active])
+  @@index([delegator_id])
   @@map("user_delegations")
 }
 
@@ -187,6 +189,8 @@ model UserOrganizationRole {
   department Department @relation(fields: [dept_id], references: [id])
   unit       Unit?      @relation(fields: [unit_id], references: [id])
 
+  @@index([dept_id])
+  @@index([unit_id])
   @@index([user_id])
   @@map("user_organization_roles")
 }
@@ -240,6 +244,8 @@ model Project {
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
   @@index([requesting_dept_id])
+  @@index([responsible_unit_id])
+  @@index([created_at])
   @@map("projects")
 }
 
@@ -275,6 +281,7 @@ model ProjectCancellation {
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
   approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
 
+  @@index([project_id, is_active])
   @@map("project_cancellations")
 }
 
@@ -291,7 +298,7 @@ model ProjectHistory {
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([project_id])
-  @@index([changed_at])
+  @@index([project_id, action, changed_at(sort: Desc)])
   @@map("project_histories")
 }
 
@@ -355,5 +362,7 @@ model BudgetPlan {
   unit    Unit     @relation(fields: [unit_id], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [project_id], references: [id])
 
+  @@index([unit_id])
+  @@index([project_id])
   @@map("budget_plans")
 }
