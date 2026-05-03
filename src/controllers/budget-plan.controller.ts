@@ -6,13 +6,16 @@ import { AuthenticatedRequest } from '../types/auth.type';
 export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Budget Plan']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, unitId } = req.query;
+  const { page, limit, unitId, available } = req.query;
   const payload = req.user!;
+  const availableBool =
+    available === 'true' ? true : available === 'false' ? false : undefined;
   const data = await BudgetPlanService.listBudgetPlans(
     payload,
     unitId as string,
     parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
+    parseInt(limit as string) || 10,
+    availableBool
   );
   res.status(200).json(data);
 };

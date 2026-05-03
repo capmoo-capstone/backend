@@ -11,12 +11,18 @@ export const listBudgetPlans = async (
   user: AuthPayload,
   unitId: string,
   page: number,
-  limit: number
+  limit: number,
+  available?: boolean
 ): Promise<PaginatedBudgetPlans> => {
   const skip = (page - 1) * limit;
   let where = {};
   if (unitId) {
     where = { unit_id: unitId };
+  }
+  if (available !== undefined) {
+    if (available === true) {
+      where = { ...where, project_id: null };
+    } else where = { ...where, NOT: { project_id: null } };
   }
 
   const [budgetPlans, total] = await Promise.all([
