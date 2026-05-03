@@ -102,7 +102,7 @@ const updateProjectForSubmission = async (
     }
     const contract = await tx.projectContractNumber.update({
       where: { id: contract_no_id },
-      data: { project_id: project.id, is_active: true },
+      data: { project_id: project.id },
       select: { id: true, contract_no: true },
     });
     oldValue['contract_no'] = null;
