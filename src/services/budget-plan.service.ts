@@ -15,12 +15,14 @@ export const listBudgetPlans = async (
   available?: boolean
 ): Promise<PaginatedBudgetPlans> => {
   const skip = (page - 1) * limit;
-  const where = {};
+  let where = {};
   if (unitId) {
-    where['unit_id'] = unitId;
+    where = { unit_id: unitId };
   }
-  if (available && available === true) {
-    where['project_id'] = null;
+  if (available !== undefined) {
+    if (available === true) {
+      where = { ...where, project_id: null };
+    } else where = { ...where, NOT: { project_id: null } };
   }
 
   const [budgetPlans, total] = await Promise.all([
