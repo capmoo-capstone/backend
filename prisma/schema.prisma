@@ -249,7 +249,9 @@ model ProjectContractNumber {
   project_id  String?
   contract_no String
   is_active   Boolean   @default(true)
+  cancellation_reason String?
   created_at  DateTime  @default(now())
+  updated_at  DateTime? @updatedAt
   projects    Project[]
 
   @@index([project_id, is_active])

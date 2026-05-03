@@ -9,6 +9,7 @@ import {
   ProjectsListResponse,
   UpdateProjectDataResponse,
 } from '../types/project.type';
+import { uuidv4 } from 'zod';
 
 const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
@@ -260,31 +261,14 @@ export const generateContractNumber = async (
   budget_year: number
 ): Promise<{ id: string; contract_no: string }> => {
   return await prisma.$transaction(async (tx) => {
-    const lockKey = `${budget_year}:${type}`;
+    const lockKey = `${budget_year}:${type}:${uuidv4()}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-    const availableContractNumber = await tx.projectContractNumber.findFirst({
-      where: {
-        type,
-        contract_no: {
-          endsWith: budget_year.toString(),
-        },
-        is_active: false,
-        project_id: null,
-      },
-      orderBy: { contract_no: 'asc' },
-      select: { id: true, contract_no: true },
-    });
-
-    if (availableContractNumber) {
-      return availableContractNumber;
-    }
-
     const newContractNo = await tx.projectContractNumber
       .count({
         where: {
           type,
           contract_no: {
-            endsWith: budget_year.toString(),
+            endsWith: budget_year.toString().slice(-2),
           },
         },
       })
@@ -296,7 +280,6 @@ export const generateContractNumber = async (
       data: {
         type,
         contract_no: newContractNo,
-        is_active: false,
         project_id: null,
       },
       select: { id: true, contract_no: true },
@@ -307,7 +290,8 @@ export const generateContractNumber = async (
 
 export const cancelContractNumber = async (
   projectId: string,
-  contractId: string
+  contractId: string,
+  reason: string
 ): Promise<{ id: string; contract_no: string; is_active: boolean }> => {
   const contract = await prisma.projectContractNumber.findFirst({
     where: { id: contractId, project_id: projectId, is_active: true },
@@ -319,7 +303,7 @@ export const cancelContractNumber = async (
   }
   return await prisma.projectContractNumber.update({
     where: { id: contractId, project_id: projectId },
-    data: { is_active: false },
+    data: { is_active: false, cancellation_reason: reason },
     select: { id: true, contract_no: true, is_active: true },
   });
 };

@@ -6,6 +6,7 @@ import * as ProjectLifecycleService from '../services/project-lifecycle.service'
 import { AuthenticatedRequest } from '../types/auth.type';
 import {
   AcceptProjectsSchema,
+  CancelContractNumberSchema,
   CancelProjectSchema,
   CreateProjectSchema,
   GetNewContractNumberSchema,
@@ -394,9 +395,17 @@ export const cancelContractNumber = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const id = req.params.id as string;
-  const contractId = req.params.contractId as string;
-  const result = await ProjectDataService.cancelContractNumber(id, contractId);
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/CancelContractNumberDto' } }
+  const { id, contractId, reason } = CancelContractNumberSchema.parse({
+    id: req.params.id,
+    contractId: req.params.contractId,
+    ...req.body,
+  });
+  const result = await ProjectDataService.cancelContractNumber(
+    id,
+    contractId,
+    reason
+  );
   res.status(200).json(result);
 };
 
