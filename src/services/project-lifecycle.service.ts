@@ -233,7 +233,7 @@ export const completeProcurementPhase = async (
 ): Promise<CompleteProcurementPhaseResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
-      where: { id: data.project_id },
+      where: { id: data.id },
       select: {
         status: true,
         current_workflow_type: true,
@@ -262,7 +262,6 @@ export const completeProcurementPhase = async (
     if (data.continue_unit_proc) {
       dataToUpdate = {
         ...dataToUpdate,
-        status: ProjectStatus.IN_PROGRESS,
         assignee_contract: {
           connect: { id: project.assignee_procurement },
         },
@@ -270,7 +269,8 @@ export const completeProcurementPhase = async (
     } else if (data.assignee_contract) {
       dataToUpdate = {
         ...dataToUpdate,
-        status: ProjectStatus.IN_PROGRESS,
+        status: ProjectStatus.WAITING_ACCEPT,
+        responsible_unit_id: CONTRACT_UNIT_ID,
         assignee_contract: { connect: { id: data.assignee_contract } },
       };
     } else {
@@ -281,25 +281,27 @@ export const completeProcurementPhase = async (
       };
     }
 
+    const oldValue = {};
+    for (const key in dataToUpdate) {
+      oldValue[key] = project[key];
+    }
+
     const updated = await tx.project.update({
-      where: { id: data.project_id },
+      where: { id: data.id },
       data: dataToUpdate,
       select: {
         id: true,
         status: true,
         current_workflow_type: true,
         responsible_unit_id: true,
+        assignee_contract: true,
       },
     });
     await tx.projectHistory.create({
       data: {
-        project_id: data.project_id,
+        project_id: data.id,
         action: ProjectActionType.STATUS_UPDATE,
-        old_value: {
-          status: project.status,
-          current_workflow_type: project.current_workflow_type,
-          responsible_unit_id: project.responsible_unit_id,
-        },
+        old_value: oldValue,
         new_value: dataToUpdate,
         changed_by: user.id,
       },

@@ -8,6 +8,7 @@ import {
   AcceptProjectsSchema,
   CancelContractNumberSchema,
   CancelProjectSchema,
+  CompleteProcurementPhaseSchema,
   CreateProjectSchema,
   GetNewContractNumberSchema,
   GetProjectsQueryByUnitSchema,
@@ -317,9 +318,13 @@ export const completeProcurement = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
+  const validatedData = CompleteProcurementPhaseSchema.parse({
+    id: projectId,
+    ...req.body,
+  });
   const project = await ProjectLifecycleService.completeProcurementPhase(
     payload,
-    projectId
+    validatedData
   );
   res.status(200).json(project);
 };

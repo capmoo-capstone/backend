@@ -35,7 +35,6 @@ export const AcceptProjectsSchema = z.object({
 
 export const CompleteProcurementPhaseSchema = z.object({
   id: z.uuid(),
-  project_id: z.uuid(),
   continue_unit_proc: z.boolean().default(false),
   assignee_contract: z.string().optional(),
 });
