@@ -219,7 +219,7 @@ model Project {
   less_no                              String?
   migo_103_no                          String?
   migo_105_no                          String?
-  contract_no_id                       String?
+  contract_no_id                       String?             @unique
   asset_code                           Boolean?
   vendor_name                          String?
   vendor_email                         String?
@@ -250,18 +250,17 @@ model Project {
 }
 
 model ProjectContractNumber {
-  id          String    @id @default(uuid())
-  type        String
-  project_id  String?
-  contract_no String
-  is_active   Boolean   @default(true)
+  id                  String    @id @default(uuid())
+  type                String
+  contract_no         String
+  is_active           Boolean   @default(true)
   cancellation_reason String?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime? @updatedAt
-  projects    Project[]
+  created_at          DateTime  @default(now())
+  updated_at          DateTime? @updatedAt
+  project             Project?
 
-  @@index([project_id, is_active])
   @@unique([type, contract_no])
+  @@index([is_active])
   @@map("project_contract_numbers")
 }
 

@@ -82,14 +82,14 @@ router.post(
   controller.getNewContractNumber
 );
 
-// ── Single project ────────────────────────────────────────────────────────────
-router.get('/:id', controller.getById);
-
 router.patch(
-  '/:id/contract/:contractId/cancel',
+  '/contract/:contractId/cancel',
   requireSupplyAccess,
   controller.cancelContractNumber
 );
+
+// ── Single project ────────────────────────────────────────────────────────────
+router.get('/:id', controller.getById);
 
 router.patch(
   '/:id/claim',

@@ -50,7 +50,6 @@ export const GetNewContractNumberSchema = z.object({
 });
 
 export const CancelContractNumberSchema = z.object({
-  id: z.uuid(),
   contractId: z.uuid(),
   reason: z.string(),
 });

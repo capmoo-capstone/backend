@@ -811,8 +811,18 @@ export const getOwnProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        responsible_unit: {
+          select: {
+            name: true,
+          },
+        },
+        procurement_status: true,
+        procurement_step: true,
+        contract_status: true,
+        contract_step: true,
         requesting_unit: {
           select: {
+            id: true,
             name: true,
             department: { select: { name: true, id: true } },
           },

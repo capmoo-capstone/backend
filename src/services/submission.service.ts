@@ -63,6 +63,7 @@ type ProjectForUpdate = Pick<
   | 'asset_code'
   | 'vendor_name'
   | 'vendor_email'
+  | 'contract_no_id'
 >;
 
 const updateProjectForSubmission = async (
@@ -86,32 +87,13 @@ const updateProjectForSubmission = async (
   }
 
   const oldValue = {};
-  const { contract_no_id, ...otherData } = validated.data;
-  Object.keys(otherData).forEach((key) => {
+  Object.keys(validated.data).forEach((key) => {
     oldValue[key] = project[key];
   });
 
-  if (contract_no_id) {
-    const existingContract = await tx.projectContractNumber.findUnique({
-      where: { id: contract_no_id },
-    });
-    if (!existingContract) {
-      throw new NotFoundError(
-        'Contract not found for the provided contract_no_id'
-      );
-    }
-    const contract = await tx.projectContractNumber.update({
-      where: { id: contract_no_id },
-      data: { project_id: project.id },
-      select: { id: true, contract_no: true },
-    });
-    oldValue['contract_no'] = null;
-    validated['contract_no'] = contract.contract_no;
-  }
-
   await tx.project.update({
     where: { id: project.id },
-    data: otherData,
+    data: validated.data,
   });
 
   await tx.projectHistory.create({
@@ -332,7 +314,7 @@ export const createStaffSubmissionsProject = async (
         pr_no: true,
         po_no: true,
         less_no: true,
-        contract_no: true,
+        contract_no_id: true,
         migo_103_no: true,
         migo_105_no: true,
         asset_code: true,
@@ -620,7 +602,7 @@ export const signAndCompleteSubmission = async (
           pr_no: true,
           po_no: true,
           less_no: true,
-          contract_no: true,
+          contract_no_id: true,
           migo_103_no: true,
           migo_105_no: true,
           asset_code: true,

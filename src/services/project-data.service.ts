@@ -289,22 +289,42 @@ export const generateContractNumber = async (
 };
 
 export const cancelContractNumber = async (
-  projectId: string,
+  user: AuthPayload,
   contractId: string,
   reason: string
 ): Promise<{ id: string; contract_no: string; is_active: boolean }> => {
-  const contract = await prisma.projectContractNumber.findFirst({
-    where: { id: contractId, project_id: projectId, is_active: true },
-  });
-  if (!contract) {
-    throw new BadRequestError(
-      'Active contract number not found for this project'
-    );
-  }
-  return await prisma.projectContractNumber.update({
-    where: { id: contractId, project_id: projectId },
-    data: { is_active: false, cancellation_reason: reason },
-    select: { id: true, contract_no: true, is_active: true },
+  return await prisma.$transaction(async (tx) => {
+    const contract = await tx.projectContractNumber.findFirst({
+      where: { id: contractId, is_active: true },
+      select: {
+        id: true,
+        contract_no: true,
+        project: { select: { id: true } },
+      },
+    });
+    if (!contract) {
+      throw new BadRequestError(
+        'Active contract number not found for this project'
+      );
+    }
+    await tx.project.update({
+      where: { id: contract.project.id },
+      data: { contract_no_id: null },
+    });
+    await tx.projectHistory.create({
+      data: {
+        project_id: contract.project.id,
+        action: ProjectActionType.INFORMATION_UPDATE,
+        old_value: { contract_no: contract.contract_no },
+        new_value: { contract_no: null },
+        changed_by: user.id,
+      },
+    });
+    return await tx.projectContractNumber.update({
+      where: { id: contractId },
+      data: { is_active: false, cancellation_reason: reason },
+      select: { id: true, contract_no: true, is_active: true },
+    });
   });
 };
 

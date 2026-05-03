@@ -396,13 +396,13 @@ export const cancelContractNumber = async (
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CancelContractNumberDto' } }
-  const { id, contractId, reason } = CancelContractNumberSchema.parse({
-    id: req.params.id,
+  const payload = req.user!;
+  const { contractId, reason } = CancelContractNumberSchema.parse({
     contractId: req.params.contractId,
     ...req.body,
   });
   const result = await ProjectDataService.cancelContractNumber(
-    id,
+    payload,
     contractId,
     reason
   );
