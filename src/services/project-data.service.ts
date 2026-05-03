@@ -268,7 +268,7 @@ export const generateContractNumber = async (
         where: {
           type,
           contract_no: {
-            endsWith: `/${budget_year.toString().slice(-2)}`,
+            endsWith: `/${budget_year}`,
           },
         },
       })
