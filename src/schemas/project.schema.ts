@@ -10,7 +10,7 @@ export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   budget: z.number(),
-  budget_year: z.number().optional(),
+  budget_year: z.coerce.number().int().optional(),
   budget_plan_id: z.array(z.string()).optional(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),
@@ -33,6 +33,12 @@ export const AcceptProjectsSchema = z.object({
   id: z.array(z.uuid()),
 });
 
+export const CompleteProcurementPhaseSchema = z.object({
+  id: z.uuid(),
+  continue_unit_proc: z.boolean().default(false),
+  assignee_contract: z.uuid().optional(),
+});
+
 export const CancelProjectSchema = z.object({
   id: z.uuid(),
   reason: z.string(),
@@ -40,6 +46,16 @@ export const CancelProjectSchema = z.object({
 
 export const RequestEditProjectSchema = z.object({
   id: z.uuid(),
+  reason: z.string(),
+});
+
+export const GetNewContractNumberSchema = z.object({
+  type: z.enum(['CU', 'SP', 'PSY', 'NUR', 'HS']),
+  budget_year: z.coerce.number().int(),
+});
+
+export const CancelContractNumberSchema = z.object({
+  contractId: z.uuid(),
   reason: z.string(),
 });
 
@@ -69,7 +85,7 @@ export const ProjectFilterQuerySchema = z
     title: z.string().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
-    fiscalYear: z.union([z.string(), z.number()]).optional(),
+    fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
     status: z.array(z.enum(ProjectStatus)).optional(),
     procurementStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),
@@ -90,6 +106,9 @@ export type UpdateStatusProjectsDto = z.infer<
   typeof UpdateStatusProjectsSchema
 >;
 export type AcceptProjectsDto = z.infer<typeof AcceptProjectsSchema>;
+export type CompleteProcurementPhaseDto = z.infer<
+  typeof CompleteProcurementPhaseSchema
+>;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
 export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;

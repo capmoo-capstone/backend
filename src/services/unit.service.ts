@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma';
 import { Unit, UnitResponsibleType, UserRole } from '@prisma/client';
-import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
+import { BadRequestError, NotFoundError } from '../lib/errors';
 import {
   CreateUnitDto,
   UpdateUnitDto,
@@ -68,7 +68,7 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
   if (data.type && (await checkValidateType(data.id, data.type))) {
     throw new BadRequestError('Unit with the same type already exists');
   }
-  const unit = await prisma.unit.create({
+  return await prisma.unit.create({
     data: {
       id: data.id,
       name: data.name,
@@ -76,10 +76,6 @@ export const createUnit = async (data: CreateUnitDto): Promise<Unit> => {
       dept_id: data.dept_id,
     },
   });
-  if (!unit) {
-    throw new AppError('Failed to create unit', 500);
-  }
-  return unit;
 };
 
 export const updateUnit = async (data: UpdateUnitDto): Promise<Unit> => {

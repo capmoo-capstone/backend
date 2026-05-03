@@ -1,6 +1,6 @@
 import { UserDelegation, UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError } from '../lib/errors';
+import { BadRequestError, NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import * as UserService from './user.service';
 import { DelegationDetail } from '../types/delegation.type';
@@ -15,6 +15,18 @@ export const addDelegation = async (
     UserService.getById(data.delegatee_id),
   ]);
   return await prisma.$transaction(async (tx) => {
+    const validExisting = await tx.userDelegation.findFirst({
+      where: {
+        delegator_id: data.delegator_id,
+        is_active: true,
+        OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
+      },
+    });
+    if (validExisting) {
+      throw new BadRequestError(
+        'An active delegation already exists for this delegator.'
+      );
+    }
     const created = await tx.userDelegation.create({
       data: {
         delegator_id: data.delegator_id,

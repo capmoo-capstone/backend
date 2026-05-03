@@ -144,14 +144,14 @@ model User {
   contract_projects    Project[] @relation("ContractProjects")
   created_projects     Project[] @relation("ProjectCreator")
 
-  submitted_submissions  ProjectSubmission[]   @relation("SubmitBy")
-  approved_submissions   ProjectSubmission[]   @relation("ApprovedBy")
-  proposed_submissions   ProjectSubmission[]   @relation("ProposedBy")
-  completed_submissions  ProjectSubmission[]   @relation("CompletedBy")
-  cancellation_requests  ProjectCancellation[] @relation("CancelRequester")
-  cancellation_approvals ProjectCancellation[] @relation("CancelApprover")
-  delegation_creations UserDelegation[] @relation("DelegationCreator")
-  delegation_cancellations UserDelegation[] @relation("DelegationCanceller")
+  submitted_submissions    ProjectSubmission[]   @relation("SubmitBy")
+  approved_submissions     ProjectSubmission[]   @relation("ApprovedBy")
+  proposed_submissions     ProjectSubmission[]   @relation("ProposedBy")
+  completed_submissions    ProjectSubmission[]   @relation("CompletedBy")
+  cancellation_requests    ProjectCancellation[] @relation("CancelRequester")
+  cancellation_approvals   ProjectCancellation[] @relation("CancelApprover")
+  delegation_creations     UserDelegation[]      @relation("DelegationCreator")
+  delegation_cancellations UserDelegation[]      @relation("DelegationCanceller")
 
   @@map("users")
 }
@@ -168,11 +168,13 @@ model UserDelegation {
   cancelled_at DateTime?
   cancelled_by String?
 
-  delegator User @relation("Delegator", fields: [delegator_id], references: [id])
-  delegatee User @relation("Delegatee", fields: [delegatee_id], references: [id])
-  creator   User @relation("DelegationCreator", fields: [created_by], references: [id])
+  delegator User  @relation("Delegator", fields: [delegator_id], references: [id])
+  delegatee User  @relation("Delegatee", fields: [delegatee_id], references: [id])
+  creator   User  @relation("DelegationCreator", fields: [created_by], references: [id])
   canceller User? @relation("DelegationCanceller", fields: [cancelled_by], references: [id])
 
+  @@index([delegatee_id, is_active])
+  @@index([delegator_id])
   @@map("user_delegations")
 }
 
@@ -187,47 +189,50 @@ model UserOrganizationRole {
   department Department @relation(fields: [dept_id], references: [id])
   unit       Unit?      @relation(fields: [unit_id], references: [id])
 
+  @@index([dept_id])
+  @@index([unit_id])
   @@index([user_id])
   @@map("user_organization_roles")
 }
 
 model Project {
-  id                     String              @id @default(uuid())
-  receive_no             String
-  title                  String
-  description            String?
-  budget                 Decimal             @db.Decimal(18, 2)
-  status                 ProjectStatus
-  procurement_type       ProcurementType
-  current_workflow_type  UnitResponsibleType
-  responsible_unit_id    String
-  requesting_dept_id     String
-  requesting_unit_id     String?
-  is_urgent              UrgentType          @default(NORMAL)
-  expected_approval_date DateTime?
+  id                                   String              @id @default(uuid())
+  receive_no                           String
+  title                                String
+  description                          String?
+  budget                               Decimal             @db.Decimal(18, 2)
+  status                               ProjectStatus
+  procurement_type                     ProcurementType
+  current_workflow_type                UnitResponsibleType
+  responsible_unit_id                  String
+  requesting_dept_id                   String
+  requesting_unit_id                   String?
+  is_urgent                            UrgentType          @default(NORMAL)
+  expected_approval_date               DateTime?
   expected_completion_procurement_date DateTime?
-  procurement_status     ProjectPhaseStatus  @default(NOT_STARTED)
-  procurement_step       Int?
-  contract_status        ProjectPhaseStatus  @default(NOT_STARTED)
-  contract_step          Int?
-  pr_no                  String?
-  po_no                  String?
-  less_no                String?
-  contract_no            String?
-  migo_103_no                String?
-  migo_105_no                String?
-  asset_code             Boolean?
-  vendor_name            String?
-  vendor_email           String?
-  request_edit_reason        String?
-  created_by             String
-  created_at             DateTime            @default(now())
-  updated_at             DateTime?           @updatedAt
+  procurement_status                   ProjectPhaseStatus  @default(NOT_STARTED)
+  procurement_step                     Int?
+  contract_status                      ProjectPhaseStatus  @default(NOT_STARTED)
+  contract_step                        Int?
+  pr_no                                String?
+  po_no                                String?
+  less_no                              String?
+  migo_103_no                          String?
+  migo_105_no                          String?
+  contract_no_id                       String?             @unique
+  asset_code                           Boolean?
+  vendor_name                          String?
+  vendor_email                         String?
+  request_edit_reason                  String?
+  created_by                           String
+  created_at                           DateTime            @default(now())
+  updated_at                           DateTime?           @updatedAt
 
-  creator          User       @relation("ProjectCreator", fields: [created_by], references: [id])
-  requesting_dept  Department @relation(fields: [requesting_dept_id], references: [id])
-  requesting_unit  Unit?      @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
-  responsible_unit Unit?      @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
+  creator          User                   @relation("ProjectCreator", fields: [created_by], references: [id])
+  requesting_dept  Department             @relation(fields: [requesting_dept_id], references: [id])
+  requesting_unit  Unit?                  @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
+  responsible_unit Unit?                  @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
+  contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id])
 
   assignee_procurement User[]                @relation("ProcurementProjects")
   assignee_contract    User[]                @relation("ContractProjects")
@@ -239,7 +244,24 @@ model Project {
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
   @@index([requesting_dept_id])
+  @@index([responsible_unit_id])
+  @@index([created_at])
   @@map("projects")
+}
+
+model ProjectContractNumber {
+  id                  String    @id @default(uuid())
+  type                String
+  contract_no         String
+  is_active           Boolean   @default(true)
+  cancellation_reason String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime? @updatedAt
+  project             Project?
+
+  @@unique([type, contract_no])
+  @@index([is_active])
+  @@map("project_contract_numbers")
 }
 
 model ProjectCancellation {
@@ -258,23 +280,24 @@ model ProjectCancellation {
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
   approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
 
+  @@index([project_id, is_active])
   @@map("project_cancellations")
 }
 
 model ProjectHistory {
-  id         String        @id @default(uuid())
+  id         String            @id @default(uuid())
   project_id String
   action     ProjectActionType
   old_value  Json
   new_value  Json
   comment    String?
   changed_by String
-  changed_at DateTime      @default(now())
+  changed_at DateTime          @default(now())
 
   project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([project_id])
-  @@index([changed_at])
+  @@index([project_id, action, changed_at(sort: Desc)])
   @@map("project_histories")
 }
 
@@ -338,5 +361,7 @@ model BudgetPlan {
   unit    Unit     @relation(fields: [unit_id], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [project_id], references: [id])
 
+  @@index([unit_id])
+  @@index([project_id])
   @@map("budget_plans")
 }

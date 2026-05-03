@@ -14,8 +14,12 @@ router.patch(
   requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT, ADMIN]),
   controller.updateSupplyRole
 );
-router.post('/:id/role', requireSuperAdmin, controller.addRole);
-router.patch('/:id/role/remove', requireSuperAdmin, controller.removeRole);
+router.post('/:id/role', requireSupplyRoles([ADMIN]), controller.addRole);
+router.patch(
+  '/:id/role/remove',
+  requireSupplyRoles([ADMIN]),
+  controller.removeRole
+);
 router.delete('/:id', requireSuperAdmin, controller.removeUser);
 
 export default router;

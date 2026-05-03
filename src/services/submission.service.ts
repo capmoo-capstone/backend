@@ -21,7 +21,6 @@ import {
   ApprovedSubmissionResponse,
   CompletedSubmissionResponse,
   GetSubmissionRoundDto,
-  ProjectDocument,
   ProjectSubmissionsResponse,
   ProposedSubmissionResponse,
   RejectedSubmissionResponse,
@@ -53,10 +52,24 @@ const getSubmissionRound = async (
   return lastSubmission + 1;
 };
 
+type ProjectForUpdate = Pick<
+  Project,
+  | 'id'
+  | 'pr_no'
+  | 'po_no'
+  | 'less_no'
+  | 'migo_103_no'
+  | 'migo_105_no'
+  | 'asset_code'
+  | 'vendor_name'
+  | 'vendor_email'
+  | 'contract_no_id'
+>;
+
 const updateProjectForSubmission = async (
   tx: Prisma.TransactionClient,
-  project: Partial<Project>,
-  meta_data = [],
+  project: ProjectForUpdate,
+  meta_data: any[],
   userId: string
 ) => {
   const dataToUpdate = {};
@@ -301,7 +314,7 @@ export const createStaffSubmissionsProject = async (
         pr_no: true,
         po_no: true,
         less_no: true,
-        contract_no: true,
+        contract_no_id: true,
         migo_103_no: true,
         migo_105_no: true,
         asset_code: true,
@@ -589,7 +602,7 @@ export const signAndCompleteSubmission = async (
           pr_no: true,
           po_no: true,
           less_no: true,
-          contract_no: true,
+          contract_no_id: true,
           migo_103_no: true,
           migo_105_no: true,
           asset_code: true,

@@ -6,8 +6,11 @@ import * as ProjectLifecycleService from '../services/project-lifecycle.service'
 import { AuthenticatedRequest } from '../types/auth.type';
 import {
   AcceptProjectsSchema,
+  CancelContractNumberSchema,
   CancelProjectSchema,
+  CompleteProcurementPhaseSchema,
   CreateProjectSchema,
+  GetNewContractNumberSchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditProjectSchema,
@@ -315,9 +318,13 @@ export const completeProcurement = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
+  const validatedData = CompleteProcurementPhaseSchema.parse({
+    id: projectId,
+    ...req.body,
+  });
   const project = await ProjectLifecycleService.completeProcurementPhase(
     payload,
-    projectId
+    validatedData
   );
   res.status(200).json(project);
 };
@@ -358,6 +365,7 @@ export const requestEditProject = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/RequestEditProjectDto' } }
   const payload = req.user!;
   const projectId = req.params.id as string;
   const validatedData = RequestEditProjectSchema.parse({
@@ -369,6 +377,41 @@ export const requestEditProject = async (
     validatedData
   );
   res.status(200).json(project);
+};
+
+export const getNewContractNumber = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/GetNewContractNumberDto' } }
+  const { type, budget_year } = GetNewContractNumberSchema.parse(req.body);
+  const result = await ProjectDataService.generateContractNumber(
+    type,
+    budget_year
+  );
+  res.status(200).json(result);
+};
+
+export const cancelContractNumber = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/CancelContractNumberDto' } }
+  const payload = req.user!;
+  const { contractId, reason } = CancelContractNumberSchema.parse({
+    contractId: req.params.contractId,
+    ...req.body,
+  });
+  const result = await ProjectDataService.cancelContractNumber(
+    payload,
+    contractId,
+    reason
+  );
+  res.status(200).json(result);
 };
 
 export const updateProject = async (

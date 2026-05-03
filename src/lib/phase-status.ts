@@ -3,7 +3,6 @@ import {
   SubmissionStatus,
   UnitResponsibleType,
   Prisma,
-  SubmissionType,
 } from '@prisma/client';
 import { WORKFLOW_STEP_ORDERS } from './constant';
 
@@ -41,7 +40,6 @@ const computePhaseStatus = async (
   const submissions = await tx.projectSubmission.findMany({
     where: {
       project_id: projectId,
-      submission_type: SubmissionType.STAFF,
       workflow_type: workflowType,
     },
     orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],

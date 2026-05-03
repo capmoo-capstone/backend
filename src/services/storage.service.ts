@@ -9,7 +9,7 @@ import {
   PRESIGN_DOWNLOAD_EXPIRES,
   PRESIGN_UPLOAD_EXPIRES,
 } from '../lib/constant';
-import { uuid, uuidv4 } from 'zod';
+import { randomUUID } from 'crypto';
 
 const BUCKET = process.env.R2_BUCKET_NAME!;
 
@@ -22,7 +22,7 @@ export const buildObjectKey = (params: {
   fileName: string;
 }): string => {
   const { projectId, workflowType, stepOrder, fileName } = params;
-  const uuid = uuidv4();
+  const uuid = randomUUID();
   const safe = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_'); // sanitize filename
   return `${projectId}/submissions/${workflowType}/step${stepOrder}/${uuid}-${safe}`;
 };
@@ -32,7 +32,7 @@ export const buildVendorObjectKey = (params: {
   fileName: string;
 }): string => {
   const { poNo, fileName } = params;
-  const uuid = uuidv4();
+  const uuid = randomUUID();
   const safe = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
   return `vendors/${poNo}/${uuid}-${safe}`;
 };

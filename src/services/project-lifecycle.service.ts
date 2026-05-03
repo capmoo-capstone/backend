@@ -10,6 +10,7 @@ import { NotFoundError, BadRequestError } from '../lib/errors';
 import { AuthPayload } from '../types/auth.type';
 import {
   CancelProjectDto,
+  CompleteProcurementPhaseDto,
   RequestEditProjectDto,
 } from '../schemas/project.schema';
 import {
@@ -227,16 +228,17 @@ export const rejectCancellation = async (
 
 export const completeProcurementPhase = async (
   user: AuthPayload,
-  projectId: string
+  data: CompleteProcurementPhaseDto
 ): Promise<CompleteProcurementPhaseResponse> => {
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
-      where: { id: projectId },
+      where: { id: data.id },
       select: {
         status: true,
         current_workflow_type: true,
         procurement_status: true,
         responsible_unit_id: true,
+        assignee_procurement: true,
       },
     });
     if (!project) {
@@ -252,34 +254,57 @@ export const completeProcurementPhase = async (
       throw new BadRequestError('Project is already in CONTRACT workflow type');
     }
 
-    const updated = await tx.project.update({
-      where: { id: projectId },
-      data: {
-        status: ProjectStatus.UNASSIGNED,
-        current_workflow_type: UnitResponsibleType.CONTRACT,
+    let dataToUpdate: any = {
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    };
+
+    if (data.continue_unit_proc) {
+      dataToUpdate = {
+        ...dataToUpdate,
+        assignee_contract: {
+          connect: project.assignee_procurement.map((u) => ({ id: u.id })),
+        },
+      };
+    } else if (data.assignee_contract) {
+      dataToUpdate = {
+        ...dataToUpdate,
+        status: ProjectStatus.WAITING_ACCEPT,
         responsible_unit_id: CONTRACT_UNIT_ID,
-      },
+        assignee_contract: { connect: { id: data.assignee_contract } },
+      };
+    } else {
+      dataToUpdate = {
+        ...dataToUpdate,
+        status: ProjectStatus.UNASSIGNED,
+        responsible_unit_id: CONTRACT_UNIT_ID,
+      };
+    }
+
+    const oldValue = {};
+    for (const key in dataToUpdate) {
+      oldValue[key] = project[key];
+    }
+
+    const updated = await tx.project.update({
+      where: { id: data.id },
+      data: dataToUpdate,
       select: {
         id: true,
         status: true,
         current_workflow_type: true,
         responsible_unit_id: true,
+        assignee_contract: true,
       },
     });
     await tx.projectHistory.create({
       data: {
-        project_id: projectId,
-        action: ProjectActionType.STATUS_UPDATE,
-        old_value: {
-          status: project.status,
-          current_workflow_type: project.current_workflow_type,
-          responsible_unit_id: project.responsible_unit_id,
-        },
-        new_value: {
-          status: ProjectStatus.UNASSIGNED,
-          current_workflow_type: UnitResponsibleType.CONTRACT,
-          responsible_unit_id: CONTRACT_UNIT_ID,
-        },
+        project_id: data.id,
+        action:
+          !data.assignee_contract && !data.continue_unit_proc
+            ? ProjectActionType.STATUS_UPDATE
+            : ProjectActionType.ASSIGNEE_UPDATE,
+        old_value: oldValue,
+        new_value: dataToUpdate,
         changed_by: user.id,
       },
     });
