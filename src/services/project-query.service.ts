@@ -765,12 +765,38 @@ export const getOwnProjects = async (
       procurementUnitIds.length > 0
     ) {
       orClauses.push({
-        AND: [
-          { assignee_procurement: { some: { id: user.id } } },
+        OR: [
+          // Case: Procurement staff work on projects in procurement phase
           {
-            procurement_status: {
-              not: ProjectPhaseStatus.COMPLETED,
-            },
+            AND: [
+              { assignee_procurement: { some: { id: user.id } } },
+              {
+                procurement_status: {
+                  notIn: [
+                    ProjectPhaseStatus.COMPLETED,
+                    ProjectPhaseStatus.NOT_STARTED,
+                  ],
+                },
+              },
+            ],
+          },
+          // Case : Procurement staff work on the contract after procurement completion
+          {
+            AND: [
+              { current_workflow_type: UnitResponsibleType.CONTRACT },
+              { responsible_unit_id: { in: procurementUnitIds } },
+              { assignee_contract: { some: { id: user.id } } },
+              { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
+              {
+                contract_status: {
+                  notIn: [
+                    ProjectPhaseStatus.COMPLETED,
+                    ProjectPhaseStatus.NOT_EXPORTED,
+                    ProjectPhaseStatus.NOT_STARTED,
+                  ],
+                },
+              },
+            ],
           },
         ],
       });
