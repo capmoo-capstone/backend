@@ -6,11 +6,11 @@ import pg from 'pg';
 const connectionString = env('DATABASE_URL');
 
 const pool = new pg.Pool({
+  max: 10,
   connectionString,
-  idleTimeoutMillis: 10000, // close idle after 10s
-  connectionTimeoutMillis: 7500, // throw within 7.5s
+  idleTimeoutMillis: 30000, // close idle after 30s
+  connectionTimeoutMillis: 5000, // throw within 5s
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
 });
 
 pool.on('error', (err) => {
