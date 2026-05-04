@@ -35,6 +35,7 @@ const allowedOrigins = [
   'http://localhost:3000', // Express local dev
   'https://nexus-procure.pages.dev', // Cloudflare Pages production
   'https://dev.nexus-procure.pages.dev', // Cloudflare Pages development
+  'https://nexus-procure-vendors-portal.pages.dev', // Cloudflare Pages production for vendor portal
   'https://nexus-procure-backend.vercel.app', // Vercel production
   'https://dev-nexus-procure-backend.vercel.app', // Vercel development
 ];
