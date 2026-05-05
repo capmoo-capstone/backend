@@ -15,13 +15,30 @@ import {
   AuthPayload,
 } from '../types/auth.type';
 import { clearUserAuthCache } from '../lib/auth-cache';
+import bcrypt from 'bcrypt';
 
-export const fetchAndFormatUserDetails = async (
-  whereClause: any
-): Promise<FetchAndFormatUserDetailsResponse | null> => {
+export const fetchAndFormatUserDetails = async (whereClause: {
+  username: string;
+  password: string;
+}): Promise<FetchAndFormatUserDetailsResponse | null> => {
   const now = new Date();
+
+  const decryptedPassword = bcrypt.compareSync(
+    whereClause.password,
+    (
+      await prisma.user.findUnique({
+        where: { username: whereClause.username },
+        select: { password: true },
+      })
+    )?.password || ''
+  );
+
+  if (!decryptedPassword) {
+    return null;
+  }
+
   const user = await prisma.user.findFirst({
-    where: whereClause,
+    where: { username: whereClause.username },
     include: {
       roles: {
         include: {
@@ -89,9 +106,9 @@ export const fetchAndFormatUserDetails = async (
 
 export const login = async (
   username: string,
-  full_name: string
+  password: string
 ): Promise<LoginResponse> => {
-  const result = await fetchAndFormatUserDetails({ username, full_name });
+  const result = await fetchAndFormatUserDetails({ username, password });
 
   if (!result) {
     throw new UnauthorizedError('Invalid credentials');
@@ -151,9 +168,12 @@ export const register = async (
       throw new NotFoundError('Unit not found in this department');
     }
 
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
     const newUser = await tx.user.create({
       data: {
         username: data.username,
+        password: hashedPassword,
         full_name: data.full_name,
         email: data.email,
         roles: {

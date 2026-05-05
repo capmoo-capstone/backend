@@ -12,6 +12,7 @@ import {
 import { prisma } from '../src/config/prisma';
 import { WORKFLOW_STEP_ORDERS } from '../src/lib/constant';
 import { syncProjectPhases } from '../src/lib/phase-status';
+import bcrypt from 'bcrypt';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = new Date();
@@ -172,102 +173,119 @@ const seedUsers = async () => {
         username: 'super_admin',
         email: 'super_admin@example.test',
         full_name: 'Super Admin',
+        password: bcrypt.hashSync('super_admin', 10),
       },
       {
         id: ids.users.admin,
         username: 'admin',
         email: 'admin@example.test',
         full_name: 'Admin',
+        password: bcrypt.hashSync('admin', 10),
       },
       {
         id: ids.users.supplyHead,
         username: 'supply_head',
         email: 'supply_head@example.test',
         full_name: 'Supply Head',
+        password: bcrypt.hashSync('supply_head', 10),
       },
       {
         id: ids.users.procHeadLt,
         username: 'proc_head1',
         email: 'proc_head1@example.test',
         full_name: 'Procurement Head1',
+        password: bcrypt.hashSync('proc_head1', 10),
       },
       {
         id: ids.users.procHeadHigh,
         username: 'proc_head2',
         email: 'proc_head2@example.test',
         full_name: 'Procurement Head2',
+        password: bcrypt.hashSync('proc_head2', 10),
       },
       {
         id: ids.users.contractHead,
         username: 'contract_head',
         email: 'contract_head@example.test',
         full_name: 'Contract Head',
+        password: bcrypt.hashSync('contract_head', 10),
       },
       {
         id: ids.users.procurementLt,
         username: 'procurement1',
         email: 'procurement1@example.test',
         full_name: 'Procurement1',
+        password: bcrypt.hashSync('procurement1', 10),
       },
       {
         id: ids.users.procurementHigh,
         username: 'procurement2',
         email: 'procurement2@example.test',
         full_name: 'Procurement2',
+        password: bcrypt.hashSync('procurement2', 10),
       },
       {
         id: ids.users.contractStaff,
         username: 'contract',
         email: 'contract@example.test',
         full_name: 'Contract',
+        password: bcrypt.hashSync('contract', 10),
       },
       {
         id: ids.users.financeStaff,
         username: 'finance_staff',
         email: 'finance_staff@example.test',
         full_name: 'Finance Staff',
+        password: bcrypt.hashSync('finance_staff', 10),
       },
       {
         id: ids.users.documentStaff,
         username: 'document_staff',
         email: 'document_staff@example.test',
         full_name: 'Document Staff',
+        password: bcrypt.hashSync('document_staff', 10),
       },
       {
         id: ids.users.facilitiesRep,
         username: 'facilities_rep',
         email: 'facilities_rep@example.test',
         full_name: 'Facilities Rep',
+        password: bcrypt.hashSync('facilities_rep', 10),
       },
       {
         id: ids.users.maintenanceRep,
         username: 'maintenance_rep',
         email: 'maintenance_rep@example.test',
         full_name: 'Maintenance Rep',
+        password: bcrypt.hashSync('maintenance_rep', 10),
       },
       {
         id: ids.users.itRep,
         username: 'registration_staff',
         email: 'registration_staff@example.test',
         full_name: 'Registration Staff',
+        password: bcrypt.hashSync('registration_staff', 10),
       },
       {
         id: ids.users.libraryStaff,
-        username: 'student_affairs_staff',
-        email: 'student_affairs_staff@example.test',
-        full_name: 'Student Affairs Staff',
+        username: 'student_affairs_rep',
+        email: 'student_affairs_rep@example.test',
+        full_name: 'Student Affairs Rep',
+        password: bcrypt.hashSync('student_affairs_rep', 10),
       },
       {
         id: ids.users.delegatedStaff,
         username: 'delegated_staff',
         email: 'delegated_staff@example.test',
         full_name: 'Delegated Staff',
+        password: bcrypt.hashSync('delegated_staff', 10),
       },
       {
         id: ids.users.guest,
         username: 'guest',
         email: 'guest@example.test',
         full_name: 'Guest',
+        password: bcrypt.hashSync('guest', 10),
       },
     ],
   });
@@ -526,7 +544,6 @@ const createProject = async (data: {
       pr_no: data.prNo,
       po_no: data.poNo,
       less_no: data.lessNo,
-      contract_no: data.contractNo,
       migo_103_no: data.migo103No,
       migo_105_no: data.migo105No,
       vendor_name: data.vendorName,
@@ -641,7 +658,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.unassigned,
-    receiveSuffix: 90001,
+    receiveSuffix: 1,
     title: 'User Testing - New chairs for reading room',
     description: 'UNASSIGNED LT100K project for claim and assignment testing.',
     budget: 75000,
@@ -655,7 +672,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.waitingAccept,
-    receiveSuffix: 90002,
+    receiveSuffix: 2,
     title: 'User Testing - Replacement laptops',
     description: 'WAITING_ACCEPT project assigned to Procurement Team 1.',
     budget: 320000,
@@ -670,7 +687,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.waitingApproval,
-    receiveSuffix: 90003,
+    receiveSuffix: 3,
     title: 'User Testing - Network monitoring sensors',
     description:
       'IN_PROGRESS project with a staff submission waiting approval.',
@@ -704,7 +721,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.waitingProposal,
-    receiveSuffix: 90004,
+    receiveSuffix: 4,
     title: 'User Testing - Accounting software renewal',
     description:
       'IN_PROGRESS MT500K project with a submission waiting proposal/signature flow.',
@@ -716,7 +733,7 @@ const seedProjects = async () => {
     createdBy: ids.users.financeStaff,
     procurementStatus: ProjectPhaseStatus.WAITING_PROPOSAL,
     procurementStep: 3,
-    prNo: `${fy}-PR-UT-90004`,
+    prNo: `${fy}-PR-UT-4`,
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
   await seedCompletedSteps(
@@ -738,7 +755,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.procurementComplete,
-    receiveSuffix: 90005,
+    receiveSuffix: 5,
     title: 'User Testing - Data center UPS upgrade',
     description:
       'EBIDDING project with procurement phase completed and ready to move to contract.',
@@ -749,7 +766,7 @@ const seedProjects = async () => {
     requestingUnitId: null,
     createdBy: ids.users.itRep,
     expectedCompletionDays: 20,
-    prNo: `${fy}-PR-UT-90005`,
+    prNo: `${fy}-PR-UT-5`,
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
   await seedCompletedSteps(
@@ -769,7 +786,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.contractActive,
-    receiveSuffix: 90006,
+    receiveSuffix: 6,
     title: 'User Testing - Security service contract',
     description: 'CONTRACT workflow currently in progress.',
     budget: 2400000,
@@ -782,9 +799,9 @@ const seedProjects = async () => {
     procurementStatus: ProjectPhaseStatus.COMPLETED,
     contractStatus: ProjectPhaseStatus.IN_PROGRESS,
     contractStep: 2,
-    prNo: `${fy}-PR-UT-90006`,
-    poNo: `${fy}-PO-UT-90006`,
-    lessNo: `${fy}-LESS-UT-90006`,
+    prNo: `${fy}-PR-UT-6`,
+    poNo: `${fy}-PO-UT-6`,
+    lessNo: `${fy}-LESS-UT-6`,
     vendorName: 'SecureWorks User Testing Co., Ltd.',
     vendorEmail: 'vendor.security@example.test',
     procurementAssigneeIds: [ids.users.procurementHigh],
@@ -800,7 +817,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.contractReadyExport,
-    receiveSuffix: 90007,
+    receiveSuffix: 7,
     title: 'User Testing - Building maintenance contract',
     description: 'CONTRACT workflow with all contract steps submitted.',
     budget: 1250000,
@@ -811,10 +828,10 @@ const seedProjects = async () => {
     requestingUnitId: 'UNIT-MAINT',
     createdBy: ids.users.maintenanceRep,
     procurementStatus: ProjectPhaseStatus.COMPLETED,
-    prNo: `${fy}-PR-UT-90007`,
-    poNo: `${fy}-PO-UT-90007`,
-    lessNo: `${fy}-LESS-UT-90007`,
-    contractNo: `${fy}-CON-UT-90007`,
+    prNo: `${fy}-PR-UT-7`,
+    poNo: `${fy}-PO-UT-7`,
+    lessNo: `${fy}-LESS-UT-7`,
+    contractNo: `${fy}-CON-UT-7`,
     vendorName: 'Maintain Plus User Testing Ltd.',
     vendorEmail: 'vendor.maintenance@example.test',
     procurementAssigneeIds: [ids.users.procurementHigh],
@@ -842,14 +859,14 @@ const seedProjects = async () => {
     submittedBy: null,
     completedBy: ids.users.contractStaff,
     submissionType: SubmissionType.VENDOR,
-    poNo: `${fy}-PO-UT-90007`,
+    poNo: `${fy}-PO-UT-7`,
     fieldKey: 'vendor_invoice',
-    fileName: 'vendor_invoice_90007.pdf',
+    fileName: 'vendor_invoice_7.pdf',
   });
 
   await createProject({
     id: ids.projects.closed,
-    receiveSuffix: 90008,
+    receiveSuffix: 8,
     title: 'User Testing - Completed tablet procurement',
     description: 'CLOSED project for request-edit and history testing.',
     budget: 285000,
@@ -861,11 +878,11 @@ const seedProjects = async () => {
     createdBy: ids.users.libraryStaff,
     procurementStatus: ProjectPhaseStatus.COMPLETED,
     contractStatus: ProjectPhaseStatus.COMPLETED,
-    prNo: `${fy}-PR-UT-90008`,
-    poNo: `${fy}-PO-UT-90008`,
-    contractNo: `${fy}-CON-UT-90008`,
-    migo103No: `${fy}-MIGO-UT-90008`,
-    migo105No: `${fy}-MIGO-UT-90008`,
+    prNo: `${fy}-PR-UT-8`,
+    poNo: `${fy}-PO-UT-8`,
+    contractNo: `${fy}-CON-UT-8`,
+    migo103No: `${fy}-MIGO-UT-8`,
+    migo105No: `${fy}-MIGO-UT-8`,
     vendorName: 'Tablet Supply User Testing Co.',
     vendorEmail: 'vendor.tablet@example.test',
     procurementAssigneeIds: [ids.users.procurementLt],
@@ -874,7 +891,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.waitingCancel,
-    receiveSuffix: 90009,
+    receiveSuffix: 9,
     title: 'User Testing - Air purifier order',
     description: 'WAITING_CANCEL project with an active cancellation request.',
     budget: 98000,
@@ -891,7 +908,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.cancelled,
-    receiveSuffix: 90010,
+    receiveSuffix: 10,
     title: 'User Testing - Cancelled printer repair',
     description: 'CANCELLED project for archive/list filtering tests.',
     budget: 43000,
@@ -905,7 +922,7 @@ const seedProjects = async () => {
 
   await createProject({
     id: ids.projects.requestEdit,
-    receiveSuffix: 90011,
+    receiveSuffix: 11,
     title: 'User Testing - Edited projector purchase',
     description: 'REQUEST_EDIT project with a requester-provided reason.',
     budget: 155000,
@@ -918,15 +935,15 @@ const seedProjects = async () => {
     procurementStatus: ProjectPhaseStatus.COMPLETED,
     contractStatus: ProjectPhaseStatus.COMPLETED,
     requestEditReason: 'Requester needs to update warranty details.',
-    prNo: `${fy}-PR-UT-90011`,
-    poNo: `${fy}-PO-UT-90011`,
+    prNo: `${fy}-PR-UT-11`,
+    poNo: `${fy}-PO-UT-11`,
     procurementAssigneeIds: [ids.users.procurementLt],
     contractAssigneeIds: [ids.users.contractStaff],
   });
 
   await createProject({
     id: ids.projects.internal,
-    receiveSuffix: 90012,
+    receiveSuffix: 12,
     title: 'User Testing - Internal spare parts transfer',
     description: 'INTERNAL procurement workflow coverage.',
     budget: 510000,

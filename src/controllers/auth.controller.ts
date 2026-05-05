@@ -5,16 +5,17 @@ import { AuthenticatedRequest } from '../types/auth.type';
 
 export const login = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
-  const { username, full_name } = req.body;
-  const data = await AuthService.login(username, full_name);
+  const { username, password } = req.body;
+  const data = await AuthService.login(username, password);
   res.status(200).json(data);
 };
 
 export const register = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
-  const { username, full_name, role, dept_id, unit_id } = req.body;
+  const { username, password, full_name, role, dept_id, unit_id } = req.body;
   const validatedData = RegisterUserSchema.parse({
     username,
+    password,
     full_name,
     role,
     dept_id,

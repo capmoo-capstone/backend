@@ -5,6 +5,7 @@ export const RegisterUserSchema = z.object({
   username: z.string(),
   full_name: z.string(),
   email: z.email().optional(),
+  password: z.string().min(6),
   role: z.enum(UserRole).default(UserRole.GUEST),
   dept_id: z.string(),
   unit_id: z.string().optional(),
