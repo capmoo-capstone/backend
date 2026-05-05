@@ -17,28 +17,13 @@ import {
 import { clearUserAuthCache } from '../lib/auth-cache';
 import bcrypt from 'bcrypt';
 
-export const fetchAndFormatUserDetails = async (whereClause: {
-  username: string;
-  password: string;
-}): Promise<FetchAndFormatUserDetailsResponse | null> => {
+export const fetchAndFormatUserDetails = async (
+  whereClause: any
+): Promise<FetchAndFormatUserDetailsResponse | null> => {
   const now = new Date();
 
-  const decryptedPassword = bcrypt.compareSync(
-    whereClause.password,
-    (
-      await prisma.user.findUnique({
-        where: { username: whereClause.username },
-        select: { password: true },
-      })
-    )?.password || ''
-  );
-
-  if (!decryptedPassword) {
-    return null;
-  }
-
-  const user = await prisma.user.findFirst({
-    where: { username: whereClause.username },
+  const user = await prisma.user.findUnique({
+    where: whereClause,
     include: {
       roles: {
         include: {
@@ -108,7 +93,25 @@ export const login = async (
   username: string,
   password: string
 ): Promise<LoginResponse> => {
-  const result = await fetchAndFormatUserDetails({ username, password });
+  const userRecord = await prisma.user.findUnique({
+    where: { username },
+    select: { id: true, password: true },
+  });
+
+  if (!userRecord) {
+    throw new UnauthorizedError('Invalid username or password');
+  }
+
+  const checkPassword = bcrypt.compareSync(
+    password,
+    userRecord?.password || ''
+  );
+
+  if (!checkPassword) {
+    throw new UnauthorizedError('Invalid username or password');
+  }
+
+  const result = await fetchAndFormatUserDetails({ id: userRecord.id });
 
   if (!result) {
     throw new UnauthorizedError('Invalid credentials');
