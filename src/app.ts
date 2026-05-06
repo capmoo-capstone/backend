@@ -38,6 +38,7 @@ const allowedOrigins = [
   'https://cst.nexus-procure.pages.dev', // Cloudflare Pages development
   'https://nexus-procure-vendors-portal.pages.dev', // Cloudflare Pages production for vendor portal
   'https://nexus-procure-backend.vercel.app', // Vercel production
+  'https://cst-nexus-procure-backend.vercel.app', // Vercel CST environment
   'https://dev-nexus-procure-backend.vercel.app', // Vercel development
 ];
 
