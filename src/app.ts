@@ -78,9 +78,11 @@ const swaggerUiOptions: swaggerUi.SwaggerUiOptions = {
 const serverUrl =
   process.env.NODE_ENV === 'production'
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/v1`
-    : process.env.NODE_ENV === 'development'
-      ? `https://dev-nexus-procure-backend.vercel.app/api/v1`
-      : 'http://localhost:3000/api/v1';
+    : process.env.NODE_ENV === 'cst'
+      ? `https://cst-nexus-procure-backend.vercel.app/api/v1`
+      : process.env.NODE_ENV === 'development'
+        ? `https://dev-nexus-procure-backend.vercel.app/api/v1`
+        : 'http://localhost:3000/api/v1';
 
 (swaggerDocument as any).servers = [{ url: serverUrl }];
 
