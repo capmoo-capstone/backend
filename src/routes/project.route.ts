@@ -40,11 +40,7 @@ router.get(
   requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT, GENERAL_STAFF]),
   controller.getWaitingCancellation
 );
-router.get(
-  '/own',
-  requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT, GENERAL_STAFF]),
-  controller.getOwnProjects
-);
+router.get('/own', requireSupplyAccess, controller.getOwnProjects);
 router.get(
   '/workload',
   requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT]),
