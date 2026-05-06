@@ -822,6 +822,41 @@ export const getOwnProjects = async (
       });
     }
 
+    if (user.roles.some((r) => r.role === UserRole.FINANCE_STAFF)) {
+      // FINANCE_STAFF can see all projects in contract NOT_EXPORTED status
+      orClauses.push({
+        AND: [
+          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
+          { contract_status: { equals: ProjectPhaseStatus.NOT_EXPORTED } },
+        ],
+      });
+    }
+
+    if (user.roles.some((r) => r.role === UserRole.DOCUMENT_STAFF)) {
+      // DOCUMENT_STAFF can see all projects
+      orClauses.push({
+        OR: [
+          {
+            procurement_status: {
+              notIn: [
+                ProjectPhaseStatus.NOT_STARTED,
+                ProjectPhaseStatus.COMPLETED,
+              ],
+            },
+          },
+          {
+            contract_status: {
+              notIn: [
+                ProjectPhaseStatus.NOT_STARTED,
+                ProjectPhaseStatus.NOT_EXPORTED,
+                ProjectPhaseStatus.COMPLETED,
+              ],
+            },
+          },
+        ],
+      });
+    }
+
     where = orClauses.length > 0 ? { OR: orClauses } : { id: 'none' };
   }
 
