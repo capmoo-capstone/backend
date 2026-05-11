@@ -1,5 +1,6 @@
 import { ProjectActionType, Prisma, Project } from '@prisma/client';
 import {
+  ProjectPhaseStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
@@ -21,13 +22,13 @@ import {
   ApprovedSubmissionResponse,
   CompletedSubmissionResponse,
   GetSubmissionRoundDto,
-  ProjectSubmissionsResponse,
   ProposedSubmissionResponse,
   RejectedSubmissionResponse,
   SubmissionActionResponse,
   VendorSubmissionsResponse,
 } from '../types/submission.type';
 import { generatePresignedDownloadUrl } from './storage.service';
+import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -110,7 +111,7 @@ const updateProjectForSubmission = async (
 export const getProjectSubmissions = async (
   _user: AuthPayload,
   projectId: string
-): Promise<ProjectSubmissionsResponse> => {
+): Promise<any> => {
   const project = await prisma.project
     .findUniqueOrThrow({
       where: { id: projectId },
@@ -122,7 +123,7 @@ export const getProjectSubmissions = async (
 
   const submissionData = await prisma.projectSubmission.findMany({
     where: { project_id: projectId },
-    orderBy: { submitted_at: 'desc' },
+    orderBy: [{ step_order: 'asc'}, { submission_round: 'desc' }],
     include: {
       documents: true,
       submitter: { select: { full_name: true } },
@@ -154,19 +155,44 @@ export const getProjectSubmissions = async (
     }))
   );
 
-  const contractSubmissions = formattedSubmissions.filter(
-    (submission) => submission.workflow_type === UnitResponsibleType.CONTRACT
-  );
+  const groupByStepOrder = (
+    submissions: typeof formattedSubmissions,
+    workflowType: UnitResponsibleType
+  ) => {
+    const map = new Map<number, { step_order: number; step_status: SubmissionStatus | 'NOT_STARTED'; data: typeof formattedSubmissions }>();
+
+    for (const stepOrder of WORKFLOW_STEP_ORDERS[workflowType]) {
+      map.set(stepOrder, {
+        step_order: stepOrder,
+        step_status: 'NOT_STARTED',
+        data: [],
+      });
+    }
+
+    for (const submission of submissions) {
+      const existing = map.get(submission.step_order);
+      if (!existing) continue;
+      if (existing.step_status === 'NOT_STARTED') {
+        existing.step_status = submission.status;
+      }
+      existing.data.push(submission);
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.step_order - b.step_order);
+  };
+
+  const procurementWorkflow = project.procurement_type as unknown as UnitResponsibleType;
 
   const procurementSubmissions = formattedSubmissions.filter(
-    (submission) =>
-      submission.workflow_type ===
-      (project?.procurement_type as UnitResponsibleType)
+    (s) => s.workflow_type === procurementWorkflow
+  );
+  const contractSubmissions = formattedSubmissions.filter(
+    (s) => s.workflow_type === UnitResponsibleType.CONTRACT
   );
 
   return {
-    procurement: procurementSubmissions,
-    contract: contractSubmissions,
+    procurement: groupByStepOrder(procurementSubmissions, procurementWorkflow),
+    contract: groupByStepOrder(contractSubmissions, UnitResponsibleType.CONTRACT),
   };
 };
 
