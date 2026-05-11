@@ -157,3 +157,24 @@ export type SummaryResponse =
       [ProjectStatus.WAITING_ACCEPT]: number;
     })
   | (SummaryResponseBase & { role: 'EXTERNAL'; NOT_STARTED: number });
+
+export interface PhaseEntry {
+  status: ProjectPhaseStatus;
+  step: number | null;
+}
+
+export interface ProjectPhase {
+  GENERAL_STAFF: PhaseEntry;
+  HEAD_OF_UNIT: PhaseEntry;
+  DOCUMENT_STAFF: PhaseEntry;
+  FINANCE_STAFF: PhaseEntry;
+  other: Omit<PhaseEntry, 'step'> & { step: null };
+}
+
+export const DEFAULT_PHASE: ProjectPhase = {
+  GENERAL_STAFF:  { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  HEAD_OF_UNIT:   { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  FINANCE_STAFF:  { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  other:          { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+};
