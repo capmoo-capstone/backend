@@ -236,7 +236,7 @@ export const completeProcurementPhase = async (
       select: {
         status: true,
         current_workflow_type: true,
-        procurement_status: true,
+        procurement_phase: true,
         responsible_unit_id: true,
         assignee_procurement: true,
       },
@@ -247,7 +247,7 @@ export const completeProcurementPhase = async (
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Project is not in IN_PROGRESS status');
     }
-    if (project.procurement_status !== ProjectPhaseStatus.COMPLETED) {
+    if (project.procurement_phase !== ProjectPhaseStatus.COMPLETED) {
       throw new BadRequestError('Procurement phase is not in COMPLETED status');
     }
     if (project.current_workflow_type === UnitResponsibleType.CONTRACT) {
@@ -322,7 +322,7 @@ export const completeContractPhase = async (
       select: {
         status: true,
         current_workflow_type: true,
-        contract_status: true,
+        contract_phase: true,
         responsible_unit_id: true,
       },
     });
@@ -332,7 +332,7 @@ export const completeContractPhase = async (
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Project is not in IN_PROGRESS status');
     }
-    if (project.contract_status !== ProjectPhaseStatus.NOT_EXPORTED) {
+    if (project.contract_phase !== ProjectPhaseStatus.NOT_EXPORTED) {
       throw new BadRequestError('Contract phase is not in NOT_EXPORTED status');
     }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
@@ -342,12 +342,13 @@ export const completeContractPhase = async (
     const updated = await tx.project.update({
       where: { id: projectId },
       data: {
-        contract_status: ProjectPhaseStatus.COMPLETED,
+        contract_phase: ProjectPhaseStatus.COMPLETED,
+        contract_progress: { path: ['FINANCE_STAFF'], value: ProjectPhaseStatus.COMPLETED },
       },
       select: {
         id: true,
         status: true,
-        contract_status: true,
+        contract_phase: true,
       },
     });
     await tx.projectHistory.create({
@@ -355,10 +356,10 @@ export const completeContractPhase = async (
         project_id: projectId,
         action: ProjectActionType.STATUS_UPDATE,
         old_value: {
-          contract_status: project.contract_status,
+          contract_phase: project.contract_phase,
         },
         new_value: {
-          contract_status: updated.contract_status,
+          contract_phase: updated.contract_phase,
         },
         changed_by: user.id,
       },
@@ -378,7 +379,7 @@ export const closeProject = async (
       select: {
         status: true,
         current_workflow_type: true,
-        contract_status: true,
+        contract_phase: true,
       },
     });
     if (!project) {
@@ -394,7 +395,7 @@ export const closeProject = async (
         'Project cannot be closed unless it is in IN_PROGRESS or REQUEST_EDIT status'
       );
     }
-    if (project.contract_status !== ProjectPhaseStatus.COMPLETED) {
+    if (project.contract_phase !== ProjectPhaseStatus.COMPLETED) {
       throw new BadRequestError('Contract phase is not in COMPLETED status');
     }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {

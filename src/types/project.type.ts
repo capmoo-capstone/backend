@@ -10,11 +10,6 @@ import {
 import { ListResponse, PaginatedResponse } from './common.type';
 import { Decimal } from '@prisma/client/runtime/client';
 
-export interface PhaseStatusResult {
-  status: ProjectPhaseStatus;
-  step?: number | null;
-}
-
 export type PaginatedProjects = PaginatedResponse<Project>;
 
 export type ProjectsListResponse = ListResponse<Project>;
@@ -45,7 +40,7 @@ export interface CompleteProcurementPhaseResponse extends ProjectIdStatusRespons
 }
 
 export interface CompleteContractPhaseResponse extends ProjectIdStatusResponse {
-  contract_status: ProjectPhaseStatus;
+  contract_phase: ProjectPhaseStatus;
 }
 
 export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
@@ -62,8 +57,8 @@ export interface ProjectDetailsResponse {
   description: string | null;
   budget: Decimal;
   status: ProjectStatus;
-  procurement_status: PhaseStatusResult;
-  contract_status: PhaseStatusResult;
+  procurement_progress: ProjectPhaseProgress;
+  contract_progress: ProjectPhaseProgress;
   budget_plans: Array<{
     id: string;
     activity_type_name: string;
@@ -163,18 +158,9 @@ export interface PhaseEntry {
   step: number | null;
 }
 
-export interface ProjectPhase {
+export interface ProjectPhaseProgress {
   GENERAL_STAFF: PhaseEntry;
   HEAD_OF_UNIT: PhaseEntry;
   DOCUMENT_STAFF: PhaseEntry;
-  FINANCE_STAFF: PhaseEntry;
   other: Omit<PhaseEntry, 'step'> & { step: null };
 }
-
-export const DEFAULT_PHASE: ProjectPhase = {
-  GENERAL_STAFF:  { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-  HEAD_OF_UNIT:   { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-  DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-  FINANCE_STAFF:  { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-  other:          { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-};

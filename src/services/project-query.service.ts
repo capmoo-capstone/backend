@@ -22,6 +22,7 @@ import { AuthPayload } from '../types/auth.type';
 import {
   PaginatedProjects,
   ProjectDetailsResponse,
+  ProjectPhaseProgress,
   ProjectsListResponse,
   StaffWorkload,
   SummaryResponse,
@@ -147,14 +148,12 @@ const buildWhereClause = (
   }
   if (filters?.procurementStatus?.length) {
     and.push({
-      procurement_status: {
-        in: filters.procurementStatus as ProjectPhaseStatus[],
-      },
+      procurement_phase: { in: filters.procurementStatus as ProjectPhaseStatus[] },
     });
   }
   if (filters?.contractStatus?.length) {
     and.push({
-      contract_status: { in: filters.contractStatus as ProjectPhaseStatus[] },
+      contract_phase: { in: filters.contractStatus as ProjectPhaseStatus[] },
     });
   }
   if (filters?.urgentStatus?.length) {
@@ -349,14 +348,8 @@ export const getById = async (
       description: projectData.description,
       budget: projectData.budget,
       status: projectData.status,
-      procurement_status: {
-        status: projectData.procurement_status,
-        step: projectData.procurement_step,
-      },
-      contract_status: {
-        status: projectData.contract_status,
-        step: projectData.contract_step,
-      },
+      procurement_progress: projectData.procurement_progress as unknown as ProjectPhaseProgress,
+      contract_progress: projectData.contract_progress as unknown as ProjectPhaseProgress,
       budget_plans: projectData.budget_plans ?? [],
       receive_no: projectData.receive_no,
       less_no: projectData.less_no,
@@ -731,11 +724,9 @@ export const getOwnProjects = async (
         AND: [
           { responsible_unit_id: { in: procurementUnitIds } },
           {
-            procurement_status: {
-              notIn: [
-                ProjectPhaseStatus.COMPLETED,
-                ProjectPhaseStatus.NOT_STARTED,
-              ],
+            procurement_progress: {
+              path: ['HEAD_OF_UNIT', 'status'],
+              equals: ProjectPhaseStatus.WAITING_APPROVAL,
             },
           },
         ],
@@ -746,55 +737,42 @@ export const getOwnProjects = async (
       orClauses.push({
         AND: [
           { responsible_unit_id: { in: contractUnitIds } },
-          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
           {
-            contract_status: {
-              notIn: [
-                ProjectPhaseStatus.COMPLETED,
-                ProjectPhaseStatus.NOT_EXPORTED,
-                ProjectPhaseStatus.NOT_STARTED,
-              ],
+            contract_progress: {
+              path: ['HEAD_OF_UNIT', 'status'],
+              equals: ProjectPhaseStatus.WAITING_APPROVAL,
             },
           },
         ],
       });
     }
 
-    if (
-      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
-      procurementUnitIds.length > 0
-    ) {
+    if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) && procurementUnitIds.length > 0) {
       orClauses.push({
         OR: [
-          // Case: Procurement staff work on projects in procurement phase
           {
             AND: [
               { assignee_procurement: { some: { id: user.id } } },
               {
-                procurement_status: {
-                  notIn: [
-                    ProjectPhaseStatus.COMPLETED,
-                    ProjectPhaseStatus.NOT_STARTED,
-                  ],
-                },
+                OR: [
+                  { procurement_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.IN_PROGRESS } },
+                  { procurement_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_APPROVAL } },
+                  { procurement_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.REJECTED } },
+                ],
               },
             ],
           },
-          // Case : Procurement staff work on the contract after procurement completion
           {
             AND: [
               { current_workflow_type: UnitResponsibleType.CONTRACT },
               { responsible_unit_id: { in: procurementUnitIds } },
               { assignee_contract: { some: { id: user.id } } },
-              { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
               {
-                contract_status: {
-                  notIn: [
-                    ProjectPhaseStatus.COMPLETED,
-                    ProjectPhaseStatus.NOT_EXPORTED,
-                    ProjectPhaseStatus.NOT_STARTED,
-                  ],
-                },
+                OR: [
+                  { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.IN_PROGRESS } },
+                  { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_APPROVAL } },
+                  { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.REJECTED } },
+                ],
               },
             ],
           },
@@ -802,61 +780,38 @@ export const getOwnProjects = async (
       });
     }
 
-    if (
-      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
-      contractUnitIds.length > 0
-    ) {
+    if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) && contractUnitIds.length > 0) {
       orClauses.push({
         AND: [
           { assignee_contract: { some: { id: user.id } } },
-          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
           {
-            contract_status: {
-              notIn: [
-                ProjectPhaseStatus.COMPLETED,
-                ProjectPhaseStatus.NOT_EXPORTED,
-              ],
-            },
+            OR: [
+              { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.IN_PROGRESS } },
+              { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_APPROVAL } },
+              { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.REJECTED } },
+            ],
           },
         ],
       });
     }
 
     if (user.roles.some((r) => r.role === UserRole.FINANCE_STAFF)) {
-      // FINANCE_STAFF can see all projects in contract NOT_EXPORTED status
       orClauses.push({
-        AND: [
-          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
-          { contract_status: { equals: ProjectPhaseStatus.NOT_EXPORTED } },
-        ],
+        procurement_phase: ProjectPhaseStatus.COMPLETED,
+        contract_phase: ProjectPhaseStatus.NOT_EXPORTED,
       });
     }
 
     if (user.roles.some((r) => r.role === UserRole.DOCUMENT_STAFF)) {
-      // DOCUMENT_STAFF can see all projects
       orClauses.push({
         OR: [
-          {
-            procurement_status: {
-              notIn: [
-                ProjectPhaseStatus.NOT_STARTED,
-                ProjectPhaseStatus.COMPLETED,
-              ],
-            },
-          },
-          {
-            contract_status: {
-              notIn: [
-                ProjectPhaseStatus.NOT_STARTED,
-                ProjectPhaseStatus.NOT_EXPORTED,
-                ProjectPhaseStatus.COMPLETED,
-              ],
-            },
-          },
+          { procurement_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_PROPOSAL } },
+          { procurement_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_SIGNATURE } },
+          { contract_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_PROPOSAL } },
+          { contract_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_SIGNATURE } },
         ],
       });
     }
-
     where = orClauses.length > 0 ? { OR: orClauses } : { id: 'none' };
   }
 
@@ -876,10 +831,10 @@ export const getOwnProjects = async (
             name: true,
           },
         },
-        procurement_status: true,
-        procurement_step: true,
-        contract_status: true,
-        contract_step: true,
+        procurement_phase: true,
+        contract_phase: true,
+        procurement_progress: true,
+        contract_progress: true,
         requesting_unit: {
           select: {
             id: true,
