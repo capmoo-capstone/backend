@@ -5,79 +5,126 @@ import {
   Prisma,
 } from '@prisma/client';
 import { WORKFLOW_STEP_ORDERS } from './constant';
+import { PhaseEntry, ProjectPhaseProgress } from '../types/project.type';
 
-export interface PhaseStatusResult {
-  status: ProjectPhaseStatus;
-  step?: number;
+type LatestByStep = Map<number, SubmissionStatus>;
+
+interface StepSummary {
+  latestByStep: LatestByStep;
+  hasRejected: boolean;
+  firstWaitingApproval: number | null;
+  firstWaitingProposal: number | null;
+  firstWaitingSignature: number | null;
 }
 
-const mapSubmissionToPhaseStatus = (
-  status: SubmissionStatus
-): ProjectPhaseStatus => {
-  switch (status) {
-    case SubmissionStatus.WAITING_APPROVAL:
-      return ProjectPhaseStatus.WAITING_APPROVAL;
-    case SubmissionStatus.WAITING_PROPOSAL:
-      return ProjectPhaseStatus.WAITING_PROPOSAL;
-    case SubmissionStatus.WAITING_SIGNATURE:
-      return ProjectPhaseStatus.WAITING_SIGNATURE;
-    case SubmissionStatus.REJECTED:
-      return ProjectPhaseStatus.REJECTED;
-    case SubmissionStatus.COMPLETED:
-      return ProjectPhaseStatus.COMPLETED;
-    default:
-      return ProjectPhaseStatus.IN_PROGRESS;
-  }
-};
-
-const computePhaseStatus = async (
+const getStepSummary = async (
   tx: Prisma.TransactionClient,
   projectId: string,
   workflowType: UnitResponsibleType
-): Promise<PhaseStatusResult> => {
-  const stepOrders = WORKFLOW_STEP_ORDERS[workflowType] ?? [];
-
+): Promise<StepSummary> => {
   const submissions = await tx.projectSubmission.findMany({
-    where: {
-      project_id: projectId,
-      workflow_type: workflowType,
-    },
+    where: { project_id: projectId, workflow_type: workflowType },
     orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
     select: { step_order: true, status: true },
   });
 
   const latestByStep = new Map<number, SubmissionStatus>();
+  let hasRejected = false;
+  let firstWaitingApproval: number | null = null;
+  let firstWaitingProposal: number | null = null;
+  let firstWaitingSignature: number | null = null;
+
   for (const s of submissions) {
-    if (s.step_order !== null && !latestByStep.has(s.step_order)) {
-      if (s.status === SubmissionStatus.REJECTED) {
-        return { status: ProjectPhaseStatus.REJECTED, step: s.step_order };
-      }
-      latestByStep.set(s.step_order, s.status as SubmissionStatus);
-    }
+    if (latestByStep.has(s.step_order)) continue;
+    latestByStep.set(s.step_order, s.status as SubmissionStatus);
+
+    if (s.status === SubmissionStatus.REJECTED) hasRejected = true;
+    if (s.status === SubmissionStatus.WAITING_APPROVAL && firstWaitingApproval === null)
+      firstWaitingApproval = s.step_order;
+    if (s.status === SubmissionStatus.WAITING_PROPOSAL && firstWaitingProposal === null)
+      firstWaitingProposal = s.step_order;
+    if (s.status === SubmissionStatus.WAITING_SIGNATURE && firstWaitingSignature === null)
+      firstWaitingSignature = s.step_order;
   }
 
-  let firstWaiting: { step: number; status: SubmissionStatus } | null = null;
+  return { latestByStep, hasRejected, firstWaitingApproval, firstWaitingProposal, firstWaitingSignature };
+};
 
-  for (const stepOrder of stepOrders) {
-    const currentStatus = latestByStep.get(stepOrder);
+const computeGeneralStaffPhase = (
+  stepOrders: number[],
+  latestByStep: LatestByStep,
+  hasRejected: boolean
+): PhaseEntry => {
+  if (hasRejected) return { status: ProjectPhaseStatus.REJECTED, step: null };
 
-    if (!currentStatus) {
-      return { status: ProjectPhaseStatus.IN_PROGRESS, step: stepOrder };
-    }
-
-    if (currentStatus !== SubmissionStatus.COMPLETED && !firstWaiting) {
-      firstWaiting = { step: stepOrder, status: currentStatus };
-    }
+  for (const step of stepOrders) {
+    const status = latestByStep.get(step);
+    if (!status) return { status: ProjectPhaseStatus.IN_PROGRESS, step };
+    if (status === SubmissionStatus.WAITING_APPROVAL)
+      return { status: ProjectPhaseStatus.WAITING_APPROVAL, step };
+    if (status !== SubmissionStatus.COMPLETED)
+      return { status: ProjectPhaseStatus.IN_PROGRESS, step };
   }
 
-  if (firstWaiting) {
-    return {
-      status: mapSubmissionToPhaseStatus(firstWaiting.status),
-      step: firstWaiting.step,
-    };
-  }
+  return { status: ProjectPhaseStatus.COMPLETED, step: null };
+};
 
-  return { status: ProjectPhaseStatus.COMPLETED };
+const computeHeadOfUnitPhase = (
+  firstWaitingApproval: number | null,
+  allCompleted: boolean
+): PhaseEntry => {
+  if (allCompleted) return { status: ProjectPhaseStatus.COMPLETED, step: null };
+  if (firstWaitingApproval !== null)
+    return { status: ProjectPhaseStatus.WAITING_APPROVAL, step: firstWaitingApproval };
+  return { status: ProjectPhaseStatus.NOT_STARTED, step: null };
+};
+
+const computeDocumentStaffPhase = (
+  firstWaitingProposal: number | null,
+  firstWaitingSignature: number | null,
+  allCompleted: boolean
+): PhaseEntry => {
+  if (allCompleted) return { status: ProjectPhaseStatus.COMPLETED, step: null };
+  if (firstWaitingProposal !== null)
+    return { status: ProjectPhaseStatus.WAITING_PROPOSAL, step: firstWaitingProposal };
+  if (firstWaitingSignature !== null)
+    return { status: ProjectPhaseStatus.WAITING_SIGNATURE, step: firstWaitingSignature };
+  return { status: ProjectPhaseStatus.NOT_STARTED, step: null };
+};
+
+const computeOtherPhase = (
+  generalStaff: PhaseEntry
+): { status: ProjectPhaseStatus; step: null } => {
+  switch (generalStaff.status) {
+    case ProjectPhaseStatus.COMPLETED:
+      return { status: ProjectPhaseStatus.COMPLETED, step: null };
+    case ProjectPhaseStatus.NOT_STARTED:
+      return { status: ProjectPhaseStatus.NOT_STARTED, step: null };
+    default:
+      return { status: ProjectPhaseStatus.IN_PROGRESS, step: null };
+  }
+};
+
+const computePhase = async (
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  workflowType: UnitResponsibleType
+): Promise<ProjectPhaseProgress> => {
+  const stepOrders = WORKFLOW_STEP_ORDERS[workflowType] ?? [];
+  const summary = await getStepSummary(tx, projectId, workflowType);
+
+  const allCompleted =
+    stepOrders.length > 0 &&
+    stepOrders.every((s) => summary.latestByStep.get(s) === SubmissionStatus.COMPLETED);
+
+  const generalStaff = computeGeneralStaffPhase(stepOrders, summary.latestByStep, summary.hasRejected);
+
+  return {
+    GENERAL_STAFF: generalStaff,
+    HEAD_OF_UNIT: computeHeadOfUnitPhase(summary.firstWaitingApproval, allCompleted),
+    DOCUMENT_STAFF: computeDocumentStaffPhase(summary.firstWaitingProposal, summary.firstWaitingSignature, allCompleted),
+    other: computeOtherPhase(generalStaff),
+  };
 };
 
 export const syncProjectPhases = async (
@@ -85,39 +132,31 @@ export const syncProjectPhases = async (
   workflowType: UnitResponsibleType,
   projectId: string
 ) => {
-  const { status, step } = await computePhaseStatus(
-    tx,
-    projectId,
-    workflowType
-  );
+  const progress = await computePhase(tx, projectId, workflowType);
+  let progressField = 'procurement_progress';
+  let phaseField = 'procurement_phase';
+  let phaseStatus = progress.GENERAL_STAFF.status;
 
-  const dataToUpdate: Partial<{
-    procurement_status: ProjectPhaseStatus;
-    procurement_step: number;
-    contract_status: ProjectPhaseStatus;
-    contract_step: number;
-  }> = {};
   if (workflowType === UnitResponsibleType.CONTRACT) {
-    if (status === ProjectPhaseStatus.COMPLETED) {
-      dataToUpdate.contract_status = ProjectPhaseStatus.NOT_EXPORTED;
-    } else {
-      dataToUpdate.contract_status = status;
-      dataToUpdate.contract_step = step;
+    progressField = 'contract_progress';
+    phaseField = 'contract_phase';
+    if (progress.GENERAL_STAFF.status === ProjectPhaseStatus.COMPLETED) {
+      phaseStatus = ProjectPhaseStatus.NOT_EXPORTED;
     }
-  } else {
-    dataToUpdate.procurement_status = status;
-    dataToUpdate.procurement_step = step;
   }
-
+  
   return await tx.project.update({
     where: { id: projectId },
-    data: dataToUpdate,
+    data: { 
+      [progressField]: progress,
+      [phaseField]: phaseStatus,
+    },
     select: {
       id: true,
-      procurement_status: true,
-      procurement_step: true,
-      contract_status: true,
-      contract_step: true,
+      procurement_progress: true,
+      contract_progress: true,
+      procurement_phase: true,
+      contract_phase: true,
     },
   });
 };

@@ -211,10 +211,10 @@ model Project {
   is_urgent                            UrgentType          @default(NORMAL)
   expected_approval_date               DateTime?
   expected_completion_procurement_date DateTime?
-  procurement_status                   ProjectPhaseStatus  @default(NOT_STARTED)
-  procurement_step                     Int?
-  contract_status                      ProjectPhaseStatus  @default(NOT_STARTED)
-  contract_step                        Int?
+  procurement_phase                    ProjectPhaseStatus  @default(NOT_STARTED)
+  contract_phase                       ProjectPhaseStatus  @default(NOT_STARTED)
+  procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   pr_no                                String?
   po_no                                String?
   less_no                              String?
