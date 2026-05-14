@@ -337,6 +337,7 @@ export const createStaffSubmissionsProject = async (
       where: { id: data.project_id },
       select: {
         id: true,
+        current_workflow_type: true,
         pr_no: true,
         po_no: true,
         less_no: true,
@@ -350,6 +351,9 @@ export const createStaffSubmissionsProject = async (
     });
     if (!project) {
       throw new NotFoundError('Project not found');
+    }
+    if (project.current_workflow_type !== data.workflow_type) {
+      throw new BadRequestError('Workflow type does not match project current workflow');
     }
 
     const submission_round = await getSubmissionRound(tx, {
@@ -410,11 +414,15 @@ export const createVendorSubmissionsProject = async (
     const project = await tx.project
       .findFirstOrThrow({
         where: { po_no: data.po_no },
-        select: { id: true },
+        select: { id: true, current_workflow_type: true },
       })
       .catch(() => {
         throw new NotFoundError('Project not found');
       });
+
+    if (project.current_workflow_type !== data.workflow_type) {
+      throw new BadRequestError('Workflow type does not match project current workflow');
+    }
 
     const submission_round = await getSubmissionRound(tx, {
       project_id: project.id,

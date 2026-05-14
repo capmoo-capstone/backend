@@ -343,7 +343,6 @@ export const completeContractPhase = async (
       where: { id: projectId },
       data: {
         contract_phase: ProjectPhaseStatus.COMPLETED,
-        contract_progress: { path: ['FINANCE_STAFF'], value: ProjectPhaseStatus.COMPLETED },
       },
       select: {
         id: true,

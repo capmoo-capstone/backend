@@ -55,6 +55,7 @@ export const createStaffSubmission = async (
 ) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateStaffSubmissionDto' } }
   const payload = req.user!;
 
   const validateData = CreateStaffSubmissionSchema.parse(req.body);
@@ -68,6 +69,7 @@ export const createStaffSubmission = async (
 export const createVendorSubmission = async (req: Request, res: Response) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
+  // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateVendorSubmissionDto' } }
   const validateData = CreateVendorSubmissionSchema.parse(req.body);
   const submission =
     await SubmissionService.createVendorSubmissionsProject(validateData);
@@ -101,7 +103,6 @@ export const proposeSubmission = async (
 ) => {
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
-  // #swagger.requestBody = { schema: { $ref: '#/definitions/SubmissionActionDto' } }
   const payload = req.user!;
   const submissionId = req.params.id as string;
 

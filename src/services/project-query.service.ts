@@ -45,8 +45,8 @@ const SORTABLE_FIELDS = new Set([
   'created_at',
   'status',
   'procurement_type',
-  'procurement_status',
-  'contract_status',
+  'procurement_phase',
+  'contract_phase',
 ]);
 
 const buildWhereClause = (
@@ -148,7 +148,9 @@ const buildWhereClause = (
   }
   if (filters?.procurementStatus?.length) {
     and.push({
-      procurement_phase: { in: filters.procurementStatus as ProjectPhaseStatus[] },
+      procurement_phase: {
+        in: filters.procurementStatus as ProjectPhaseStatus[],
+      },
     });
   }
   if (filters?.contractStatus?.length) {
@@ -201,19 +203,19 @@ const buildWhereClause = (
 
 const buildOrderBy = (filters?: ProjectFilterQuery) => {
   if (filters?.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
-    if (filters.sortBy === 'procurement_status') {
+    if (filters.sortBy === 'procurement_phase') {
       return [
         {
-          procurement_status: filters.sortOrder ?? 'desc',
+          procurement_phase: filters.sortOrder ?? 'desc',
         },
         {
           status: filters.sortOrder ?? 'desc',
         },
       ];
-    } else if (filters.sortBy === 'contract_status') {
+    } else if (filters.sortBy === 'contract_phase') {
       return [
         {
-          contract_status: filters.sortOrder ?? 'desc',
+          contract_phase: filters.sortOrder ?? 'desc',
         },
         {
           status: filters.sortOrder ?? 'desc',
@@ -348,8 +350,10 @@ export const getById = async (
       description: projectData.description,
       budget: projectData.budget,
       status: projectData.status,
-      procurement_progress: projectData.procurement_progress as unknown as ProjectPhaseProgress,
-      contract_progress: projectData.contract_progress as unknown as ProjectPhaseProgress,
+      procurement_progress:
+        projectData.procurement_progress as unknown as ProjectPhaseProgress,
+      contract_progress:
+        projectData.contract_progress as unknown as ProjectPhaseProgress,
       budget_plans: projectData.budget_plans ?? [],
       receive_no: projectData.receive_no,
       less_no: projectData.less_no,
@@ -747,7 +751,10 @@ export const getOwnProjects = async (
       });
     }
 
-    if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) && procurementUnitIds.length > 0) {
+    if (
+      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
+      procurementUnitIds.length > 0
+    ) {
       orClauses.push({
         OR: [
           {
@@ -755,9 +762,24 @@ export const getOwnProjects = async (
               { assignee_procurement: { some: { id: user.id } } },
               {
                 OR: [
-                  { procurement_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.IN_PROGRESS } },
-                  { procurement_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_APPROVAL } },
-                  { procurement_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.REJECTED } },
+                  {
+                    procurement_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.IN_PROGRESS,
+                    },
+                  },
+                  {
+                    procurement_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.WAITING_APPROVAL,
+                    },
+                  },
+                  {
+                    procurement_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.REJECTED,
+                    },
+                  },
                 ],
               },
             ],
@@ -769,9 +791,24 @@ export const getOwnProjects = async (
               { assignee_contract: { some: { id: user.id } } },
               {
                 OR: [
-                  { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.IN_PROGRESS } },
-                  { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_APPROVAL } },
-                  { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.REJECTED } },
+                  {
+                    contract_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.IN_PROGRESS,
+                    },
+                  },
+                  {
+                    contract_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.WAITING_APPROVAL,
+                    },
+                  },
+                  {
+                    contract_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.REJECTED,
+                    },
+                  },
                 ],
               },
             ],
@@ -780,15 +817,33 @@ export const getOwnProjects = async (
       });
     }
 
-    if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) && contractUnitIds.length > 0) {
+    if (
+      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
+      contractUnitIds.length > 0
+    ) {
       orClauses.push({
         AND: [
           { assignee_contract: { some: { id: user.id } } },
           {
             OR: [
-              { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.IN_PROGRESS } },
-              { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_APPROVAL } },
-              { contract_progress: { path: ['GENERAL_STAFF', 'status'], equals: ProjectPhaseStatus.REJECTED } },
+              {
+                contract_progress: {
+                  path: ['GENERAL_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.IN_PROGRESS,
+                },
+              },
+              {
+                contract_progress: {
+                  path: ['GENERAL_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.WAITING_APPROVAL,
+                },
+              },
+              {
+                contract_progress: {
+                  path: ['GENERAL_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.REJECTED,
+                },
+              },
             ],
           },
         ],
@@ -797,18 +852,47 @@ export const getOwnProjects = async (
 
     if (user.roles.some((r) => r.role === UserRole.FINANCE_STAFF)) {
       orClauses.push({
-        procurement_phase: ProjectPhaseStatus.COMPLETED,
-        contract_phase: ProjectPhaseStatus.NOT_EXPORTED,
+        OR: [
+          {
+            AND: [
+              { procurement_phase: ProjectPhaseStatus.COMPLETED },
+              { contract_phase: ProjectPhaseStatus.NOT_EXPORTED },
+            ],
+          },
+          {
+            status: ProjectStatus.REQUEST_EDIT,
+          },
+        ],
       });
     }
 
     if (user.roles.some((r) => r.role === UserRole.DOCUMENT_STAFF)) {
       orClauses.push({
         OR: [
-          { procurement_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_PROPOSAL } },
-          { procurement_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_SIGNATURE } },
-          { contract_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_PROPOSAL } },
-          { contract_progress: { path: ['DOCUMENT_STAFF', 'status'], equals: ProjectPhaseStatus.WAITING_SIGNATURE } },
+          {
+            procurement_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_PROPOSAL,
+            },
+          },
+          {
+            procurement_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_SIGNATURE,
+            },
+          },
+          {
+            contract_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_PROPOSAL,
+            },
+          },
+          {
+            contract_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_SIGNATURE,
+            },
+          },
         ],
       });
     }
@@ -1058,7 +1142,7 @@ export const getSummaryCards = async (
               },
             },
             {
-              procurement_status: {
+              procurement_phase: {
                 in: [ProjectPhaseStatus.NOT_STARTED],
               },
             },
@@ -1076,8 +1160,8 @@ export const getSummaryCards = async (
             },
             {
               AND: [
-                { procurement_status: { in: [ProjectPhaseStatus.COMPLETED] } },
-                { contract_status: { in: [ProjectPhaseStatus.NOT_STARTED] } },
+                { procurement_phase: { in: [ProjectPhaseStatus.COMPLETED] } },
+                { contract_phase: { in: [ProjectPhaseStatus.NOT_STARTED] } },
                 {
                   status: {
                     in: [

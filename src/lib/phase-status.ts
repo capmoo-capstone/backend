@@ -11,7 +11,8 @@ type LatestByStep = Map<number, SubmissionStatus>;
 
 interface StepSummary {
   latestByStep: LatestByStep;
-  hasRejected: boolean;
+  allCompleted: boolean;
+  firstRejected: number | null;
   firstWaitingApproval: number | null;
   firstWaitingProposal: number | null;
   firstWaitingSignature: number | null;
@@ -29,7 +30,8 @@ const getStepSummary = async (
   });
 
   const latestByStep = new Map<number, SubmissionStatus>();
-  let hasRejected = false;
+  let allCompleted = false;
+  let firstRejected: number | null = null;
   let firstWaitingApproval: number | null = null;
   let firstWaitingProposal: number | null = null;
   let firstWaitingSignature: number | null = null;
@@ -38,7 +40,8 @@ const getStepSummary = async (
     if (latestByStep.has(s.step_order)) continue;
     latestByStep.set(s.step_order, s.status as SubmissionStatus);
 
-    if (s.status === SubmissionStatus.REJECTED) hasRejected = true;
+    if (s.status === SubmissionStatus.REJECTED && firstRejected === null)
+      firstRejected = s.step_order;
     if (s.status === SubmissionStatus.WAITING_APPROVAL && firstWaitingApproval === null)
       firstWaitingApproval = s.step_order;
     if (s.status === SubmissionStatus.WAITING_PROPOSAL && firstWaitingProposal === null)
@@ -47,29 +50,40 @@ const getStepSummary = async (
       firstWaitingSignature = s.step_order;
   }
 
-  return { latestByStep, hasRejected, firstWaitingApproval, firstWaitingProposal, firstWaitingSignature };
+  const stepOrders = WORKFLOW_STEP_ORDERS[workflowType] ?? [];
+  allCompleted = stepOrders.length > 0 && stepOrders.every((s) => latestByStep.get(s) === SubmissionStatus.COMPLETED);
+
+  return { latestByStep, firstRejected, firstWaitingApproval, firstWaitingProposal, firstWaitingSignature, allCompleted };
 };
 
-const computeGeneralStaffPhase = (
+const computeGeneralStaffProgress = (
   stepOrders: number[],
   latestByStep: LatestByStep,
-  hasRejected: boolean
+  firstRejected: number | null,
+  firstWaitingApproval: number | null,
+  allCompleted: boolean
 ): PhaseEntry => {
-  if (hasRejected) return { status: ProjectPhaseStatus.REJECTED, step: null };
+  if (firstRejected !== null) {
+    return { status: ProjectPhaseStatus.REJECTED, step: firstRejected };
+  } else if (allCompleted) {
+    return { status: ProjectPhaseStatus.COMPLETED, step: null };
+  }
 
   for (const step of stepOrders) {
     const status = latestByStep.get(step);
-    if (!status) return { status: ProjectPhaseStatus.IN_PROGRESS, step };
-    if (status === SubmissionStatus.WAITING_APPROVAL)
-      return { status: ProjectPhaseStatus.WAITING_APPROVAL, step };
-    if (status !== SubmissionStatus.COMPLETED)
+    if (!status) {
       return { status: ProjectPhaseStatus.IN_PROGRESS, step };
+    }
+  }
+
+  if (firstWaitingApproval !== null) {
+    return { status: ProjectPhaseStatus.WAITING_APPROVAL, step: firstWaitingApproval };
   }
 
   return { status: ProjectPhaseStatus.COMPLETED, step: null };
 };
 
-const computeHeadOfUnitPhase = (
+const computeHeadOfUnitProgress = (
   firstWaitingApproval: number | null,
   allCompleted: boolean
 ): PhaseEntry => {
@@ -79,7 +93,7 @@ const computeHeadOfUnitPhase = (
   return { status: ProjectPhaseStatus.NOT_STARTED, step: null };
 };
 
-const computeDocumentStaffPhase = (
+const computeDocumentStaffProgress = (
   firstWaitingProposal: number | null,
   firstWaitingSignature: number | null,
   allCompleted: boolean
@@ -92,12 +106,16 @@ const computeDocumentStaffPhase = (
   return { status: ProjectPhaseStatus.NOT_STARTED, step: null };
 };
 
-const computeOtherPhase = (
-  generalStaff: PhaseEntry
+const computeOtherProgress = (
+  generalStaff: PhaseEntry,
+  headOfUnit: PhaseEntry,
+  documentStaff: PhaseEntry
 ): { status: ProjectPhaseStatus; step: null } => {
   switch (generalStaff.status) {
     case ProjectPhaseStatus.COMPLETED:
-      return { status: ProjectPhaseStatus.COMPLETED, step: null };
+      if (headOfUnit.status === ProjectPhaseStatus.COMPLETED && documentStaff.status === ProjectPhaseStatus.COMPLETED) {
+        return { status: ProjectPhaseStatus.COMPLETED, step: null };
+      } else return { status: ProjectPhaseStatus.IN_PROGRESS, step: null };
     case ProjectPhaseStatus.NOT_STARTED:
       return { status: ProjectPhaseStatus.NOT_STARTED, step: null };
     default:
@@ -105,7 +123,24 @@ const computeOtherPhase = (
   }
 };
 
-const computePhase = async (
+const computePhaseStatus = (
+  generalStaff: PhaseEntry,
+  headOfUnit: PhaseEntry,
+  documentStaff: PhaseEntry
+): ProjectPhaseStatus => {
+  if (generalStaff.status === ProjectPhaseStatus.REJECTED) return ProjectPhaseStatus.REJECTED;
+  if (generalStaff.status === ProjectPhaseStatus.IN_PROGRESS)
+    return ProjectPhaseStatus.IN_PROGRESS;
+  if (generalStaff.status === ProjectPhaseStatus.WAITING_APPROVAL || headOfUnit.status === ProjectPhaseStatus.WAITING_APPROVAL) return ProjectPhaseStatus.WAITING_APPROVAL;
+  if (generalStaff.status === ProjectPhaseStatus.COMPLETED) {
+    if (documentStaff.status === ProjectPhaseStatus.WAITING_PROPOSAL) return ProjectPhaseStatus.WAITING_PROPOSAL;
+    if (documentStaff.status === ProjectPhaseStatus.WAITING_SIGNATURE) return ProjectPhaseStatus.WAITING_SIGNATURE;
+    return ProjectPhaseStatus.COMPLETED;
+  }
+  return ProjectPhaseStatus.NOT_STARTED;
+};
+
+const computeProgress = async (
   tx: Prisma.TransactionClient,
   projectId: string,
   workflowType: UnitResponsibleType
@@ -113,17 +148,15 @@ const computePhase = async (
   const stepOrders = WORKFLOW_STEP_ORDERS[workflowType] ?? [];
   const summary = await getStepSummary(tx, projectId, workflowType);
 
-  const allCompleted =
-    stepOrders.length > 0 &&
-    stepOrders.every((s) => summary.latestByStep.get(s) === SubmissionStatus.COMPLETED);
-
-  const generalStaff = computeGeneralStaffPhase(stepOrders, summary.latestByStep, summary.hasRejected);
+  const generalStaff = computeGeneralStaffProgress(stepOrders, summary.latestByStep, summary.firstRejected, summary.firstWaitingApproval, summary.allCompleted);
+  const headOfUnit = computeHeadOfUnitProgress(summary.firstWaitingApproval, summary.allCompleted);
+  const documentStaff = computeDocumentStaffProgress(summary.firstWaitingProposal, summary.firstWaitingSignature, summary.allCompleted);
 
   return {
     GENERAL_STAFF: generalStaff,
-    HEAD_OF_UNIT: computeHeadOfUnitPhase(summary.firstWaitingApproval, allCompleted),
-    DOCUMENT_STAFF: computeDocumentStaffPhase(summary.firstWaitingProposal, summary.firstWaitingSignature, allCompleted),
-    other: computeOtherPhase(generalStaff),
+    HEAD_OF_UNIT: headOfUnit,
+    DOCUMENT_STAFF: documentStaff,
+    other: computeOtherProgress(generalStaff, headOfUnit, documentStaff),
   };
 };
 
@@ -132,15 +165,15 @@ export const syncProjectPhases = async (
   workflowType: UnitResponsibleType,
   projectId: string
 ) => {
-  const progress = await computePhase(tx, projectId, workflowType);
+  const progress = await computeProgress(tx, projectId, workflowType);
   let progressField = 'procurement_progress';
   let phaseField = 'procurement_phase';
-  let phaseStatus = progress.GENERAL_STAFF.status;
+  let phaseStatus = computePhaseStatus(progress.GENERAL_STAFF, progress.HEAD_OF_UNIT, progress.DOCUMENT_STAFF);
 
   if (workflowType === UnitResponsibleType.CONTRACT) {
     progressField = 'contract_progress';
     phaseField = 'contract_phase';
-    if (progress.GENERAL_STAFF.status === ProjectPhaseStatus.COMPLETED) {
+    if (phaseStatus === ProjectPhaseStatus.COMPLETED) {
       phaseStatus = ProjectPhaseStatus.NOT_EXPORTED;
     }
   }
