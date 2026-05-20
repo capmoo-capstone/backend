@@ -1,12 +1,15 @@
-import { ProjectActionType, Prisma, Project } from '@prisma/client';
 import {
+  Prisma,
+  Project,
+  ProjectActionType,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
 import { BadRequestError, NotFoundError } from '../lib/errors';
-import { AuthPayload } from '../types/auth.type';
+import { syncProjectPhases } from '../lib/phase-status';
 import {
   ApproveSubmissionDto,
   CompleteSubmissionDto,
@@ -16,7 +19,7 @@ import {
   UpdateProjectForSubmissionSchema,
   VendorSubmissionFilterQuery,
 } from '../schemas/submission.schema';
-import { syncProjectPhases } from '../lib/phase-status';
+import { AuthPayload } from '../types/auth.type';
 import {
   ApprovedSubmissionResponse,
   CompletedSubmissionResponse,
@@ -122,7 +125,7 @@ export const getProjectSubmissions = async (
 
   const submissionData = await prisma.projectSubmission.findMany({
     where: { project_id: projectId },
-    orderBy: { submitted_at: 'desc' },
+    orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
     include: {
       documents: true,
       submitter: { select: { full_name: true } },
@@ -154,19 +157,55 @@ export const getProjectSubmissions = async (
     }))
   );
 
-  const contractSubmissions = formattedSubmissions.filter(
-    (submission) => submission.workflow_type === UnitResponsibleType.CONTRACT
-  );
+  const groupByStepOrder = (
+    submissions: typeof formattedSubmissions,
+    workflowType: UnitResponsibleType
+  ) => {
+    const map = new Map<
+      number,
+      {
+        step_order: number;
+        step_status: SubmissionStatus | 'NOT_STARTED';
+        data: typeof formattedSubmissions;
+      }
+    >();
+
+    for (const stepOrder of WORKFLOW_STEP_ORDERS[workflowType]) {
+      map.set(stepOrder, {
+        step_order: stepOrder,
+        step_status: 'NOT_STARTED',
+        data: [],
+      });
+    }
+
+    for (const submission of submissions) {
+      const existing = map.get(submission.step_order);
+      if (!existing) continue;
+      if (existing.step_status === 'NOT_STARTED') {
+        existing.step_status = submission.status;
+      }
+      existing.data.push(submission);
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.step_order - b.step_order);
+  };
+
+  const procurementWorkflow =
+    project.procurement_type as unknown as UnitResponsibleType;
 
   const procurementSubmissions = formattedSubmissions.filter(
-    (submission) =>
-      submission.workflow_type ===
-      (project?.procurement_type as UnitResponsibleType)
+    (s) => s.workflow_type === procurementWorkflow
+  );
+  const contractSubmissions = formattedSubmissions.filter(
+    (s) => s.workflow_type === UnitResponsibleType.CONTRACT
   );
 
   return {
-    procurement: procurementSubmissions,
-    contract: contractSubmissions,
+    procurement: groupByStepOrder(procurementSubmissions, procurementWorkflow),
+    contract: groupByStepOrder(
+      contractSubmissions,
+      UnitResponsibleType.CONTRACT
+    ),
   };
 };
 
@@ -311,6 +350,7 @@ export const createStaffSubmissionsProject = async (
       where: { id: data.project_id },
       select: {
         id: true,
+        current_workflow_type: true,
         pr_no: true,
         po_no: true,
         less_no: true,
@@ -324,6 +364,11 @@ export const createStaffSubmissionsProject = async (
     });
     if (!project) {
       throw new NotFoundError('Project not found');
+    }
+    if (project.current_workflow_type !== data.workflow_type) {
+      throw new BadRequestError(
+        'Workflow type does not match project current workflow'
+      );
     }
 
     const submission_round = await getSubmissionRound(tx, {
@@ -384,11 +429,17 @@ export const createVendorSubmissionsProject = async (
     const project = await tx.project
       .findFirstOrThrow({
         where: { po_no: data.po_no },
-        select: { id: true },
+        select: { id: true, current_workflow_type: true },
       })
       .catch(() => {
         throw new NotFoundError('Project not found');
       });
+
+    if (project.current_workflow_type !== data.workflow_type) {
+      throw new BadRequestError(
+        'Workflow type does not match project current workflow'
+      );
+    }
 
     const submission_round = await getSubmissionRound(tx, {
       project_id: project.id,

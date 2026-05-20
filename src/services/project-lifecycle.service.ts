@@ -1,18 +1,18 @@
 import {
-  ProjectStatus,
   ProjectActionType,
-  ProjectPhaseStatus,
+  ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { CONTRACT_UNIT_ID } from '../lib/constant';
-import { NotFoundError, BadRequestError } from '../lib/errors';
-import { AuthPayload } from '../types/auth.type';
+import { BadRequestError, NotFoundError } from '../lib/errors';
+import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,
   RequestEditProjectDto,
 } from '../schemas/project.schema';
+import { AuthPayload } from '../types/auth.type';
 import {
   CompleteContractPhaseResponse,
   CompleteProcurementPhaseResponse,
@@ -20,7 +20,6 @@ import {
   ProjectIdStatusResponse,
   RequestEditProjectResponse,
 } from '../types/project.type';
-import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 
 export const cancelProject = async (
   user: AuthPayload,
@@ -236,7 +235,7 @@ export const completeProcurementPhase = async (
       select: {
         status: true,
         current_workflow_type: true,
-        procurement_status: true,
+        procurement_progress: true,
         responsible_unit_id: true,
         assignee_procurement: true,
       },
@@ -246,9 +245,6 @@ export const completeProcurementPhase = async (
     }
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Project is not in IN_PROGRESS status');
-    }
-    if (project.procurement_status !== ProjectPhaseStatus.COMPLETED) {
-      throw new BadRequestError('Procurement phase is not in COMPLETED status');
     }
     if (project.current_workflow_type === UnitResponsibleType.CONTRACT) {
       throw new BadRequestError('Project is already in CONTRACT workflow type');
@@ -322,7 +318,7 @@ export const completeContractPhase = async (
       select: {
         status: true,
         current_workflow_type: true,
-        contract_status: true,
+        contract_progress: true,
         responsible_unit_id: true,
       },
     });
@@ -332,39 +328,47 @@ export const completeContractPhase = async (
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Project is not in IN_PROGRESS status');
     }
-    if (project.contract_status !== ProjectPhaseStatus.NOT_EXPORTED) {
-      throw new BadRequestError('Contract phase is not in NOT_EXPORTED status');
-    }
+    // if (project.contract_phase !== ProjectPhaseStatus.NOT_EXPORTED) {
+    //   throw new BadRequestError('Contract phase is not in NOT_EXPORTED status');
+    // }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
       throw new BadRequestError('Project is not in CONTRACT workflow type');
     }
 
-    const updated = await tx.project.update({
-      where: { id: projectId },
-      data: {
-        contract_status: ProjectPhaseStatus.COMPLETED,
-      },
-      select: {
-        id: true,
-        status: true,
-        contract_status: true,
-      },
-    });
-    await tx.projectHistory.create({
-      data: {
-        project_id: projectId,
-        action: ProjectActionType.STATUS_UPDATE,
-        old_value: {
-          contract_status: project.contract_status,
-        },
-        new_value: {
-          contract_status: updated.contract_status,
-        },
-        changed_by: user.id,
-      },
-    });
+    // const updated = await tx.project.update({
+    //   where: { id: projectId },
+    //   data: {
+    //     contract_progress:
+    //       updatedContractProgress as unknown as Prisma.InputJsonValue,
+    //   },
+    //   select: {
+    //     id: true,
+    //     status: true,
+    //     contract_progress: true,
+    //   },
+    // });
+    // await tx.projectHistory.create({
+    //   data: {
+    //     project_id: projectId,
+    //     action: ProjectActionType.STATUS_UPDATE,
+    //     old_value: {
+    //       contract_progress: {
+    //         other: { status: contractWorkflowStatus, step: null },
+    //       },
+    //     },
+    //     new_value: {
+    //       contract_progress: {
+    //         other: updatedContractProgress.other,
+    //       },
+    //     },
+    //     changed_by: user.id,
+    //   },
+    // });
 
-    return updated;
+    return {
+      id: projectId,
+      status: project.status,
+    };
   });
 };
 
@@ -378,7 +382,7 @@ export const closeProject = async (
       select: {
         status: true,
         current_workflow_type: true,
-        contract_status: true,
+        contract_progress: true,
       },
     });
     if (!project) {
@@ -394,9 +398,9 @@ export const closeProject = async (
         'Project cannot be closed unless it is in IN_PROGRESS or REQUEST_EDIT status'
       );
     }
-    if (project.contract_status !== ProjectPhaseStatus.COMPLETED) {
-      throw new BadRequestError('Contract phase is not in COMPLETED status');
-    }
+    // if (project.contract_phase !== ProjectPhaseStatus.COMPLETED) {
+    //   throw new BadRequestError('Contract phase is not in COMPLETED status');
+    // }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
       throw new BadRequestError('Project is not in CONTRACT workflow type');
     }

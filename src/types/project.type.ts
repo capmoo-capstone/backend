@@ -7,13 +7,8 @@ import {
   UrgentType,
   UserRole,
 } from '@prisma/client';
-import { ListResponse, PaginatedResponse } from './common.type';
 import { Decimal } from '@prisma/client/runtime/client';
-
-export interface PhaseStatusResult {
-  status: ProjectPhaseStatus;
-  step?: number | null;
-}
+import { ListResponse, PaginatedResponse } from './common.type';
 
 export type PaginatedProjects = PaginatedResponse<Project>;
 
@@ -44,9 +39,7 @@ export interface CompleteProcurementPhaseResponse extends ProjectIdStatusRespons
   responsible_unit_id: string;
 }
 
-export interface CompleteContractPhaseResponse extends ProjectIdStatusResponse {
-  contract_status: ProjectPhaseStatus;
-}
+export interface CompleteContractPhaseResponse extends ProjectIdStatusResponse {}
 
 export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
   request_edit_reason: string | null;
@@ -62,8 +55,8 @@ export interface ProjectDetailsResponse {
   description: string | null;
   budget: Decimal;
   status: ProjectStatus;
-  procurement_status: PhaseStatusResult;
-  contract_status: PhaseStatusResult;
+  procurement_progress: ProjectPhaseProgress;
+  contract_progress: ProjectPhaseProgress;
   budget_plans: Array<{
     id: string;
     activity_type_name: string;
@@ -157,3 +150,14 @@ export type SummaryResponse =
       [ProjectStatus.WAITING_ACCEPT]: number;
     })
   | (SummaryResponseBase & { role: 'EXTERNAL'; NOT_STARTED: number });
+
+export interface PhaseEntry {
+  status: ProjectPhaseStatus;
+  step: number | null;
+}
+
+export interface ProjectPhaseProgress {
+  GENERAL_STAFF: PhaseEntry;
+  HEAD_OF_UNIT: PhaseEntry;
+  DOCUMENT_STAFF: PhaseEntry;
+}

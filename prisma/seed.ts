@@ -1,18 +1,23 @@
 import {
-  ProjectActionType,
   ProcurementType,
+  ProjectActionType,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
-  UserRole,
   UrgentType,
+  UserRole,
 } from '@prisma/client';
-import { prisma } from '../src/config/prisma';
-import { WORKFLOW_STEP_ORDERS } from '../src/lib/constant';
-import { syncProjectPhases } from '../src/lib/phase-status';
+import { InputJsonValue } from '@prisma/client/runtime/client';
 import bcrypt from 'bcrypt';
+import { prisma } from '../src/config/prisma';
+import {
+  COMPLETED_PHASE,
+  DEFAULT_PHASE,
+  WORKFLOW_STEP_ORDERS,
+} from '../src/lib/constant';
+import { ProjectPhaseProgress } from '../src/types/project.type';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = new Date();
@@ -489,10 +494,8 @@ const createProject = async (data: {
   urgent?: UrgentType;
   expectedApprovalDays?: number;
   expectedCompletionDays?: number;
-  procurementStatus?: ProjectPhaseStatus;
-  procurementStep?: number | null;
-  contractStatus?: ProjectPhaseStatus;
-  contractStep?: number | null;
+  procurementProgress?: ProjectPhaseProgress;
+  contractProgress?: ProjectPhaseProgress;
   prNo?: string;
   poNo?: string;
   lessNo?: string;
@@ -514,9 +517,7 @@ const createProject = async (data: {
   return await prisma.project.create({
     data: {
       id: data.id,
-      receive_no: `${fiscalYear()}/${data.receiveSuffix
-        .toString()
-        .padStart(5, '0')}`,
+      receive_no: `${fiscalYear()}/${data.receiveSuffix.toString().padStart(5, '0')}`,
       title: data.title,
       description: data.description,
       budget: data.budget,
@@ -536,11 +537,10 @@ const createProject = async (data: {
         data.expectedCompletionDays === undefined
           ? null
           : daysFromNow(data.expectedCompletionDays),
-      procurement_status:
-        data.procurementStatus ?? ProjectPhaseStatus.NOT_STARTED,
-      procurement_step: data.procurementStep ?? null,
-      contract_status: data.contractStatus ?? ProjectPhaseStatus.NOT_STARTED,
-      contract_step: data.contractStep ?? null,
+      procurement_progress: (data.procurementProgress ??
+        DEFAULT_PHASE) as unknown as InputJsonValue,
+      contract_progress: (data.contractProgress ??
+        DEFAULT_PHASE) as unknown as InputJsonValue,
       pr_no: data.prNo,
       po_no: data.poNo,
       less_no: data.lessNo,
@@ -551,15 +551,11 @@ const createProject = async (data: {
       request_edit_reason: data.requestEditReason,
       assignee_procurement:
         data.procurementAssigneeIds && data.procurementAssigneeIds.length > 0
-          ? {
-              connect: data.procurementAssigneeIds.map((id) => ({ id })),
-            }
+          ? { connect: data.procurementAssigneeIds.map((id) => ({ id })) }
           : undefined,
       assignee_contract:
         data.contractAssigneeIds && data.contractAssigneeIds.length > 0
-          ? {
-              connect: data.contractAssigneeIds.map((id) => ({ id })),
-            }
+          ? { connect: data.contractAssigneeIds.map((id) => ({ id })) }
           : undefined,
     },
   });
@@ -656,6 +652,7 @@ const seedCompletedSteps = async (
 const seedProjects = async () => {
   const fy = fiscalYear();
 
+  // 1. UNASSIGNED — no phase data, all defaults
   await createProject({
     id: ids.projects.unassigned,
     receiveSuffix: 1,
@@ -670,6 +667,7 @@ const seedProjects = async () => {
     expectedApprovalDays: 7,
   });
 
+  // 2. WAITING_ACCEPT — no phase data, all defaults
   await createProject({
     id: ids.projects.waitingAccept,
     receiveSuffix: 2,
@@ -685,6 +683,7 @@ const seedProjects = async () => {
     procurementAssigneeIds: [ids.users.procurementLt],
   });
 
+  // 3. WAITING_APPROVAL — HOU has something to approve at step 2
   await createProject({
     id: ids.projects.waitingApproval,
     receiveSuffix: 3,
@@ -699,8 +698,11 @@ const seedProjects = async () => {
     createdBy: ids.users.itRep,
     urgent: UrgentType.URGENT,
     expectedApprovalDays: 3,
-    procurementStatus: ProjectPhaseStatus.WAITING_APPROVAL,
-    procurementStep: 2,
+    procurementProgress: {
+      GENERAL_STAFF: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 2 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 2 },
+      DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+    },
     procurementAssigneeIds: [ids.users.procurementLt],
   });
   await seedCompletedSteps(
@@ -719,6 +721,7 @@ const seedProjects = async () => {
     fieldKey: 'approval_pack',
   });
 
+  // 4. WAITING_PROPOSAL — DOCUMENT_STAFF has something to propose at step 3
   await createProject({
     id: ids.projects.waitingProposal,
     receiveSuffix: 4,
@@ -731,8 +734,11 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-FIN',
     requestingUnitId: 'UNIT-ACC',
     createdBy: ids.users.financeStaff,
-    procurementStatus: ProjectPhaseStatus.WAITING_PROPOSAL,
-    procurementStep: 3,
+    procurementProgress: {
+      GENERAL_STAFF: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 3 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
+      DOCUMENT_STAFF: { status: ProjectPhaseStatus.WAITING_PROPOSAL, step: 3 },
+    },
     prNo: `${fy}-PR-UT-4`,
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
@@ -753,6 +759,7 @@ const seedProjects = async () => {
     fieldKey: 'proposal_request',
   });
 
+  // 5. PROCUREMENT COMPLETE — all procurement steps done
   await createProject({
     id: ids.projects.procurementComplete,
     receiveSuffix: 5,
@@ -766,6 +773,7 @@ const seedProjects = async () => {
     requestingUnitId: null,
     createdBy: ids.users.itRep,
     expectedCompletionDays: 20,
+    procurementProgress: COMPLETED_PHASE,
     prNo: `${fy}-PR-UT-5`,
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
@@ -776,14 +784,8 @@ const seedProjects = async () => {
     ids.users.procurementHigh,
     WORKFLOW_STEP_ORDERS[UnitResponsibleType.EBIDDING].length
   );
-  await prisma.$transaction((tx) =>
-    syncProjectPhases(
-      tx,
-      UnitResponsibleType.EBIDDING,
-      ids.projects.procurementComplete
-    )
-  );
 
+  // 6. CONTRACT ACTIVE — contract in progress at step 2
   await createProject({
     id: ids.projects.contractActive,
     receiveSuffix: 6,
@@ -796,9 +798,12 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-LOC',
     requestingUnitId: 'UNIT-BUILD',
     createdBy: ids.users.facilitiesRep,
-    procurementStatus: ProjectPhaseStatus.COMPLETED,
-    contractStatus: ProjectPhaseStatus.IN_PROGRESS,
-    contractStep: 2,
+    procurementProgress: COMPLETED_PHASE,
+    contractProgress: {
+      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+    },
     prNo: `${fy}-PR-UT-6`,
     poNo: `${fy}-PO-UT-6`,
     lessNo: `${fy}-LESS-UT-6`,
@@ -815,6 +820,7 @@ const seedProjects = async () => {
     1
   );
 
+  // 7. CONTRACT READY EXPORT — all contract steps done, FINANCE_STAFF needs to export
   await createProject({
     id: ids.projects.contractReadyExport,
     receiveSuffix: 7,
@@ -827,7 +833,12 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-LOC',
     requestingUnitId: 'UNIT-MAINT',
     createdBy: ids.users.maintenanceRep,
-    procurementStatus: ProjectPhaseStatus.COMPLETED,
+    procurementProgress: COMPLETED_PHASE,
+    contractProgress: {
+      GENERAL_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
+      DOCUMENT_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
+    },
     prNo: `${fy}-PR-UT-7`,
     poNo: `${fy}-PO-UT-7`,
     lessNo: `${fy}-LESS-UT-7`,
@@ -844,13 +855,6 @@ const seedProjects = async () => {
     ids.users.contractStaff,
     WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].length
   );
-  await prisma.$transaction((tx) =>
-    syncProjectPhases(
-      tx,
-      UnitResponsibleType.CONTRACT,
-      ids.projects.contractReadyExport
-    )
-  );
   await createSubmission({
     projectId: ids.projects.contractReadyExport,
     workflowType: UnitResponsibleType.CONTRACT,
@@ -864,6 +868,7 @@ const seedProjects = async () => {
     fileName: 'vendor_invoice_7.pdf',
   });
 
+  // 8. CLOSED — both phases completed
   await createProject({
     id: ids.projects.closed,
     receiveSuffix: 8,
@@ -876,8 +881,8 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-STUAFF',
     requestingUnitId: 'UNIT-EDU',
     createdBy: ids.users.libraryStaff,
-    procurementStatus: ProjectPhaseStatus.COMPLETED,
-    contractStatus: ProjectPhaseStatus.COMPLETED,
+    procurementProgress: COMPLETED_PHASE,
+    contractProgress: COMPLETED_PHASE,
     prNo: `${fy}-PR-UT-8`,
     poNo: `${fy}-PO-UT-8`,
     contractNo: `${fy}-CON-UT-8`,
@@ -889,6 +894,7 @@ const seedProjects = async () => {
     contractAssigneeIds: [ids.users.contractStaff],
   });
 
+  // 9. WAITING_CANCEL — in progress procurement at step 1
   await createProject({
     id: ids.projects.waitingCancel,
     receiveSuffix: 9,
@@ -901,11 +907,15 @@ const seedProjects = async () => {
     requestingUnitId: 'UNIT-BUILD',
     createdBy: ids.users.facilitiesRep,
     urgent: UrgentType.VERY_URGENT,
-    procurementStatus: ProjectPhaseStatus.IN_PROGRESS,
-    procurementStep: 1,
+    procurementProgress: {
+      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 1 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+    },
     procurementAssigneeIds: [ids.users.procurementLt],
   });
 
+  // 10. CANCELLED — all defaults fine
   await createProject({
     id: ids.projects.cancelled,
     receiveSuffix: 10,
@@ -920,6 +930,7 @@ const seedProjects = async () => {
     procurementAssigneeIds: [ids.users.procurementLt],
   });
 
+  // 11. REQUEST_EDIT — both phases completed
   await createProject({
     id: ids.projects.requestEdit,
     receiveSuffix: 11,
@@ -932,8 +943,8 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-STUAFF',
     requestingUnitId: 'UNIT-NET',
     createdBy: ids.users.libraryStaff,
-    procurementStatus: ProjectPhaseStatus.COMPLETED,
-    contractStatus: ProjectPhaseStatus.COMPLETED,
+    procurementProgress: COMPLETED_PHASE,
+    contractProgress: COMPLETED_PHASE,
     requestEditReason: 'Requester needs to update warranty details.',
     prNo: `${fy}-PR-UT-11`,
     poNo: `${fy}-PO-UT-11`,
@@ -941,6 +952,7 @@ const seedProjects = async () => {
     contractAssigneeIds: [ids.users.contractStaff],
   });
 
+  // 12. INTERNAL — in progress at step 2
   await createProject({
     id: ids.projects.internal,
     receiveSuffix: 12,
@@ -952,8 +964,11 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-FIN',
     requestingUnitId: 'UNIT-FIN',
     createdBy: ids.users.financeStaff,
-    procurementStatus: ProjectPhaseStatus.IN_PROGRESS,
-    procurementStep: 2,
+    procurementProgress: {
+      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+    },
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
   await seedCompletedSteps(
