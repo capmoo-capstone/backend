@@ -1,8 +1,9 @@
 import { User, UserRole } from '@prisma/client';
 
-export interface UsersListFilters {
+export interface UserListFilters {
   unitId?: string;
   deptId?: string;
+  role?: UserRole;
 }
 
 export interface UserListItem {
@@ -11,7 +12,7 @@ export interface UserListItem {
   roles: UserRole[];
 }
 
-export interface UsersListResponse {
+export interface UserListResponse {
   id: string;
   entity_type: string;
   name: string;

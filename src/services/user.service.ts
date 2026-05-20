@@ -1,15 +1,6 @@
+import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import {
-  UpdateUserRoleResponse,
-  UserDetailResponse,
-  UsersListFilters,
-  UsersListResponse,
-} from '../types/user.type';
-import {
-  AddRoleDto,
-  RemoveRoleDto,
-  UpdateSupplyRoleDto,
-} from '../schemas/user.schema';
+import { OPS_DEPT_ID } from '../lib/constant';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import {
   addRoleInternal,
@@ -17,15 +8,25 @@ import {
   assertUsersExist,
   removeRoleInternal,
 } from '../lib/user-role';
-import { UserRole } from '@prisma/client';
-import { OPS_DEPT_ID } from '../lib/constant';
+import {
+  AddRoleDto,
+  RemoveRoleDto,
+  UpdateSupplyRoleDto,
+} from '../schemas/user.schema';
+import { UpdateUserRoleResponse, UserDetailResponse, UserListFilters, UserListResponse } from '../types/user.type';
 
 export const listUsers = async (
-  filters: UsersListFilters
-): Promise<UsersListResponse> => {
-  const { unitId, deptId } = filters;
+  filters: UserListFilters
+): Promise<UserListResponse> => {
+  const { unitId, deptId, role } = filters;
+  const roleWhere = {
+    ...(unitId ? { unit_id: unitId } : {}),
+    ...(deptId ? { dept_id: deptId } : {}),
+    ...(role ? { role } : {}),
+  };
+  const userWhere = { roles: { some: roleWhere } };
 
-  let data: UsersListResponse;
+  let data: UserListResponse;
 
   if (unitId) {
     const unit = await prisma.unit.findUnique({
@@ -38,19 +39,13 @@ export const listUsers = async (
     const [users, count] = await Promise.all([
       prisma.user.findMany({
         where: {
-          roles: {
-            some: {
-              unit_id: unitId,
-            },
-          },
+          roles: { some: roleWhere },
         },
         select: {
           id: true,
           full_name: true,
           roles: {
-            where: {
-              unit_id: unitId,
-            },
+            where: roleWhere,
             select: {
               role: true,
             },
@@ -59,11 +54,7 @@ export const listUsers = async (
       }),
       prisma.user.count({
         where: {
-          roles: {
-            some: {
-              unit_id: unitId,
-            },
-          },
+          roles: { some: roleWhere },
         },
       }),
     ]);
@@ -92,19 +83,13 @@ export const listUsers = async (
     const [users, count] = await Promise.all([
       prisma.user.findMany({
         where: {
-          roles: {
-            some: {
-              dept_id: deptId,
-            },
-          },
+          roles: { some: roleWhere },
         },
         select: {
           id: true,
           full_name: true,
           roles: {
-            where: {
-              dept_id: deptId,
-            },
+            where: roleWhere,
             select: {
               role: true,
             },
@@ -113,11 +98,7 @@ export const listUsers = async (
       }),
       prisma.user.count({
         where: {
-          roles: {
-            some: {
-              dept_id: deptId,
-            },
-          },
+          roles: { some: roleWhere },
         },
       }),
     ]);
@@ -137,17 +118,19 @@ export const listUsers = async (
   } else {
     const [users, count] = await Promise.all([
       prisma.user.findMany({
+        where: role ? userWhere : {},
         select: {
           id: true,
           full_name: true,
           roles: {
+            where: role ? roleWhere : undefined,
             select: {
               role: true,
             },
           },
         },
       }),
-      prisma.user.count(),
+      prisma.user.count({ where: role ? userWhere : {} }),
     ]);
     data = {
       id: 'all',
@@ -206,7 +189,8 @@ export const deleteUser = async (id: string): Promise<void> => {
 export const updateSupplyRole = async (
   data: UpdateSupplyRoleDto
 ): Promise<{ added: number; removed: number }> => {
-  const { role, new_users, remove_users } = data;
+  const { role, unit_id, new_users, remove_users } = data;
+  const unitId = role === UserRole.HEAD_OF_UNIT ? unit_id! : null;
 
   if (new_users.length === 0 && remove_users.length === 0) {
     throw new BadRequestError('No users to add or remove');
@@ -215,6 +199,21 @@ export const updateSupplyRole = async (
   assertNoDuplicatesOrOverlap(new_users, remove_users);
 
   return await prisma.$transaction(async (tx) => {
+    if (role === UserRole.HEAD_OF_UNIT) {
+      const unit = await tx.unit.findUnique({
+        where: { id: unitId },
+        select: { dept_id: true },
+      });
+      if (!unit) {
+        throw new NotFoundError('Unit not found');
+      }
+      if (unit.dept_id !== OPS_DEPT_ID) {
+        throw new BadRequestError(
+          'HEAD_OF_UNIT can only be assigned to Supply Operation units'
+        );
+      }
+    }
+
     await assertUsersExist(tx, [...new_users, ...remove_users]);
 
     // HEAD_OF_DEPARTMENT — enforce 1 คน
@@ -233,13 +232,29 @@ export const updateSupplyRole = async (
       }
     }
 
+    if (role === UserRole.HEAD_OF_UNIT && new_users.length > 0) {
+      const existingHead = await tx.userOrganizationRole.findFirst({
+        where: {
+          dept_id: OPS_DEPT_ID,
+          unit_id: unitId,
+          role: UserRole.HEAD_OF_UNIT,
+          user_id: { notIn: remove_users },
+        },
+      });
+      if (existingHead) {
+        throw new BadRequestError(
+          'Unit already has a HEAD_OF_UNIT. Include them in remove_users to replace.'
+        );
+      }
+    }
+
     // REMOVE
     for (const userId of remove_users) {
       await removeRoleInternal(tx, {
         userId,
         role,
         deptId: OPS_DEPT_ID,
-        unitId: null,
+        unitId,
       });
     }
 
@@ -249,7 +264,7 @@ export const updateSupplyRole = async (
         userId,
         role,
         deptId: OPS_DEPT_ID,
-        unitId: null,
+        unitId,
       });
     }
 

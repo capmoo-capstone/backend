@@ -7,13 +7,22 @@ import {
   UpdateRepresentativeSchema,
 } from '../schemas/unit.schema';
 
+const toBool = (value: unknown): boolean => value === true || value === 'true';
+
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit } = req.query;
+  const { page, limit, dept_id, withUsers, withHead, withDelegations } =
+    req.query;
   const data = await UnitService.listUnits(
     parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
+    parseInt(limit as string) || 10,
+    {
+      deptId: dept_id as string,
+      withUsers: toBool(withUsers),
+      withHead: toBool(withHead),
+      withDelegations: toBool(withDelegations),
+    }
   );
   res.status(200).json(data);
 };
