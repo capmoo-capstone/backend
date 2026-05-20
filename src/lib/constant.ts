@@ -56,15 +56,13 @@ export const PROCUREMENT_WORKFLOW_TYPES = [
 ];
 
 export const DEFAULT_PHASE: ProjectPhaseProgress = {
-  GENERAL_STAFF:  { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-  HEAD_OF_UNIT:   { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  GENERAL_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
   DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-  other:          { status: ProjectPhaseStatus.NOT_STARTED, step: null },
 };
 
 export const COMPLETED_PHASE: ProjectPhaseProgress = {
-  GENERAL_STAFF:  { status: ProjectPhaseStatus.COMPLETED, step: null },
-  HEAD_OF_UNIT:   { status: ProjectPhaseStatus.COMPLETED, step: null },
+  GENERAL_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
+  HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
   DOCUMENT_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
-  other:          { status: ProjectPhaseStatus.COMPLETED, step: null },
 };

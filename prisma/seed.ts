@@ -1,19 +1,23 @@
 import {
-  ProjectActionType,
   ProcurementType,
+  ProjectActionType,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
-  UserRole,
   UrgentType,
+  UserRole,
 } from '@prisma/client';
-import { prisma } from '../src/config/prisma';
-import { WORKFLOW_STEP_ORDERS, DEFAULT_PHASE, COMPLETED_PHASE } from '../src/lib/constant';
-import { ProjectPhaseProgress } from '../src/types/project.type';
-import bcrypt from 'bcrypt';
 import { InputJsonValue } from '@prisma/client/runtime/client';
+import bcrypt from 'bcrypt';
+import { prisma } from '../src/config/prisma';
+import {
+  COMPLETED_PHASE,
+  DEFAULT_PHASE,
+  WORKFLOW_STEP_ORDERS,
+} from '../src/lib/constant';
+import { ProjectPhaseProgress } from '../src/types/project.type';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = new Date();
@@ -490,8 +494,6 @@ const createProject = async (data: {
   urgent?: UrgentType;
   expectedApprovalDays?: number;
   expectedCompletionDays?: number;
-  procurementPhase?: ProjectPhaseStatus;
-  contractPhase?: ProjectPhaseStatus;
   procurementProgress?: ProjectPhaseProgress;
   contractProgress?: ProjectPhaseProgress;
   prNo?: string;
@@ -535,10 +537,10 @@ const createProject = async (data: {
         data.expectedCompletionDays === undefined
           ? null
           : daysFromNow(data.expectedCompletionDays),
-      procurement_phase: data.procurementPhase ?? ProjectPhaseStatus.NOT_STARTED,
-      contract_phase: data.contractPhase ?? ProjectPhaseStatus.NOT_STARTED,
-      procurement_progress: (data.procurementProgress ?? DEFAULT_PHASE) as unknown as InputJsonValue,
-      contract_progress: (data.contractProgress ?? DEFAULT_PHASE) as unknown as InputJsonValue,
+      procurement_progress: (data.procurementProgress ??
+        DEFAULT_PHASE) as unknown as InputJsonValue,
+      contract_progress: (data.contractProgress ??
+        DEFAULT_PHASE) as unknown as InputJsonValue,
       pr_no: data.prNo,
       po_no: data.poNo,
       less_no: data.lessNo,
@@ -686,7 +688,8 @@ const seedProjects = async () => {
     id: ids.projects.waitingApproval,
     receiveSuffix: 3,
     title: 'User Testing - Network monitoring sensors',
-    description: 'IN_PROGRESS project with a staff submission waiting approval.',
+    description:
+      'IN_PROGRESS project with a staff submission waiting approval.',
     budget: 460000,
     status: ProjectStatus.IN_PROGRESS,
     procurementType: ProcurementType.LT500K,
@@ -695,12 +698,10 @@ const seedProjects = async () => {
     createdBy: ids.users.itRep,
     urgent: UrgentType.URGENT,
     expectedApprovalDays: 3,
-    procurementPhase: ProjectPhaseStatus.WAITING_APPROVAL,
     procurementProgress: {
-      GENERAL_STAFF:  { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 2 },
-      HEAD_OF_UNIT:   { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 2 },
+      GENERAL_STAFF: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 2 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 2 },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-      other:          { status: ProjectPhaseStatus.IN_PROGRESS, step: null },
     },
     procurementAssigneeIds: [ids.users.procurementLt],
   });
@@ -725,19 +726,18 @@ const seedProjects = async () => {
     id: ids.projects.waitingProposal,
     receiveSuffix: 4,
     title: 'User Testing - Accounting software renewal',
-    description: 'IN_PROGRESS MT500K project with a submission waiting proposal/signature flow.',
+    description:
+      'IN_PROGRESS MT500K project with a submission waiting proposal/signature flow.',
     budget: 690000,
     status: ProjectStatus.IN_PROGRESS,
     procurementType: ProcurementType.MT500K,
     requestingDeptId: 'DEPT-FIN',
     requestingUnitId: 'UNIT-ACC',
     createdBy: ids.users.financeStaff,
-    procurementPhase: ProjectPhaseStatus.WAITING_PROPOSAL,
     procurementProgress: {
-      GENERAL_STAFF:  { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 3 },
-      HEAD_OF_UNIT:   { status: ProjectPhaseStatus.COMPLETED, step: null },
+      GENERAL_STAFF: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 3 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.WAITING_PROPOSAL, step: 3 },
-      other:          { status: ProjectPhaseStatus.IN_PROGRESS, step: null },
     },
     prNo: `${fy}-PR-UT-4`,
     procurementAssigneeIds: [ids.users.procurementHigh],
@@ -764,7 +764,8 @@ const seedProjects = async () => {
     id: ids.projects.procurementComplete,
     receiveSuffix: 5,
     title: 'User Testing - Data center UPS upgrade',
-    description: 'EBIDDING project with procurement phase completed and ready to move to contract.',
+    description:
+      'EBIDDING project with procurement phase completed and ready to move to contract.',
     budget: 1800000,
     status: ProjectStatus.IN_PROGRESS,
     procurementType: ProcurementType.EBIDDING,
@@ -772,7 +773,6 @@ const seedProjects = async () => {
     requestingUnitId: null,
     createdBy: ids.users.itRep,
     expectedCompletionDays: 20,
-    procurementPhase: ProjectPhaseStatus.COMPLETED,
     procurementProgress: COMPLETED_PHASE,
     prNo: `${fy}-PR-UT-5`,
     procurementAssigneeIds: [ids.users.procurementHigh],
@@ -798,14 +798,11 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-LOC',
     requestingUnitId: 'UNIT-BUILD',
     createdBy: ids.users.facilitiesRep,
-    procurementPhase: ProjectPhaseStatus.COMPLETED,
     procurementProgress: COMPLETED_PHASE,
-    contractPhase: ProjectPhaseStatus.IN_PROGRESS,
     contractProgress: {
-      GENERAL_STAFF:  { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
-      HEAD_OF_UNIT:   { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-      other:          { status: ProjectPhaseStatus.IN_PROGRESS, step: null },
     },
     prNo: `${fy}-PR-UT-6`,
     poNo: `${fy}-PO-UT-6`,
@@ -836,14 +833,11 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-LOC',
     requestingUnitId: 'UNIT-MAINT',
     createdBy: ids.users.maintenanceRep,
-    procurementPhase: ProjectPhaseStatus.COMPLETED,
     procurementProgress: COMPLETED_PHASE,
-    contractPhase: ProjectPhaseStatus.NOT_EXPORTED,
     contractProgress: {
-      GENERAL_STAFF:  { status: ProjectPhaseStatus.COMPLETED, step: null },
-      HEAD_OF_UNIT:   { status: ProjectPhaseStatus.COMPLETED, step: null },
+      GENERAL_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
-      other:          { status: ProjectPhaseStatus.COMPLETED, step: null },
     },
     prNo: `${fy}-PR-UT-7`,
     poNo: `${fy}-PO-UT-7`,
@@ -887,9 +881,7 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-STUAFF',
     requestingUnitId: 'UNIT-EDU',
     createdBy: ids.users.libraryStaff,
-    procurementPhase: ProjectPhaseStatus.COMPLETED,
     procurementProgress: COMPLETED_PHASE,
-    contractPhase: ProjectPhaseStatus.COMPLETED,
     contractProgress: COMPLETED_PHASE,
     prNo: `${fy}-PR-UT-8`,
     poNo: `${fy}-PO-UT-8`,
@@ -915,12 +907,10 @@ const seedProjects = async () => {
     requestingUnitId: 'UNIT-BUILD',
     createdBy: ids.users.facilitiesRep,
     urgent: UrgentType.VERY_URGENT,
-    procurementPhase: ProjectPhaseStatus.IN_PROGRESS,
     procurementProgress: {
-      GENERAL_STAFF:  { status: ProjectPhaseStatus.IN_PROGRESS, step: 1 },
-      HEAD_OF_UNIT:   { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 1 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-      other:          { status: ProjectPhaseStatus.IN_PROGRESS, step: null },
     },
     procurementAssigneeIds: [ids.users.procurementLt],
   });
@@ -953,9 +943,7 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-STUAFF',
     requestingUnitId: 'UNIT-NET',
     createdBy: ids.users.libraryStaff,
-    procurementPhase: ProjectPhaseStatus.COMPLETED,
     procurementProgress: COMPLETED_PHASE,
-    contractPhase: ProjectPhaseStatus.COMPLETED,
     contractProgress: COMPLETED_PHASE,
     requestEditReason: 'Requester needs to update warranty details.',
     prNo: `${fy}-PR-UT-11`,
@@ -976,12 +964,10 @@ const seedProjects = async () => {
     requestingDeptId: 'DEPT-FIN',
     requestingUnitId: 'UNIT-FIN',
     createdBy: ids.users.financeStaff,
-    procurementPhase: ProjectPhaseStatus.IN_PROGRESS,
     procurementProgress: {
-      GENERAL_STAFF:  { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
-      HEAD_OF_UNIT:   { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
+      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-      other:          { status: ProjectPhaseStatus.IN_PROGRESS, step: null },
     },
     procurementAssigneeIds: [ids.users.procurementHigh],
   });

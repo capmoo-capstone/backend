@@ -1,23 +1,32 @@
 import {
   Prisma,
+  ProcurementType,
+  ProjectActionType,
+  ProjectPhaseStatus,
   ProjectStatus,
-  UserRole,
   UnitResponsibleType,
   UrgentType,
-  ProcurementType,
-  ProjectPhaseStatus,
-  ProjectActionType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import {
+  CONTRACT_UNIT_ID,
+  IN_PROGRESS_STATUSES,
+  OPS_DEPT_ID,
+  PROC1_UNIT_ID,
+  PROC2_UNIT_ID,
+  WORKLOAD_STATUSES,
+} from '../lib/constant';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
 import {
-  haveSupplyPermission,
   getDeptIdsForUser,
+  getUnitIdsForUser,
+  haveSupplyPermission,
   isHeadOfSupplyDept,
   isHeadOfSupplyUnit,
   isSuperAdmin,
-  getUnitIdsForUser,
 } from '../lib/permissions';
+import { ProjectFilterQuery } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
   PaginatedProjects,
@@ -29,15 +38,6 @@ import {
   UnitWorkload,
   WorkloadStatsResponse,
 } from '../types/project.type';
-import {
-  CONTRACT_UNIT_ID,
-  IN_PROGRESS_STATUSES,
-  OPS_DEPT_ID,
-  PROC1_UNIT_ID,
-  PROC2_UNIT_ID,
-  WORKLOAD_STATUSES,
-} from '../lib/constant';
-import { ProjectFilterQuery } from '../schemas/project.schema';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -45,8 +45,8 @@ const SORTABLE_FIELDS = new Set([
   'created_at',
   'status',
   'procurement_type',
-  'procurement_phase',
-  'contract_phase',
+  'procurement_status',
+  'contract_status',
 ]);
 
 const buildWhereClause = (
@@ -148,14 +148,32 @@ const buildWhereClause = (
   }
   if (filters?.procurementStatus?.length) {
     and.push({
-      procurement_phase: {
-        in: filters.procurementStatus as ProjectPhaseStatus[],
-      },
+      AND: [
+        {
+          current_workflow_type: {
+            not: UnitResponsibleType.CONTRACT,
+          },
+        },
+        {
+          status: {
+            in: filters.procurementStatus as ProjectStatus[],
+          },
+        },
+      ],
     });
   }
   if (filters?.contractStatus?.length) {
     and.push({
-      contract_phase: { in: filters.contractStatus as ProjectPhaseStatus[] },
+      AND: [
+        {
+          current_workflow_type: UnitResponsibleType.CONTRACT,
+        },
+        {
+          status: {
+            in: filters.contractStatus as ProjectStatus[],
+          },
+        },
+      ],
     });
   }
   if (filters?.urgentStatus?.length) {
@@ -203,30 +221,11 @@ const buildWhereClause = (
 
 const buildOrderBy = (filters?: ProjectFilterQuery) => {
   if (filters?.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
-    if (filters.sortBy === 'procurement_phase') {
-      return [
-        {
-          procurement_phase: filters.sortOrder ?? 'desc',
-        },
-        {
-          status: filters.sortOrder ?? 'desc',
-        },
-      ];
-    } else if (filters.sortBy === 'contract_phase') {
-      return [
-        {
-          contract_phase: filters.sortOrder ?? 'desc',
-        },
-        {
-          status: filters.sortOrder ?? 'desc',
-        },
-      ];
-    } else
-      return [
-        {
-          [filters.sortBy]: filters.sortOrder ?? 'desc',
-        } as Prisma.ProjectOrderByWithRelationInput,
-      ];
+    return [
+      {
+        [filters.sortBy]: filters.sortOrder ?? 'desc',
+      } as Prisma.ProjectOrderByWithRelationInput,
+    ];
   }
   return [{ receive_no: 'desc' as Prisma.SortOrder }];
 };
@@ -855,8 +854,12 @@ export const getOwnProjects = async (
         OR: [
           {
             AND: [
-              { procurement_phase: ProjectPhaseStatus.COMPLETED },
-              { contract_phase: ProjectPhaseStatus.NOT_EXPORTED },
+              {
+                contract_progress: {
+                  path: ['FINANCE_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.NOT_EXPORTED,
+                },
+              },
             ],
           },
           {
@@ -915,8 +918,6 @@ export const getOwnProjects = async (
             name: true,
           },
         },
-        procurement_phase: true,
-        contract_phase: true,
         procurement_progress: true,
         contract_progress: true,
         requesting_unit: {
@@ -1142,8 +1143,8 @@ export const getSummaryCards = async (
               },
             },
             {
-              procurement_phase: {
-                in: [ProjectPhaseStatus.NOT_STARTED],
+              current_workflow_type: {
+                not: UnitResponsibleType.CONTRACT,
               },
             },
           ],
@@ -1160,8 +1161,7 @@ export const getSummaryCards = async (
             },
             {
               AND: [
-                { procurement_phase: { in: [ProjectPhaseStatus.COMPLETED] } },
-                { contract_phase: { in: [ProjectPhaseStatus.NOT_STARTED] } },
+                { current_workflow_type: UnitResponsibleType.CONTRACT },
                 {
                   status: {
                     in: [
