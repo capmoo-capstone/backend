@@ -863,16 +863,16 @@ export const getOwnProjects = async (
     if (user.roles.some((r) => r.role === UserRole.FINANCE_STAFF)) {
       orClauses.push({
         OR: [
-          {
-            AND: [
-              {
-                contract_progress: {
-                  path: ['FINANCE_STAFF', 'status'],
-                  equals: ProjectPhaseStatus.NOT_EXPORTED,
-                },
-              },
-            ],
-          },
+          // {
+          //   AND: [
+          //     {
+          //       contract_progress: {
+          //         path: ['FINANCE_STAFF', 'status'],
+          //         equals: ProjectPhaseStatus.NOT_EXPORTED,
+          //       },
+          //     },
+          //   ],
+          // },
           {
             status: ProjectStatus.REQUEST_EDIT,
           },
