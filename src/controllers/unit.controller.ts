@@ -1,13 +1,12 @@
 import { Request, Response } from 'express';
-import * as UnitService from '../services/unit.service';
+import { toBool } from '../lib/helper';
 import {
   CreateUnitSchema,
+  UpdateRepresentativeSchema,
   UpdateUnitSchema,
   UpdateUnitUsersSchema,
-  UpdateRepresentativeSchema,
 } from '../schemas/unit.schema';
-
-const toBool = (value: unknown): boolean => value === true || value === 'true';
+import * as UnitService from '../services/unit.service';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']

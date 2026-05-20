@@ -1,5 +1,5 @@
-import { prisma } from '../config/prisma';
 import { Department, Prisma, Unit, UserRole } from '@prisma/client';
+import { prisma } from '../config/prisma';
 import { NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,
@@ -31,6 +31,7 @@ export const listDepartments = async (
               where: {
                 role: UserRole.REPRESENTATIVE,
               },
+              take: 1,
               select: {
                 user: {
                   select: {

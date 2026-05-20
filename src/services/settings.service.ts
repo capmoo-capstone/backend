@@ -69,18 +69,22 @@ export const getOpsUnits = async (): Promise<OpsUnitSettingsResponse> => {
       name: unit.name,
       type: unit.type,
       head: (() => {
-        const headRole = unit.organization_roles.find((role) => role.role === UserRole.HEAD_OF_UNIT);
+        const headRole = unit.organization_roles.find(
+          (role) => role.role === UserRole.HEAD_OF_UNIT
+        );
         if (!headRole) return null;
         const d = headRole.user.delegations_given[0];
         return {
           id: headRole.user.id,
           full_name: headRole.user.full_name,
-          active_delegation: d ? {
-            id: d.id,
-            delegatee: d.delegatee,
-            start_date: d.start_date,
-            end_date: d.end_date,
-          } : null,
+          active_delegation: d
+            ? {
+                id: d.id,
+                delegatee: d.delegatee,
+                start_date: d.start_date,
+                end_date: d.end_date,
+              }
+            : null,
         };
       })(),
       users: unit.organization_roles
@@ -107,6 +111,7 @@ export const getRepresentatives =
             name: true,
             organization_roles: {
               where: { role: UserRole.REPRESENTATIVE },
+              take: 1,
               select: {
                 user: {
                   select: {
@@ -130,10 +135,12 @@ export const getRepresentatives =
         units: department.units.map((unit) => ({
           id: unit.id,
           name: unit.name,
-          representative: unit.organization_roles[0] ? {
-            id: unit.organization_roles[0].user.id,
-            full_name: unit.organization_roles[0].user.full_name,
-          } : null,
+          representative: unit.organization_roles[0]
+            ? {
+                id: unit.organization_roles[0].user.id,
+                full_name: unit.organization_roles[0].user.full_name,
+              }
+            : null,
         })),
       })),
     };
@@ -207,11 +214,14 @@ export const getOpsStaff = async (): Promise<OpsStaffSettingsResponse> => {
             id: users[0].id,
             full_name: users[0].full_name,
           },
-          active_delegation: users[0]?.active_delegation || null,
+          active_delegation: users[0].active_delegation || null,
         };
       }
 
-      return { role, users: users.map((u) => ({ id: u.id, full_name: u.full_name })) };
+      return {
+        role,
+        users: users.map((u) => ({ id: u.id, full_name: u.full_name })),
+      };
     }),
   };
 };
