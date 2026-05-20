@@ -45,8 +45,6 @@ const SORTABLE_FIELDS = new Set([
   'created_at',
   'status',
   'procurement_type',
-  'procurement_status',
-  'contract_status',
 ]);
 
 const buildWhereClause = (
@@ -221,6 +219,19 @@ const buildWhereClause = (
 
 const buildOrderBy = (filters?: ProjectFilterQuery) => {
   if (filters?.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
+    if (filters.sortBy === 'status') {
+      const sortOrder: Prisma.SortOrder = filters.sortOrder ?? 'desc';
+
+      return [
+        {
+          status: sortOrder,
+        },
+        {
+          receive_no: 'desc' as Prisma.SortOrder,
+        },
+      ];
+    }
+
     return [
       {
         [filters.sortBy]: filters.sortOrder ?? 'desc',
