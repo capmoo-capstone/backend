@@ -8,16 +8,20 @@ import {
 } from '../types/budget-plan.type';
 
 export const listBudgetPlans = async (
-  user: AuthPayload,
-  unitId: string,
+  _user: AuthPayload,
   page: number,
   limit: number,
+  deptId?: string,
+  unitId?: string,
   available?: boolean
 ): Promise<PaginatedBudgetPlans> => {
   const skip = (page - 1) * limit;
   let where = {};
+  if (deptId) {
+    where = { unit: { dept_id: deptId } };
+  }
   if (unitId) {
-    where = { unit_id: unitId };
+    where = { ...where, unit_id: unitId };
   }
   if (available !== undefined) {
     if (available === true) {
