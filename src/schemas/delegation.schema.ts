@@ -21,6 +21,7 @@ export const GetActiveDelegationQuerySchema = z
     },
     {
       message: 'unitId is required when role is HEAD_OF_UNIT',
+      path: ['unitId'],
     }
   );
 

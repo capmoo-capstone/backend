@@ -34,7 +34,8 @@ export const listBudgetPlans = async (
       where,
       include: {
         unit: {
-          include: {
+          select: {
+            name: true,
             department: {
               select: { name: true },
             },

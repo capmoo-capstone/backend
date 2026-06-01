@@ -118,7 +118,7 @@ export const getById = async (id: string): Promise<DelegationDetail> => {
 
 export const getActiveDelegation = async (
   role: 'HEAD_OF_DEPARTMENT' | 'HEAD_OF_UNIT',
-  unitId: string | null
+  unitId?: string
 ): Promise<DelegationDetail | null> => {
   const delegation = await prisma.userDelegation.findFirst({
     where: {
@@ -126,7 +126,7 @@ export const getActiveDelegation = async (
         roles: {
           some: {
             role,
-            unit_id: unitId,
+            unit_id: unitId ?? undefined,
           },
         },
       },

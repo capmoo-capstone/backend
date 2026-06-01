@@ -51,9 +51,7 @@ export const getActiveDelegation = async (
 ) => {
   // #swagger.tags = ['Delegation']
   // #swagger.security = [{ bearerAuth: [] }]
-  const user = req.user!;
   const { role, unitId } = req.query;
-
   const validatedQuery = GetActiveDelegationQuerySchema.parse({
     role,
     unitId,
@@ -61,7 +59,7 @@ export const getActiveDelegation = async (
 
   const data = await DelegationService.getActiveDelegation(
     validatedQuery.role,
-    validatedQuery.unitId
+    validatedQuery.unitId ?? null
   );
   res.status(200).json(data);
 };
