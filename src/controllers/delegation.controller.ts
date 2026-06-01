@@ -1,8 +1,7 @@
 import { Response } from 'express';
-import * as DelegationService from '../services/delegation.service';
 import { AddDelegationSchema } from '../schemas/delegation.schema';
+import * as DelegationService from '../services/delegation.service';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { UserRole } from '@prisma/client';
 
 export const addDelegation = async (
   req: AuthenticatedRequest,
@@ -49,9 +48,12 @@ export const getActiveDelegation = async (
 ) => {
   // #swagger.tags = ['Delegation']
   // #swagger.security = [{ bearerAuth: [] }]
+  const user = req.user!;
   const { role, unitId } = req.query;
+
   const data = await DelegationService.getActiveDelegation(
-    role as UserRole,
+    user,
+    role as 'HEAD_OF_DEPARTMENT' | 'HEAD_OF_UNIT',
     unitId as string | null
   );
   res.status(200).json(data);
