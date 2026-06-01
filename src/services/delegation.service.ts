@@ -1,10 +1,10 @@
-import { UserDelegation, UserRole } from '@prisma/client';
+import { UserDelegation } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { AddDelegationDto } from '../schemas/delegation.schema';
-import * as UserService from './user.service';
-import { DelegationDetail } from '../types/delegation.type';
 import { AuthPayload } from '../types/auth.type';
+import { DelegationDetail } from '../types/delegation.type';
+import * as UserService from './user.service';
 
 export const addDelegation = async (
   user: AuthPayload,
@@ -117,8 +117,8 @@ export const getById = async (id: string): Promise<DelegationDetail> => {
 };
 
 export const getActiveDelegation = async (
-  role: UserRole,
-  unitId: string | null
+  role: 'HEAD_OF_DEPARTMENT' | 'HEAD_OF_UNIT',
+  unitId?: string
 ): Promise<DelegationDetail | null> => {
   const delegation = await prisma.userDelegation.findFirst({
     where: {
@@ -126,7 +126,7 @@ export const getActiveDelegation = async (
         roles: {
           some: {
             role,
-            unit_id: unitId,
+            unit_id: unitId ?? undefined,
           },
         },
       },
