@@ -117,7 +117,6 @@ export const getById = async (id: string): Promise<DelegationDetail> => {
 };
 
 export const getActiveDelegation = async (
-  user: AuthPayload,
   role: 'HEAD_OF_DEPARTMENT' | 'HEAD_OF_UNIT',
   unitId: string | null
 ): Promise<DelegationDetail | null> => {
@@ -131,7 +130,6 @@ export const getActiveDelegation = async (
           },
         },
       },
-      delegatee_id: user.id,
       is_active: true,
       OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
     },

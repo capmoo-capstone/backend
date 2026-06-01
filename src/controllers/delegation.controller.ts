@@ -1,5 +1,8 @@
 import { Response } from 'express';
-import { AddDelegationSchema } from '../schemas/delegation.schema';
+import {
+  AddDelegationSchema,
+  GetActiveDelegationQuerySchema,
+} from '../schemas/delegation.schema';
 import * as DelegationService from '../services/delegation.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 
@@ -51,10 +54,14 @@ export const getActiveDelegation = async (
   const user = req.user!;
   const { role, unitId } = req.query;
 
+  const validatedQuery = GetActiveDelegationQuerySchema.parse({
+    role,
+    unitId,
+  });
+
   const data = await DelegationService.getActiveDelegation(
-    user,
-    role as 'HEAD_OF_DEPARTMENT' | 'HEAD_OF_UNIT',
-    unitId as string | null
+    validatedQuery.role,
+    validatedQuery.unitId
   );
   res.status(200).json(data);
 };
