@@ -59,7 +59,7 @@ export const getActiveDelegation = async (
 
   const data = await DelegationService.getActiveDelegation(
     validatedQuery.role,
-    validatedQuery.unitId ?? null
+    validatedQuery.unitId
   );
   res.status(200).json(data);
 };

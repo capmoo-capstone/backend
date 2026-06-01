@@ -49,12 +49,14 @@ export const listBudgetPlans = async (
     prisma.budgetPlan.count({ where }),
   ]);
 
-  const formattedBudgetPlans = budgetPlans.map((plan) => ({
-    ...plan,
-    unit_name: plan.unit?.name,
-    dept_name: plan.unit?.department?.name,
-    unit: undefined,
-  }));
+  const formattedBudgetPlans = budgetPlans.map((plan) => {
+    const { unit, ...rest } = plan;
+    return {
+      ...rest,
+      unit_name: unit?.name,
+      dept_name: unit?.department?.name,
+    };
+  });
 
   return {
     total,
