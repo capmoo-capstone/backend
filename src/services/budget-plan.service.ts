@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma';
-import { AuthPayload } from '../types/auth.type';
 import { ImportBudgetPlanDto } from '../schemas/budget-plan.schema';
+import { AuthPayload } from '../types/auth.type';
 import {
   ImportBudgetPlanResponse,
   PaginatedBudgetPlans,
@@ -32,6 +32,15 @@ export const listBudgetPlans = async (
   const [budgetPlans, total] = await Promise.all([
     prisma.budgetPlan.findMany({
       where,
+      include: {
+        unit: {
+          include: {
+            department: {
+              select: { name: true },
+            },
+          },
+        },
+      },
       skip: skip,
       take: limit,
       orderBy: { created_at: 'desc' },
@@ -39,12 +48,19 @@ export const listBudgetPlans = async (
     prisma.budgetPlan.count({ where }),
   ]);
 
+  const formattedBudgetPlans = budgetPlans.map((plan) => ({
+    ...plan,
+    unit_name: plan.unit?.name,
+    dept_name: plan.unit?.department?.name,
+    unit: undefined,
+  }));
+
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: budgetPlans,
+    data: formattedBudgetPlans,
   };
 };
 
