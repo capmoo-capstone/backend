@@ -1,8 +1,10 @@
 import { BudgetPlan } from '@prisma/client';
-import { ListResponse, PaginatedResponse } from './common.type';
 import { Decimal } from '@prisma/client/runtime/client';
+import { ListResponse, PaginatedResponse } from './common.type';
 
-export type PaginatedBudgetPlans = PaginatedResponse<BudgetPlan>;
+export type PaginatedBudgetPlans = PaginatedResponse<BudgetPlan> & {
+  data: Array<BudgetPlan & { unit_name?: string; dept_name?: string }>;
+};
 
 export interface BudgetPlanDetailResponse {
   id: string;
