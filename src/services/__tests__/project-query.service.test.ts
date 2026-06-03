@@ -91,9 +91,12 @@ describe('project-query.service', () => {
 
     expect(result.total).toBe(1);
     const where = prismaMock.project.findMany.mock.calls[0][0].where;
-    expect(where.AND).toEqual([
-      { created_at: { gte: new Date('2025-12-01T00:00:00+07:00') } },
-    ]);
+
+    const expectedDate = new Date('2026-06-01T00:00:00.000Z');
+    expectedDate.setHours(0, 0, 0, 0);
+    expectedDate.setMonth(expectedDate.getMonth() - 6);
+
+    expect(where.AND).toEqual([{ created_at: { gte: expectedDate } }]);
   });
 
   it('listProjects for external users scopes to their requesting departments', async () => {
