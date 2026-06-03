@@ -13,6 +13,7 @@ vi.mock('../config/prisma', async () => {
 });
 
 beforeEach(async () => {
+  vi.useFakeTimers();
   const { resetPrismaMock } = await import('./prisma-mock');
   resetPrismaMock();
 });
