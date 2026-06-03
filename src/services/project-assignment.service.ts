@@ -311,15 +311,14 @@ export const addAssignee = async (
       throw new NotFoundError('Project not found');
     }
 
-    if (
-      project.status in
-      [
-        ProjectStatus.UNASSIGNED,
-        ProjectStatus.WAITING_ACCEPT,
-        ProjectStatus.CANCELLED,
-        ProjectStatus.CLOSED,
-      ]
-    ) {
+    const forbiddenStatuses: ProjectStatus[] = [
+      ProjectStatus.UNASSIGNED,
+      ProjectStatus.WAITING_ACCEPT,
+      ProjectStatus.CANCELLED,
+      ProjectStatus.CLOSED,
+    ];
+
+    if (forbiddenStatuses.includes(project.status)) {
       throw new BadRequestError(
         'Cannot add assignee to project that is not in progress'
       );

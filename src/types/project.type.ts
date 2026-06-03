@@ -39,7 +39,7 @@ export interface CompleteProcurementPhaseResponse extends ProjectIdStatusRespons
   responsible_unit_id: string;
 }
 
-export interface CompleteContractPhaseResponse extends ProjectIdStatusResponse {}
+export type CompleteContractPhaseResponse = ProjectIdStatusResponse;
 
 export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
   request_edit_reason: string | null;
