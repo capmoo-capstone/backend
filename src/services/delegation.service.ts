@@ -26,26 +26,6 @@ const assertValidDelegationScope = (data: AddDelegationDto) => {
   }
 };
 
-const matchesDelegationScope = (
-  delegation: Pick<UserDelegation, 'role' | 'unit_id'>,
-  role: { role: UserRole; dept_id: string; unit_id: string | null }
-) =>
-  delegation.role === role.role &&
-  role.dept_id === OPS_DEPT_ID &&
-  delegation.unit_id === role.unit_id;
-
-// const applyDelegatedScope = (
-//   delegation: DelegationDetail
-// ): DelegationDetail => ({
-//   ...delegation,
-//   delegator: {
-//     ...delegation.delegator,
-//     roles: delegation.delegator.roles.filter((role) =>
-//       matchesDelegationScope(delegation, role)
-//     ),
-//   },
-// });
-
 export const addDelegation = async (
   user: AuthPayload,
   data: AddDelegationDto
