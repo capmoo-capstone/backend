@@ -471,6 +471,8 @@ const seedUsers = async () => {
     data: {
       delegator_id: ids.users.procHeadLt,
       delegatee_id: ids.users.delegatedStaff,
+      role: UserRole.HEAD_OF_UNIT,
+      unit_id: 'UNIT-PROC-1',
       start_date: daysFromNow(-1),
       end_date: daysFromNow(14),
       is_active: true,

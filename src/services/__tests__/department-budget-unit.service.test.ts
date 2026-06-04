@@ -181,6 +181,63 @@ describe('unit.service', () => {
     expect(result.data[0].id).toBe('unit-1');
   });
 
+  it('listUnits returns only delegations matching the head-of-unit scope', async () => {
+    prismaMock.unit.findMany.mockResolvedValue([
+      {
+        id: 'unit-1',
+        name: 'Unit One',
+        dept_id: OPS_DEPT_ID,
+        type: [],
+        organization_roles: [
+          {
+            role: UserRole.HEAD_OF_UNIT,
+            user: {
+              id: 'head-1',
+              full_name: 'Head One',
+              delegations_given: [
+                {
+                  id: 'other-unit-delegation',
+                  role: UserRole.HEAD_OF_UNIT,
+                  unit_id: 'unit-2',
+                  start_date: new Date('2026-06-01T00:00:00.000Z'),
+                  end_date: null,
+                  delegator: { id: 'head-1', full_name: 'Head One' },
+                  delegatee: {
+                    id: 'delegatee-2',
+                    full_name: 'Delegatee Two',
+                  },
+                },
+                {
+                  id: 'matching-delegation',
+                  role: UserRole.HEAD_OF_UNIT,
+                  unit_id: 'unit-1',
+                  start_date: new Date('2026-06-01T00:00:00.000Z'),
+                  end_date: null,
+                  delegator: { id: 'head-1', full_name: 'Head One' },
+                  delegatee: {
+                    id: 'delegatee-1',
+                    full_name: 'Delegatee One',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+    prismaMock.unit.count.mockResolvedValue(1);
+
+    const result = await listUnits(1, 10, { withDelegations: true });
+
+    expect(result.data[0].delegations).toEqual([
+      expect.objectContaining({
+        id: 'matching-delegation',
+        role: UserRole.HEAD_OF_UNIT,
+        unit_id: 'unit-1',
+      }),
+    ]);
+  });
+
   it('createUnit creates a unit with a unique type', async () => {
     prismaMock.unit.findFirst.mockResolvedValue(null);
     prismaMock.unit.create.mockResolvedValue({

@@ -161,6 +161,8 @@ model UserDelegation {
   id           String    @id @default(uuid())
   delegator_id String
   delegatee_id String
+  role         UserRole?
+  unit_id      String?
   start_date   DateTime
   end_date     DateTime?
   is_active    Boolean   @default(true)
@@ -175,7 +177,9 @@ model UserDelegation {
   canceller User? @relation("DelegationCanceller", fields: [cancelled_by], references: [id])
 
   @@index([delegatee_id, is_active])
+  @@index([delegatee_id, is_active, role, unit_id], map: "user_delegations_delegatee_active_scope_idx")
   @@index([delegator_id])
+  @@index([delegator_id, is_active, role, unit_id], map: "user_delegations_delegator_active_scope_idx")
   @@map("user_delegations")
 }
 
@@ -197,35 +201,35 @@ model UserOrganizationRole {
 }
 
 model Project {
-  id                                   String               @id @default(uuid())
+  id                                   String              @id @default(uuid())
   receive_no                           String
   title                                String
   description                          String?
-  budget                               Decimal              @db.Decimal(18, 2)
+  budget                               Decimal             @db.Decimal(18, 2)
   status                               ProjectStatus
   procurement_type                     ProcurementType
   current_workflow_type                UnitResponsibleType
   responsible_unit_id                  String
   requesting_dept_id                   String
   requesting_unit_id                   String?
-  is_urgent                            UrgentType           @default(NORMAL)
+  is_urgent                            UrgentType          @default(NORMAL)
   expected_approval_date               DateTime?
   expected_completion_procurement_date DateTime?
-  procurement_progress                 Json                 @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
-  contract_progress                    Json                 @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   pr_no                                String?
   po_no                                String?
   less_no                              String?
   migo_103_no                          String?
   migo_105_no                          String?
-  contract_no_id                       String?              @unique
+  contract_no_id                       String?             @unique
   asset_code                           Boolean?
   vendor_name                          String?
   vendor_email                         String?
   request_edit_reason                  String?
   created_by                           String
-  created_at                           DateTime             @default(now())
-  updated_at                           DateTime?            @updatedAt
+  created_at                           DateTime            @default(now())
+  updated_at                           DateTime?           @updatedAt
 
   creator          User                   @relation("ProjectCreator", fields: [created_by], references: [id])
   requesting_dept  Department             @relation(fields: [requesting_dept_id], references: [id])

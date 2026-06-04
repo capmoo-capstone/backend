@@ -13,10 +13,13 @@ export const addDelegation = async (
   // #swagger.tags = ['Delegation']
   // #swagger.security = [{ bearerAuth: [] }]
   const user = req.user!;
-  const { delegator_id, delegatee_id, start_date, end_date } = req.body;
+  const { delegator_id, delegatee_id, role, unit_id, start_date, end_date } =
+    req.body;
   const validatedData = AddDelegationSchema.parse({
     delegator_id,
     delegatee_id,
+    role,
+    unit_id,
     start_date,
     end_date: end_date ?? undefined,
   });

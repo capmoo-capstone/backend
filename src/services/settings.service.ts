@@ -44,6 +44,8 @@ export const getOpsUnits = async (): Promise<OpsUnitSettingsResponse> => {
                 },
                 select: {
                   id: true,
+                  role: true,
+                  unit_id: true,
                   start_date: true,
                   end_date: true,
                   delegatee: {
@@ -73,13 +75,19 @@ export const getOpsUnits = async (): Promise<OpsUnitSettingsResponse> => {
           (role) => role.role === UserRole.HEAD_OF_UNIT
         );
         if (!headRole) return null;
-        const d = headRole.user.delegations_given[0];
+        const d = headRole.user.delegations_given.find(
+          (delegation) =>
+            delegation.role === UserRole.HEAD_OF_UNIT &&
+            delegation.unit_id === unit.id
+        );
         return {
           id: headRole.user.id,
           full_name: headRole.user.full_name,
           active_delegation: d
             ? {
                 id: d.id,
+                role: d.role,
+                unit_id: d.unit_id,
                 delegatee: d.delegatee,
                 start_date: d.start_date,
                 end_date: d.end_date,
@@ -171,6 +179,8 @@ export const getOpsStaff = async (): Promise<OpsStaffSettingsResponse> => {
                 },
                 select: {
                   id: true,
+                  role: true,
+                  unit_id: true,
                   start_date: true,
                   end_date: true,
                   delegatee: {
@@ -203,7 +213,12 @@ export const getOpsStaff = async (): Promise<OpsStaffSettingsResponse> => {
         .map((organizationRole) => ({
           id: organizationRole.user.id,
           full_name: organizationRole.user.full_name,
-          active_delegation: organizationRole.user.delegations_given[0] ?? null,
+          active_delegation:
+            organizationRole.user.delegations_given.find(
+              (delegation) =>
+                delegation.role === organizationRole.role &&
+                delegation.unit_id === null
+            ) ?? null,
         }))
         .sort((a, b) => a.full_name.localeCompare(b.full_name));
 

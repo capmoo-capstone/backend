@@ -15,6 +15,7 @@ import {
 } from '../types/audit-log.type';
 import { AuthPayload } from '../types/auth.type';
 import { AuditLogsQuery } from '../schemas/admin.schema';
+import { OPS_DEPT_ID } from '../lib/constant';
 
 type BasicUser = Pick<User, 'id' | 'full_name'>;
 type BasicProject = {
@@ -51,6 +52,18 @@ const buildProjectTarget = (project: BasicProject): AuditTarget => ({
   name: project.title,
   refNo: project.receive_no,
 });
+
+const formatDelegationScope = (
+  delegation: Pick<UserDelegation, 'role' | 'unit_id'>
+) => {
+  if (!delegation.role) return 'access';
+
+  const scope = delegation.unit_id
+    ? `${OPS_DEPT_ID}/${delegation.unit_id}`
+    : OPS_DEPT_ID;
+
+  return `${delegation.role} access (${scope})`;
+};
 
 const matchesSearch = (item: AuditLogItem, query?: string) => {
   if (!query) return true;
@@ -159,6 +172,10 @@ const mapUserDelegation = (
   const commonDetails = {
     delegator,
     delegatee,
+    delegatedRole: {
+      role: delegation.role,
+      unitId: delegation.unit_id,
+    },
     startDate: delegation.start_date.toISOString(),
     endDate: toIsoStringOrNull(delegation.end_date),
     isActive: delegation.is_active,
@@ -167,10 +184,11 @@ const mapUserDelegation = (
     cancelledBy: delegation.canceller?.full_name ?? null,
   };
 
+  const scopeDescription = formatDelegationScope(delegation);
   const createdDescription =
     delegation.creator.id === delegation.delegator_id
-      ? `${delegator.name} delegated access to ${delegatee.name}`
-      : `${delegation.creator.full_name} created delegation for ${delegator.name} to ${delegatee.name}`;
+      ? `${delegator.name} delegated ${scopeDescription} to ${delegatee.name}`
+      : `${delegation.creator.full_name} created ${scopeDescription} delegation for ${delegator.name} to ${delegatee.name}`;
 
   const createdLog: AuditLogItem = {
     id: `${delegation.id}:created`,
@@ -194,9 +212,9 @@ const mapUserDelegation = (
         title: 'User delegation cancelled',
         description: delegation.canceller
           ? delegation.canceller.id === delegation.delegator_id
-            ? `${delegator.name} cancelled delegation to ${delegatee.name}`
-            : `${delegation.canceller!.full_name} cancelled delegation for ${delegator.name} to ${delegatee.name}`
-          : `${delegator.name} cancelled delegation to ${delegatee.name}`,
+            ? `${delegator.name} cancelled ${scopeDescription} delegation to ${delegatee.name}`
+            : `${delegation.canceller!.full_name} cancelled ${scopeDescription} delegation for ${delegator.name} to ${delegatee.name}`
+          : `${delegator.name} cancelled ${scopeDescription} delegation to ${delegatee.name}`,
         actor: canceller ?? null,
         target: commonTarget,
         details: {
