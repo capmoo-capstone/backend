@@ -44,6 +44,8 @@ export const listUnits = async (
       },
       select: {
         id: true,
+        role: true,
+        unit_id: true,
         start_date: true,
         end_date: true,
         delegator: {
@@ -115,6 +117,8 @@ export const listUnits = async (
             full_name: string;
             delegations_given?: {
               id: string;
+              role: UserRole | null;
+              unit_id: string | null;
               delegator: {
                 id: string;
                 full_name: string;
@@ -163,15 +167,22 @@ export const listUnits = async (
         data.delegations =
           roles
             .filter((role) => role.role === UserRole.HEAD_OF_UNIT)
-            .filter((role) => role.user.delegations_given.length > 0)
             .flatMap((role) =>
-              role.user.delegations_given.map((delegation) => ({
-                id: delegation.id,
-                delegator: delegation.delegator,
-                delegatee: delegation.delegatee,
-                start_date: delegation.start_date,
-                end_date: delegation.end_date,
-              }))
+              role.user.delegations_given
+                .filter(
+                  (delegation) =>
+                    delegation.role === UserRole.HEAD_OF_UNIT &&
+                    delegation.unit_id === unit.id
+                )
+                .map((delegation) => ({
+                  id: delegation.id,
+                  role: delegation.role,
+                  unit_id: delegation.unit_id,
+                  delegator: delegation.delegator,
+                  delegatee: delegation.delegatee,
+                  start_date: delegation.start_date,
+                  end_date: delegation.end_date,
+                }))
             ) ?? [];
       }
 

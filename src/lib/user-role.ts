@@ -1,6 +1,45 @@
 import { Prisma, UserRole } from '@prisma/client';
 import { BadRequestError, NotFoundError } from './errors';
 import { UpdateUserRoleResponse } from '../types/user.type';
+import { OPS_DEPT_ID } from './constant';
+
+const activeDelegationWhere = () => ({
+  is_active: true,
+  OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
+});
+
+const touchActiveDelegatees = async (
+  tx: Prisma.TransactionClient,
+  params: {
+    delegatorId: string;
+    role: UserRole;
+    deptId: string;
+    unitId: string | null;
+  }
+): Promise<void> => {
+  if (params.deptId !== OPS_DEPT_ID) return;
+
+  const activeDelegations =
+    (await tx.userDelegation.findMany({
+      where: {
+        delegator_id: params.delegatorId,
+        role: params.role,
+        unit_id: params.unitId,
+        ...activeDelegationWhere(),
+      },
+      select: { delegatee_id: true },
+    })) ?? [];
+  const delegateeIds = [
+    ...new Set(activeDelegations.map((delegation) => delegation.delegatee_id)),
+  ];
+
+  if (delegateeIds.length === 0) return;
+
+  await tx.user.updateMany({
+    where: { id: { in: delegateeIds } },
+    data: { role_updated_at: new Date() },
+  });
+};
 
 /**
  * เพิ่ม role ให้ user
@@ -52,6 +91,12 @@ export const addRoleInternal = async (
       where: { id: sameUnitSlot.id },
       data: { role },
     });
+    await touchActiveDelegatees(tx, {
+      delegatorId: userId,
+      role: sameUnitSlot.role,
+      deptId,
+      unitId,
+    });
   } else if (onlyGuest) {
     // GUEST เดียวใน dept → replace
     result = await tx.userOrganizationRole.update({
@@ -67,6 +112,12 @@ export const addRoleInternal = async (
   await tx.user.update({
     where: { id: userId },
     data: { role_updated_at: new Date() },
+  });
+  await touchActiveDelegatees(tx, {
+    delegatorId: userId,
+    role,
+    deptId,
+    unitId,
   });
 
   return result;
@@ -116,6 +167,12 @@ export const removeRoleInternal = async (
   await tx.user.update({
     where: { id: userId },
     data: { role_updated_at: new Date() },
+  });
+  await touchActiveDelegatees(tx, {
+    delegatorId: userId,
+    role,
+    deptId,
+    unitId,
   });
 };
 

@@ -1,4 +1,4 @@
-import { UnitResponsibleType } from '@prisma/client';
+import { UnitResponsibleType, UserRole } from '@prisma/client';
 
 export interface SettingsUser {
   id: string;
@@ -7,6 +7,8 @@ export interface SettingsUser {
 
 export interface SettingsDelegation {
   id: string;
+  role: UserRole | null;
+  unit_id: string | null;
   delegatee: SettingsUser;
   start_date: Date;
   end_date: Date | null;
@@ -17,9 +19,11 @@ export interface OpsUnitSettingsUnit {
   dept_id: string;
   name: string;
   type: UnitResponsibleType[];
-  head: (SettingsUser & {
-    active_delegation: SettingsDelegation | null;
-  }) | null;
+  head:
+    | (SettingsUser & {
+        active_delegation: SettingsDelegation | null;
+      })
+    | null;
   users: SettingsUser[];
 }
 

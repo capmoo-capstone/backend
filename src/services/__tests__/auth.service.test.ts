@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearUserAuthCache } from '../../lib/auth-cache';
+import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { clearSessionCache, login, register } from '../auth.service';
 
@@ -79,6 +80,87 @@ describe('auth.service', () => {
       process.env.JWT_SECRET,
       { expiresIn: '3h' }
     );
+  });
+
+  it('login inherits only the role scope selected by an active delegation', async () => {
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ id: 'delegatee-1', password: 'hashed-password' })
+      .mockResolvedValueOnce({
+        id: 'delegatee-1',
+        username: 'delegatee',
+        full_name: 'Delegatee User',
+        roles: [
+          {
+            role: UserRole.GENERAL_STAFF,
+            dept_id: 'dept-1',
+            unit_id: 'unit-1',
+            department: { id: 'dept-1', name: 'Dept One' },
+            unit: { id: 'unit-1', name: 'Unit One' },
+          },
+        ],
+        delegations_received: [
+          {
+            id: 'delegation-1',
+            role: UserRole.HEAD_OF_UNIT,
+            unit_id: 'unit-1',
+            delegator: {
+              id: 'delegator-1',
+              full_name: 'Delegator User',
+              roles: [
+                {
+                  role: UserRole.HEAD_OF_UNIT,
+                  dept_id: OPS_DEPT_ID,
+                  unit_id: 'unit-1',
+                  department: { id: OPS_DEPT_ID, name: 'Supply Operation' },
+                  unit: { id: 'unit-1', name: 'Unit One' },
+                },
+                {
+                  role: UserRole.ADMIN,
+                  dept_id: OPS_DEPT_ID,
+                  unit_id: null,
+                  department: { id: OPS_DEPT_ID, name: 'Supply Operation' },
+                  unit: null,
+                },
+              ],
+            },
+          },
+        ],
+      });
+    mockedBcrypt.compareSync.mockReturnValue(true);
+    mockedJwt.sign.mockReturnValue('signed-token' as any);
+
+    const result = await login('delegatee', 'password');
+
+    expect(result.roles).toEqual([
+      expect.objectContaining({
+        role: UserRole.GENERAL_STAFF,
+        dept_id: 'dept-1',
+        unit_id: 'unit-1',
+      }),
+      expect.objectContaining({
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: OPS_DEPT_ID,
+        unit_id: 'unit-1',
+      }),
+    ]);
+    expect(result.roles).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: UserRole.ADMIN }),
+      ])
+    );
+    expect(result.delegated_by).toEqual([
+      {
+        id: 'delegator-1',
+        full_name: 'Delegator User',
+        roles: [
+          expect.objectContaining({
+            role: UserRole.HEAD_OF_UNIT,
+            dept_id: OPS_DEPT_ID,
+            unit_id: 'unit-1',
+          }),
+        ],
+      },
+    ]);
   });
 
   it('register creates a department-level role without a unit', async () => {

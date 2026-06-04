@@ -16,6 +16,8 @@ export interface UnitListUser {
 
 export interface UnitListDelegation {
   id: string;
+  role: UserRole | null;
+  unit_id: string | null;
   delegator: {
     id: string;
     full_name: string;
