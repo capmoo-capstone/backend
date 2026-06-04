@@ -57,6 +57,9 @@ export const addDelegation = async (
     UserService.getById(data.delegatee_id),
   ]);
   return await prisma.$transaction(async (tx) => {
+    const scopeKey = `delegation:${data.delegator_id}:${data.role}:${data.unit_id ?? 'null'}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${scopeKey}))`;
+
     const delegatedRole = await tx.userOrganizationRole.findFirst({
       where: {
         user_id: data.delegator_id,
