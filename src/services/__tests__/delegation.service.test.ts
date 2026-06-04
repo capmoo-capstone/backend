@@ -1,14 +1,14 @@
 import { UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
-import { txMock, prismaMock } from '../../test/prisma-mock';
-import { getById as getUserById } from '../user.service';
+import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   addDelegation,
   cancelDelegation,
   getActiveDelegation,
   getById,
 } from '../delegation.service';
+import { getById as getUserById } from '../user.service';
 
 vi.mock('../user.service', () => ({
   getById: vi.fn().mockResolvedValue({ id: 'user-1' }),
@@ -196,35 +196,26 @@ describe('delegation.service', () => {
       id: 'delegation-1',
       role: UserRole.HEAD_OF_UNIT,
       unit_id: 'unit-1',
+      start_date: new Date('2026-06-01T00:00:00.000Z'),
+      end_date: null,
       delegator: {
         id: 'delegator-1',
         full_name: 'Delegator',
-        roles: [
-          {
-            role: UserRole.HEAD_OF_UNIT,
-            dept_id: OPS_DEPT_ID,
-            unit_id: 'unit-1',
-          },
-          {
-            role: UserRole.ADMIN,
-            dept_id: OPS_DEPT_ID,
-            unit_id: null,
-          },
-        ],
       },
-      delegatee: { id: 'delegatee-1', full_name: 'Delegatee', roles: [] },
+      delegatee: { id: 'delegatee-1', full_name: 'Delegatee' },
     });
 
     const result = await getById('delegation-1');
 
     expect(result.delegator.full_name).toBe('Delegator');
-    expect(result.delegator.roles).toEqual([
-      {
-        role: UserRole.HEAD_OF_UNIT,
-        dept_id: OPS_DEPT_ID,
-        unit_id: 'unit-1',
+    expect(result.delegatee.full_name).toBe('Delegatee');
+    expect(prismaMock.userDelegation.findUnique).toHaveBeenCalledWith({
+      where: { id: 'delegation-1' },
+      include: {
+        delegator: { select: { id: true, full_name: true } },
+        delegatee: { select: { id: true, full_name: true } },
       },
-    ]);
+    });
   });
 
   it('getActiveDelegation returns the active delegation for a head-of-unit role', async () => {
@@ -232,23 +223,13 @@ describe('delegation.service', () => {
       id: 'delegation-1',
       role: UserRole.HEAD_OF_UNIT,
       unit_id: 'unit-1',
+      start_date: new Date('2026-06-01T00:00:00.000Z'),
+      end_date: null,
       delegator: {
         id: 'delegator-1',
         full_name: 'Delegator',
-        roles: [
-          {
-            role: UserRole.HEAD_OF_UNIT,
-            dept_id: OPS_DEPT_ID,
-            unit_id: 'unit-1',
-          },
-          {
-            role: UserRole.ADMIN,
-            dept_id: OPS_DEPT_ID,
-            unit_id: null,
-          },
-        ],
       },
-      delegatee: { id: 'delegatee-1', full_name: 'Delegatee', roles: [] },
+      delegatee: { id: 'delegatee-1', full_name: 'Delegatee' },
     });
 
     const result = await getActiveDelegation(UserRole.HEAD_OF_UNIT, 'unit-1');
@@ -261,12 +242,13 @@ describe('delegation.service', () => {
       unit_id: 'unit-1',
       is_active: true,
     });
-    expect(result?.delegator.roles).toEqual([
-      {
-        role: UserRole.HEAD_OF_UNIT,
-        dept_id: OPS_DEPT_ID,
-        unit_id: 'unit-1',
-      },
-    ]);
+    expect(result?.delegator.full_name).toBe('Delegator');
+    expect(result?.delegatee.full_name).toBe('Delegatee');
+  });
+
+  it('getActiveDelegation returns null if no active delegation exists', async () => {
+    prismaMock.userDelegation.findFirst.mockResolvedValue(null);
+    const result = await getActiveDelegation(UserRole.HEAD_OF_DEPARTMENT);
+    expect(result).toBeNull();
   });
 });

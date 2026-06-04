@@ -103,6 +103,8 @@ describe('auth.service', () => {
             id: 'delegation-1',
             role: UserRole.HEAD_OF_UNIT,
             unit_id: 'unit-1',
+            start_date: new Date('2026-06-01T00:00:00.000Z'),
+            end_date: null,
             delegator: {
               id: 'delegator-1',
               full_name: 'Delegator User',
@@ -113,13 +115,6 @@ describe('auth.service', () => {
                   unit_id: 'unit-1',
                   department: { id: OPS_DEPT_ID, name: 'Supply Operation' },
                   unit: { id: 'unit-1', name: 'Unit One' },
-                },
-                {
-                  role: UserRole.ADMIN,
-                  dept_id: OPS_DEPT_ID,
-                  unit_id: null,
-                  department: { id: OPS_DEPT_ID, name: 'Supply Operation' },
-                  unit: null,
                 },
               ],
             },
@@ -152,13 +147,11 @@ describe('auth.service', () => {
       {
         id: 'delegator-1',
         full_name: 'Delegator User',
-        roles: [
-          expect.objectContaining({
-            role: UserRole.HEAD_OF_UNIT,
-            dept_id: OPS_DEPT_ID,
-            unit_id: 'unit-1',
-          }),
-        ],
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: OPS_DEPT_ID,
+        unit_id: 'unit-1',
+        start_date: new Date('2026-06-01T00:00:00.000Z'),
+        end_date: null,
       },
     ]);
   });
