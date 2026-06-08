@@ -491,12 +491,13 @@ export const getUnassignedProjectsByUnit = async (
 
 export const getAssignedProjects = async (
   user: AuthPayload,
-  targetDate: Date
+  dateFrom?: Date,
+  dateTo?: Date
 ): Promise<ProjectsListResponse> => {
-  const startOfDay = new Date(targetDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(targetDate);
-  endOfDay.setHours(23, 59, 59, 999);
+  const from = dateFrom ? new Date(dateFrom) : new Date();
+  from.setHours(0, 0, 0, 0);
+  const to = dateTo ? new Date(dateTo) : new Date();
+  to.setHours(23, 59, 59, 999);
 
   const where: any = {
     AND: [
@@ -522,7 +523,7 @@ export const getAssignedProjects = async (
                       { action: ProjectActionType.ASSIGNEE_UPDATE },
                     ],
                   },
-                  { changed_at: { gte: startOfDay, lte: endOfDay } },
+                  { changed_at: { gte: from, lte: to } },
                   {
                     OR: [
                       {
