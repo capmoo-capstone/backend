@@ -1,12 +1,10 @@
+import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import cors from 'cors';
-import apiV1Routes from './routes/index';
-import adminRoutes from './routes/admin.route';
-import { errorHandler } from './middlewares/error';
-import { protect } from './middlewares/auth';
 import swaggerUi from 'swagger-ui-express';
 import swaggerDocument from '../swagger-output.json';
+import { errorHandler } from './middlewares/error';
+import apiV1Routes from './routes/index';
 
 const NODE_ENV = process.env.NODE_ENV || 'local';
 const PORT = process.env.PORT || 3000;
@@ -32,7 +30,7 @@ app.use(
 );
 const allowedOrigins = [
   'http://localhost:5173', // Vite local dev
-  'http://localhost:3000', // Express local dev
+  `http://localhost:${PORT}`, // Express local dev
   'https://nexus-procure.pages.dev', // Cloudflare Pages production
   'https://dev.nexus-procure.pages.dev', // Cloudflare Pages development
   'https://nexus-procure-vendors-portal.pages.dev', // Cloudflare Pages production for vendor portal
@@ -79,7 +77,7 @@ const serverUrl =
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/v1`
     : process.env.NODE_ENV === 'development'
       ? `https://dev-nexus-procure-backend.vercel.app/api/v1`
-      : 'http://localhost:3000/api/v1';
+      : `http://localhost:${PORT}/api/v1`;
 
 (swaggerDocument as any).servers = [{ url: serverUrl }];
 
