@@ -1,15 +1,11 @@
 import { Response } from 'express';
-import * as ProjectQueryService from '../services/project-query.service';
-import * as ProjectAssignmentService from '../services/project-assignment.service';
-import * as ProjectDataService from '../services/project-data.service';
-import * as ProjectLifecycleService from '../services/project-lifecycle.service';
-import { AuthenticatedRequest } from '../types/auth.type';
 import {
   AcceptProjectsSchema,
   CancelContractNumberSchema,
   CancelProjectSchema,
   CompleteProcurementPhaseSchema,
   CreateProjectSchema,
+  GetAssignedProjectsQuerySchema,
   GetNewContractNumberSchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
@@ -18,6 +14,11 @@ import {
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
 } from '../schemas/project.schema';
+import * as ProjectAssignmentService from '../services/project-assignment.service';
+import * as ProjectDataService from '../services/project-data.service';
+import * as ProjectLifecycleService from '../services/project-lifecycle.service';
+import * as ProjectQueryService from '../services/project-query.service';
+import { AuthenticatedRequest } from '../types/auth.type';
 
 export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
@@ -66,12 +67,16 @@ export const getAssignedProjects = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { date } = req.query;
   const payload = req.user!;
-  const targetDate = date ? new Date(date as string) : new Date();
+  const { dateFrom, dateTo } = req.query;
+  const validated = GetAssignedProjectsQuerySchema.parse({
+    dateFrom,
+    dateTo,
+  });
   const projects = await ProjectQueryService.getAssignedProjects(
     payload,
-    targetDate
+    validated.dateFrom,
+    validated.dateTo
   );
   res.status(200).json(projects);
 };

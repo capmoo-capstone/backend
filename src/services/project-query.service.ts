@@ -491,12 +491,13 @@ export const getUnassignedProjectsByUnit = async (
 
 export const getAssignedProjects = async (
   user: AuthPayload,
-  targetDate: Date
+  dateFrom?: Date,
+  dateTo?: Date
 ): Promise<ProjectsListResponse> => {
-  const startOfDay = new Date(targetDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(targetDate);
-  endOfDay.setHours(23, 59, 59, 999);
+  const from = dateFrom ? new Date(dateFrom) : new Date();
+  from.setHours(0, 0, 0, 0);
+  const to = dateTo ? new Date(dateTo) : new Date();
+  to.setHours(23, 59, 59, 999);
 
   const where: any = {
     AND: [
@@ -522,7 +523,7 @@ export const getAssignedProjects = async (
                       { action: ProjectActionType.ASSIGNEE_UPDATE },
                     ],
                   },
-                  { changed_at: { gte: startOfDay, lte: endOfDay } },
+                  { changed_at: { gte: from, lte: to } },
                   {
                     OR: [
                       {
@@ -548,38 +549,40 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT)) {
-    const unitIds = user.roles
-      .map((r) => r.unit_id)
-      .filter((id): id is string => Boolean(id));
-    if (unitIds.length === 0) {
-      throw new NotFoundError('Unit not found');
-    }
+  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
+    if (user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT)) {
+      const unitIds = user.roles
+        .map((r) => r.unit_id)
+        .filter((id): id is string => Boolean(id));
+      if (unitIds.length === 0) {
+        throw new NotFoundError('Unit not found');
+      }
 
-    const unit = await prisma.unit.findMany({
-      where: {
-        id: {
-          in: unitIds,
+      const unit = await prisma.unit.findMany({
+        where: {
+          id: {
+            in: unitIds,
+          },
         },
-      },
-      select: { type: true },
-    });
-    if (unit.length === 0) {
-      throw new NotFoundError('Unit not found');
-    }
+        select: { type: true },
+      });
+      if (unit.length === 0) {
+        throw new NotFoundError('Unit not found');
+      }
 
-    where.AND.push({
-      current_workflow_type: {
-        in: unit.flatMap((u) => u.type),
-      },
-    });
-  } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
-    where.AND.push({
-      OR: [
-        { assignee_procurement: { some: { id: user.id } } },
-        { assignee_contract: { some: { id: user.id } } },
-      ],
-    });
+      where.AND.push({
+        current_workflow_type: {
+          in: unit.flatMap((u) => u.type),
+        },
+      });
+    } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
+      where.AND.push({
+        OR: [
+          { assignee_procurement: { some: { id: user.id } } },
+          { assignee_contract: { some: { id: user.id } } },
+        ],
+      });
+    }
   }
 
   const [projects, total] = await prisma.$transaction([

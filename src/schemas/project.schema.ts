@@ -78,8 +78,8 @@ export const ProjectFilterQuerySchema = z
   .object({
     search: z.string().optional(),
     title: z.string().optional(),
-    dateFrom: z.string().optional(),
-    dateTo: z.string().optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
     fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
     status: z.array(z.enum(ProjectStatus)).optional(),
@@ -94,6 +94,11 @@ export const ProjectFilterQuerySchema = z
     sortOrder: z.enum(['asc', 'desc']).optional(),
   })
   .optional();
+
+export const GetAssignedProjectsQuerySchema = z.object({
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional(),
+});
 
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 export type UpdateStatusProjectDto = z.infer<typeof UpdateStatusProjectSchema>;
@@ -111,3 +116,6 @@ export type GetProjectsQueryByUnitDto = z.infer<
   typeof GetProjectsQueryByUnitSchema
 >;
 export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;
+export type GetAssignedProjectsQuery = z.infer<
+  typeof GetAssignedProjectsQuerySchema
+>;
