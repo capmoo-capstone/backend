@@ -9,6 +9,7 @@ import {
   ProjectsListResponse,
   UpdateProjectDataResponse,
 } from '../types/project.type';
+import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 
 const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
@@ -241,14 +242,12 @@ export const updateProjectData = async (
       });
     }
 
-    await tx.projectHistory.create({
-      data: {
-        project_id: data.id,
-        action: ProjectActionType.INFORMATION_UPDATE,
-        old_value: { ...oldValue },
-        new_value: { ...projectData },
-        changed_by: user.id,
-      },
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId: data.id,
+      action: ProjectActionType.INFORMATION_UPDATE,
+      oldValue: { ...oldValue },
+      newValue: { ...projectData },
+      changedBy: user,
     });
 
     return updated;
@@ -314,14 +313,12 @@ export const cancelContractNumber = async (
         where: { id: contract.project.id },
         data: { contract_no_id: null },
       });
-      await tx.projectHistory.create({
-        data: {
-          project_id: contract.project.id,
-          action: ProjectActionType.INFORMATION_UPDATE,
-          old_value: { contract_no: contract.contract_no },
-          new_value: { contract_no: null },
-          changed_by: user.id,
-        },
+      await createProjectHistoryAndAuditEvent(tx, {
+        projectId: contract.project.id,
+        action: ProjectActionType.INFORMATION_UPDATE,
+        oldValue: { contract_no: contract.contract_no },
+        newValue: { contract_no: null },
+        changedBy: user,
       });
     }
 

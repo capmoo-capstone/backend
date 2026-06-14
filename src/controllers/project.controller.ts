@@ -1,8 +1,10 @@
 import { Response } from 'express';
+import { AuditLogsQuerySchema } from '../schemas/admin.schema';
 import {
   AcceptProjectsSchema,
   CancelContractNumberSchema,
   CancelProjectSchema,
+  CancellationDecisionSchema,
   CompleteProcurementPhaseSchema,
   CreateProjectSchema,
   GetAssignedProjectsQuerySchema,
@@ -14,6 +16,7 @@ import {
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
 } from '../schemas/project.schema';
+import * as AuditLogService from '../services/audit-log.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
 import * as ProjectDataService from '../services/project-data.service';
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
@@ -43,6 +46,34 @@ export const getById = async (req: AuthenticatedRequest, res: Response) => {
   const payload = req.user!;
   const project = await ProjectQueryService.getById(payload, projectId);
   res.status(200).json(project);
+};
+
+export const getProjectHistory = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const projectId = req.params.id as string;
+  const { page, limit, q, kind, eventType, actorId, dateFrom, dateTo } =
+    req.query;
+  const query = AuditLogsQuerySchema.parse({
+    q: q as string,
+    kind,
+    eventType,
+    actorId,
+    dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
+    dateTo: dateTo ? new Date(dateTo as string) : undefined,
+  });
+  const history = await AuditLogService.listProjectAuditLogs(
+    payload,
+    projectId,
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    query
+  );
+  res.status(200).json(history);
 };
 
 export const getUnassignedByUnit = async (
@@ -293,9 +324,13 @@ export const approveCancellation = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
+  const validatedData = CancellationDecisionSchema.parse({
+    id: projectId,
+    ...req.body,
+  });
   const project = await ProjectLifecycleService.approveCancellation(
     payload,
-    projectId
+    validatedData
   );
   res.status(200).json(project);
 };
@@ -308,9 +343,13 @@ export const rejectCancellation = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
+  const validatedData = CancellationDecisionSchema.parse({
+    id: projectId,
+    ...req.body,
+  });
   const project = await ProjectLifecycleService.rejectCancellation(
     payload,
-    projectId
+    validatedData
   );
   res.status(200).json(project);
 };

@@ -46,9 +46,14 @@ describe('project-lifecycle.service', () => {
       status: ProjectStatus.WAITING_CANCEL,
     });
     txMock.projectCancellation.create.mockResolvedValue({
+      id: 'cancellation-1',
       project_id: 'project-1',
       reason: 'Need cancellation',
-      is_cancelled: false,
+      status: 'PENDING',
+      requested_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_by: null,
+      decision_at: null,
+      decision_comment: null,
     });
 
     const result = await cancelProject(staffUser, {
@@ -56,7 +61,7 @@ describe('project-lifecycle.service', () => {
       reason: 'Need cancellation',
     });
 
-    expect(result.is_cancelled).toBe(false);
+    expect(result.status).toBe('PENDING');
     expect(txMock.project.update).toHaveBeenCalledWith({
       where: { id: 'project-1' },
       data: { status: ProjectStatus.WAITING_CANCEL },
@@ -70,9 +75,14 @@ describe('project-lifecycle.service', () => {
     });
     txMock.projectCancellation.findFirst.mockResolvedValue(null);
     txMock.projectCancellation.create.mockResolvedValue({
+      id: 'cancellation-1',
       project_id: 'project-1',
       reason: 'Approved cancellation',
-      is_cancelled: true,
+      status: 'APPROVED',
+      requested_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_by: headUser.id,
+      decision_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_comment: 'Approved cancellation',
     });
 
     const result = await cancelProject(headUser, {
@@ -80,11 +90,13 @@ describe('project-lifecycle.service', () => {
       reason: 'Approved cancellation',
     });
 
-    expect(result.is_cancelled).toBe(true);
-    expect(txMock.project.update).toHaveBeenCalledWith({
-      where: { id: 'project-1' },
-      data: { status: ProjectStatus.CANCELLED },
-    });
+    expect(result.status).toBe('APPROVED');
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'project-1' },
+        data: { status: ProjectStatus.CANCELLED },
+      })
+    );
   });
 
   it('approveCancellation moves waiting-cancel projects to cancelled', async () => {
@@ -95,18 +107,43 @@ describe('project-lifecycle.service', () => {
       id: 'project-1',
       status: ProjectStatus.CANCELLED,
     });
+    txMock.projectCancellation.findFirst.mockResolvedValue({
+      id: 'cancellation-1',
+      project_id: 'project-1',
+      reason: 'Need cancellation',
+      status: 'PENDING',
+      requested_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_by: null,
+      decision_at: null,
+      decision_comment: null,
+    });
+    txMock.projectCancellation.update.mockResolvedValue({
+      id: 'cancellation-1',
+      project_id: 'project-1',
+      reason: 'Need cancellation',
+      status: 'APPROVED',
+      decision_by: headUser.id,
+      decision_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_comment: 'Approved',
+    });
 
-    const result = await approveCancellation(headUser, 'project-1');
+    const result = await approveCancellation(headUser, {
+      id: 'project-1',
+      comment: 'Approved',
+    });
 
     expect(result.status).toBe(ProjectStatus.CANCELLED);
-    expect(txMock.projectCancellation.updateMany).toHaveBeenCalledWith({
-      where: { project_id: 'project-1' },
-      data: {
-        is_cancelled: true,
-        approved_by: headUser.id,
-        approved_at: new Date('2026-06-01T00:00:00.000Z'),
-      },
-    });
+    expect(txMock.projectCancellation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cancellation-1' },
+        data: {
+          status: 'APPROVED',
+          decision_by: headUser.id,
+          decision_at: new Date('2026-06-01T00:00:00.000Z'),
+          decision_comment: 'Approved',
+        },
+      })
+    );
   });
 
   it('rejectCancellation restores the previous status from project history', async () => {
@@ -116,17 +153,47 @@ describe('project-lifecycle.service', () => {
     txMock.projectHistory.findFirst.mockResolvedValue({
       old_value: { status: ProjectStatus.IN_PROGRESS },
     });
+    txMock.projectCancellation.findFirst.mockResolvedValue({
+      id: 'cancellation-1',
+      project_id: 'project-1',
+      reason: 'Need cancellation',
+      status: 'PENDING',
+      requested_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_by: null,
+      decision_at: null,
+      decision_comment: null,
+    });
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
       status: ProjectStatus.IN_PROGRESS,
     });
+    txMock.projectCancellation.update.mockResolvedValue({
+      id: 'cancellation-1',
+      project_id: 'project-1',
+      reason: 'Need cancellation',
+      status: 'REJECTED',
+      decision_by: headUser.id,
+      decision_at: new Date('2026-06-01T00:00:00.000Z'),
+      decision_comment: 'Rejected',
+    });
 
-    const result = await rejectCancellation(headUser, 'project-1');
+    const result = await rejectCancellation(headUser, {
+      id: 'project-1',
+      comment: 'Rejected',
+    });
 
     expect(result.status).toBe(ProjectStatus.IN_PROGRESS);
-    expect(txMock.projectCancellation.deleteMany).toHaveBeenCalledWith({
-      where: { project_id: 'project-1' },
-    });
+    expect(txMock.projectCancellation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cancellation-1' },
+        data: {
+          status: 'REJECTED',
+          decision_by: headUser.id,
+          decision_at: new Date('2026-06-01T00:00:00.000Z'),
+          decision_comment: 'Rejected',
+        },
+      })
+    );
   });
 
   it('completeProcurementPhase moves procurement projects into contract workflow as unassigned', async () => {

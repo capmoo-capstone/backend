@@ -11,10 +11,23 @@ export const getAuditLogs = async (
   // #swagger.tags = ['Admin']
   // #swagger.security = [{ bearerAuth: [] }]
   const user = req.user!;
-  const { page, limit, q, kind, dateFrom, dateTo } = req.query;
+  const {
+    page,
+    limit,
+    q,
+    kind,
+    eventType,
+    projectId,
+    actorId,
+    dateFrom,
+    dateTo,
+  } = req.query;
   const query = AuditLogsQuerySchema.parse({
     q: q as string,
     kind,
+    eventType,
+    projectId,
+    actorId,
     dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
     dateTo: dateTo ? new Date(dateTo as string) : undefined,
   });
@@ -28,21 +41,30 @@ export const getAuditLogs = async (
   res.status(200).json(auditLogs);
 };
 
-export const getOpsUnits = async (_req: AuthenticatedRequest, res: Response) => {
+export const getOpsUnits = async (
+  _req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Admin']
   // #swagger.security = [{ bearerAuth: [] }]
   const data = await SettingsService.getOpsUnits();
   res.status(200).json(data);
 };
 
-export const getRepresentatives = async (_req: AuthenticatedRequest, res: Response) => {
+export const getRepresentatives = async (
+  _req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Admin']
   // #swagger.security = [{ bearerAuth: [] }]
   const data = await SettingsService.getRepresentatives();
   res.status(200).json(data);
 };
 
-export const getOpsStaff = async (_req: AuthenticatedRequest, res: Response) => {
+export const getOpsStaff = async (
+  _req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Admin']
   // #swagger.security = [{ bearerAuth: [] }]
   const data = await SettingsService.getOpsStaff();

@@ -30,6 +30,7 @@ import {
   SubmissionActionResponse,
   VendorSubmissionsResponse,
 } from '../types/submission.type';
+import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import { generatePresignedDownloadUrl } from './storage.service';
 
 const getSubmissionRound = async (
@@ -99,14 +100,12 @@ const updateProjectForSubmission = async (
     data: validated.data,
   });
 
-  await tx.projectHistory.create({
-    data: {
-      project_id: project.id,
-      action: ProjectActionType.INFORMATION_UPDATE,
-      old_value: oldValue,
-      new_value: validated.data,
-      changed_by: userId,
-    },
+  await createProjectHistoryAndAuditEvent(tx, {
+    projectId: project.id,
+    action: ProjectActionType.INFORMATION_UPDATE,
+    oldValue,
+    newValue: validated.data,
+    changedBy: userId,
   });
 };
 

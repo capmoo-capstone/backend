@@ -171,6 +171,8 @@ describe('delegation.service', () => {
     txMock.userDelegation.findUnique.mockResolvedValue({
       id: 'delegation-1',
       delegatee_id: 'delegatee-1',
+      is_active: true,
+      cancelled_at: null,
     });
     txMock.userDelegation.update.mockResolvedValue({
       id: 'delegation-1',
@@ -189,6 +191,22 @@ describe('delegation.service', () => {
         cancelled_by: user.id,
       },
     });
+  });
+
+  it('cancelDelegation rejects an already cancelled delegation', async () => {
+    txMock.userDelegation.findUnique.mockResolvedValue({
+      id: 'delegation-1',
+      delegatee_id: 'delegatee-1',
+      is_active: false,
+      cancelled_at: new Date('2026-05-01T00:00:00.000Z'),
+    });
+
+    await expect(cancelDelegation(user, 'delegation-1')).rejects.toThrow(
+      'Delegation is already cancelled'
+    );
+
+    expect(txMock.userDelegation.update).not.toHaveBeenCalled();
+    expect(txMock.auditEvent.create).not.toHaveBeenCalled();
   });
 
   it('getById returns delegation with delegator and delegatee details', async () => {

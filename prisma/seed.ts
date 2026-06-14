@@ -77,6 +77,7 @@ const workflowUnitByProcurement: Record<ProcurementType, string> = {
 const cleanup = async () => {
   await prisma.projectDocument.deleteMany();
   await prisma.projectSubmission.deleteMany();
+  await prisma.auditEvent.deleteMany();
   await prisma.projectCancellation.deleteMany();
   await prisma.projectHistory.deleteMany();
   await prisma.budgetPlan.deleteMany();

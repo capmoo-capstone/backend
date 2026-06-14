@@ -51,11 +51,35 @@ enum AuditLogType {
   USER_DELEGATION
 }
 
+enum AuditEventType {
+  PROJECT_DATA_UPDATED
+  PROJECT_ASSIGNEE_UPDATED
+  PROJECT_STATUS_UPDATED
+  PROJECT_STEP_UPDATED
+  USER_DELEGATION_CREATED
+  USER_DELEGATION_CANCELLED
+  PROJECT_CANCELLATION_CREATED
+  PROJECT_CANCELLATION_APPROVED
+  PROJECT_CANCELLATION_REJECTED
+}
+
+enum AuditTargetType {
+  PROJECT
+  USER_DELEGATION
+  PROJECT_CANCELLATION
+}
+
 enum ProjectActionType {
   INFORMATION_UPDATE
   STATUS_UPDATE
   ASSIGNEE_UPDATE
   STEP_UPDATE
+}
+
+enum ProjectCancellationStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum ProcurementType {
@@ -151,6 +175,7 @@ model User {
   completed_submissions    ProjectSubmission[]   @relation("CompletedBy")
   cancellation_requests    ProjectCancellation[] @relation("CancelRequester")
   cancellation_approvals   ProjectCancellation[] @relation("CancelApprover")
+  cancellation_decisions   ProjectCancellation[] @relation("CancelDecider")
   delegation_creations     UserDelegation[]      @relation("DelegationCreator")
   delegation_cancellations UserDelegation[]      @relation("DelegationCanceller")
 
@@ -268,20 +293,25 @@ model ProjectContractNumber {
 }
 
 model ProjectCancellation {
-  id           String    @id @default(uuid())
-  project_id   String
-  reason       String
-  is_active    Boolean   @default(true)
-  is_cancelled Boolean   @default(false)
-  requested_by String
-  requested_at DateTime  @default(now())
-  approved_by  String?
-  approved_at  DateTime?
-  cancelled_at DateTime?
+  id               String                    @id @default(uuid())
+  project_id       String
+  reason           String
+  status           ProjectCancellationStatus @default(PENDING)
+  is_active        Boolean                   @default(true)
+  is_cancelled     Boolean                   @default(false)
+  requested_by     String
+  requested_at     DateTime                  @default(now())
+  approved_by      String?
+  approved_at      DateTime?
+  cancelled_at     DateTime?
+  decision_by      String?
+  decision_at      DateTime?
+  decision_comment String?
 
   project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
   approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
+  decider   User?   @relation("CancelDecider", fields: [decision_by], references: [id])
 
   @@index([project_id, is_active])
   @@map("project_cancellations")
@@ -302,6 +332,34 @@ model ProjectHistory {
   @@index([project_id])
   @@index([project_id, action, changed_at(sort: Desc)])
   @@map("project_histories")
+}
+
+model AuditEvent {
+  id              String          @id @default(uuid())
+  kind            AuditLogType
+  event_type      AuditEventType
+  target_type     AuditTargetType
+  target_id       String
+  project_id      String?
+  actor_id        String?
+  actor_snapshot  Json
+  target_snapshot Json
+  diff            Json?
+  comment         String?
+  metadata        Json?
+  search_text     String?
+  source_table    String?
+  source_id       String?
+  occurred_at     DateTime        @default(now())
+  created_at      DateTime        @default(now())
+
+  @@unique([source_table, source_id, event_type])
+  @@index([occurred_at(sort: Desc)])
+  @@index([kind, occurred_at(sort: Desc)])
+  @@index([event_type, occurred_at(sort: Desc)])
+  @@index([project_id, occurred_at(sort: Desc)])
+  @@index([actor_id, occurred_at(sort: Desc)])
+  @@map("audit_events")
 }
 
 model ProjectSubmission {
