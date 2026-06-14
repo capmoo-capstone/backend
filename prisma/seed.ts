@@ -1,6 +1,7 @@
 import {
   ProcurementType,
   ProjectActionType,
+  ProjectCancellationStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
@@ -989,21 +990,20 @@ const seedCancellationsAndHistory = async () => {
       {
         project_id: ids.projects.waitingCancel,
         reason: 'Requester found duplicated demand in another plan.',
-        is_active: true,
-        is_cancelled: false,
+        status: ProjectCancellationStatus.PENDING,
         requested_by: ids.users.facilitiesRep,
         requested_at: daysFromNow(-2),
       },
       {
         project_id: ids.projects.cancelled,
         reason: 'Repair was no longer needed after warranty replacement.',
-        is_active: true,
-        is_cancelled: true,
+        status: ProjectCancellationStatus.APPROVED,
         requested_by: ids.users.maintenanceRep,
         requested_at: daysFromNow(-8),
-        approved_by: ids.users.supplyHead,
-        approved_at: daysFromNow(-7),
-        cancelled_at: daysFromNow(-7),
+        decision_by: ids.users.supplyHead,
+        decision_at: daysFromNow(-7),
+        decision_comment:
+          'Repair was no longer needed after warranty replacement.',
       },
     ],
   });

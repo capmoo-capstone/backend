@@ -174,7 +174,6 @@ model User {
   proposed_submissions     ProjectSubmission[]   @relation("ProposedBy")
   completed_submissions    ProjectSubmission[]   @relation("CompletedBy")
   cancellation_requests    ProjectCancellation[] @relation("CancelRequester")
-  cancellation_approvals   ProjectCancellation[] @relation("CancelApprover")
   cancellation_decisions   ProjectCancellation[] @relation("CancelDecider")
   delegation_creations     UserDelegation[]      @relation("DelegationCreator")
   delegation_cancellations UserDelegation[]      @relation("DelegationCanceller")
@@ -297,23 +296,17 @@ model ProjectCancellation {
   project_id       String
   reason           String
   status           ProjectCancellationStatus @default(PENDING)
-  is_active        Boolean                   @default(true)
-  is_cancelled     Boolean                   @default(false)
   requested_by     String
   requested_at     DateTime                  @default(now())
-  approved_by      String?
-  approved_at      DateTime?
-  cancelled_at     DateTime?
   decision_by      String?
   decision_at      DateTime?
   decision_comment String?
 
   project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
-  approver  User?   @relation("CancelApprover", fields: [approved_by], references: [id])
   decider   User?   @relation("CancelDecider", fields: [decision_by], references: [id])
 
-  @@index([project_id, is_active])
+  @@index([project_id])
   @@map("project_cancellations")
 }
 
