@@ -127,10 +127,7 @@ describe('project-lifecycle.service', () => {
       decision_comment: 'Approved',
     });
 
-    const result = await approveCancellation(headUser, {
-      id: 'project-1',
-      comment: 'Approved',
-    });
+    const result = await approveCancellation(headUser, 'project-1');
 
     expect(result.status).toBe(ProjectStatus.CANCELLED);
     expect(txMock.projectCancellation.update).toHaveBeenCalledWith(
@@ -140,7 +137,6 @@ describe('project-lifecycle.service', () => {
           status: 'APPROVED',
           decision_by: headUser.id,
           decision_at: new Date('2026-06-01T00:00:00.000Z'),
-          decision_comment: 'Approved',
         },
       })
     );

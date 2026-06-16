@@ -14,8 +14,8 @@ import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 import {
   CancelProjectDto,
-  CancellationDecisionDto,
   CompleteProcurementPhaseDto,
+  RejectCancellationDto,
   RequestEditProjectDto,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
@@ -180,7 +180,7 @@ const recordCancellationDecisionAudit = async (
     before: CancellationEventRecord;
     after: CancellationEventRecord;
     actor: AuthPayload;
-    comment: string;
+    comment?: string;
     projectOldStatus: ProjectStatus;
     projectNewStatus: ProjectStatus;
     extraDiff: AuditFieldDiff[];
@@ -317,20 +317,20 @@ export const cancelProject = async (
 
 export const approveCancellation = async (
   user: AuthPayload,
-  data: CancellationDecisionDto
+  id: string
 ): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const now = new Date();
-    const projectStatus = await findProjectStatusOrThrow(tx, data.id);
+    const projectStatus = await findProjectStatusOrThrow(tx, id);
     if (projectStatus !== ProjectStatus.WAITING_CANCEL) {
       throw new BadRequestError('Project is not in WAITING_CANCEL status');
     }
 
-    const cancellation = await findPendingCancellationOrThrow(tx, data.id);
+    const cancellation = await findPendingCancellationOrThrow(tx, id);
     const updated = await updateProjectStatusWithHistory(
       tx,
       user,
-      data.id,
+      id,
       projectStatus,
       ProjectStatus.CANCELLED
     );
@@ -341,7 +341,6 @@ export const approveCancellation = async (
         status: ProjectCancellationStatus.APPROVED,
         decision_by: user.id,
         decision_at: now,
-        decision_comment: data.comment,
       },
       select: cancellationEventSelect,
     });
@@ -351,7 +350,6 @@ export const approveCancellation = async (
       before: cancellation,
       after: approvedCancellation,
       actor: user,
-      comment: data.comment,
       projectOldStatus: projectStatus,
       projectNewStatus: updated.status,
       extraDiff: [
@@ -372,7 +370,7 @@ export const approveCancellation = async (
 
 export const rejectCancellation = async (
   user: AuthPayload,
-  data: CancellationDecisionDto
+  data: RejectCancellationDto
 ): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const now = new Date();

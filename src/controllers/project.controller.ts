@@ -4,13 +4,13 @@ import {
   AcceptProjectsSchema,
   CancelContractNumberSchema,
   CancelProjectSchema,
-  CancellationDecisionSchema,
   CompleteProcurementPhaseSchema,
   CreateProjectSchema,
   GetAssignedProjectsQuerySchema,
   GetNewContractNumberSchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
+  RejectCancellationSchema,
   RequestEditProjectSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
@@ -324,13 +324,10 @@ export const approveCancellation = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
-  const validatedData = CancellationDecisionSchema.parse({
-    id: projectId,
-    ...req.body,
-  });
+
   const project = await ProjectLifecycleService.approveCancellation(
     payload,
-    validatedData
+    projectId
   );
   res.status(200).json(project);
 };
@@ -343,7 +340,7 @@ export const rejectCancellation = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
-  const validatedData = CancellationDecisionSchema.parse({
+  const validatedData = RejectCancellationSchema.parse({
     id: projectId,
     ...req.body,
   });
