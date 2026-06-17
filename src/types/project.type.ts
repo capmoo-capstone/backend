@@ -1,6 +1,7 @@
 import {
   ProcurementType,
   Project,
+  ProjectCancellationStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
@@ -31,7 +32,7 @@ export type ProjectAssigneeListResponse = ProjectAssigneeResponse[];
 export interface ProjectCancellationResponse {
   project_id: string;
   reason: string;
-  is_cancelled: boolean;
+  status: ProjectCancellationStatus;
 }
 
 export interface CompleteProcurementPhaseResponse extends ProjectIdStatusResponse {
@@ -99,17 +100,14 @@ export interface ProjectDetailsResponse {
   }> | null;
   cancellation: Array<{
     reason: string;
-    is_cancelled: boolean;
+    status: ProjectCancellationStatus;
     requester: {
       id: string;
       full_name: string;
     };
-    approver: {
-      id: string;
-      full_name: string;
-    } | null;
     requested_at: Date;
-    approved_at: Date | null;
+    decision_at: Date | null;
+    decision_comment: string | null;
   }> | null;
 }
 

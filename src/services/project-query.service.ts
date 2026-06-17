@@ -2,6 +2,7 @@ import {
   Prisma,
   ProcurementType,
   ProjectActionType,
+  ProjectCancellationStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
@@ -328,10 +329,21 @@ export const getById = async (
           },
         },
         project_cancellation: {
-          where: { is_active: true },
-          include: {
+          where: {
+            status: {
+              in: [
+                ProjectCancellationStatus.PENDING,
+                ProjectCancellationStatus.APPROVED,
+              ],
+            },
+          },
+          select: {
+            reason: true,
+            status: true,
+            requested_at: true,
+            decision_at: true,
+            decision_comment: true,
             requester: { select: { id: true, full_name: true, roles: true } },
-            approver: { select: { id: true, full_name: true, roles: true } },
           },
         },
         budget_plans: {
@@ -398,19 +410,14 @@ export const getById = async (
       cancellation: projectData.project_cancellation
         ? projectData.project_cancellation.map((c) => ({
             reason: c.reason,
-            is_cancelled: c.is_cancelled,
+            status: c.status,
             requester: {
               id: c.requester.id,
               full_name: c.requester.full_name,
             },
-            approver: c.approver
-              ? {
-                  id: c.approver.id,
-                  full_name: c.approver.full_name,
-                }
-              : null,
             requested_at: c.requested_at,
-            approved_at: c.approved_at,
+            decision_at: c.decision_at,
+            decision_comment: c.decision_comment,
           }))
         : null,
     };
@@ -685,7 +692,7 @@ export const getWaitingCancellationProjects = async (
         created_at: true,
         updated_at: true,
         project_cancellation: {
-          where: { is_active: true },
+          where: { status: ProjectCancellationStatus.PENDING },
           select: {
             reason: true,
             requester: {

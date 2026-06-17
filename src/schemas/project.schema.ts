@@ -39,6 +39,11 @@ export const CancelProjectSchema = z.object({
   reason: z.string(),
 });
 
+export const RejectCancellationSchema = z.object({
+  id: z.uuid(),
+  comment: z.string().trim().min(1),
+});
+
 export const RequestEditProjectSchema = z.object({
   id: z.uuid(),
   reason: z.string(),
@@ -110,6 +115,7 @@ export type CompleteProcurementPhaseDto = z.infer<
   typeof CompleteProcurementPhaseSchema
 >;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
+export type RejectCancellationDto = z.infer<typeof RejectCancellationSchema>;
 export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<

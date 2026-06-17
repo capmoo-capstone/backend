@@ -17,6 +17,7 @@ import {
   ProjectAssigneeResponse,
   ProjectIdStatusResponse,
 } from '../types/project.type';
+import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 
 const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
   workflowType === UnitResponsibleType.CONTRACT
@@ -87,17 +88,15 @@ export const assignProjectsToUser = async (
       );
 
       historyPromises.push(
-        tx.projectHistory.create({
-          data: {
-            project_id: id,
-            action: ProjectActionType.ASSIGNEE_UPDATE,
-            old_value: { status: project.status, [assigneeField]: [] },
-            new_value: {
-              status: ProjectStatus.WAITING_ACCEPT,
-              [assigneeField]: [assignee.full_name],
-            },
-            changed_by: user.id,
+        createProjectHistoryAndAuditEvent(tx, {
+          projectId: id,
+          action: ProjectActionType.ASSIGNEE_UPDATE,
+          oldValue: { status: project.status, [assigneeField]: [] },
+          newValue: {
+            status: ProjectStatus.WAITING_ACCEPT,
+            [assigneeField]: [assignee.full_name],
           },
+          changedBy: user,
         })
       );
     }
@@ -154,16 +153,14 @@ export const changeAssignee = async (
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
-    await tx.projectHistory.create({
-      data: {
-        project_id: id,
-        action: ProjectActionType.ASSIGNEE_UPDATE,
-        old_value: {
-          [assigneeField]: [project[assigneeField]?.[0]?.full_name ?? null],
-        },
-        new_value: { [assigneeField]: [newAssignee.full_name] },
-        changed_by: user.id,
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId: id,
+      action: ProjectActionType.ASSIGNEE_UPDATE,
+      oldValue: {
+        [assigneeField]: [project[assigneeField]?.[0]?.full_name ?? null],
       },
+      newValue: { [assigneeField]: [newAssignee.full_name] },
+      changedBy: user,
     });
     return updated as unknown as ProjectAssigneeResponse;
   });
@@ -206,17 +203,15 @@ export const claimProject = async (
 
     await syncProjectPhases(tx, project.current_workflow_type, projectId);
 
-    await tx.projectHistory.create({
-      data: {
-        project_id: projectId,
-        action: ProjectActionType.ASSIGNEE_UPDATE,
-        old_value: { status: project.status, [assigneeField]: [] },
-        new_value: {
-          status: updated.status,
-          [assigneeField]: [user.full_name],
-        },
-        changed_by: user.id,
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId,
+      action: ProjectActionType.ASSIGNEE_UPDATE,
+      oldValue: { status: project.status, [assigneeField]: [] },
+      newValue: {
+        status: updated.status,
+        [assigneeField]: [user.full_name],
       },
+      changedBy: user,
     });
 
     return updated as unknown as ProjectAssigneeResponse;
@@ -271,14 +266,12 @@ export const acceptProjects = async (
 
       historyPromises.push(
         syncProjectPhases(tx, project.current_workflow_type, project.id),
-        tx.projectHistory.create({
-          data: {
-            project_id: project.id,
-            action: ProjectActionType.STATUS_UPDATE,
-            old_value: { status: ProjectStatus.WAITING_ACCEPT },
-            new_value: { status: ProjectStatus.IN_PROGRESS },
-            changed_by: user.id,
-          },
+        createProjectHistoryAndAuditEvent(tx, {
+          projectId: project.id,
+          action: ProjectActionType.STATUS_UPDATE,
+          oldValue: { status: ProjectStatus.WAITING_ACCEPT },
+          newValue: { status: ProjectStatus.IN_PROGRESS },
+          changedBy: user,
         })
       );
     }
@@ -351,18 +344,16 @@ export const addAssignee = async (
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
-    await tx.projectHistory.create({
-      data: {
-        project_id: data.id,
-        action: ProjectActionType.ASSIGNEE_UPDATE,
-        old_value: {
-          [assigneeField]: project[assigneeField].map((u) => u.full_name),
-        },
-        new_value: {
-          [assigneeField]: updated[assigneeField].map((u) => u.full_name),
-        },
-        changed_by: user.id,
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId: data.id,
+      action: ProjectActionType.ASSIGNEE_UPDATE,
+      oldValue: {
+        [assigneeField]: project[assigneeField].map((u) => u.full_name),
       },
+      newValue: {
+        [assigneeField]: updated[assigneeField].map((u) => u.full_name),
+      },
+      changedBy: user,
     });
     return updated as unknown as ProjectAssigneeResponse;
   });
@@ -416,17 +407,15 @@ export const returnProject = async (
 
     await syncProjectPhases(tx, project.current_workflow_type, updated.id);
 
-    await tx.projectHistory.create({
-      data: {
-        project_id: projectId,
-        action: ProjectActionType.ASSIGNEE_UPDATE,
-        old_value: {
-          status: project.status,
-          [assigneeField]: [user.full_name],
-        },
-        new_value: { status: updated.status, [assigneeField]: [] },
-        changed_by: user.id,
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId,
+      action: ProjectActionType.ASSIGNEE_UPDATE,
+      oldValue: {
+        status: project.status,
+        [assigneeField]: [user.full_name],
       },
+      newValue: { status: updated.status, [assigneeField]: [] },
+      changedBy: user,
     });
     return updated;
   });
