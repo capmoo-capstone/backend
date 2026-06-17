@@ -191,15 +191,29 @@ describe('project-data.service', () => {
     txMock.projectContractNumber.create.mockResolvedValue({
       id: 'contract-1',
       contract_no: '3/2569',
+      type: 'PO',
+      is_active: true,
+      cancellation_reason: null,
     });
 
-    const result = await generateContractNumber('PO', 2569);
+    const result = await generateContractNumber(user, 'PO', 2569);
 
     expect(result).toEqual({ id: 'contract-1', contract_no: '3/2569' });
     expect(txMock.$executeRaw).toHaveBeenCalledTimes(1);
     expect(txMock.projectContractNumber.count).toHaveBeenCalledWith({
       where: { type: 'PO', contract_no: { endsWith: '/2569' } },
     });
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'CONTRACT_NUMBER',
+          event_type: 'CONTRACT_NUMBER_CREATED',
+          target_type: 'CONTRACT_NUMBER',
+          target_id: 'contract-1',
+          actor_id: user.id,
+        }),
+      })
+    );
   });
 
   it('uses a stable contract-number advisory lock key for the type and fiscal year', async () => {
@@ -207,9 +221,12 @@ describe('project-data.service', () => {
     txMock.projectContractNumber.create.mockResolvedValue({
       id: 'contract-1',
       contract_no: '1/2569',
+      type: 'PO',
+      is_active: true,
+      cancellation_reason: null,
     });
 
-    await generateContractNumber('PO', 2569);
+    await generateContractNumber(user, 'PO', 2569);
 
     expect(txMock.$executeRaw.mock.calls[0][1]).toBe('2569:PO');
   });
@@ -223,6 +240,7 @@ describe('project-data.service', () => {
     txMock.projectContractNumber.update.mockResolvedValue({
       id: 'contract-1',
       contract_no: '3/2569',
+      type: 'PO',
       is_active: false,
       cancellation_reason: 'Duplicate',
     });
@@ -235,5 +253,17 @@ describe('project-data.service', () => {
       data: { contract_no_id: null },
     });
     expect(txMock.projectHistory.create).toHaveBeenCalled();
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'CONTRACT_NUMBER',
+          event_type: 'CONTRACT_NUMBER_CANCELLED',
+          target_type: 'CONTRACT_NUMBER',
+          target_id: 'contract-1',
+          actor_id: user.id,
+          comment: 'Duplicate',
+        }),
+      })
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { Prisma, ProjectStatus, ProjectActionType } from '@prisma/client';
+import { Prisma, ProjectStatus, ProjectActionType, AuditLogType, AuditEventType, AuditTargetType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError, AppError } from '../lib/errors';
 import { getProcurementTypeToUnitIdMap } from '../lib/unit-type';
@@ -9,7 +9,7 @@ import {
   ProjectsListResponse,
   UpdateProjectDataResponse,
 } from '../types/project.type';
-import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+import { createProjectHistoryAndAuditEvent, recordAuditEvent, buildContractNumberTargetSnapshot } from './audit-log.service';
 
 const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
@@ -255,6 +255,7 @@ export const updateProjectData = async (
 };
 
 export const generateContractNumber = async (
+  user: AuthPayload,
   type: string,
   budget_year: number
 ): Promise<{ id: string; contract_no: string }> => {
@@ -279,9 +280,28 @@ export const generateContractNumber = async (
         type,
         contract_no: newContractNo,
       },
-      select: { id: true, contract_no: true },
+      select: {
+        id: true,
+        contract_no: true,
+        type: true,
+        is_active: true,
+        cancellation_reason: true,
+      },
     });
-    return newContract;
+
+    await recordAuditEvent(tx, {
+      kind: AuditLogType.CONTRACT_NUMBER,
+      eventType: AuditEventType.CONTRACT_NUMBER_CREATED,
+      targetType: AuditTargetType.CONTRACT_NUMBER,
+      targetId: newContract.id,
+      actor: user,
+      actorId: user.id,
+      targetSnapshot: await buildContractNumberTargetSnapshot(tx, newContract),
+      sourceTable: 'project_contract_numbers',
+      sourceId: newContract.id,
+    });
+
+    return { id: newContract.id, contract_no: newContract.contract_no };
   });
 };
 
@@ -322,16 +342,37 @@ export const cancelContractNumber = async (
       });
     }
 
-    return await tx.projectContractNumber.update({
+    const updated = await tx.projectContractNumber.update({
       where: { id: contractId },
       data: { is_active: false, cancellation_reason: reason },
       select: {
         id: true,
         contract_no: true,
+        type: true,
         is_active: true,
         cancellation_reason: true,
       },
     });
+
+    await recordAuditEvent(tx, {
+      kind: AuditLogType.CONTRACT_NUMBER,
+      eventType: AuditEventType.CONTRACT_NUMBER_CANCELLED,
+      targetType: AuditTargetType.CONTRACT_NUMBER,
+      targetId: updated.id,
+      actor: user,
+      actorId: user.id,
+      targetSnapshot: await buildContractNumberTargetSnapshot(tx, updated),
+      comment: reason,
+      sourceTable: 'project_contract_numbers',
+      sourceId: updated.id,
+    });
+
+    return {
+      id: updated.id,
+      contract_no: updated.contract_no,
+      is_active: updated.is_active,
+      cancellation_reason: updated.cancellation_reason!,
+    };
   });
 };
 

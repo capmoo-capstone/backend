@@ -86,6 +86,8 @@ const titleByEventType: Record<AuditEventType, string> = {
     'Project cancellation approved',
   [AuditEventType.PROJECT_CANCELLATION_REJECTED]:
     'Project cancellation rejected',
+  [AuditEventType.CONTRACT_NUMBER_CREATED]: 'Contract number created',
+  [AuditEventType.CONTRACT_NUMBER_CANCELLED]: 'Contract number cancelled',
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -274,6 +276,27 @@ export const buildProjectTargetSnapshot = async (
     type: AuditTargetType.PROJECT,
     name: project?.title ?? projectId,
     refNo: project?.receive_no ?? null,
+  };
+};
+
+export const buildContractNumberTargetSnapshot = async (
+  tx: AuditClient,
+  contract: {
+    id: string;
+    type: string;
+    contract_no: string;
+    is_active?: boolean;
+    cancellation_reason?: string | null;
+  }
+) => {
+  return {
+    id: contract.id,
+    type: AuditTargetType.CONTRACT_NUMBER,
+    name: contract.contract_no,
+    refNo: contract.contract_no,
+    contractType: contract.type,
+    isActive: contract.is_active ?? true,
+    cancellationReason: contract.cancellation_reason ?? null,
   };
 };
 
