@@ -92,7 +92,7 @@ app.use(
 app.use(errorHandler);
 
 // Only listen locally — Vercel handles the server itself
-if (NODE_ENV === 'local') {
+if (NODE_ENV === 'local' || NODE_ENV === 'production') {
   app.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
   });
