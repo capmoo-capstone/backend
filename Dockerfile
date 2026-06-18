@@ -28,6 +28,7 @@ COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Copy compiled output and required files
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
 COPY --from=builder /app/swagger-output.json ./swagger-output.json
 
 EXPOSE 3000
