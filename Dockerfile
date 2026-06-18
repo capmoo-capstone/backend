@@ -20,6 +20,7 @@ COPY package*.json ./
 
 # Copy prisma schema BEFORE npm ci so postinstall (prisma generate) can find it
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 RUN npm ci --omit=dev
 
