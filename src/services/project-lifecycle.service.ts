@@ -270,7 +270,6 @@ export const cancelProject = async (
           ? {
               decision_by: user.id,
               decision_at: now,
-              decision_comment: data.reason,
             }
           : {}),
       },

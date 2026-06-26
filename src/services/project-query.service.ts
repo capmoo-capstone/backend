@@ -342,8 +342,8 @@ export const getById = async (
             status: true,
             requested_at: true,
             decision_at: true,
-            decision_comment: true,
             requester: { select: { id: true, full_name: true, roles: true } },
+            decider: { select: { id: true, full_name: true, roles: true } },
           },
         },
         budget_plans: {
@@ -417,7 +417,10 @@ export const getById = async (
             },
             requested_at: c.requested_at,
             decision_at: c.decision_at,
-            decision_comment: c.decision_comment,
+            decider: {
+              id: c.decider?.id,
+              full_name: c.decider?.full_name,
+            },
           }))
         : null,
     };
