@@ -304,7 +304,6 @@ model ProjectCancellation {
   requested_at     DateTime                  @default(now())
   decision_by      String?
   decision_at      DateTime?
-  decision_comment String?
 
   project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])

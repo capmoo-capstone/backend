@@ -15,7 +15,6 @@ import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,
-  RejectCancellationDto,
   RequestEditProjectDto,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
@@ -77,7 +76,6 @@ const cancellationEventSelect = {
   requested_at: true,
   decision_by: true,
   decision_at: true,
-  decision_comment: true,
 } satisfies Prisma.ProjectCancellationSelect;
 
 type CancellationEventRecord = Prisma.ProjectCancellationGetPayload<{
@@ -289,7 +287,6 @@ export const cancelProject = async (
           status: ProjectCancellationStatus.PENDING,
           decision_by: null,
           decision_at: null,
-          decision_comment: null,
         },
         after: cancelled,
         actor: user,
@@ -370,18 +367,18 @@ export const approveCancellation = async (
 
 export const rejectCancellation = async (
   user: AuthPayload,
-  data: RejectCancellationDto
+  id: string
 ): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
     const now = new Date();
-    const projectStatus = await findProjectStatusOrThrow(tx, data.id);
+    const projectStatus = await findProjectStatusOrThrow(tx, id);
     if (projectStatus !== ProjectStatus.WAITING_CANCEL) {
       throw new BadRequestError('Project is not in WAITING_CANCEL status');
     }
 
     const lastHistory = await tx.projectHistory.findFirst({
       where: {
-        project_id: data.id,
+        project_id: id,
         action: ProjectActionType.STATUS_UPDATE,
         new_value: {
           path: ['status'],
@@ -400,11 +397,11 @@ export const rejectCancellation = async (
       );
     }
 
-    const cancellation = await findPendingCancellationOrThrow(tx, data.id);
+    const cancellation = await findPendingCancellationOrThrow(tx, id);
     const updated = await updateProjectStatusWithHistory(
       tx,
       user,
-      data.id,
+      id,
       projectStatus,
       lastStatus
     );
@@ -415,7 +412,6 @@ export const rejectCancellation = async (
         status: ProjectCancellationStatus.REJECTED,
         decision_by: user.id,
         decision_at: now,
-        decision_comment: data.comment,
       },
       select: cancellationEventSelect,
     });
@@ -425,7 +421,6 @@ export const rejectCancellation = async (
       before: cancellation,
       after: rejectedCancellation,
       actor: user,
-      comment: data.comment,
       projectOldStatus: projectStatus,
       projectNewStatus: updated.status,
       extraDiff: [
