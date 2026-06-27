@@ -483,3 +483,16 @@ export const removeProject = async (
   await ProjectDataService.deleteProject(payload, projectId);
   res.status(204).send();
 };
+
+export const getDocumentSummary = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const projectId = req.params.id as string;
+  const payload = req.user!;
+  const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
+  res.status(200).json(data);
+};
+

@@ -5,6 +5,8 @@ import {
   ProjectCancellationStatus,
   ProjectPhaseStatus,
   ProjectStatus,
+  SubmissionStatus,
+  SubmissionType,
   UnitResponsibleType,
   UrgentType,
   UserRole,
@@ -17,8 +19,10 @@ import {
   PROC1_UNIT_ID,
   PROC2_UNIT_ID,
   WORKLOAD_STATUSES,
+  WORKFLOW_STEP_ORDERS,
 } from '../lib/constant';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
+import { generatePresignedDownloadUrl } from './storage.service';
 import {
   getDeptIdsForUser,
   getUnitIdsForUser,
@@ -1227,5 +1231,103 @@ export const getSummaryCards = async (
     [ProjectStatus.CLOSED]: closed,
     [ProjectStatus.CANCELLED]: cancelled,
     [UrgentType.URGENT]: urgent,
+  };
+};
+
+export const getDocumentSummary = async (
+  user: AuthPayload,
+  projectId: string
+) => {
+  const haveAccess =
+    haveSupplyPermission(user) ||
+    (await prisma.project.count({
+      where: {
+        id: projectId,
+        requesting_dept_id: { in: getDeptIdsForUser(user) },
+      },
+    })) > 0;
+
+  if (!haveAccess) {
+    throw new ForbiddenError('You do not have access to this project');
+  }
+
+  const project = await prisma.project
+    .findUniqueOrThrow({
+      where: { id: projectId },
+      select: { procurement_type: true },
+    })
+    .catch(() => {
+      throw new NotFoundError('Project not found');
+    });
+
+  const submissions = await prisma.projectSubmission.findMany({
+    where: { project_id: projectId },
+    select: {
+      documents: true,
+      status: true,
+      submission_round: true,
+      workflow_type: true,
+      step_order: true,
+    },
+    orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
+  });
+
+  const procurementWorkflow =
+    project.procurement_type as unknown as UnitResponsibleType;
+
+  const mapStepDocuments = async (
+    stepOrders: number[],
+    workflowType: UnitResponsibleType
+  ) => {
+    return Promise.all(
+      stepOrders.map(async (stepOrder) => {
+        const stepSubmissions = submissions.filter(
+          (s) => s.workflow_type === workflowType && s.step_order === stepOrder
+        );
+
+        let selectedSubmission = stepSubmissions.find(
+          (s) => s.status === SubmissionStatus.COMPLETED
+        );
+
+        if (!selectedSubmission && stepSubmissions.length > 0) {
+          selectedSubmission = stepSubmissions[0];
+        }
+
+        const documents = selectedSubmission
+          ? await Promise.all(
+              selectedSubmission.documents.map(async (doc) => ({
+                field_key: doc.field_key,
+                file_name: doc.file_name,
+                file_path: doc.file_path,
+                download_url: await generatePresignedDownloadUrl(doc.file_path),
+              }))
+            )
+          : [];
+
+        const stepStatus =
+          stepSubmissions.length > 0
+            ? stepSubmissions[0].status
+            : 'NOT_STARTED';
+
+        return {
+          step_order: stepOrder,
+          step_status: stepStatus,
+          submission_round: selectedSubmission?.submission_round ?? null,
+          documents,
+        };
+      })
+    );
+  };
+
+  const procurementSteps = WORKFLOW_STEP_ORDERS[procurementWorkflow] ?? [];
+  const contractSteps =
+    WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT] ?? [];
+
+  return {
+    procurement: await mapStepDocuments(procurementSteps, procurementWorkflow),
+    contract: await mapStepDocuments(
+      contractSteps,
+      UnitResponsibleType.CONTRACT
+    ),
   };
 };

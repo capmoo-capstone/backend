@@ -1,6 +1,8 @@
 import {
   ProcurementType,
   ProjectStatus,
+  SubmissionStatus,
+  SubmissionType,
   UnitResponsibleType,
   UrgentType,
   UserRole,
@@ -11,12 +13,19 @@ import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   getAssignedProjects,
   getById,
+  getDocumentSummary,
   getOwnProjects,
   getSummaryCards,
   getUnassignedProjectsByUnit,
   getWorkload,
   listProjects,
 } from '../project-query.service';
+
+vi.mock('../storage.service', () => ({
+  generatePresignedDownloadUrl: vi.fn(
+    async (key: string) => `https://files.test/${key}`
+  ),
+}));
 
 const supplyUser = {
   id: 'head-1',
@@ -318,6 +327,118 @@ describe('project-query.service', () => {
     });
     expect(prismaMock.project.count.mock.calls[0][0]).toEqual({
       where: { requesting_dept_id: { in: ['dept-1'] } },
+    });
+  });
+
+  describe('getDocumentSummary', () => {
+    it('throws ForbiddenError if the user does not have access to the project', async () => {
+      prismaMock.project.count.mockResolvedValue(0);
+
+      await expect(
+        getDocumentSummary(externalUser, 'project-1')
+      ).rejects.toThrowError('You do not have access to this project');
+    });
+
+    it('returns empty document lists for all steps if no submissions exist', async () => {
+      prismaMock.project.count.mockResolvedValue(1);
+      prismaMock.project.findUniqueOrThrow.mockResolvedValue({
+        procurement_type: ProcurementType.LT100K,
+      });
+      prismaMock.projectSubmission.findMany.mockResolvedValue([]);
+
+      const result = await getDocumentSummary(supplyUser, 'project-1');
+
+      expect(result.procurement).toHaveLength(4);
+      expect(result.contract).toHaveLength(5);
+
+      expect(result.procurement[0]).toMatchObject({
+        step_order: 1,
+        step_status: 'NOT_STARTED',
+        documents: [],
+      });
+    });
+
+    it('returns approved (COMPLETED) submission documents when they exist, even if there are later non-completed rounds', async () => {
+      prismaMock.project.count.mockResolvedValue(1);
+      prismaMock.project.findUniqueOrThrow.mockResolvedValue({
+        procurement_type: ProcurementType.LT100K,
+      });
+
+      prismaMock.projectSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-round-2',
+          workflow_type: UnitResponsibleType.LT100K,
+          step_order: 1,
+          submission_round: 2,
+          status: SubmissionStatus.WAITING_APPROVAL,
+          submission_type: SubmissionType.STAFF,
+          documents: [
+            { field_key: 'prop', file_name: 'round2.pdf', file_path: 'r2.pdf' },
+          ],
+        },
+        {
+          id: 'sub-round-1',
+          workflow_type: UnitResponsibleType.LT100K,
+          step_order: 1,
+          submission_round: 1,
+          status: SubmissionStatus.COMPLETED,
+          submission_type: SubmissionType.STAFF,
+          documents: [
+            {
+              field_key: 'prop',
+              file_name: 'round1-completed.pdf',
+              file_path: 'r1.pdf',
+            },
+          ],
+        },
+      ] as any);
+
+      const result = await getDocumentSummary(supplyUser, 'project-1');
+
+      expect(result.procurement[0].step_status).toBe(
+        SubmissionStatus.WAITING_APPROVAL
+      );
+      expect(result.procurement[0].documents).toHaveLength(1);
+      expect(result.procurement[0].documents[0]).toMatchObject({
+        file_name: 'round1-completed.pdf',
+        download_url: 'https://files.test/r1.pdf',
+      });
+    });
+
+    it('falls back to latest submission documents if no COMPLETED submission exists for a step', async () => {
+      prismaMock.project.count.mockResolvedValue(1);
+      prismaMock.project.findUniqueOrThrow.mockResolvedValue({
+        procurement_type: ProcurementType.LT100K,
+      });
+
+      prismaMock.projectSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-round-1',
+          workflow_type: UnitResponsibleType.LT100K,
+          step_order: 1,
+          submission_round: 1,
+          status: SubmissionStatus.WAITING_APPROVAL,
+          submission_type: SubmissionType.STAFF,
+          documents: [
+            {
+              field_key: 'prop',
+              file_name: 'round1-latest.pdf',
+              file_path: 'r1.pdf',
+            },
+          ],
+        },
+      ] as any);
+
+      const result = await getDocumentSummary(supplyUser, 'project-1');
+
+      expect(result.procurement[0].step_status).toBe(
+        SubmissionStatus.WAITING_APPROVAL
+      );
+      expect(result.procurement[0].documents).toHaveLength(1);
+      expect(result.procurement[0].documents[0]).toMatchObject({
+        file_name: 'round1-latest.pdf',
+        download_url: 'https://files.test/r1.pdf',
+      });
     });
   });
 });
