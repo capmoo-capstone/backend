@@ -212,12 +212,12 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 
 ### Holidays — `/holidays`
 
-| Method | Path                  | Description                                                                        |
-| ------ | --------------------- | ---------------------------------------------------------------------------------- |
-| GET    | `/`                   | List all holidays (filter by `?year=YYYY`)                                         |
-| POST   | `/`                   | Add a new holiday (ADMIN / SUPER\_ADMIN only)                                      |
-| PUT    | `/:id`                | Update a holiday (ADMIN / SUPER\_ADMIN only)                                       |
-| DELETE | `/:id`                | Delete a holiday (ADMIN / SUPER\_ADMIN only)                                       |
+| Method | Path                  | Description                                                                         |
+| ------ | --------------------- | ----------------------------------------------------------------------------------- |
+| GET    | `/`                   | List all holidays (filter by `?year=YYYY`)                                          |
+| POST   | `/`                   | Add a new holiday (ADMIN / SUPER_ADMIN only)                                        |
+| PUT    | `/:id`                | Update a holiday (ADMIN / SUPER_ADMIN only)                                         |
+| DELETE | `/:id`                | Delete a holiday (ADMIN / SUPER_ADMIN only)                                         |
 | POST   | `/calculate-timeline` | Calculate delivery date, remaining working days, and urgency level (all auth users) |
 
 ---
@@ -247,19 +247,18 @@ When no `deliveryDate` is provided to `POST /holidays/calculate-timeline`, the s
 
 Derived from **remaining working days** between today and the delivery date:
 
-| Level          | Condition                                                                      |
-| -------------- | ------------------------------------------------------------------------------ |
-| `SUPER_URGENT` | `LT100K` or `LT500K` with ≤ 3 remaining working days                          |
-| `VERY_URGENT`  | `LT100K`/`INTERNAL` ≤ 7 · `LT500K`/`MT500K` ≤ 15 · `EBIDDING` ≤ 60          |
-| `URGENT`       | `LT100K`/`INTERNAL` ≤ 15 · `LT500K`/`MT500K`/`SELECTION` ≤ 30 · `EBIDDING` ≤ 90 |
-| `NORMAL`       | Does not meet any of the above conditions                                      |
+| Level          | Condition                                                                              |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `SUPER_URGENT` | `LT100K` or `LT500K` with ≤ 3 remaining working days                                   |
+| `VERY_URGENT`  | `LT100K`/`INTERNAL` ≤ 7 · `LT500K`/`MT500K` ≤ 15 · `SELECTION` ≤ 30 · `EBIDDING` ≤ 60  |
+| `URGENT`       | `LT100K`/`INTERNAL` ≤ 15 · `LT500K`/`MT500K` ≤ 30 · `SELECTION` ≤ 60 · `EBIDDING` ≤ 90 |
+| `NORMAL`       | Does not meet any of the above conditions                                              |
 
 The `urgencyWarningThreshold` field in the response always reflects the `URGENT` threshold for the given procurement type.
 
 ---
 
 ## Domain Concepts
-
 
 ### Roles & Permissions
 
@@ -396,3 +395,4 @@ Tokens expire after **3 hours**.
 - **`unit.service.ts` self-exclusion bug**: `checkValidateType` does not exclude the unit currently being updated, so updating a unit's type incorrectly conflicts with itself.
 - **`getReceiveNumber` hardcoded year**: The `budget_year` parameter is unconditionally overwritten with a hardcoded value (`2569`) inside the function body.
 - **`resolveAssigneeField` duplication**: An inline ternary still exists in `getAssignedProjects` within `project-query.service.ts` rather than using the shared `resolveAssigneeField` helper from `project-assignment.service.ts`.
+

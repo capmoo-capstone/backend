@@ -293,5 +293,45 @@ describe('holiday.service – calculateTimeline', () => {
     expect(result.urgentLevel).toBe(UrgentType.NORMAL);
     expect(result.urgencyWarningThreshold).toBe(90);
   });
+
+  it('uses correct quota, VERY_URGENT and URGENT thresholds for SELECTION type', async () => {
+    // default SELECTION quota = 60 working days.
+    // Remaining = 60. Since <= 60 (urgent threshold), urgency is URGENT.
+    const defaultResult = await calculateTimeline({
+      unitResponsibilityType: 'SELECTION',
+    });
+    expect(defaultResult.unitResponsibilityType).toBe(UnitResponsibleType.SELECTION);
+    expect(defaultResult.remainingWorkingDays).toBe(60);
+    expect(defaultResult.urgentLevel).toBe(UrgentType.URGENT);
+    expect(defaultResult.urgencyWarningThreshold).toBe(60);
+
+    // Remaining = 30 days -> VERY_URGENT (since <= 30)
+    // today = Jun 29 (Mon)
+    // addWorkingDays(Jun 29, 30) = Aug 10 (Mon)
+    const veryUrgentResult = await calculateTimeline({
+      unitResponsibilityType: 'SELECTION',
+      deliveryDate: '2026-08-10T00:00:00.000Z',
+    });
+    expect(veryUrgentResult.remainingWorkingDays).toBe(30);
+    expect(veryUrgentResult.urgentLevel).toBe(UrgentType.VERY_URGENT);
+
+    // Remaining = 31 days -> URGENT (since <= 60)
+    // addWorkingDays(Jun 29, 31) = Aug 11 (Tue)
+    const urgentResult = await calculateTimeline({
+      unitResponsibilityType: 'SELECTION',
+      deliveryDate: '2026-08-11T00:00:00.000Z',
+    });
+    expect(urgentResult.remainingWorkingDays).toBe(31);
+    expect(urgentResult.urgentLevel).toBe(UrgentType.URGENT);
+
+    // Remaining = 61 days -> NORMAL (since > 60)
+    // addWorkingDays(Jun 29, 61) = Sep 22 (Tue)
+    const normalResult = await calculateTimeline({
+      unitResponsibilityType: 'SELECTION',
+      deliveryDate: '2026-09-22T00:00:00.000Z',
+    });
+    expect(normalResult.remainingWorkingDays).toBe(61);
+    expect(normalResult.urgentLevel).toBe(UrgentType.NORMAL);
+  });
 });
 

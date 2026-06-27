@@ -28,7 +28,7 @@ const URGENCY_THRESHOLDS: Record<string, UrgencyThresholds> = {
   INTERNAL: { veryUrgent: 7, urgent: 15 },
   LT500K: { superUrgent: 3, veryUrgent: 15, urgent: 30 },
   MT500K: { veryUrgent: 15, urgent: 30 },
-  SELECTION: { urgent: 30 },
+  SELECTION: { veryUrgent: 30, urgent: 60 },
   EBIDDING: { veryUrgent: 60, urgent: 90 },
 };
 
