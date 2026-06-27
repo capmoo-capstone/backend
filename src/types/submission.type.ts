@@ -1,4 +1,5 @@
 import {
+  ProjectPhaseStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
@@ -72,9 +73,15 @@ export interface SubmissionDetailResponse {
   documents: ProjectDocument[];
 }
 
+export interface StepGroup {
+  step_order: number;
+  step_status: SubmissionStatus | 'NOT_STARTED';
+  data: SubmissionDetailResponse[];
+}
+
 export interface ProjectSubmissionsResponse {
-  procurement: SubmissionDetailResponse[];
-  contract: SubmissionDetailResponse[];
+  procurement: StepGroup[];
+  contract: StepGroup[];
 }
 
 export interface VendorSubmissionDetailResponse {

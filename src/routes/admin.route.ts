@@ -13,4 +13,17 @@ router.get(
   controller.getAuditLogs
 );
 
+router.get(
+  '/settings/ops-units',
+  requireSupplyRoles([ADMIN]),
+  controller.getOpsUnits
+);
+router.get(
+  '/settings/representatives',
+  requireSupplyRoles([ADMIN]),
+  controller.getRepresentatives
+);
+router.get('/settings/ops-staff', requireSupplyRoles([ADMIN]), controller.getOpsStaff);
+
+
 export default router;

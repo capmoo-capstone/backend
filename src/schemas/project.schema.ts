@@ -1,10 +1,5 @@
+import { ProcurementType, ProjectStatus, UrgentType } from '@prisma/client';
 import { z } from 'zod';
-import {
-  ProcurementType,
-  ProjectPhaseStatus,
-  ProjectStatus,
-  UrgentType,
-} from '@prisma/client';
 
 export const CreateProjectSchema = z.object({
   title: z.string(),
@@ -42,6 +37,11 @@ export const CompleteProcurementPhaseSchema = z.object({
 export const CancelProjectSchema = z.object({
   id: z.uuid(),
   reason: z.string(),
+});
+
+export const RejectCancellationSchema = z.object({
+  id: z.uuid(),
+  comment: z.string().trim().min(1),
 });
 
 export const RequestEditProjectSchema = z.object({
@@ -83,13 +83,13 @@ export const ProjectFilterQuerySchema = z
   .object({
     search: z.string().optional(),
     title: z.string().optional(),
-    dateFrom: z.string().optional(),
-    dateTo: z.string().optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
     fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
     status: z.array(z.enum(ProjectStatus)).optional(),
-    procurementStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),
-    contractStatus: z.array(z.enum(ProjectPhaseStatus)).optional(),
+    procurementStatus: z.array(z.enum(ProjectStatus)).optional(),
+    contractStatus: z.array(z.enum(ProjectStatus)).optional(),
     urgentStatus: z.array(z.enum(UrgentType)).optional(),
     assignees: z.array(z.string()).optional(),
     departments: z.array(z.string()).optional(),
@@ -99,6 +99,11 @@ export const ProjectFilterQuerySchema = z
     sortOrder: z.enum(['asc', 'desc']).optional(),
   })
   .optional();
+
+export const GetAssignedProjectsQuerySchema = z.object({
+  dateFrom: z.coerce.date().optional(),
+  dateTo: z.coerce.date().optional(),
+});
 
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 export type UpdateStatusProjectDto = z.infer<typeof UpdateStatusProjectSchema>;
@@ -110,9 +115,13 @@ export type CompleteProcurementPhaseDto = z.infer<
   typeof CompleteProcurementPhaseSchema
 >;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
+export type RejectCancellationDto = z.infer<typeof RejectCancellationSchema>;
 export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<
   typeof GetProjectsQueryByUnitSchema
 >;
 export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;
+export type GetAssignedProjectsQuery = z.infer<
+  typeof GetAssignedProjectsQuerySchema
+>;

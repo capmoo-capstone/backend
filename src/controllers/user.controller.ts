@@ -3,16 +3,18 @@ import * as UserService from '../services/user.service';
 import {
   AddRoleSchema,
   RemoveRoleSchema,
+  ListUsersQuerySchema,
   UpdateSupplyRoleSchema,
 } from '../schemas/user.schema';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId, deptId } = req.query;
+  const { unitId, deptId, role } = ListUsersQuerySchema.parse(req.query);
   const data = await UserService.listUsers({
-    unitId: unitId as string,
-    deptId: deptId as string,
+    unitId,
+    deptId,
+    role,
   });
   res.status(200).json(data);
 };

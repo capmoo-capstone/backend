@@ -1,16 +1,24 @@
 import { Request, Response } from 'express';
-import * as DepartmentService from '../services/department.service';
-import { AuthenticatedRequest } from '../types/auth.type';
+import { toBool, toStringArray } from '../lib/helper';
 import {
   CreateDepartmentSchema,
   UpdateDepartmentSchema,
 } from '../schemas/department.schema';
+import * as DepartmentService from '../services/department.service';
+import { AuthenticatedRequest } from '../types/auth.type';
 
 export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Department']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const data = await DepartmentService.listDepartments(payload);
+  const { exclude_dept, excludeDept, withUnit } = req.query;
+  const data = await DepartmentService.listDepartments(payload, {
+    excludeDeptIds: [
+      ...toStringArray(exclude_dept),
+      ...toStringArray(excludeDept),
+    ],
+    withUnit: toBool(withUnit),
+  });
   res.status(200).json(data);
 };
 

@@ -1,21 +1,22 @@
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
+import { clearUserAuthCache } from '../lib/auth-cache';
+import { OPS_DEPT_ID } from '../lib/constant';
 import {
   AppError,
   BadRequestError,
   NotFoundError,
   UnauthorizedError,
 } from '../lib/errors';
-import jwt from 'jsonwebtoken';
-import { RegisterUserDto } from '../schemas/user.schema';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
+import { RegisterUserDto } from '../schemas/user.schema';
 import {
+  AuthPayload,
   FetchAndFormatUserDetailsResponse,
   LoginResponse,
   RegisterResponse,
-  AuthPayload,
 } from '../types/auth.type';
-import { clearUserAuthCache } from '../lib/auth-cache';
-import bcrypt from 'bcrypt';
 
 export const fetchAndFormatUserDetails = async (
   whereClause: any
@@ -37,9 +38,15 @@ export const fetchAndFormatUserDetails = async (
           start_date: { lte: now },
           OR: [{ end_date: null }, { end_date: { gte: now } }],
         },
-        include: {
+        select: {
+          role: true,
+          unit_id: true,
+          start_date: true,
+          end_date: true,
           delegator: {
-            include: {
+            select: {
+              id: true,
+              full_name: true,
               roles: {
                 include: {
                   department: { select: { id: true, name: true } },
@@ -64,18 +71,40 @@ export const fetchAndFormatUserDetails = async (
       unit_name: r.unit?.name || null,
     }));
 
+  const getDelegatedRoles = (delegation: any) =>
+    delegation.delegator.roles.filter(
+      (role: any) =>
+        delegation.role === role.role &&
+        role.dept_id === OPS_DEPT_ID &&
+        (delegation.unit_id ?? null) === (role.unit_id ?? null)
+    );
+
   const ownRoles = formatRoles(user.roles);
-  const inheritedRoles =
-    user.delegations_received.length > 0
-      ? formatRoles(user.delegations_received.flatMap((d) => d.delegator.roles))
-      : [];
+  const delegatedEntries = user.delegations_received.map((delegation) => ({
+    id: delegation.delegator.id,
+    full_name: delegation.delegator.full_name,
+    roles: getDelegatedRoles(delegation).flatMap((role: any) => ({
+      role: role.role,
+      dept_id: role.dept_id,
+      dept_name: role.department.name,
+      unit_id: role.unit_id,
+      unit_name: role.unit.name,
+    })),
+    start_date: delegation.start_date,
+    end_date: delegation.end_date,
+  }));
+  const inheritedRoles = delegatedEntries.flatMap((entry) => entry.roles);
 
   const finalRoles = [...ownRoles, ...inheritedRoles];
-  const isDelegated = user.delegations_received.length > 0;
-  const delegatedBy = user.delegations_received.map((d) => ({
-    id: d.delegator.id,
-    full_name: d.delegator.full_name,
-    roles: formatRoles(d.delegator.roles),
+  const isDelegated = delegatedEntries.length > 0;
+  const delegatedBy = delegatedEntries.map((entry) => ({
+    id: entry.id,
+    full_name: entry.full_name,
+    role: entry.roles.length > 0 ? entry.roles[0].role : null,
+    dept_id: entry.roles.length > 0 ? entry.roles[0].dept_id : null,
+    unit_id: entry.roles.length > 0 ? entry.roles[0].unit_id : null,
+    start_date: entry.start_date,
+    end_date: entry.end_date,
   }));
 
   return {
