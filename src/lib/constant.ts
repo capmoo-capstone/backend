@@ -3,6 +3,7 @@ import {
   ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
+import { ProjectPhaseProgress } from '../types/project.type';
 
 export const PRESIGN_UPLOAD_EXPIRES = 5 * 60; // 5 minutes — client must upload within this window
 export const PRESIGN_DOWNLOAD_EXPIRES = 15 * 60; // 15 minutes — download link stays valid this long
@@ -53,3 +54,15 @@ export const PROCUREMENT_WORKFLOW_TYPES = [
   UnitResponsibleType.EBIDDING,
   UnitResponsibleType.INTERNAL,
 ];
+
+export const DEFAULT_PHASE: ProjectPhaseProgress = {
+  GENERAL_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+  DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+};
+
+export const COMPLETED_PHASE: ProjectPhaseProgress = {
+  GENERAL_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
+  HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
+  DOCUMENT_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
+};

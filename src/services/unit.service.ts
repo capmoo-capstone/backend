@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { Unit, UnitResponsibleType, UserRole } from '@prisma/client';
+import { Prisma, Unit, UnitResponsibleType, UserRole } from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import {
   CreateUnitDto,
@@ -7,7 +7,12 @@ import {
   UpdateUnitUsersDto,
   UpdateRepresentativeDto,
 } from '../schemas/unit.schema';
-import { PaginatedUnits, UnitRepresentativeResponse } from '../types/unit.type';
+import {
+  PaginatedUnits,
+  UnitListItem,
+  UnitListOptions,
+  UnitRepresentativeResponse,
+} from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
 import {
   addRoleInternal,
@@ -18,17 +23,84 @@ import {
 
 export const listUnits = async (
   page: number,
-  limit: number
+  limit: number,
+  options: UnitListOptions = {}
 ): Promise<PaginatedUnits> => {
   const skip = (page - 1) * limit;
+  const where: Prisma.UnitWhereInput = options.deptId
+    ? { dept_id: options.deptId }
+    : {};
+  const includeRoles =
+    options.withUsers || options.withHead || options.withDelegations;
+  const userSelect: Prisma.UserSelect = {
+    id: true,
+    full_name: true,
+  };
+  if (options.withDelegations) {
+    userSelect.delegations_given = {
+      where: {
+        is_active: true,
+        OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
+      },
+      select: {
+        id: true,
+        role: true,
+        unit_id: true,
+        start_date: true,
+        end_date: true,
+        delegator: {
+          select: {
+            id: true,
+            full_name: true,
+          },
+        },
+        delegatee: {
+          select: {
+            id: true,
+            full_name: true,
+          },
+        },
+      },
+    };
+  }
+  const include: Prisma.UnitInclude = includeRoles
+    ? {
+        organization_roles: {
+          where: {
+            role: {
+              in: [
+                ...(options.withUsers
+                  ? [
+                      UserRole.GENERAL_STAFF,
+                      UserRole.REPRESENTATIVE,
+                      UserRole.GUEST,
+                    ]
+                  : []),
+                ...(options.withHead || options.withDelegations
+                  ? [UserRole.HEAD_OF_UNIT]
+                  : []),
+              ],
+            },
+          },
+          select: {
+            role: true,
+            user: {
+              select: userSelect,
+            },
+          },
+        },
+      }
+    : {};
 
   const [units, total] = await prisma.$transaction([
     prisma.unit.findMany({
+      where,
       skip: skip,
       take: limit,
       orderBy: { id: 'desc' },
+      include: includeRoles ? include : undefined,
     }),
-    prisma.unit.count(),
+    prisma.unit.count({ where }),
   ]);
 
   return {
@@ -36,7 +108,86 @@ export const listUnits = async (
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: units,
+    data: units.map((unit) => {
+      const unitWithRelations = unit as unknown as UnitListItem & {
+        organization_roles?: {
+          role: UserRole;
+          user: {
+            id: string;
+            full_name: string;
+            delegations_given?: {
+              id: string;
+              role: UserRole | null;
+              unit_id: string | null;
+              delegator: {
+                id: string;
+                full_name: string;
+              };
+              delegatee: {
+                id: string;
+                full_name: string;
+              };
+              start_date: Date;
+              end_date: Date | null;
+            }[];
+          };
+        }[];
+      };
+      const roles = includeRoles
+        ? (unitWithRelations.organization_roles ?? [])
+        : [];
+      const data: UnitListItem = {
+        id: unit.id,
+        name: unit.name,
+        dept_id: unit.dept_id,
+        type: unit.type,
+      };
+
+      if (options.withUsers) {
+        data.users = roles
+          .filter((role) => role.role !== UserRole.HEAD_OF_UNIT)
+          .map((role) => ({
+            id: role.user.id,
+            full_name: role.user.full_name,
+            role: role.role,
+          }));
+      }
+
+      if (options.withHead) {
+        const head = roles.find((role) => role.role === UserRole.HEAD_OF_UNIT);
+        data.head = head
+          ? {
+              id: head.user.id,
+              full_name: head.user.full_name,
+            }
+          : null;
+      }
+
+      if (options.withDelegations) {
+        data.delegations =
+          roles
+            .filter((role) => role.role === UserRole.HEAD_OF_UNIT)
+            .flatMap((role) =>
+              role.user.delegations_given
+                .filter(
+                  (delegation) =>
+                    delegation.role === UserRole.HEAD_OF_UNIT &&
+                    delegation.unit_id === unit.id
+                )
+                .map((delegation) => ({
+                  id: delegation.id,
+                  role: delegation.role,
+                  unit_id: delegation.unit_id,
+                  delegator: delegation.delegator,
+                  delegatee: delegation.delegatee,
+                  start_date: delegation.start_date,
+                  end_date: delegation.end_date,
+                }))
+            ) ?? [];
+      }
+
+      return data;
+    }),
   };
 };
 

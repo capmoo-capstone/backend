@@ -11,7 +11,14 @@ export const RegisterUserSchema = z.object({
   unit_id: z.string().optional(),
 });
 
+export const ListUsersQuerySchema = z.object({
+  unitId: z.string().optional(),
+  deptId: z.string().optional(),
+  role: z.enum(UserRole).optional(),
+});
+
 const supplyDeptRoles = [
+  UserRole.HEAD_OF_UNIT,
   UserRole.HEAD_OF_DEPARTMENT,
   UserRole.ADMIN,
   UserRole.DOCUMENT_STAFF,
@@ -21,6 +28,7 @@ const supplyDeptRoles = [
 export const UpdateSupplyRoleSchema = z
   .object({
     role: z.enum(supplyDeptRoles),
+    unit_id: z.string().optional(),
     new_users: z.array(z.uuid()).default([]),
     remove_users: z.array(z.uuid()).default([]),
   })
@@ -30,6 +38,13 @@ export const UpdateSupplyRoleSchema = z
     {
       message: 'HEAD_OF_DEPARTMENT can only have one person',
       path: ['new_users'],
+    }
+  )
+  .refine(
+    (data) => data.role !== UserRole.HEAD_OF_UNIT || Boolean(data.unit_id),
+    {
+      message: 'unit_id is required for HEAD_OF_UNIT',
+      path: ['unit_id'],
     }
   );
 
@@ -50,6 +65,7 @@ export const RemoveRoleSchema = z.object({
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type RegisterUserDto = z.infer<typeof RegisterUserSchema>;
+export type ListUsersQueryDto = z.infer<typeof ListUsersQuerySchema>;
 export type UpdateSupplyRoleDto = z.infer<typeof UpdateSupplyRoleSchema>;
 export type AddRoleDto = z.infer<typeof AddRoleSchema>;
 export type RemoveRoleDto = z.infer<typeof RemoveRoleSchema>;

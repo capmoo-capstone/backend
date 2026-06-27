@@ -1,33 +1,15 @@
 import {
   Prisma,
+  ProcurementType,
+  ProjectActionType,
+  ProjectCancellationStatus,
+  ProjectPhaseStatus,
   ProjectStatus,
-  UserRole,
   UnitResponsibleType,
   UrgentType,
-  ProcurementType,
-  ProjectPhaseStatus,
-  ProjectActionType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { ForbiddenError, NotFoundError } from '../lib/errors';
-import {
-  haveSupplyPermission,
-  getDeptIdsForUser,
-  isHeadOfSupplyDept,
-  isHeadOfSupplyUnit,
-  isSuperAdmin,
-  getUnitIdsForUser,
-} from '../lib/permissions';
-import { AuthPayload } from '../types/auth.type';
-import {
-  PaginatedProjects,
-  ProjectDetailsResponse,
-  ProjectsListResponse,
-  StaffWorkload,
-  SummaryResponse,
-  UnitWorkload,
-  WorkloadStatsResponse,
-} from '../types/project.type';
 import {
   CONTRACT_UNIT_ID,
   IN_PROGRESS_STATUSES,
@@ -36,7 +18,27 @@ import {
   PROC2_UNIT_ID,
   WORKLOAD_STATUSES,
 } from '../lib/constant';
+import { ForbiddenError, NotFoundError } from '../lib/errors';
+import {
+  getDeptIdsForUser,
+  getUnitIdsForUser,
+  haveSupplyPermission,
+  isHeadOfSupplyDept,
+  isHeadOfSupplyUnit,
+  isSuperAdmin,
+} from '../lib/permissions';
 import { ProjectFilterQuery } from '../schemas/project.schema';
+import { AuthPayload } from '../types/auth.type';
+import {
+  PaginatedProjects,
+  ProjectDetailsResponse,
+  ProjectPhaseProgress,
+  ProjectsListResponse,
+  StaffWorkload,
+  SummaryResponse,
+  UnitWorkload,
+  WorkloadStatsResponse,
+} from '../types/project.type';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -44,8 +46,6 @@ const SORTABLE_FIELDS = new Set([
   'created_at',
   'status',
   'procurement_type',
-  'procurement_status',
-  'contract_status',
 ]);
 
 const buildWhereClause = (
@@ -147,14 +147,32 @@ const buildWhereClause = (
   }
   if (filters?.procurementStatus?.length) {
     and.push({
-      procurement_status: {
-        in: filters.procurementStatus as ProjectPhaseStatus[],
-      },
+      AND: [
+        {
+          current_workflow_type: {
+            not: UnitResponsibleType.CONTRACT,
+          },
+        },
+        {
+          status: {
+            in: filters.procurementStatus as ProjectStatus[],
+          },
+        },
+      ],
     });
   }
   if (filters?.contractStatus?.length) {
     and.push({
-      contract_status: { in: filters.contractStatus as ProjectPhaseStatus[] },
+      AND: [
+        {
+          current_workflow_type: UnitResponsibleType.CONTRACT,
+        },
+        {
+          status: {
+            in: filters.contractStatus as ProjectStatus[],
+          },
+        },
+      ],
     });
   }
   if (filters?.urgentStatus?.length) {
@@ -202,30 +220,24 @@ const buildWhereClause = (
 
 const buildOrderBy = (filters?: ProjectFilterQuery) => {
   if (filters?.sortBy && SORTABLE_FIELDS.has(filters.sortBy)) {
-    if (filters.sortBy === 'procurement_status') {
+    if (filters.sortBy === 'status') {
+      const sortOrder: Prisma.SortOrder = filters.sortOrder ?? 'desc';
+
       return [
         {
-          procurement_status: filters.sortOrder ?? 'desc',
+          status: sortOrder,
         },
         {
-          status: filters.sortOrder ?? 'desc',
-        },
-      ];
-    } else if (filters.sortBy === 'contract_status') {
-      return [
-        {
-          contract_status: filters.sortOrder ?? 'desc',
-        },
-        {
-          status: filters.sortOrder ?? 'desc',
+          receive_no: 'desc' as Prisma.SortOrder,
         },
       ];
-    } else
-      return [
-        {
-          [filters.sortBy]: filters.sortOrder ?? 'desc',
-        } as Prisma.ProjectOrderByWithRelationInput,
-      ];
+    }
+
+    return [
+      {
+        [filters.sortBy]: filters.sortOrder ?? 'desc',
+      } as Prisma.ProjectOrderByWithRelationInput,
+    ];
   }
   return [{ receive_no: 'desc' as Prisma.SortOrder }];
 };
@@ -317,10 +329,21 @@ export const getById = async (
           },
         },
         project_cancellation: {
-          where: { is_active: true },
-          include: {
+          where: {
+            status: {
+              in: [
+                ProjectCancellationStatus.PENDING,
+                ProjectCancellationStatus.APPROVED,
+              ],
+            },
+          },
+          select: {
+            reason: true,
+            status: true,
+            requested_at: true,
+            decision_at: true,
+            decision_comment: true,
             requester: { select: { id: true, full_name: true, roles: true } },
-            approver: { select: { id: true, full_name: true, roles: true } },
           },
         },
         budget_plans: {
@@ -349,14 +372,10 @@ export const getById = async (
       description: projectData.description,
       budget: projectData.budget,
       status: projectData.status,
-      procurement_status: {
-        status: projectData.procurement_status,
-        step: projectData.procurement_step,
-      },
-      contract_status: {
-        status: projectData.contract_status,
-        step: projectData.contract_step,
-      },
+      procurement_progress:
+        projectData.procurement_progress as unknown as ProjectPhaseProgress,
+      contract_progress:
+        projectData.contract_progress as unknown as ProjectPhaseProgress,
       budget_plans: projectData.budget_plans ?? [],
       receive_no: projectData.receive_no,
       less_no: projectData.less_no,
@@ -391,19 +410,14 @@ export const getById = async (
       cancellation: projectData.project_cancellation
         ? projectData.project_cancellation.map((c) => ({
             reason: c.reason,
-            is_cancelled: c.is_cancelled,
+            status: c.status,
             requester: {
               id: c.requester.id,
               full_name: c.requester.full_name,
             },
-            approver: c.approver
-              ? {
-                  id: c.approver.id,
-                  full_name: c.approver.full_name,
-                }
-              : null,
             requested_at: c.requested_at,
-            approved_at: c.approved_at,
+            decision_at: c.decision_at,
+            decision_comment: c.decision_comment,
           }))
         : null,
     };
@@ -484,12 +498,13 @@ export const getUnassignedProjectsByUnit = async (
 
 export const getAssignedProjects = async (
   user: AuthPayload,
-  targetDate: Date
+  dateFrom?: Date,
+  dateTo?: Date
 ): Promise<ProjectsListResponse> => {
-  const startOfDay = new Date(targetDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(targetDate);
-  endOfDay.setHours(23, 59, 59, 999);
+  const from = dateFrom ? new Date(dateFrom) : new Date();
+  from.setHours(0, 0, 0, 0);
+  const to = dateTo ? new Date(dateTo) : new Date();
+  to.setHours(23, 59, 59, 999);
 
   const where: any = {
     AND: [
@@ -515,7 +530,7 @@ export const getAssignedProjects = async (
                       { action: ProjectActionType.ASSIGNEE_UPDATE },
                     ],
                   },
-                  { changed_at: { gte: startOfDay, lte: endOfDay } },
+                  { changed_at: { gte: from, lte: to } },
                   {
                     OR: [
                       {
@@ -541,38 +556,40 @@ export const getAssignedProjects = async (
     ],
   };
 
-  if (user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT)) {
-    const unitIds = user.roles
-      .map((r) => r.unit_id)
-      .filter((id): id is string => Boolean(id));
-    if (unitIds.length === 0) {
-      throw new NotFoundError('Unit not found');
-    }
+  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
+    if (user.roles.some((r) => r.role === UserRole.HEAD_OF_UNIT)) {
+      const unitIds = user.roles
+        .map((r) => r.unit_id)
+        .filter((id): id is string => Boolean(id));
+      if (unitIds.length === 0) {
+        throw new NotFoundError('Unit not found');
+      }
 
-    const unit = await prisma.unit.findMany({
-      where: {
-        id: {
-          in: unitIds,
+      const unit = await prisma.unit.findMany({
+        where: {
+          id: {
+            in: unitIds,
+          },
         },
-      },
-      select: { type: true },
-    });
-    if (unit.length === 0) {
-      throw new NotFoundError('Unit not found');
-    }
+        select: { type: true },
+      });
+      if (unit.length === 0) {
+        throw new NotFoundError('Unit not found');
+      }
 
-    where.AND.push({
-      current_workflow_type: {
-        in: unit.flatMap((u) => u.type),
-      },
-    });
-  } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
-    where.AND.push({
-      OR: [
-        { assignee_procurement: { some: { id: user.id } } },
-        { assignee_contract: { some: { id: user.id } } },
-      ],
-    });
+      where.AND.push({
+        current_workflow_type: {
+          in: unit.flatMap((u) => u.type),
+        },
+      });
+    } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
+      where.AND.push({
+        OR: [
+          { assignee_procurement: { some: { id: user.id } } },
+          { assignee_contract: { some: { id: user.id } } },
+        ],
+      });
+    }
   }
 
   const [projects, total] = await prisma.$transaction([
@@ -675,7 +692,7 @@ export const getWaitingCancellationProjects = async (
         created_at: true,
         updated_at: true,
         project_cancellation: {
-          where: { is_active: true },
+          where: { status: ProjectCancellationStatus.PENDING },
           select: {
             reason: true,
             requester: {
@@ -731,11 +748,9 @@ export const getOwnProjects = async (
         AND: [
           { responsible_unit_id: { in: procurementUnitIds } },
           {
-            procurement_status: {
-              notIn: [
-                ProjectPhaseStatus.COMPLETED,
-                ProjectPhaseStatus.NOT_STARTED,
-              ],
+            procurement_progress: {
+              path: ['HEAD_OF_UNIT', 'status'],
+              equals: ProjectPhaseStatus.WAITING_APPROVAL,
             },
           },
         ],
@@ -746,14 +761,10 @@ export const getOwnProjects = async (
       orClauses.push({
         AND: [
           { responsible_unit_id: { in: contractUnitIds } },
-          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
           {
-            contract_status: {
-              notIn: [
-                ProjectPhaseStatus.COMPLETED,
-                ProjectPhaseStatus.NOT_EXPORTED,
-                ProjectPhaseStatus.NOT_STARTED,
-              ],
+            contract_progress: {
+              path: ['HEAD_OF_UNIT', 'status'],
+              equals: ProjectPhaseStatus.WAITING_APPROVAL,
             },
           },
         ],
@@ -766,35 +777,59 @@ export const getOwnProjects = async (
     ) {
       orClauses.push({
         OR: [
-          // Case: Procurement staff work on projects in procurement phase
           {
             AND: [
               { assignee_procurement: { some: { id: user.id } } },
               {
-                procurement_status: {
-                  notIn: [
-                    ProjectPhaseStatus.COMPLETED,
-                    ProjectPhaseStatus.NOT_STARTED,
-                  ],
-                },
+                OR: [
+                  {
+                    procurement_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.IN_PROGRESS,
+                    },
+                  },
+                  {
+                    procurement_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.WAITING_APPROVAL,
+                    },
+                  },
+                  {
+                    procurement_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.REJECTED,
+                    },
+                  },
+                ],
               },
             ],
           },
-          // Case : Procurement staff work on the contract after procurement completion
           {
             AND: [
               { current_workflow_type: UnitResponsibleType.CONTRACT },
               { responsible_unit_id: { in: procurementUnitIds } },
               { assignee_contract: { some: { id: user.id } } },
-              { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
               {
-                contract_status: {
-                  notIn: [
-                    ProjectPhaseStatus.COMPLETED,
-                    ProjectPhaseStatus.NOT_EXPORTED,
-                    ProjectPhaseStatus.NOT_STARTED,
-                  ],
-                },
+                OR: [
+                  {
+                    contract_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.IN_PROGRESS,
+                    },
+                  },
+                  {
+                    contract_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.WAITING_APPROVAL,
+                    },
+                  },
+                  {
+                    contract_progress: {
+                      path: ['GENERAL_STAFF', 'status'],
+                      equals: ProjectPhaseStatus.REJECTED,
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -809,54 +844,82 @@ export const getOwnProjects = async (
       orClauses.push({
         AND: [
           { assignee_contract: { some: { id: user.id } } },
-          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
           {
-            contract_status: {
-              notIn: [
-                ProjectPhaseStatus.COMPLETED,
-                ProjectPhaseStatus.NOT_EXPORTED,
-              ],
-            },
+            OR: [
+              {
+                contract_progress: {
+                  path: ['GENERAL_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.IN_PROGRESS,
+                },
+              },
+              {
+                contract_progress: {
+                  path: ['GENERAL_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.WAITING_APPROVAL,
+                },
+              },
+              {
+                contract_progress: {
+                  path: ['GENERAL_STAFF', 'status'],
+                  equals: ProjectPhaseStatus.REJECTED,
+                },
+              },
+            ],
           },
         ],
       });
     }
 
     if (user.roles.some((r) => r.role === UserRole.FINANCE_STAFF)) {
-      // FINANCE_STAFF can see all projects in contract NOT_EXPORTED status
       orClauses.push({
-        AND: [
-          { procurement_status: { equals: ProjectPhaseStatus.COMPLETED } },
-          { contract_status: { equals: ProjectPhaseStatus.NOT_EXPORTED } },
+        OR: [
+          // {
+          //   AND: [
+          //     {
+          //       contract_progress: {
+          //         path: ['FINANCE_STAFF', 'status'],
+          //         equals: ProjectPhaseStatus.NOT_EXPORTED,
+          //       },
+          //     },
+          //   ],
+          // },
+          {
+            status: ProjectStatus.REQUEST_EDIT,
+          },
         ],
       });
     }
 
     if (user.roles.some((r) => r.role === UserRole.DOCUMENT_STAFF)) {
-      // DOCUMENT_STAFF can see all projects
       orClauses.push({
         OR: [
           {
-            procurement_status: {
-              notIn: [
-                ProjectPhaseStatus.NOT_STARTED,
-                ProjectPhaseStatus.COMPLETED,
-              ],
+            procurement_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_PROPOSAL,
             },
           },
           {
-            contract_status: {
-              notIn: [
-                ProjectPhaseStatus.NOT_STARTED,
-                ProjectPhaseStatus.NOT_EXPORTED,
-                ProjectPhaseStatus.COMPLETED,
-              ],
+            procurement_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_SIGNATURE,
+            },
+          },
+          {
+            contract_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_PROPOSAL,
+            },
+          },
+          {
+            contract_progress: {
+              path: ['DOCUMENT_STAFF', 'status'],
+              equals: ProjectPhaseStatus.WAITING_SIGNATURE,
             },
           },
         ],
       });
     }
-
     where = orClauses.length > 0 ? { OR: orClauses } : { id: 'none' };
   }
 
@@ -876,10 +939,8 @@ export const getOwnProjects = async (
             name: true,
           },
         },
-        procurement_status: true,
-        procurement_step: true,
-        contract_status: true,
-        contract_step: true,
+        procurement_progress: true,
+        contract_progress: true,
         requesting_unit: {
           select: {
             id: true,
@@ -1103,8 +1164,8 @@ export const getSummaryCards = async (
               },
             },
             {
-              procurement_status: {
-                in: [ProjectPhaseStatus.NOT_STARTED],
+              current_workflow_type: {
+                not: UnitResponsibleType.CONTRACT,
               },
             },
           ],
@@ -1121,8 +1182,7 @@ export const getSummaryCards = async (
             },
             {
               AND: [
-                { procurement_status: { in: [ProjectPhaseStatus.COMPLETED] } },
-                { contract_status: { in: [ProjectPhaseStatus.NOT_STARTED] } },
+                { current_workflow_type: UnitResponsibleType.CONTRACT },
                 {
                   status: {
                     in: [

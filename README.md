@@ -194,12 +194,12 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 
 ### Delegations — `/delegations`
 
-| Method | Path          | Description                                       |
-| ------ | ------------- | ------------------------------------------------- |
-| POST   | `/`           | Create a delegation                               |
-| GET    | `/active`     | Get the active delegation for a unit (`?unitId=`) |
-| GET    | `/:id`        | Get delegation by ID                              |
-| PATCH  | `/:id/cancel` | Cancel a delegation                               |
+| Method | Path          | Description                                                              |
+| ------ | ------------- | ------------------------------------------------------------------------ |
+| POST   | `/`           | Create a delegation for one role/scope                                   |
+| GET    | `/active`     | Get the active delegation for a Supply Ops role/scope (`?role=&unitId=`) |
+| GET    | `/:id`        | Get delegation by ID                                                     |
+| PATCH  | `/:id/cancel` | Cancel a delegation                                                      |
 
 ### Budget Plans — `/budget-plans`
 
@@ -275,7 +275,22 @@ Each type maps to a fixed set of ordered workflow steps defined in `WORKFLOW_STE
 
 ### Delegation
 
-A user can delegate their roles to another user for a specified period. The delegatee inherits the delegator's roles during that window. Role changes and delegations update `role_updated_at`, which invalidates the auth LRU cache.
+A user can delegate one specific role/scope to another user for a specified period. The delegatee inherits only that selected role during the active window. Role changes and delegations update `role_updated_at`, which invalidates the auth LRU cache.
+
+`POST /delegations` requires the delegated scope:
+
+```ts
+{
+  delegator_id: string
+  delegatee_id: string
+  role: 'HEAD_OF_DEPARTMENT' | 'HEAD_OF_UNIT'
+  unit_id?: string
+  start_date: string | Date
+  end_date?: string | Date
+}
+```
+
+Delegations are always for Supply Operations (`DEPT-SUP-OPS`). `HEAD_OF_UNIT` requires `unit_id`; `HEAD_OF_DEPARTMENT` must omit `unit_id`. A delegator can have active delegations for multiple different scopes, but only one active delegation per exact `role + unit_id` scope.
 
 ### Project Filtering
 

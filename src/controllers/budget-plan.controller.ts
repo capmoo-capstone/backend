@@ -2,19 +2,21 @@ import { Response } from 'express';
 import * as BudgetPlanService from '../services/budget-plan.service';
 import { ImportBudgetPlanSchema } from '../schemas/budget-plan.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
+import { de } from 'zod/locales';
 
 export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Budget Plan']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, unitId, available } = req.query;
+  const { page, limit, deptId, unitId, available } = req.query;
   const payload = req.user!;
   const availableBool =
     available === 'true' ? true : available === 'false' ? false : undefined;
   const data = await BudgetPlanService.listBudgetPlans(
     payload,
-    unitId as string,
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10,
+    deptId as string,
+    unitId as string,
     availableBool
   );
   res.status(200).json(data);

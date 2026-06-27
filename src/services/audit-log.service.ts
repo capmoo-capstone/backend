@@ -1,12 +1,15 @@
 import {
+  AuditEvent,
+  AuditEventType,
   AuditLogType,
+  AuditTargetType,
+  Prisma,
   ProjectActionType,
-  ProjectCancellation,
-  ProjectHistory,
-  User,
-  UserDelegation,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { ForbiddenError, NotFoundError } from '../lib/errors';
+import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
+import { AuditLogsQuery } from '../schemas/admin.schema';
 import {
   AuditActor,
   AuditLogItem,
@@ -14,199 +17,537 @@ import {
   AuditTarget,
 } from '../types/audit-log.type';
 import { AuthPayload } from '../types/auth.type';
-import { AuditLogsQuery } from '../schemas/admin.schema';
 
-type BasicUser = Pick<User, 'id' | 'full_name'>;
-type BasicProject = {
-  id: string;
-  title: string;
-  receive_no: string;
+type AuditClient = Prisma.TransactionClient;
+type AuditEventJson = Prisma.JsonValue | null;
+
+type ActorInput =
+  | Pick<
+      AuthPayload,
+      'id' | 'full_name' | 'roles' | 'is_delegated' | 'delegated_by'
+    >
+  | {
+      id: string;
+      full_name?: string;
+      name?: string;
+    }
+  | null;
+
+export interface AuditFieldDiff {
+  field: string;
+  oldValue: Prisma.InputJsonValue | null;
+  newValue: Prisma.InputJsonValue | null;
+}
+
+interface RecordAuditEventInput {
+  kind: AuditLogType;
+  eventType: AuditEventType;
+  targetType: AuditTargetType;
+  targetId: string;
+  projectId?: string | null;
+  actor?: ActorInput;
+  actorId?: string | null;
+  actorSnapshot?: Record<string, unknown>;
+  targetSnapshot: Record<string, unknown>;
+  diff?: AuditFieldDiff[];
+  comment?: string | null;
+  metadata?: Record<string, unknown> | null;
+  sourceTable?: string | null;
+  sourceId?: string | null;
+  occurredAt?: Date;
+}
+
+interface CreateProjectHistoryAuditInput {
+  projectId: string;
+  action: ProjectActionType;
+  oldValue: Record<string, unknown>;
+  newValue: Record<string, unknown>;
+  changedBy: ActorInput | string;
+  comment?: string | null;
+}
+
+const actionToEventType: Record<ProjectActionType, AuditEventType> = {
+  [ProjectActionType.INFORMATION_UPDATE]: AuditEventType.PROJECT_DATA_UPDATED,
+  [ProjectActionType.ASSIGNEE_UPDATE]: AuditEventType.PROJECT_ASSIGNEE_UPDATED,
+  [ProjectActionType.STATUS_UPDATE]: AuditEventType.PROJECT_STATUS_UPDATED,
+  [ProjectActionType.STEP_UPDATE]: AuditEventType.PROJECT_STEP_UPDATED,
 };
 
-type ProjectHistoryWithProject = ProjectHistory & {
-  project: BasicProject;
+const titleByEventType: Record<AuditEventType, string> = {
+  [AuditEventType.PROJECT_DATA_UPDATED]: 'Project information updated',
+  [AuditEventType.PROJECT_ASSIGNEE_UPDATED]: 'Project assignee updated',
+  [AuditEventType.PROJECT_STATUS_UPDATED]: 'Project status updated',
+  [AuditEventType.PROJECT_STEP_UPDATED]: 'Project step updated',
+  [AuditEventType.USER_DELEGATION_CREATED]: 'User delegation created',
+  [AuditEventType.USER_DELEGATION_CANCELLED]: 'User delegation cancelled',
+  [AuditEventType.PROJECT_CANCELLATION_CREATED]:
+    'Project cancellation requested',
+  [AuditEventType.PROJECT_CANCELLATION_APPROVED]:
+    'Project cancellation approved',
+  [AuditEventType.PROJECT_CANCELLATION_REJECTED]:
+    'Project cancellation rejected',
+  [AuditEventType.CONTRACT_NUMBER_CREATED]: 'Contract number created',
+  [AuditEventType.CONTRACT_NUMBER_CANCELLED]: 'Contract number cancelled',
 };
 
-type ProjectCancellationWithRelations = ProjectCancellation & {
-  project: BasicProject;
-  requester: BasicUser;
-  approver: BasicUser | null;
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' &&
+  value !== null &&
+  Object.getPrototypeOf(value) === Object.prototype;
+
+export const toAuditJsonValue = (
+  value: unknown
+): Prisma.InputJsonValue | null => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+
+  const valueType = typeof value;
+  if (
+    valueType === 'string' ||
+    valueType === 'number' ||
+    valueType === 'boolean'
+  ) {
+    return value as Prisma.InputJsonValue;
+  }
+  if (valueType === 'bigint') return value.toString();
+  if (Array.isArray(value)) {
+    return value.map((item) => toAuditJsonValue(item));
+  }
+
+  if (typeof value === 'object') {
+    const withJson = value as { toJSON?: () => unknown };
+    if (typeof withJson.toJSON === 'function' && !isPlainObject(value)) {
+      return toAuditJsonValue(withJson.toJSON());
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, nestedValue]) => nestedValue !== undefined)
+        .map(([key, nestedValue]) => [key, toAuditJsonValue(nestedValue)])
+    ) as Prisma.InputJsonObject;
+  }
+
+  return String(value);
 };
 
-type UserDelegationWithRelations = UserDelegation & {
-  delegator: BasicUser;
-  delegatee: BasicUser;
-  creator: BasicUser;
-  canceller?: BasicUser | null;
+const jsonEquals = (left: unknown, right: unknown) =>
+  JSON.stringify(toAuditJsonValue(left)) ===
+  JSON.stringify(toAuditJsonValue(right));
+
+export const buildAuditDiff = (
+  oldValue: Record<string, unknown>,
+  newValue: Record<string, unknown>
+): AuditFieldDiff[] => {
+  const fields = new Set([...Object.keys(oldValue), ...Object.keys(newValue)]);
+
+  return [...fields]
+    .filter((field) => !jsonEquals(oldValue[field], newValue[field]))
+    .map((field) => ({
+      field,
+      oldValue: toAuditJsonValue(oldValue[field]),
+      newValue: toAuditJsonValue(newValue[field]),
+    }));
 };
 
-const toIsoStringOrNull = (date: Date | null) => date?.toISOString() ?? null;
+const collectSearchValues = (value: unknown, output: string[]) => {
+  if (value === null || value === undefined) return;
 
-const buildActor = (user: BasicUser | null | undefined): AuditActor | null =>
-  user ? { id: user.id, name: user.full_name } : null;
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    output.push(String(value));
+    return;
+  }
 
-const buildProjectTarget = (project: BasicProject): AuditTarget => ({
-  id: project.id,
-  type: 'PROJECT',
-  name: project.title,
-  refNo: project.receive_no,
-});
+  if (value instanceof Date) {
+    output.push(value.toISOString());
+    return;
+  }
 
-const matchesSearch = (item: AuditLogItem, query?: string) => {
-  if (!query) return true;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSearchValues(item, output));
+    return;
+  }
 
-  const q = query.toLowerCase();
-  const searchableValues = [
-    item.id,
-    item.kind,
-    item.occurredAt,
-    item.title,
-    item.description,
-    item.actor?.id,
-    item.actor?.name,
-    item.target.id,
-    item.target.type,
-    item.target.name,
-    item.target.refNo,
-    JSON.stringify(item.details),
-  ];
-
-  return searchableValues.some((value) => value?.toLowerCase().includes(q));
+  if (typeof value === 'object') {
+    Object.values(value as Record<string, unknown>).forEach((item) =>
+      collectSearchValues(item, output)
+    );
+  }
 };
 
-const mapProjectHistory = (
-  history: ProjectHistoryWithProject,
-  actorMap: Map<string, BasicUser>
-): AuditLogItem => {
-  const titleByAction: Record<ProjectActionType, string> = {
-    [ProjectActionType.INFORMATION_UPDATE]: 'Project information updated',
-    [ProjectActionType.ASSIGNEE_UPDATE]: 'Project assignee updated',
-    [ProjectActionType.STATUS_UPDATE]: 'Project status updated',
-    [ProjectActionType.STEP_UPDATE]: 'Project step updated',
-  };
+export const buildAuditSearchText = (
+  input: Pick<
+    RecordAuditEventInput,
+    | 'kind'
+    | 'eventType'
+    | 'targetType'
+    | 'targetId'
+    | 'projectId'
+    | 'comment'
+    | 'targetSnapshot'
+    | 'actorSnapshot'
+    | 'metadata'
+    | 'diff'
+  >
+) => {
+  const values = [
+    input.kind,
+    input.eventType,
+    input.targetType,
+    input.targetId,
+    input.projectId,
+    input.comment,
+  ].filter((value): value is string => Boolean(value));
+
+  collectSearchValues(input.actorSnapshot, values);
+  collectSearchValues(input.targetSnapshot, values);
+  collectSearchValues(input.metadata, values);
+  collectSearchValues(input.diff, values);
+
+  return values.join(' ').toLowerCase();
+};
+
+const asRecord = (value: AuditEventJson): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const asString = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim().length > 0 ? value : null;
+
+const getActorId = (actor?: ActorInput, actorId?: string | null) => {
+  if (actor && 'id' in actor) return actor.id;
+  return actorId ?? null;
+};
+
+const buildActorSnapshot = async (
+  tx: AuditClient,
+  actor?: ActorInput,
+  actorId?: string | null
+) => {
+  if (actor) {
+    const displayName =
+      'full_name' in actor && actor.full_name
+        ? actor.full_name
+        : 'name' in actor
+          ? actor.name
+          : null;
+
+    return {
+      id: actor.id,
+      name: displayName,
+      full_name: displayName,
+      roles: 'roles' in actor ? actor.roles : undefined,
+      is_delegated: 'is_delegated' in actor ? actor.is_delegated : undefined,
+      delegated_by: 'delegated_by' in actor ? actor.delegated_by : undefined,
+    };
+  }
+
+  if (!actorId) {
+    return { id: null, name: null, full_name: null };
+  }
+
+  const user = await tx.user.findUnique({
+    where: { id: actorId },
+    select: { id: true, full_name: true },
+  });
 
   return {
-    id: history.id,
-    kind: AuditLogType.PROJECT_HISTORY,
-    occurredAt: history.changed_at.toISOString(),
-    title: titleByAction[history.action],
-    description: history.comment ?? 'Project updated',
-    actor: buildActor(actorMap.get(history.changed_by)),
-    target: buildProjectTarget(history.project),
-    details: {
-      action: history.action,
-      oldValue: history.old_value,
-      newValue: history.new_value,
-      comment: history.comment,
-    },
+    id: actorId,
+    name: user?.full_name ?? null,
+    full_name: user?.full_name ?? null,
   };
 };
 
-const mapProjectCancellation = (
-  cancellation: ProjectCancellationWithRelations
-): AuditLogItem => {
-  const latestStateAt =
-    cancellation.cancelled_at ??
-    cancellation.approved_at ??
-    cancellation.requested_at;
-  const hasApprovalState =
-    cancellation.is_cancelled ||
-    cancellation.approved_at !== null ||
-    cancellation.cancelled_at !== null;
-  const actor = hasApprovalState
-    ? buildActor(cancellation.approver ?? cancellation.requester)
-    : buildActor(cancellation.requester);
+export const buildProjectTargetSnapshot = async (
+  tx: AuditClient,
+  projectId: string
+) => {
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, title: true, receive_no: true },
+  });
+
+  return {
+    id: projectId,
+    type: AuditTargetType.PROJECT,
+    name: project?.title ?? projectId,
+    refNo: project?.receive_no ?? null,
+  };
+};
+
+export const buildContractNumberTargetSnapshot = async (
+  tx: AuditClient,
+  contract: {
+    id: string;
+    type: string;
+    contract_no: string;
+    is_active?: boolean;
+    cancellation_reason?: string | null;
+  }
+) => {
+  return {
+    id: contract.id,
+    type: AuditTargetType.CONTRACT_NUMBER,
+    name: contract.contract_no,
+    refNo: contract.contract_no,
+    contractType: contract.type,
+    isActive: contract.is_active ?? true,
+    cancellationReason: contract.cancellation_reason ?? null,
+  };
+};
+
+export const buildProjectCancellationTargetSnapshot = async (
+  tx: AuditClient,
+  cancellation: {
+    id: string;
+    project_id: string;
+    reason?: string | null;
+  }
+) => {
+  const project = await buildProjectTargetSnapshot(tx, cancellation.project_id);
 
   return {
     id: cancellation.id,
-    kind: AuditLogType.PROJECT_CANCELLATION,
-    occurredAt: latestStateAt.toISOString(),
-    title: hasApprovalState
-      ? 'Project cancellation approved'
-      : 'Project cancellation requested',
-    description: cancellation.reason,
-    actor,
-    target: buildProjectTarget(cancellation.project),
-    details: {
-      reason: cancellation.reason,
-      isActive: cancellation.is_active,
-      isCancelled: cancellation.is_cancelled,
-      requestedBy: cancellation.requester.full_name,
-      requestedAt: cancellation.requested_at.toISOString(),
-      approvedBy: cancellation.approver?.full_name ?? null,
-      approvedAt: toIsoStringOrNull(cancellation.approved_at),
-      cancelledAt: toIsoStringOrNull(cancellation.cancelled_at),
-    },
+    type: AuditTargetType.PROJECT_CANCELLATION,
+    name: project.name,
+    refNo: project.refNo,
+    project,
+    reason: cancellation.reason ?? null,
   };
 };
 
-const mapUserDelegation = (
-  delegation: UserDelegationWithRelations
-): AuditLogItem[] => {
-  const wasCancelled = delegation.cancelled_at !== null;
-  const delegator = buildActor(delegation.delegator)!;
-  const delegatee = buildActor(delegation.delegatee)!;
-  const creator = buildActor(delegation.creator)!;
-  const canceller = buildActor(delegation.canceller ?? null);
+export const buildDelegationTargetSnapshot = async (
+  tx: AuditClient,
+  delegation: {
+    id: string;
+    delegator_id: string;
+    delegatee_id: string;
+    role: string | null;
+    unit_id: string | null;
+    start_date?: Date;
+    end_date?: Date | null;
+  }
+) => {
+  const [delegator, delegatee] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: delegation.delegator_id },
+      select: { id: true, full_name: true },
+    }),
+    tx.user.findUnique({
+      where: { id: delegation.delegatee_id },
+      select: { id: true, full_name: true },
+    }),
+  ]);
 
-  const commonTarget: AuditTarget = {
+  const delegatorSnapshot = {
+    id: delegation.delegator_id,
+    name: delegator?.full_name ?? delegation.delegator_id,
+  };
+  const delegateeSnapshot = {
+    id: delegation.delegatee_id,
+    name: delegatee?.full_name ?? delegation.delegatee_id,
+  };
+
+  return {
     id: delegation.id,
-    type: 'USER_DELEGATION',
-    name: `${delegator.name} -> ${delegatee.name}`,
+    type: AuditTargetType.USER_DELEGATION,
+    name: `${delegatorSnapshot.name} -> ${delegateeSnapshot.name}`,
     refNo: null,
+    delegator: delegatorSnapshot,
+    delegatee: delegateeSnapshot,
+    role: delegation.role,
+    unitId: delegation.unit_id,
+    startDate: delegation.start_date?.toISOString() ?? null,
+    endDate: delegation.end_date?.toISOString() ?? null,
   };
+};
 
-  const commonDetails = {
-    delegator,
-    delegatee,
-    startDate: delegation.start_date.toISOString(),
-    endDate: toIsoStringOrNull(delegation.end_date),
-    isActive: delegation.is_active,
-    cancelledAt: toIsoStringOrNull(delegation.cancelled_at),
-    createdBy: delegation.creator.full_name,
-    cancelledBy: delegation.canceller?.full_name ?? null,
-  };
+export const recordAuditEvent = async (
+  tx: AuditClient,
+  input: RecordAuditEventInput
+) => {
+  const actorId = getActorId(input.actor, input.actorId);
+  const actorSnapshot =
+    input.actorSnapshot ?? (await buildActorSnapshot(tx, input.actor, actorId));
+  const diff = input.diff ?? [];
+  const metadata = input.metadata ?? null;
+  const search_text = buildAuditSearchText({
+    ...input,
+    actorSnapshot,
+    diff,
+    metadata,
+  });
 
-  const createdDescription =
-    delegation.creator.id === delegation.delegator_id
-      ? `${delegator.name} delegated access to ${delegatee.name}`
-      : `${delegation.creator.full_name} created delegation for ${delegator.name} to ${delegatee.name}`;
-
-  const createdLog: AuditLogItem = {
-    id: `${delegation.id}:created`,
-    kind: AuditLogType.USER_DELEGATION,
-    occurredAt: delegation.created_at.toISOString(),
-    title: 'User delegation created',
-    description: createdDescription,
-    actor: creator,
-    target: commonTarget,
-    details: {
-      ...commonDetails,
-      event: 'CREATED',
+  return tx.auditEvent.create({
+    data: {
+      kind: input.kind,
+      event_type: input.eventType,
+      target_type: input.targetType,
+      target_id: input.targetId,
+      project_id: input.projectId ?? null,
+      actor_id: actorId,
+      actor_snapshot: toAuditJsonValue(actorSnapshot) ?? {},
+      target_snapshot: toAuditJsonValue(input.targetSnapshot) ?? {},
+      diff: toAuditJsonValue(diff),
+      comment: input.comment ?? null,
+      metadata: metadata ? toAuditJsonValue(metadata) : undefined,
+      search_text,
+      source_table: input.sourceTable ?? null,
+      source_id: input.sourceId ?? null,
+      occurred_at: input.occurredAt ?? new Date(),
     },
+  });
+};
+
+export const createProjectHistoryAndAuditEvent = async (
+  tx: AuditClient,
+  input: CreateProjectHistoryAuditInput
+) => {
+  const changedBy =
+    typeof input.changedBy === 'string' ? input.changedBy : input.changedBy.id;
+  const history = await tx.projectHistory.create({
+    data: {
+      project_id: input.projectId,
+      action: input.action,
+      old_value: toAuditJsonValue(input.oldValue) ?? {},
+      new_value: toAuditJsonValue(input.newValue) ?? {},
+      comment: input.comment ?? null,
+      changed_by: changedBy,
+    },
+  });
+
+  await recordAuditEvent(tx, {
+    kind: AuditLogType.PROJECT_HISTORY,
+    eventType: actionToEventType[input.action],
+    targetType: AuditTargetType.PROJECT,
+    targetId: input.projectId,
+    projectId: input.projectId,
+    actor: typeof input.changedBy === 'string' ? null : input.changedBy,
+    actorId: changedBy,
+    targetSnapshot: await buildProjectTargetSnapshot(tx, input.projectId),
+    diff: buildAuditDiff(input.oldValue, input.newValue),
+    comment: input.comment ?? null,
+    metadata: { action: input.action },
+    sourceTable: 'project_histories',
+    sourceId: history?.id ?? null,
+    occurredAt: history?.changed_at ?? new Date(),
+  });
+
+  return history;
+};
+
+const buildActor = (snapshot: AuditEventJson): AuditActor | null => {
+  const actor = asRecord(snapshot);
+  const id = asString(actor.id);
+  const name = asString(actor.name) ?? asString(actor.full_name);
+
+  if (!id && !name) return null;
+
+  return {
+    id: id ?? '',
+    name: name ?? id ?? 'Unknown user',
   };
+};
 
-  const cancellationLog: AuditLogItem | null = wasCancelled
-    ? {
-        id: `${delegation.id}:cancelled`,
-        kind: AuditLogType.USER_DELEGATION,
-        occurredAt: delegation.cancelled_at!.toISOString(),
-        title: 'User delegation cancelled',
-        description: delegation.canceller
-          ? delegation.canceller.id === delegation.delegator_id
-            ? `${delegator.name} cancelled delegation to ${delegatee.name}`
-            : `${delegation.canceller!.full_name} cancelled delegation for ${delegator.name} to ${delegatee.name}`
-          : `${delegator.name} cancelled delegation to ${delegatee.name}`,
-        actor: canceller ?? null,
-        target: commonTarget,
-        details: {
-          ...commonDetails,
-          event: 'CANCELLED',
-        },
-      }
-    : null;
+const buildTarget = (
+  event: Pick<AuditEvent, 'target_id' | 'target_type' | 'target_snapshot'>
+): AuditTarget => {
+  const snapshot = asRecord(event.target_snapshot);
+  const projectSnapshot = asRecord(snapshot.project as AuditEventJson);
 
-  return cancellationLog ? [createdLog, cancellationLog] : [createdLog];
+  return {
+    id: asString(snapshot.id) ?? event.target_id,
+    type:
+      (asString(snapshot.type) as AuditTargetType | null) ?? event.target_type,
+    name:
+      asString(snapshot.name) ??
+      asString(projectSnapshot.name) ??
+      event.target_id,
+    refNo: asString(snapshot.refNo) ?? asString(projectSnapshot.refNo),
+  };
+};
+
+const buildWhere = (
+  query: AuditLogsQuery,
+  projectId?: string
+): Prisma.AuditEventWhereInput => {
+  const where: Prisma.AuditEventWhereInput = {};
+
+  if (query.kind) where.kind = query.kind;
+  if (query.eventType) where.event_type = query.eventType;
+  if (query.actorId) where.actor_id = query.actorId;
+  if (query.projectId || projectId)
+    where.project_id = projectId ?? query.projectId;
+
+  if (query.dateFrom || query.dateTo) {
+    where.occurred_at = {
+      gte: query.dateFrom,
+      lte: query.dateTo,
+    };
+  }
+
+  if (query.q?.trim()) {
+    where.search_text = {
+      contains: query.q.trim().toLowerCase(),
+      mode: Prisma.QueryMode.insensitive,
+    };
+  }
+
+  return where;
+};
+
+const mapAuditEvent = (event: AuditEvent): AuditLogItem => ({
+  id: event.id,
+  kind: event.kind,
+  eventType: event.event_type,
+  occurredAt: event.occurred_at.toISOString(),
+  title: titleByEventType[event.event_type],
+  description: event.comment ?? titleByEventType[event.event_type],
+  actor: buildActor(event.actor_snapshot),
+  target: buildTarget(event),
+  details: {
+    eventType: event.event_type,
+    targetType: event.target_type,
+    diff: event.diff,
+    comment: event.comment,
+    metadata: event.metadata,
+    source: {
+      table: event.source_table,
+      id: event.source_id,
+    },
+  },
+});
+
+const queryAuditEvents = async (
+  page: number,
+  limit: number,
+  query: AuditLogsQuery,
+  projectId?: string
+): Promise<AuditLogsResponse> => {
+  const skip = (page - 1) * limit;
+  const where = buildWhere(query, projectId);
+
+  const [events, total] = await prisma.$transaction([
+    prisma.auditEvent.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { occurred_at: 'desc' },
+    }),
+    prisma.auditEvent.count({ where }),
+  ]);
+
+  return {
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+    pageSize: limit,
+    data: events.map(mapAuditEvent),
+  };
 };
 
 export const listAuditLogs = async (
@@ -214,131 +555,30 @@ export const listAuditLogs = async (
   page: number,
   limit: number,
   query: AuditLogsQuery
+): Promise<AuditLogsResponse> => queryAuditEvents(page, limit, query);
+
+export const listProjectAuditLogs = async (
+  user: AuthPayload,
+  projectId: string,
+  page: number,
+  limit: number,
+  query: AuditLogsQuery
 ): Promise<AuditLogsResponse> => {
-  const skip = (page - 1) * limit;
-  const shouldFetchProjectHistory =
-    !query.kind || query.kind === AuditLogType.PROJECT_HISTORY;
-  const shouldFetchProjectCancellation =
-    !query.kind || query.kind === AuditLogType.PROJECT_CANCELLATION;
-  const shouldFetchUserDelegation =
-    !query.kind || query.kind === AuditLogType.USER_DELEGATION;
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { requesting_dept_id: true },
+  });
 
-  const [projectHistories, projectCancellations, userDelegations] =
-    await Promise.all([
-      shouldFetchProjectHistory
-        ? prisma.projectHistory.findMany({
-            where: {
-              changed_at: {
-                gte: query.dateFrom ?? undefined,
-                lte: query.dateTo ?? new Date(),
-              },
-            },
-            skip,
-            take: limit,
-            include: {
-              project: {
-                select: { id: true, title: true, receive_no: true },
-              },
-            },
-          })
-        : Promise.resolve([]),
-      shouldFetchProjectCancellation
-        ? prisma.projectCancellation.findMany({
-            where: {
-              OR: [
-                {
-                  requested_at: {
-                    gte: query.dateFrom ?? undefined,
-                    lte: query.dateTo ?? new Date(),
-                  },
-                },
-                {
-                  approved_at: {
-                    gte: query.dateFrom ?? undefined,
-                    lte: query.dateTo ?? new Date(),
-                  },
-                },
-                {
-                  cancelled_at: {
-                    gte: query.dateFrom ?? undefined,
-                    lte: query.dateTo ?? new Date(),
-                  },
-                },
-              ],
-            },
-            skip,
-            take: limit,
-            include: {
-              project: {
-                select: { id: true, title: true, receive_no: true },
-              },
-              requester: { select: { id: true, full_name: true } },
-              approver: { select: { id: true, full_name: true } },
-            },
-          })
-        : Promise.resolve([]),
-      shouldFetchUserDelegation
-        ? prisma.userDelegation.findMany({
-            where: {
-              OR: [
-                {
-                  created_at: {
-                    gte: query.dateFrom ?? undefined,
-                    lte: query.dateTo ?? new Date(),
-                  },
-                },
-                {
-                  cancelled_at: {
-                    gte: query.dateFrom ?? undefined,
-                    lte: query.dateTo ?? new Date(),
-                  },
-                },
-              ],
-            },
-            skip,
-            take: limit,
-            include: {
-              delegator: { select: { id: true, full_name: true } },
-              delegatee: { select: { id: true, full_name: true } },
-              creator: { select: { id: true, full_name: true } },
-              canceller: { select: { id: true, full_name: true } },
-            },
-          })
-        : Promise.resolve([]),
-    ]);
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
 
-  const actorIds = [
-    ...new Set(projectHistories.map((history) => history.changed_by)),
-  ];
-  const actors =
-    actorIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: actorIds } },
-          select: { id: true, full_name: true },
-        })
-      : [];
-  const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
+  if (
+    !haveSupplyPermission(user) &&
+    !getDeptIdsForUser(user).includes(project.requesting_dept_id)
+  ) {
+    throw new ForbiddenError('You do not have access to this project');
+  }
 
-  const searchQuery = query.q?.trim();
-
-  const allLogs = [
-    ...projectHistories.map((history) => mapProjectHistory(history, actorMap)),
-    ...projectCancellations.map(mapProjectCancellation),
-    ...userDelegations.flatMap(mapUserDelegation),
-  ]
-    .filter((item) => matchesSearch(item, searchQuery))
-    .sort(
-      (a, b) =>
-        new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
-    );
-
-  const pagedLogs = allLogs.slice(skip, skip + limit);
-
-  return {
-    total: allLogs.length,
-    page,
-    totalPages: Math.ceil(allLogs.length / limit),
-    pageSize: limit,
-    data: pagedLogs,
-  };
+  return queryAuditEvents(page, limit, query, projectId);
 };

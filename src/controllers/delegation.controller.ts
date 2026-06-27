@@ -1,8 +1,10 @@
 import { Response } from 'express';
+import {
+  AddDelegationSchema,
+  GetActiveDelegationQuerySchema,
+} from '../schemas/delegation.schema';
 import * as DelegationService from '../services/delegation.service';
-import { AddDelegationSchema } from '../schemas/delegation.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { UserRole } from '@prisma/client';
 
 export const addDelegation = async (
   req: AuthenticatedRequest,
@@ -11,10 +13,13 @@ export const addDelegation = async (
   // #swagger.tags = ['Delegation']
   // #swagger.security = [{ bearerAuth: [] }]
   const user = req.user!;
-  const { delegator_id, delegatee_id, start_date, end_date } = req.body;
+  const { delegator_id, delegatee_id, role, unit_id, start_date, end_date } =
+    req.body;
   const validatedData = AddDelegationSchema.parse({
     delegator_id,
     delegatee_id,
+    role,
+    unit_id,
     start_date,
     end_date: end_date ?? undefined,
   });
@@ -50,9 +55,14 @@ export const getActiveDelegation = async (
   // #swagger.tags = ['Delegation']
   // #swagger.security = [{ bearerAuth: [] }]
   const { role, unitId } = req.query;
+  const validatedQuery = GetActiveDelegationQuerySchema.parse({
+    role,
+    unitId,
+  });
+
   const data = await DelegationService.getActiveDelegation(
-    role as UserRole,
-    unitId as string | null
+    validatedQuery.role,
+    validatedQuery.unitId
   );
   res.status(200).json(data);
 };

@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma';
-import { AuthPayload } from '../types/auth.type';
 import { ImportBudgetPlanDto } from '../schemas/budget-plan.schema';
+import { AuthPayload } from '../types/auth.type';
 import {
   ImportBudgetPlanResponse,
   PaginatedBudgetPlans,
@@ -8,16 +8,20 @@ import {
 } from '../types/budget-plan.type';
 
 export const listBudgetPlans = async (
-  user: AuthPayload,
-  unitId: string,
+  _user: AuthPayload,
   page: number,
   limit: number,
+  deptId?: string,
+  unitId?: string,
   available?: boolean
 ): Promise<PaginatedBudgetPlans> => {
   const skip = (page - 1) * limit;
   let where = {};
+  if (deptId) {
+    where = { unit: { dept_id: deptId } };
+  }
   if (unitId) {
-    where = { unit_id: unitId };
+    where = { ...where, unit_id: unitId };
   }
   if (available !== undefined) {
     if (available === true) {
@@ -28,6 +32,16 @@ export const listBudgetPlans = async (
   const [budgetPlans, total] = await Promise.all([
     prisma.budgetPlan.findMany({
       where,
+      include: {
+        unit: {
+          select: {
+            name: true,
+            department: {
+              select: { name: true },
+            },
+          },
+        },
+      },
       skip: skip,
       take: limit,
       orderBy: { created_at: 'desc' },
@@ -35,12 +49,21 @@ export const listBudgetPlans = async (
     prisma.budgetPlan.count({ where }),
   ]);
 
+  const formattedBudgetPlans = budgetPlans.map((plan) => {
+    const { unit, ...rest } = plan;
+    return {
+      ...rest,
+      unit_name: unit?.name,
+      dept_name: unit?.department?.name,
+    };
+  });
+
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: budgetPlans,
+    data: formattedBudgetPlans,
   };
 };
 

@@ -5,9 +5,14 @@
   "main": "index.js",
   "scripts": {
     "swagger": "tsx swagger.ts",
-    "build": "npx tsx swagger.ts && tsc",
+    "build": "npm test && npx tsx swagger.ts && tsc",
     "start": "node --env-file=.env dist/app.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
+    "format": "prettier --write . --ignore-unknown",
+    "format:check": "prettier --check . --ignore-unknown",
+    "typecheck": "tsc --noEmit",
     "dev": "npm run swagger && tsx --watch --env-file=.env src/app.ts",
     "postinstall": "prisma generate",
     "generate": "prisma generate",
@@ -63,7 +68,8 @@
     "eslint-plugin-prettier": "^5.5.5",
     "globals": "^17.5.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.1"
+    "typescript-eslint": "^8.59.1",
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "@hono/node-server": "^1.19.13",

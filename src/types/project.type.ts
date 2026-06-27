@@ -1,19 +1,15 @@
 import {
   ProcurementType,
   Project,
+  ProjectCancellationStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
   UrgentType,
   UserRole,
 } from '@prisma/client';
-import { ListResponse, PaginatedResponse } from './common.type';
 import { Decimal } from '@prisma/client/runtime/client';
-
-export interface PhaseStatusResult {
-  status: ProjectPhaseStatus;
-  step?: number | null;
-}
+import { ListResponse, PaginatedResponse } from './common.type';
 
 export type PaginatedProjects = PaginatedResponse<Project>;
 
@@ -36,7 +32,7 @@ export type ProjectAssigneeListResponse = ProjectAssigneeResponse[];
 export interface ProjectCancellationResponse {
   project_id: string;
   reason: string;
-  is_cancelled: boolean;
+  status: ProjectCancellationStatus;
 }
 
 export interface CompleteProcurementPhaseResponse extends ProjectIdStatusResponse {
@@ -44,9 +40,7 @@ export interface CompleteProcurementPhaseResponse extends ProjectIdStatusRespons
   responsible_unit_id: string;
 }
 
-export interface CompleteContractPhaseResponse extends ProjectIdStatusResponse {
-  contract_status: ProjectPhaseStatus;
-}
+export type CompleteContractPhaseResponse = ProjectIdStatusResponse;
 
 export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
   request_edit_reason: string | null;
@@ -62,8 +56,8 @@ export interface ProjectDetailsResponse {
   description: string | null;
   budget: Decimal;
   status: ProjectStatus;
-  procurement_status: PhaseStatusResult;
-  contract_status: PhaseStatusResult;
+  procurement_progress: ProjectPhaseProgress;
+  contract_progress: ProjectPhaseProgress;
   budget_plans: Array<{
     id: string;
     activity_type_name: string;
@@ -106,17 +100,14 @@ export interface ProjectDetailsResponse {
   }> | null;
   cancellation: Array<{
     reason: string;
-    is_cancelled: boolean;
+    status: ProjectCancellationStatus;
     requester: {
       id: string;
       full_name: string;
     };
-    approver: {
-      id: string;
-      full_name: string;
-    } | null;
     requested_at: Date;
-    approved_at: Date | null;
+    decision_at: Date | null;
+    decision_comment: string | null;
   }> | null;
 }
 
@@ -157,3 +148,14 @@ export type SummaryResponse =
       [ProjectStatus.WAITING_ACCEPT]: number;
     })
   | (SummaryResponseBase & { role: 'EXTERNAL'; NOT_STARTED: number });
+
+export interface PhaseEntry {
+  status: ProjectPhaseStatus;
+  step: number | null;
+}
+
+export interface ProjectPhaseProgress {
+  GENERAL_STAFF: PhaseEntry;
+  HEAD_OF_UNIT: PhaseEntry;
+  DOCUMENT_STAFF: PhaseEntry;
+}
