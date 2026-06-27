@@ -12,6 +12,7 @@ import budgetPlanRoutes from './budget-plan.route';
 import vendorRoutes from './vendor.route';
 import adminRoutes from './admin.route';
 import storageRoutes from './storage.route';
+import holidayRoutes from './holiday.route';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/budget-plans', protect, budgetPlanRoutes);
 router.use('/vendors', vendorRoutes);
 router.use('/admin', protect, adminRoutes);
 router.use('/storage', protect, storageRoutes);
+router.use('/holidays', protect, holidayRoutes);
 
 export default router;

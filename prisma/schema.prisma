@@ -423,3 +423,13 @@ model BudgetPlan {
   @@index([project_id])
   @@map("budget_plans")
 }
+
+model Holiday {
+  id          String   @id @default(uuid())
+  date        DateTime @db.Date
+  name        String
+
+  @@unique([date])
+  @@index([date])
+  @@map("holidays")
+}
