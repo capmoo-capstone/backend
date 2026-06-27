@@ -38,6 +38,7 @@ const allowedOrigins = [
   'https://nexus-procure-vendors-portal.pages.dev', // Cloudflare Pages production for vendor portal
   'https://nexus-procure-backend.vercel.app', // Vercel production
   'https://dev-nexus-procure-backend.vercel.app', // Vercel development
+  `${process.env.FRONTEND_URL}`,
 ];
 
 app.options('/{*path}', cors());
@@ -92,7 +93,7 @@ app.use(
 app.use(errorHandler);
 
 // Only listen locally — Vercel handles the server itself
-if (NODE_ENV === 'local') {
+if (NODE_ENV === 'local' || NODE_ENV === 'production') {
   app.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
   });

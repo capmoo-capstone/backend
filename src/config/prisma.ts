@@ -3,14 +3,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { env } from '@prisma/config';
 import pg from 'pg';
 
+pg.defaults.keepAlive = true;
+
 const connectionString = env('DATABASE_URL');
+const isProduction = env('NODE_ENV') === 'production';
 
 const pool = new pg.Pool({
-  max: 10,
   connectionString,
-  idleTimeoutMillis: 30000, // close idle after 30s
-  connectionTimeoutMillis: 5000, // throw within 5s
-  keepAlive: true,
+  max: isProduction ? 20 : 10,
+  idleTimeoutMillis: isProduction ? 60000 : 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 pool.on('error', (err) => {
