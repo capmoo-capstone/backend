@@ -376,6 +376,7 @@ export const getById = async (
       description: projectData.description,
       budget: projectData.budget,
       status: projectData.status,
+      installment_rounds: projectData.installment_rounds,
       procurement_progress:
         projectData.procurement_progress as unknown as ProjectPhaseProgress,
       contract_progress:
@@ -1254,7 +1255,7 @@ export const getDocumentSummary = async (
   const project = await prisma.project
     .findUniqueOrThrow({
       where: { id: projectId },
-      select: { procurement_type: true },
+      select: { procurement_type: true, installment_rounds: true },
     })
     .catch(() => {
       throw new NotFoundError('Project not found');
@@ -1266,6 +1267,7 @@ export const getDocumentSummary = async (
       documents: true,
       status: true,
       submission_round: true,
+      installment_no: true,
       workflow_type: true,
       step_order: true,
     },
@@ -1277,12 +1279,17 @@ export const getDocumentSummary = async (
 
   const mapStepDocuments = async (
     stepOrders: number[],
-    workflowType: UnitResponsibleType
+    workflowType: UnitResponsibleType,
+    installmentNo?: number
   ) => {
     return Promise.all(
       stepOrders.map(async (stepOrder) => {
         const stepSubmissions = submissions.filter(
-          (s) => s.workflow_type === workflowType && s.step_order === stepOrder
+          (s) =>
+            s.workflow_type === workflowType &&
+            s.step_order === stepOrder &&
+            (installmentNo === undefined ||
+              (s.installment_no ?? 1) === installmentNo)
         );
 
         let selectedSubmission = stepSubmissions.find(
@@ -1311,6 +1318,7 @@ export const getDocumentSummary = async (
 
         return {
           step_order: stepOrder,
+          installment_no: installmentNo ?? null,
           step_status: stepStatus,
           submission_round: selectedSubmission?.submission_round ?? null,
           documents,
@@ -1322,12 +1330,22 @@ export const getDocumentSummary = async (
   const procurementSteps = WORKFLOW_STEP_ORDERS[procurementWorkflow] ?? [];
   const contractSteps =
     WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT] ?? [];
+  const installmentRounds = project.installment_rounds ?? 1;
 
   return {
     procurement: await mapStepDocuments(procurementSteps, procurementWorkflow),
-    contract: await mapStepDocuments(
-      contractSteps,
-      UnitResponsibleType.CONTRACT
+    contract: await Promise.all(
+      Array.from({ length: installmentRounds }, async (_, index) => {
+        const installmentNo = index + 1;
+        return {
+          installment_no: installmentNo,
+          steps: await mapStepDocuments(
+            contractSteps,
+            UnitResponsibleType.CONTRACT,
+            installmentNo
+          ),
+        };
+      })
     ),
   };
 };
