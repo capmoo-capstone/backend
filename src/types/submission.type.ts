@@ -19,6 +19,7 @@ export interface SubmissionActionResponse {
   workflow_type: UnitResponsibleType;
   step_order: number;
   submission_round: number;
+  installment_no: number | null;
   status: SubmissionStatus;
 }
 
@@ -27,6 +28,7 @@ export interface GetSubmissionRoundDto {
   type: SubmissionType;
   step_order: number;
   workflow_type: UnitResponsibleType;
+  installment_no?: number | null;
 }
 
 export interface RejectedSubmissionResponse extends SubmissionActionResponse {
@@ -58,6 +60,7 @@ export interface SubmissionDetailResponse {
   workflow_type: UnitResponsibleType;
   step_order: number;
   submission_round: number;
+  installment_no: number | null;
   submission_type: SubmissionType;
   status: SubmissionStatus;
   meta_data: unknown;
@@ -81,7 +84,10 @@ export interface StepGroup {
 
 export interface ProjectSubmissionsResponse {
   procurement: StepGroup[];
-  contract: StepGroup[];
+  contract: Array<{
+    installment_no: number;
+    steps: StepGroup[];
+  }>;
 }
 
 export interface VendorSubmissionDetailResponse {
@@ -90,6 +96,7 @@ export interface VendorSubmissionDetailResponse {
   title: string;
   receive_no: string;
   po_no: string;
+  installment_no: number | null;
   vendor_name: string;
   requester: {
     dept_id: string;

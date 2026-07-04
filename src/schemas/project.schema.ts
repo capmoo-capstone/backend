@@ -15,6 +15,7 @@ export const CreateProjectSchema = z.object({
   is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
   expected_approval_date: z.coerce.date().optional(),
   expected_completion_procurement_date: z.coerce.date().optional(),
+  installment_rounds: z.coerce.number().int().min(1).default(1),
 });
 
 export const UpdateStatusProjectSchema = z.object({
@@ -67,6 +68,7 @@ export const UpdateProjectSchema = z.object({
     budget_plan_id: z.array(z.string()).optional(),
     vendor_name: z.string().optional(),
     vendor_email: z.string().optional(),
+    installment_rounds: z.coerce.number().int().min(1).optional(),
   }),
 });
 

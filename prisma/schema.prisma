@@ -243,6 +243,7 @@ model Project {
   is_urgent                            UrgentType          @default(NORMAL)
   expected_approval_date               DateTime?
   expected_completion_procurement_date DateTime?
+  installment_rounds                   Int                 @default(1)
   procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   pr_no                                String?
@@ -296,14 +297,14 @@ model ProjectContractNumber {
 }
 
 model ProjectCancellation {
-  id               String                    @id @default(uuid())
-  project_id       String
-  reason           String
-  status           ProjectCancellationStatus @default(PENDING)
-  requested_by     String
-  requested_at     DateTime                  @default(now())
-  decision_by      String?
-  decision_at      DateTime?
+  id           String                    @id @default(uuid())
+  project_id   String
+  reason       String
+  status       ProjectCancellationStatus @default(PENDING)
+  requested_by String
+  requested_at DateTime                  @default(now())
+  decision_by  String?
+  decision_at  DateTime?
 
   project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
@@ -365,6 +366,7 @@ model ProjectSubmission {
   step_order       Int
   submission_type  SubmissionType      @default(STAFF)
   submission_round Int
+  installment_no   Int?
   po_no            String?
   status           SubmissionStatus
   submitted_by     String?
@@ -387,6 +389,7 @@ model ProjectSubmission {
 
   @@index([project_id, submitted_at(sort: Desc)])
   @@index([project_id, step_order, submission_type])
+  @@index([project_id, workflow_type, installment_no, step_order, submission_type])
   @@map("project_submissions")
 }
 
@@ -424,9 +427,9 @@ model BudgetPlan {
 }
 
 model Holiday {
-  id          String   @id @default(uuid())
-  date        DateTime @db.Date
-  name        String
+  id   String   @id @default(uuid())
+  date DateTime @db.Date
+  name String
 
   @@unique([date])
   @@index([date])

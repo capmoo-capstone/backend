@@ -6,6 +6,7 @@ export const CreateStaffSubmissionSchema = z.object({
   type: z.literal(SubmissionType.STAFF),
   step_order: z.number(),
   workflow_type: z.enum(UnitResponsibleType),
+  installment_no: z.number().int().min(1).optional(),
   required_approval: z.boolean(),
   required_updating: z.boolean(),
   meta_data: z
@@ -35,7 +36,7 @@ export const CreateVendorSubmissionSchema = z.object({
   workflow_type: z.literal(UnitResponsibleType.CONTRACT),
   step_order: z.number().default(2),
   po_no: z.string(),
-  installment: z.number().optional(),
+  installment_no: z.number().int().min(1),
   files: z.array(
     z.object({
       field_key: z.string(),

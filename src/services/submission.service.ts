@@ -37,7 +37,8 @@ const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
   data: GetSubmissionRoundDto
 ) => {
-  const lockKey = `${data.project_id}:${data.workflow_type}:${data.step_order}:${data.type}`;
+  const installmentKey = data.installment_no ?? 'none';
+  const lockKey = `${data.project_id}:${data.workflow_type}:${installmentKey}:${data.step_order}:${data.type}`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
   const lastSubmission = await tx.projectSubmission
@@ -46,6 +47,7 @@ const getSubmissionRound = async (
         project_id: data.project_id,
         step_order: data.step_order,
         workflow_type: data.workflow_type,
+        installment_no: data.installment_no ?? null,
         submission_type: data.type,
       },
       orderBy: { submission_round: 'desc' },
@@ -54,6 +56,35 @@ const getSubmissionRound = async (
     .then((s) => s?.submission_round ?? 0);
 
   return lastSubmission + 1;
+};
+
+const validateInstallmentNo = (
+  workflowType: UnitResponsibleType,
+  installmentNo: number | undefined,
+  installmentRounds: number
+) => {
+  if (workflowType !== UnitResponsibleType.CONTRACT) {
+    if (installmentNo !== undefined) {
+      throw new BadRequestError(
+        'Installment number is only allowed for CONTRACT workflow'
+      );
+    }
+    return null;
+  }
+
+  if (installmentNo === undefined) {
+    throw new BadRequestError(
+      'Installment number is required for CONTRACT workflow'
+    );
+  }
+
+  if (installmentNo < 1 || installmentNo > installmentRounds) {
+    throw new BadRequestError(
+      `Installment number must be between 1 and ${installmentRounds}`
+    );
+  }
+
+  return installmentNo;
 };
 
 type ProjectForUpdate = Pick<
@@ -116,7 +147,7 @@ export const getProjectSubmissions = async (
   const project = await prisma.project
     .findUniqueOrThrow({
       where: { id: projectId },
-      select: { procurement_type: true },
+      select: { procurement_type: true, installment_rounds: true },
     })
     .catch(() => {
       throw new NotFoundError('Project not found');
@@ -198,13 +229,25 @@ export const getProjectSubmissions = async (
   const contractSubmissions = formattedSubmissions.filter(
     (s) => s.workflow_type === UnitResponsibleType.CONTRACT
   );
+  const contractByInstallment = Array.from(
+    { length: project.installment_rounds },
+    (_, index) => {
+      const installmentNo = index + 1;
+      return {
+        installment_no: installmentNo,
+        steps: groupByStepOrder(
+          contractSubmissions.filter(
+            (s) => (s.installment_no ?? 1) === installmentNo
+          ),
+          UnitResponsibleType.CONTRACT
+        ),
+      };
+    }
+  );
 
   return {
     procurement: groupByStepOrder(procurementSubmissions, procurementWorkflow),
-    contract: groupByStepOrder(
-      contractSubmissions,
-      UnitResponsibleType.CONTRACT
-    ),
+    contract: contractByInstallment,
   };
 };
 
@@ -292,6 +335,7 @@ export const getVendorSubmissions = async (
       select: {
         id: true,
         po_no: true,
+        installment_no: true,
         submitted_at: true,
         documents: true,
         project: {
@@ -354,6 +398,7 @@ export const createStaffSubmissionsProject = async (
         po_no: true,
         less_no: true,
         contract_no_id: true,
+        installment_rounds: true,
         migo_103_no: true,
         migo_105_no: true,
         asset_code: true,
@@ -369,12 +414,18 @@ export const createStaffSubmissionsProject = async (
         'Workflow type does not match project current workflow'
       );
     }
+    const installmentNo = validateInstallmentNo(
+      data.workflow_type,
+      data.installment_no,
+      project.installment_rounds
+    );
 
     const submission_round = await getSubmissionRound(tx, {
       project_id: data.project_id,
       type: data.type,
       step_order: data.step_order,
       workflow_type: data.workflow_type,
+      installment_no: installmentNo,
     });
     const nextStatus: SubmissionStatus = data.required_approval
       ? SubmissionStatus.WAITING_APPROVAL
@@ -386,6 +437,7 @@ export const createStaffSubmissionsProject = async (
         submitted_by: user.id,
         step_order: data.step_order,
         workflow_type: data.workflow_type,
+        installment_no: installmentNo,
         submission_round,
         submission_type: SubmissionType.STAFF,
         status: nextStatus,
@@ -404,6 +456,7 @@ export const createStaffSubmissionsProject = async (
         workflow_type: true,
         step_order: true,
         submission_round: true,
+        installment_no: true,
         status: true,
       },
     });
@@ -428,7 +481,11 @@ export const createVendorSubmissionsProject = async (
     const project = await tx.project
       .findFirstOrThrow({
         where: { po_no: data.po_no },
-        select: { id: true, current_workflow_type: true },
+        select: {
+          id: true,
+          current_workflow_type: true,
+          installment_rounds: true,
+        },
       })
       .catch(() => {
         throw new NotFoundError('Project not found');
@@ -439,12 +496,18 @@ export const createVendorSubmissionsProject = async (
         'Workflow type does not match project current workflow'
       );
     }
+    const installmentNo = validateInstallmentNo(
+      data.workflow_type,
+      data.installment_no,
+      project.installment_rounds
+    );
 
     const submission_round = await getSubmissionRound(tx, {
       project_id: project.id,
       type: data.type,
       step_order: data.step_order,
       workflow_type: data.workflow_type,
+      installment_no: installmentNo,
     });
 
     const submission = await tx.projectSubmission.create({
@@ -453,11 +516,12 @@ export const createVendorSubmissionsProject = async (
         submitted_by: null,
         step_order: data.step_order,
         workflow_type: data.workflow_type,
+        installment_no: installmentNo,
         submission_round,
         submission_type: SubmissionType.VENDOR,
         status: SubmissionStatus.COMPLETED,
         po_no: data.po_no,
-        meta_data: [{ installment: data.installment ?? '-' }],
+        meta_data: [{ field_key: 'installment_no', value: installmentNo }],
         documents: {
           create: data.files?.map((file) => ({
             field_key: file.field_key,
@@ -472,6 +536,7 @@ export const createVendorSubmissionsProject = async (
         workflow_type: true,
         step_order: true,
         submission_round: true,
+        installment_no: true,
         status: true,
       },
     });
@@ -503,6 +568,7 @@ export const rejectSubmission = async (
         workflow_type: true,
         step_order: true,
         submission_round: true,
+        installment_no: true,
         status: true,
         comment: true,
         approved_by: true,
@@ -551,6 +617,7 @@ export const approveSubmission = async (
         workflow_type: true,
         step_order: true,
         submission_round: true,
+        installment_no: true,
         status: true,
         approved_at: data.required_signature ? true : false,
         approved_by: data.required_signature ? true : false,
@@ -596,6 +663,7 @@ export const proposeSubmission = async (
         workflow_type: true,
         step_order: true,
         submission_round: true,
+        installment_no: true,
         status: true,
         proposing_at: true,
         proposing_by: true,
@@ -638,6 +706,7 @@ export const signAndCompleteSubmission = async (
         workflow_type: true,
         step_order: true,
         submission_round: true,
+        installment_no: true,
         status: true,
         completed_at: true,
         completed_by: true,

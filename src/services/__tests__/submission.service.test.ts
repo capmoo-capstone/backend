@@ -58,6 +58,7 @@ describe('submission.service', () => {
   it('getProjectSubmissions groups procurement and contract submissions and signs document URLs', async () => {
     prismaMock.project.findUniqueOrThrow.mockResolvedValue({
       procurement_type: ProcurementType.LT100K,
+      installment_rounds: 2,
     });
     prismaMock.projectSubmission.findMany.mockResolvedValue([
       {
@@ -78,6 +79,7 @@ describe('submission.service', () => {
         id: 'submission-2',
         project_id: 'project-1',
         workflow_type: UnitResponsibleType.CONTRACT,
+        installment_no: 1,
         step_order: 2,
         status: SubmissionStatus.WAITING_SIGNATURE,
         documents: [
@@ -96,7 +98,8 @@ describe('submission.service', () => {
       step_order: 1,
       step_status: SubmissionStatus.COMPLETED,
     });
-    expect(result.contract[1]).toMatchObject({
+    expect(result.contract).toHaveLength(2);
+    expect(result.contract[0].steps[1]).toMatchObject({
       step_order: 2,
       step_status: SubmissionStatus.WAITING_SIGNATURE,
     });
@@ -157,6 +160,7 @@ describe('submission.service', () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
     });
     txMock.projectSubmission.findFirst.mockResolvedValue(null);
     txMock.projectSubmission.create.mockResolvedValue({
@@ -195,6 +199,7 @@ describe('submission.service', () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
     });
     txMock.projectSubmission.findFirst.mockResolvedValue({
       submission_round: 2,
@@ -223,6 +228,7 @@ describe('submission.service', () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 1,
     });
 
     await expect(
@@ -235,6 +241,7 @@ describe('submission.service', () => {
     txMock.project.findFirstOrThrow.mockResolvedValue({
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 2,
     });
     txMock.projectSubmission.findFirst.mockResolvedValue(null);
     txMock.projectSubmission.create.mockResolvedValue({
@@ -243,6 +250,7 @@ describe('submission.service', () => {
       workflow_type: UnitResponsibleType.CONTRACT,
       step_order: 2,
       submission_round: 1,
+      installment_no: 1,
       status: SubmissionStatus.COMPLETED,
     });
 
@@ -251,7 +259,7 @@ describe('submission.service', () => {
       workflow_type: UnitResponsibleType.CONTRACT,
       step_order: 2,
       po_no: 'PO-1',
-      installment: 1,
+      installment_no: 1,
       files: [
         {
           field_key: 'invoice',
@@ -270,6 +278,82 @@ describe('submission.service', () => {
     );
   });
 
+  it('createStaffSubmissionsProject requires installment number for contract workflow', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 2,
+    });
+
+    await expect(
+      createStaffSubmissionsProject(
+        user,
+        staffSubmissionDto({
+          workflow_type: UnitResponsibleType.CONTRACT,
+        })
+      )
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect(txMock.projectSubmission.create).not.toHaveBeenCalled();
+  });
+
+  it('createVendorSubmissionsProject rejects installment numbers outside project range', async () => {
+    txMock.project.findFirstOrThrow.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 2,
+    });
+
+    await expect(
+      createVendorSubmissionsProject({
+        type: SubmissionType.VENDOR,
+        workflow_type: UnitResponsibleType.CONTRACT,
+        step_order: 2,
+        po_no: 'PO-1',
+        installment_no: 3,
+        files: [],
+      })
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect(txMock.projectSubmission.create).not.toHaveBeenCalled();
+  });
+
+  it('createStaffSubmissionsProject increments submission rounds independently per installment', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 2,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue({
+      submission_round: 1,
+    });
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-2',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 1,
+      submission_round: 2,
+      installment_no: 2,
+      status: SubmissionStatus.COMPLETED,
+    });
+
+    const result = await createStaffSubmissionsProject(
+      user,
+      staffSubmissionDto({
+        workflow_type: UnitResponsibleType.CONTRACT,
+        installment_no: 2,
+        required_approval: false,
+      })
+    );
+
+    expect(result.submission_round).toBe(2);
+    expect(txMock.projectSubmission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          installment_no: 2,
+        }),
+      })
+    );
+  });
+
   it('createVendorSubmissionsProject maps missing PO projects to NotFoundError', async () => {
     txMock.project.findFirstOrThrow.mockRejectedValue(new Error('missing'));
 
@@ -279,6 +363,7 @@ describe('submission.service', () => {
         workflow_type: UnitResponsibleType.CONTRACT,
         step_order: 2,
         po_no: 'PO-404',
+        installment_no: 1,
         files: [],
       })
     ).rejects.toBeInstanceOf(NotFoundError);

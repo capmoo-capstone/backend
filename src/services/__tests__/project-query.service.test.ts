@@ -129,6 +129,7 @@ describe('project-query.service', () => {
       is_urgent: UrgentType.NORMAL,
       procurement_progress: {},
       contract_progress: {},
+      installment_rounds: 1,
       budget_plans: [],
       less_no: null,
       pr_no: 'PR-1',
@@ -343,13 +344,18 @@ describe('project-query.service', () => {
       prismaMock.project.count.mockResolvedValue(1);
       prismaMock.project.findUniqueOrThrow.mockResolvedValue({
         procurement_type: ProcurementType.LT100K,
+        installment_rounds: 1,
       });
       prismaMock.projectSubmission.findMany.mockResolvedValue([]);
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
       expect(result.procurement).toHaveLength(4);
-      expect(result.contract).toHaveLength(5);
+      expect(result.contract).toHaveLength(1);
+      expect(result.contract[0]).toMatchObject({
+        installment_no: 1,
+        steps: expect.any(Array),
+      });
 
       expect(result.procurement[0]).toMatchObject({
         step_order: 1,
@@ -362,6 +368,7 @@ describe('project-query.service', () => {
       prismaMock.project.count.mockResolvedValue(1);
       prismaMock.project.findUniqueOrThrow.mockResolvedValue({
         procurement_type: ProcurementType.LT100K,
+        installment_rounds: 1,
       });
 
       prismaMock.projectSubmission.findMany.mockResolvedValue([
@@ -409,6 +416,7 @@ describe('project-query.service', () => {
       prismaMock.project.count.mockResolvedValue(1);
       prismaMock.project.findUniqueOrThrow.mockResolvedValue({
         procurement_type: ProcurementType.LT100K,
+        installment_rounds: 1,
       });
 
       prismaMock.projectSubmission.findMany.mockResolvedValue([
@@ -438,6 +446,45 @@ describe('project-query.service', () => {
       expect(result.procurement[0].documents[0]).toMatchObject({
         file_name: 'round1-latest.pdf',
         download_url: 'https://files.test/r1.pdf',
+      });
+    });
+
+    it('groups contract document summary by installment', async () => {
+      prismaMock.project.count.mockResolvedValue(1);
+      prismaMock.project.findUniqueOrThrow.mockResolvedValue({
+        procurement_type: ProcurementType.LT100K,
+        installment_rounds: 2,
+      });
+
+      prismaMock.projectSubmission.findMany.mockResolvedValue([
+        {
+          id: 'contract-installment-2',
+          workflow_type: UnitResponsibleType.CONTRACT,
+          installment_no: 2,
+          step_order: 2,
+          submission_round: 1,
+          status: SubmissionStatus.COMPLETED,
+          submission_type: SubmissionType.VENDOR,
+          documents: [
+            {
+              field_key: 'invoice',
+              file_name: 'installment-2.pdf',
+              file_path: 'i2.pdf',
+            },
+          ],
+        },
+      ] as any);
+
+      const result = await getDocumentSummary(supplyUser, 'project-1');
+
+      expect(result.contract).toHaveLength(2);
+      expect(result.contract[1]).toMatchObject({
+        installment_no: 2,
+      });
+      expect(result.contract[1].steps[1]).toMatchObject({
+        installment_no: 2,
+        step_order: 2,
+        step_status: SubmissionStatus.COMPLETED,
       });
     });
   });
