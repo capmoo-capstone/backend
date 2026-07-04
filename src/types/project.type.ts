@@ -56,6 +56,7 @@ export interface ProjectDetailsResponse {
   description: string | null;
   budget: Decimal;
   status: ProjectStatus;
+  installment_rounds: number;
   procurement_progress: ProjectPhaseProgress;
   contract_progress: ProjectPhaseProgress;
   budget_plans: Array<{
@@ -155,6 +156,7 @@ export type SummaryResponse =
 export interface PhaseEntry {
   status: ProjectPhaseStatus;
   step: number | null;
+  installment_no?: number | null;
 }
 
 export interface ProjectPhaseProgress {
