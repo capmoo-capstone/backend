@@ -86,6 +86,7 @@ router.patch(
 
 // ── Single project ────────────────────────────────────────────────────────────
 router.get('/:id/history', controller.getProjectHistory);
+router.get('/:id/document-summary', controller.getDocumentSummary);
 router.get('/:id', controller.getById);
 
 router.patch(

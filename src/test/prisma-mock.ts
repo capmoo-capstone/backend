@@ -24,6 +24,7 @@ const MODEL_NAMES = [
   'auditLog',
   'budgetPlan',
   'department',
+  'holiday',
   'project',
   'projectCancellation',
   'projectContractNumber',

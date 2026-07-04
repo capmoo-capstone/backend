@@ -10,7 +10,6 @@ import {
   GetNewContractNumberSchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
-  RejectCancellationSchema,
   RequestEditProjectSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
@@ -340,13 +339,9 @@ export const rejectCancellation = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
-  const validatedData = RejectCancellationSchema.parse({
-    id: projectId,
-    ...req.body,
-  });
   const project = await ProjectLifecycleService.rejectCancellation(
     payload,
-    validatedData
+    projectId
   );
   res.status(200).json(project);
 };
@@ -488,3 +483,16 @@ export const removeProject = async (
   await ProjectDataService.deleteProject(payload, projectId);
   res.status(204).send();
 };
+
+export const getDocumentSummary = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const projectId = req.params.id as string;
+  const payload = req.user!;
+  const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
+  res.status(200).json(data);
+};
+
