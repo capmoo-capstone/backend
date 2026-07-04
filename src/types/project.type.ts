@@ -107,7 +107,10 @@ export interface ProjectDetailsResponse {
     };
     requested_at: Date;
     decision_at: Date | null;
-    decision_comment: string | null;
+    decider: {
+      id: string;
+      full_name: string;
+    } | null;
   }> | null;
 }
 

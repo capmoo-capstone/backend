@@ -53,7 +53,6 @@ describe('project-lifecycle.service', () => {
       requested_at: new Date('2026-06-01T00:00:00.000Z'),
       decision_by: null,
       decision_at: null,
-      decision_comment: null,
     });
 
     const result = await cancelProject(staffUser, {
@@ -82,7 +81,6 @@ describe('project-lifecycle.service', () => {
       requested_at: new Date('2026-06-01T00:00:00.000Z'),
       decision_by: headUser.id,
       decision_at: new Date('2026-06-01T00:00:00.000Z'),
-      decision_comment: 'Approved cancellation',
     });
 
     const result = await cancelProject(headUser, {
@@ -115,7 +113,6 @@ describe('project-lifecycle.service', () => {
       requested_at: new Date('2026-06-01T00:00:00.000Z'),
       decision_by: null,
       decision_at: null,
-      decision_comment: null,
     });
     txMock.projectCancellation.update.mockResolvedValue({
       id: 'cancellation-1',
@@ -124,7 +121,6 @@ describe('project-lifecycle.service', () => {
       status: 'APPROVED',
       decision_by: headUser.id,
       decision_at: new Date('2026-06-01T00:00:00.000Z'),
-      decision_comment: 'Approved',
     });
 
     const result = await approveCancellation(headUser, 'project-1');
@@ -157,7 +153,6 @@ describe('project-lifecycle.service', () => {
       requested_at: new Date('2026-06-01T00:00:00.000Z'),
       decision_by: null,
       decision_at: null,
-      decision_comment: null,
     });
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
@@ -170,13 +165,9 @@ describe('project-lifecycle.service', () => {
       status: 'REJECTED',
       decision_by: headUser.id,
       decision_at: new Date('2026-06-01T00:00:00.000Z'),
-      decision_comment: 'Rejected',
     });
 
-    const result = await rejectCancellation(headUser, {
-      id: 'project-1',
-      comment: 'Rejected',
-    });
+    const result = await rejectCancellation(headUser, 'project-1');
 
     expect(result.status).toBe(ProjectStatus.IN_PROGRESS);
     expect(txMock.projectCancellation.update).toHaveBeenCalledWith(
@@ -186,7 +177,6 @@ describe('project-lifecycle.service', () => {
           status: 'REJECTED',
           decision_by: headUser.id,
           decision_at: new Date('2026-06-01T00:00:00.000Z'),
-          decision_comment: 'Rejected',
         },
       })
     );
