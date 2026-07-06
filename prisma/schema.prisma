@@ -177,6 +177,7 @@ model User {
   approved_submissions     ProjectSubmission[]   @relation("ApprovedBy")
   proposed_submissions     ProjectSubmission[]   @relation("ProposedBy")
   completed_submissions    ProjectSubmission[]   @relation("CompletedBy")
+  finance_exports          ProjectFinanceExport[] @relation("ProjectFinanceExporter") 
   cancellation_requests    ProjectCancellation[] @relation("CancelRequester")
   cancellation_decisions   ProjectCancellation[] @relation("CancelDecider")
   delegation_creations     UserDelegation[]      @relation("DelegationCreator")
@@ -270,6 +271,7 @@ model Project {
   assignee_contract    User[]                @relation("ContractProjects")
   project_cancellation ProjectCancellation[]
   project_histories    ProjectHistory[]
+  project_finance_export ProjectFinanceExport[]
   submissions          ProjectSubmission[]
   budget_plans         BudgetPlan[]
 
@@ -279,6 +281,22 @@ model Project {
   @@index([responsible_unit_id])
   @@index([created_at])
   @@map("projects")
+}
+
+model ProjectFinanceExport {
+  id              String   @id @default(uuid())
+  project_id      String
+  installment_no  Int
+  is_exported     Boolean @default(false)
+  exported_by     String
+  exported_at     DateTime @default(now())
+
+  project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  exporter User    @relation("ProjectFinanceExporter", fields: [exported_by], references: [id])
+
+  @@index([project_id, installment_no])
+  @@index([is_exported])
+  @@map("project_finance_exports")
 }
 
 model ProjectContractNumber {

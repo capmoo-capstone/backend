@@ -3,10 +3,8 @@ import {
   ProcurementType,
   ProjectActionType,
   ProjectCancellationStatus,
-  ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
-  SubmissionType,
   UnitResponsibleType,
   UrgentType,
   UserRole,
@@ -25,13 +23,12 @@ import { ForbiddenError, NotFoundError } from '../lib/errors';
 import { generatePresignedDownloadUrl } from './storage.service';
 import {
   getDeptIdsForUser,
-  getUnitIdsForUser,
   haveSupplyPermission,
   isHeadOfSupplyDept,
   isHeadOfSupplyUnit,
   isSuperAdmin,
 } from '../lib/permissions';
-import { ProjectFilterQuery } from '../schemas/project.schema';
+import { OwnProjectTab, ProjectFilterQuery } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
   PaginatedProjects,
@@ -43,6 +40,7 @@ import {
   UnitWorkload,
   WorkloadStatsResponse,
 } from '../types/project.type';
+import { getOwnProjects as getOwnProjectsFromHelper } from './project-query-own.helper';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -725,258 +723,10 @@ export const getWaitingCancellationProjects = async (
 export const getOwnProjects = async (
   user: AuthPayload,
   page: number,
-  limit: number
+  limit: number,
+  tab: OwnProjectTab = 'all'
 ): Promise<PaginatedProjects> => {
-  const skip = (page - 1) * limit;
-  let where: Prisma.ProjectWhereInput;
-
-  if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
-    where = {};
-  } else {
-    const unitIds = getUnitIdsForUser(user);
-    const userUnits =
-      unitIds.length > 0
-        ? await prisma.unit.findMany({
-            where: { id: { in: unitIds } },
-            select: { id: true, type: true },
-          })
-        : [];
-
-    const procurementUnitIds = userUnits
-      .filter((u) => u.type.some((t) => t !== UnitResponsibleType.CONTRACT))
-      .map((u) => u.id);
-
-    const contractUnitIds = userUnits
-      .filter((u) => u.type.includes(UnitResponsibleType.CONTRACT))
-      .map((u) => u.id);
-    const orClauses: Prisma.ProjectWhereInput[] = [];
-
-    if (isHeadOfSupplyUnit(user) && procurementUnitIds.length > 0) {
-      orClauses.push({
-        AND: [
-          { responsible_unit_id: { in: procurementUnitIds } },
-          {
-            procurement_progress: {
-              path: ['HEAD_OF_UNIT', 'status'],
-              equals: ProjectPhaseStatus.WAITING_APPROVAL,
-            },
-          },
-        ],
-      });
-    }
-
-    if (isHeadOfSupplyUnit(user) && contractUnitIds.length > 0) {
-      orClauses.push({
-        AND: [
-          { responsible_unit_id: { in: contractUnitIds } },
-          {
-            contract_progress: {
-              path: ['HEAD_OF_UNIT', 'status'],
-              equals: ProjectPhaseStatus.WAITING_APPROVAL,
-            },
-          },
-        ],
-      });
-    }
-
-    if (
-      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
-      procurementUnitIds.length > 0
-    ) {
-      orClauses.push({
-        OR: [
-          {
-            AND: [
-              { assignee_procurement: { some: { id: user.id } } },
-              {
-                OR: [
-                  {
-                    procurement_progress: {
-                      path: ['GENERAL_STAFF', 'status'],
-                      equals: ProjectPhaseStatus.IN_PROGRESS,
-                    },
-                  },
-                  {
-                    procurement_progress: {
-                      path: ['GENERAL_STAFF', 'status'],
-                      equals: ProjectPhaseStatus.WAITING_APPROVAL,
-                    },
-                  },
-                  {
-                    procurement_progress: {
-                      path: ['GENERAL_STAFF', 'status'],
-                      equals: ProjectPhaseStatus.REJECTED,
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            AND: [
-              { current_workflow_type: UnitResponsibleType.CONTRACT },
-              { responsible_unit_id: { in: procurementUnitIds } },
-              { assignee_contract: { some: { id: user.id } } },
-              {
-                OR: [
-                  {
-                    contract_progress: {
-                      path: ['GENERAL_STAFF', 'status'],
-                      equals: ProjectPhaseStatus.IN_PROGRESS,
-                    },
-                  },
-                  {
-                    contract_progress: {
-                      path: ['GENERAL_STAFF', 'status'],
-                      equals: ProjectPhaseStatus.WAITING_APPROVAL,
-                    },
-                  },
-                  {
-                    contract_progress: {
-                      path: ['GENERAL_STAFF', 'status'],
-                      equals: ProjectPhaseStatus.REJECTED,
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
-    }
-
-    if (
-      user.roles.some((r) => r.role === UserRole.GENERAL_STAFF) &&
-      contractUnitIds.length > 0
-    ) {
-      orClauses.push({
-        AND: [
-          { assignee_contract: { some: { id: user.id } } },
-          {
-            OR: [
-              {
-                contract_progress: {
-                  path: ['GENERAL_STAFF', 'status'],
-                  equals: ProjectPhaseStatus.IN_PROGRESS,
-                },
-              },
-              {
-                contract_progress: {
-                  path: ['GENERAL_STAFF', 'status'],
-                  equals: ProjectPhaseStatus.WAITING_APPROVAL,
-                },
-              },
-              {
-                contract_progress: {
-                  path: ['GENERAL_STAFF', 'status'],
-                  equals: ProjectPhaseStatus.REJECTED,
-                },
-              },
-            ],
-          },
-        ],
-      });
-    }
-
-    if (user.roles.some((r) => r.role === UserRole.FINANCE_STAFF)) {
-      orClauses.push({
-        OR: [
-          // {
-          //   AND: [
-          //     {
-          //       contract_progress: {
-          //         path: ['FINANCE_STAFF', 'status'],
-          //         equals: ProjectPhaseStatus.NOT_EXPORTED,
-          //       },
-          //     },
-          //   ],
-          // },
-          {
-            status: ProjectStatus.REQUEST_EDIT,
-          },
-        ],
-      });
-    }
-
-    if (user.roles.some((r) => r.role === UserRole.DOCUMENT_STAFF)) {
-      orClauses.push({
-        OR: [
-          {
-            procurement_progress: {
-              path: ['DOCUMENT_STAFF', 'status'],
-              equals: ProjectPhaseStatus.WAITING_PROPOSAL,
-            },
-          },
-          {
-            procurement_progress: {
-              path: ['DOCUMENT_STAFF', 'status'],
-              equals: ProjectPhaseStatus.WAITING_SIGNATURE,
-            },
-          },
-          {
-            contract_progress: {
-              path: ['DOCUMENT_STAFF', 'status'],
-              equals: ProjectPhaseStatus.WAITING_PROPOSAL,
-            },
-          },
-          {
-            contract_progress: {
-              path: ['DOCUMENT_STAFF', 'status'],
-              equals: ProjectPhaseStatus.WAITING_SIGNATURE,
-            },
-          },
-        ],
-      });
-    }
-    where = orClauses.length > 0 ? { OR: orClauses } : { id: 'none' };
-  }
-
-  const [projects, total] = await Promise.all([
-    prisma.project.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: [{ receive_no: 'desc' }],
-      select: {
-        id: true,
-        receive_no: true,
-        title: true,
-        status: true,
-        responsible_unit: {
-          select: {
-            name: true,
-          },
-        },
-        procurement_progress: true,
-        contract_progress: true,
-        requesting_unit: {
-          select: {
-            id: true,
-            name: true,
-            department: { select: { name: true, id: true } },
-          },
-        },
-        budget: true,
-        procurement_type: true,
-        current_workflow_type: true,
-        assignee_procurement: { select: { id: true, full_name: true } },
-        assignee_contract: { select: { id: true, full_name: true } },
-        is_urgent: true,
-        expected_approval_date: true,
-        created_at: true,
-        updated_at: true,
-      },
-    }),
-    prisma.project.count({ where }),
-  ]);
-
-  return {
-    total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
-    data: projects,
-  };
+  return getOwnProjectsFromHelper(user, page, limit, tab);
 };
 
 const aggregateByStaff = (
