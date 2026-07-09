@@ -3,9 +3,11 @@ import { prisma } from '../config/prisma';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import {
   CalculateTimelineDto,
+  CreateHolidayBatchDto,
   CreateHolidayDto,
   UpdateHolidayDto,
 } from '../schemas/holiday.schema';
+
 import { TimelineResult } from '../types/holiday.type';
 
 const WORKING_DAY_QUOTA: Record<string, number> = {
@@ -174,6 +176,25 @@ export const createHoliday = async (
       name: data.name,
     },
   });
+};
+
+export const createHolidays = async (
+  items: CreateHolidayBatchDto
+): Promise<Holiday[]> => {
+  await Promise.all(
+    items.map((item) => checkDuplicateDate(new Date(item.date), item.date))
+  );
+
+  return prisma.$transaction(
+    items.map((item) =>
+      prisma.holiday.create({
+        data: {
+          date: new Date(item.date),
+          name: item.name,
+        },
+      })
+    )
+  );
 };
 
 export const updateHoliday = async (

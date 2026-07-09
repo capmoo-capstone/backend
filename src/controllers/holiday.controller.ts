@@ -1,12 +1,14 @@
 import { Response } from 'express';
 import * as HolidayService from '../services/holiday.service';
 import {
+  CreateHolidayBatchSchema,
   CreateHolidaySchema,
   UpdateHolidaySchema,
   HolidayQuerySchema,
   CalculateTimelineSchema,
 } from '../schemas/holiday.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
+
 
 export const getAll = async (
   req: AuthenticatedRequest,
@@ -26,10 +28,17 @@ export const create = async (
   // #swagger.tags = ['Holidays']
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateHolidayDto' } }
-  const validatedData = CreateHolidaySchema.parse(req.body);
-  const data = await HolidayService.createHoliday(validatedData);
-  res.status(201).json(data);
+  if (Array.isArray(req.body)) {
+    const validatedData = CreateHolidayBatchSchema.parse(req.body);
+    const data = await HolidayService.createHolidays(validatedData);
+    res.status(201).json(data);
+  } else {
+    const validatedData = CreateHolidaySchema.parse(req.body);
+    const data = await HolidayService.createHoliday(validatedData);
+    res.status(201).json(data);
+  }
 };
+
 
 export const update = async (
   req: AuthenticatedRequest,
