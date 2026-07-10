@@ -9,7 +9,6 @@ import {
 } from '../schemas/holiday.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
 
-
 export const getAll = async (
   req: AuthenticatedRequest,
   res: Response
@@ -29,12 +28,12 @@ export const create = async (
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/CreateHolidayDto' } }
   if (Array.isArray(req.body)) {
-    const validatedData = CreateHolidayBatchSchema.parse(req.body);
-    const data = await HolidayService.createHolidays(validatedData);
+    const items = CreateHolidayBatchSchema.parse(req.body);
+    const data = await HolidayService.createHolidays(items);
     res.status(201).json(data);
   } else {
-    const validatedData = CreateHolidaySchema.parse(req.body);
-    const data = await HolidayService.createHoliday(validatedData);
+    const item = CreateHolidaySchema.parse(req.body);
+    const [data] = await HolidayService.createHolidays([item]);
     res.status(201).json(data);
   }
 };

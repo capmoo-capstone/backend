@@ -35,4 +35,3 @@ export type CreateHolidayBatchDto = z.infer<typeof CreateHolidayBatchSchema>;
 export type UpdateHolidayDto = z.infer<typeof UpdateHolidaySchema>;
 export type HolidayQueryDto = z.infer<typeof HolidayQuerySchema>;
 export type CalculateTimelineDto = z.infer<typeof CalculateTimelineSchema>;
-
