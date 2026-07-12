@@ -267,6 +267,24 @@ const roleTabWhere = (
   }
 
   if (tab === 'all') {
+    if (scope.role === UserRole.DOCUMENT_STAFF) {
+      return andWhere(
+        scope.where,
+        progressStatusWhere(scope.role, [
+          ProjectPhaseStatus.WAITING_PROPOSAL,
+          ProjectPhaseStatus.WAITING_SIGNATURE,
+        ])
+      );
+    }
+    if (scope.role === UserRole.FINANCE_STAFF) {
+      return andWhere(
+        scope.where,
+        orWhere([
+          { project_finance_export: { some: { is_exported: false } } },
+          financeCloseWhere(waitingCloseProjectIds),
+        ])
+      );
+    }
     return scope.where;
   }
 
@@ -349,7 +367,8 @@ const getWaitingCloseProjectIds = async (): Promise<string[]> => {
       id: true,
       installment_rounds: true,
       project_finance_export: {
-        select: { installment_no: true, is_exported: true },
+        where: { is_exported: true },
+        select: { installment_no: true },
       },
     },
   });
@@ -357,9 +376,9 @@ const getWaitingCloseProjectIds = async (): Promise<string[]> => {
   return projects
     .filter((project) => {
       const exportedInstallments = new Set(
-        project.project_finance_export
-          .filter((financeExport) => financeExport.is_exported)
-          .map((financeExport) => financeExport.installment_no)
+        project.project_finance_export.map(
+          (financeExport) => financeExport.installment_no
+        )
       );
 
       for (
@@ -404,11 +423,12 @@ const ownProjectWhereClause = async (
   }
 
   const scopes = await buildRoleScopes(user);
-  const waitingCloseProjectIds =
-    tab === 'waiting_close_project' &&
-    scopes.some((scope) => scope.role === UserRole.FINANCE_STAFF)
-      ? await getWaitingCloseProjectIds()
-      : [];
+  const needsWaitingCloseProjectIds =
+    (tab === 'waiting_close_project' || tab === 'all') &&
+    scopes.some((scope) => scope.role === UserRole.FINANCE_STAFF);
+  const waitingCloseProjectIds = needsWaitingCloseProjectIds
+    ? await getWaitingCloseProjectIds()
+    : [];
 
   const clauses = scopes
     .map((scope) => roleTabWhere(scope, tab, waitingCloseProjectIds))
