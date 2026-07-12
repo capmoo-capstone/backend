@@ -162,17 +162,18 @@ const checkDuplicateDate = async (
   }
 };
 
-export const createHoliday = async (
-  data: CreateHolidayDto
-): Promise<Holiday> => {
-  const dateValue = new Date(data.date);
-  await checkDuplicateDate(dateValue, data.date);
+export const createHolidays = async (
+  items: CreateHolidayDto[]
+): Promise<Holiday[]> => {
+  await Promise.all(
+    items.map((item) => checkDuplicateDate(new Date(item.date), item.date))
+  );
 
-  return prisma.holiday.create({
-    data: {
-      date: dateValue,
-      name: data.name,
-    },
+  return prisma.holiday.createManyAndReturn({
+    data: items.map((item) => ({
+      date: new Date(item.date),
+      name: item.name,
+    })),
   });
 };
 
@@ -248,4 +249,3 @@ export const calculateTimeline = async (
     urgencyWarningThreshold: thresholds.urgent,
   };
 };
-

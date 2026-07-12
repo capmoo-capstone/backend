@@ -4,11 +4,12 @@ import { BadRequestError, NotFoundError } from '../../lib/errors';
 import { prismaMock } from '../../test/prisma-mock';
 import {
   calculateTimeline,
-  createHoliday,
+  createHolidays,
   deleteHoliday,
   listHolidays,
   updateHoliday,
 } from '../holiday.service';
+
 
 describe('holiday.service – listHolidays', () => {
   it('returns all holidays when no year is given', async () => {
@@ -47,26 +48,21 @@ describe('holiday.service – listHolidays', () => {
   });
 });
 
-describe('holiday.service – createHoliday', () => {
-  it('creates a holiday when the date is not already taken', async () => {
+describe('holiday.service – createHolidays', () => {
+  it('creates a single holiday when the date is not already taken', async () => {
     prismaMock.holiday.findUnique.mockResolvedValue(null);
-    prismaMock.holiday.create.mockResolvedValue({
+    prismaMock.holiday.createManyAndReturn.mockResolvedValue([{
       id: 'h-1',
       date: new Date('2026-01-01'),
       name: 'วันปีใหม่',
-    });
+    }]);
 
-    const result = await createHoliday({
-      date: '2026-01-01',
-      name: 'วันปีใหม่',
-    });
+    const result = await createHolidays([{ date: '2026-01-01', name: 'วันปีใหม่' }]);
 
-    expect(result.id).toBe('h-1');
-    expect(prismaMock.holiday.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ name: 'วันปีใหม่' }),
-      })
-    );
+    expect(result[0].id).toBe('h-1');
+    expect(prismaMock.holiday.createManyAndReturn).toHaveBeenCalledWith({
+      data: [{ date: new Date('2026-01-01'), name: 'วันปีใหม่' }],
+    });
   });
 
   it('throws BadRequestError when a holiday on the same date already exists', async () => {
@@ -77,10 +73,10 @@ describe('holiday.service – createHoliday', () => {
     });
 
     await expect(
-      createHoliday({ date: '2026-01-01', name: 'วันปีใหม่ (ซ้ำ)' })
+      createHolidays([{ date: '2026-01-01', name: 'วันปีใหม่ (ซ้ำ)' }])
     ).rejects.toBeInstanceOf(BadRequestError);
 
-    expect(prismaMock.holiday.create).not.toHaveBeenCalled();
+    expect(prismaMock.holiday.createManyAndReturn).not.toHaveBeenCalled();
   });
 });
 

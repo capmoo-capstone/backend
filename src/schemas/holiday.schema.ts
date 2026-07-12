@@ -5,6 +5,10 @@ export const CreateHolidaySchema = z.object({
   name: z.string().min(1),
 });
 
+export const CreateHolidayBatchSchema = z
+  .array(CreateHolidaySchema)
+  .min(1, 'กรุณาระบุวันหยุดอย่างน้อย 1 วัน');
+
 export const UpdateHolidaySchema = z.object({
   date: z.string().date().optional(),
   name: z.string().min(1).optional(),
@@ -27,7 +31,7 @@ export const CalculateTimelineSchema = z.object({
 });
 
 export type CreateHolidayDto = z.infer<typeof CreateHolidaySchema>;
+export type CreateHolidayBatchDto = z.infer<typeof CreateHolidayBatchSchema>;
 export type UpdateHolidayDto = z.infer<typeof UpdateHolidaySchema>;
 export type HolidayQueryDto = z.infer<typeof HolidayQuerySchema>;
 export type CalculateTimelineDto = z.infer<typeof CalculateTimelineSchema>;
-
