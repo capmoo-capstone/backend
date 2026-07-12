@@ -8,6 +8,7 @@ import {
   CreateProjectSchema,
   GetAssignedProjectsQuerySchema,
   GetNewContractNumberSchema,
+  GetOwnProjectsQuerySchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditProjectSchema,
@@ -133,12 +134,14 @@ export const getOwnProjects = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit } = req.query;
+  const { page, limit, tab } = req.query;
   const payload = req.user!;
+  const validated = GetOwnProjectsQuerySchema.parse({ tab });
   const projects = await ProjectQueryService.getOwnProjects(
     payload,
     parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
+    parseInt(limit as string) || 10,
+    validated.tab
   );
   res.status(200).json(projects);
 };
@@ -495,4 +498,3 @@ export const getDocumentSummary = async (
   const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
   res.status(200).json(data);
 };
-

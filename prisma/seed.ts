@@ -1002,8 +1002,6 @@ const seedCancellationsAndHistory = async () => {
         requested_at: daysFromNow(-8),
         decision_by: ids.users.supplyHead,
         decision_at: daysFromNow(-7),
-        decision_comment:
-          'Repair was no longer needed after warranty replacement.',
       },
     ],
   });

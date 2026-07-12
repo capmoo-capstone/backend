@@ -1,6 +1,29 @@
 import { ProcurementType, ProjectStatus, UrgentType } from '@prisma/client';
 import { z } from 'zod';
 
+export const OwnProjectTabSchema = z
+  .enum([
+    'all',
+    'waiting_accept',
+    'need_action',
+    'rejected',
+    'waiting_approval',
+    'waiting_cancel',
+    'waiting_proposal',
+    'waiting_signature',
+    'waiting_others',
+    'urgent',
+    'very_urgent',
+    'super_urgent',
+    'waiting_finance_export',
+    'waiting_close_project',
+  ])
+  .default('all');
+
+export const GetOwnProjectsQuerySchema = z.object({
+  tab: OwnProjectTabSchema,
+});
+
 export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
@@ -121,3 +144,4 @@ export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;
 export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
+export type OwnProjectTab = z.infer<typeof OwnProjectTabSchema>;
