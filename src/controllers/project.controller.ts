@@ -63,8 +63,8 @@ export const getProjectHistory = async (
     kind,
     eventType,
     actorId,
-    dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
-    dateTo: dateTo ? new Date(dateTo as string) : undefined,
+    dateFrom,
+    dateTo,
   });
   const history = await AuditLogService.listProjectAuditLogs(
     payload,

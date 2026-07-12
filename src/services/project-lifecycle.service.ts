@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { CONTRACT_UNIT_ID } from '../lib/constant';
+import { nowUtc } from '../lib/date';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 import {
@@ -244,7 +245,7 @@ export const cancelProject = async (
       throw new BadRequestError('Cancellation is already requested');
     }
 
-    const now = new Date();
+    const now = nowUtc();
     const targetProjectStatus = isHead
       ? ProjectStatus.CANCELLED
       : ProjectStatus.WAITING_CANCEL;
@@ -316,7 +317,7 @@ export const approveCancellation = async (
   id: string
 ): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
-    const now = new Date();
+    const now = nowUtc();
     const projectStatus = await findProjectStatusOrThrow(tx, id);
     if (projectStatus !== ProjectStatus.WAITING_CANCEL) {
       throw new BadRequestError('Project is not in WAITING_CANCEL status');
@@ -369,7 +370,7 @@ export const rejectCancellation = async (
   id: string
 ): Promise<ProjectIdStatusResponse> => {
   return await prisma.$transaction(async (tx) => {
-    const now = new Date();
+    const now = nowUtc();
     const projectStatus = await findProjectStatusOrThrow(tx, id);
     if (projectStatus !== ProjectStatus.WAITING_CANCEL) {
       throw new BadRequestError('Project is not in WAITING_CANCEL status');

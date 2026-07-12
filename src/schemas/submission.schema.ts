@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SubmissionType, UnitResponsibleType } from '@prisma/client';
+import { BangkokDateTimeSchema } from '../lib/date';
 
 export const CreateStaffSubmissionSchema = z.object({
   project_id: z.uuid(),
@@ -49,8 +50,8 @@ export const CreateVendorSubmissionSchema = z.object({
 export const VendorSubmissionFilterQuerySchema = z
   .object({
     search: z.string().optional(),
-    dateFrom: z.coerce.date().optional(),
-    dateTo: z.coerce.date().optional(),
+    dateFrom: BangkokDateTimeSchema.optional(),
+    dateTo: BangkokDateTimeSchema.optional(),
   })
   .optional();
 

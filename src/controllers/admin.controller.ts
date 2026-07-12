@@ -28,8 +28,8 @@ export const getAuditLogs = async (
     eventType,
     projectId,
     actorId,
-    dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
-    dateTo: dateTo ? new Date(dateTo as string) : undefined,
+    dateFrom,
+    dateTo,
   });
   const auditLogs = await AuditLogService.listAuditLogs(
     user,

@@ -18,16 +18,18 @@ import {
   DEFAULT_PHASE,
   WORKFLOW_STEP_ORDERS,
 } from '../src/lib/constant';
+import { nowUtc, toBangkokParts } from '../src/lib/date';
 import { ProjectPhaseProgress } from '../src/types/project.type';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const now = new Date();
+const now = nowUtc();
 
 const daysFromNow = (days: number) => new Date(now.getTime() + days * DAY_MS);
 
 const fiscalYear = (date = now) => {
-  const thaiYear = date.getFullYear() + 543;
-  return date.getMonth() + 1 >= 10 ? thaiYear + 1 : thaiYear;
+  const parts = toBangkokParts(date);
+  const thaiYear = parts.year + 543;
+  return parts.month >= 10 ? thaiYear + 1 : thaiYear;
 };
 
 const ids = {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
+import { BangkokDateTimeSchema } from '../lib/date';
 
 const delegableRoles = [
   UserRole.HEAD_OF_DEPARTMENT,
@@ -12,8 +13,8 @@ export const AddDelegationSchema = z
     delegatee_id: z.uuid(),
     role: z.enum(delegableRoles),
     unit_id: z.string().optional(),
-    start_date: z.coerce.date(),
-    end_date: z.coerce.date().optional(),
+    start_date: BangkokDateTimeSchema,
+    end_date: BangkokDateTimeSchema.optional(),
   })
   .refine((data) => data.role !== UserRole.HEAD_OF_UNIT || !!data.unit_id, {
     message: 'unit_id is required when role is HEAD_OF_UNIT',

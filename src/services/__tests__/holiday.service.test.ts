@@ -1,6 +1,7 @@
 import { UnitResponsibleType, UrgentType } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
+import { parseBangkokDateTime } from '../../lib/date';
 import { prismaMock } from '../../test/prisma-mock';
 import {
   calculateTimeline,
@@ -9,7 +10,6 @@ import {
   listHolidays,
   updateHoliday,
 } from '../holiday.service';
-
 
 describe('holiday.service – listHolidays', () => {
   it('returns all holidays when no year is given', async () => {
@@ -51,13 +51,17 @@ describe('holiday.service – listHolidays', () => {
 describe('holiday.service – createHolidays', () => {
   it('creates a single holiday when the date is not already taken', async () => {
     prismaMock.holiday.findUnique.mockResolvedValue(null);
-    prismaMock.holiday.createManyAndReturn.mockResolvedValue([{
-      id: 'h-1',
-      date: new Date('2026-01-01'),
-      name: 'วันปีใหม่',
-    }]);
+    prismaMock.holiday.createManyAndReturn.mockResolvedValue([
+      {
+        id: 'h-1',
+        date: new Date('2026-01-01'),
+        name: 'วันปีใหม่',
+      },
+    ]);
 
-    const result = await createHolidays([{ date: '2026-01-01', name: 'วันปีใหม่' }]);
+    const result = await createHolidays([
+      { date: '2026-01-01', name: 'วันปีใหม่' },
+    ]);
 
     expect(result[0].id).toBe('h-1');
     expect(prismaMock.holiday.createManyAndReturn).toHaveBeenCalledWith({
@@ -218,7 +222,7 @@ describe('holiday.service – calculateTimeline', () => {
     // countWorkingDays(Jun 29, Jul 1): ข้าม Jun 29 → Jun 30(Tue)=1, Jul 1(Wed)=2 = 2 วัน ≤ 3
     const result = await calculateTimeline({
       unitResponsibilityType: 'LT100K',
-      deliveryDate: '2026-07-01T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-07-01'),
     });
 
     expect(result.isCustomDate).toBe(true);
@@ -231,7 +235,7 @@ describe('holiday.service – calculateTimeline', () => {
     // countWorkingDays(Jun 29, Jul 3): ข้าม Jun 29 → Jun 30=1, Jul 1=2, Jul 2=3, Jul 3=4 = 4 วัน ≤ 7
     const result = await calculateTimeline({
       unitResponsibilityType: 'LT100K',
-      deliveryDate: '2026-07-03T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-07-03'),
     });
 
     expect(result.remainingWorkingDays).toBe(4);
@@ -243,7 +247,7 @@ describe('holiday.service – calculateTimeline', () => {
     // countWorkingDays(Jun 29, Jul 10): ข้าม Jun 29 → Jun 30–Jul 3=4 + Jul 6–10=5 = 9 วัน ≤ 15
     const result = await calculateTimeline({
       unitResponsibilityType: 'LT100K',
-      deliveryDate: '2026-07-10T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-07-10'),
     });
 
     expect(result.remainingWorkingDays).toBe(9);
@@ -253,7 +257,7 @@ describe('holiday.service – calculateTimeline', () => {
   it('returns 0 remaining working days when delivery date is in the past', async () => {
     const result = await calculateTimeline({
       unitResponsibilityType: 'LT100K',
-      deliveryDate: '2026-06-01T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-06-01'),
     });
 
     expect(result.remainingWorkingDays).toBe(0);
@@ -270,7 +274,7 @@ describe('holiday.service – calculateTimeline', () => {
 
     const result = await calculateTimeline({
       unitResponsibilityType: 'LT100K',
-      deliveryDate: '2026-07-02T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-07-02'),
     });
 
     expect(result.remainingWorkingDays).toBe(2);
@@ -296,7 +300,9 @@ describe('holiday.service – calculateTimeline', () => {
     const defaultResult = await calculateTimeline({
       unitResponsibilityType: 'SELECTION',
     });
-    expect(defaultResult.unitResponsibilityType).toBe(UnitResponsibleType.SELECTION);
+    expect(defaultResult.unitResponsibilityType).toBe(
+      UnitResponsibleType.SELECTION
+    );
     expect(defaultResult.remainingWorkingDays).toBe(60);
     expect(defaultResult.urgentLevel).toBe(UrgentType.URGENT);
     expect(defaultResult.urgencyWarningThreshold).toBe(60);
@@ -306,7 +312,7 @@ describe('holiday.service – calculateTimeline', () => {
     // addWorkingDays(Jun 29, 30) = Aug 10 (Mon)
     const veryUrgentResult = await calculateTimeline({
       unitResponsibilityType: 'SELECTION',
-      deliveryDate: '2026-08-10T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-08-10'),
     });
     expect(veryUrgentResult.remainingWorkingDays).toBe(30);
     expect(veryUrgentResult.urgentLevel).toBe(UrgentType.VERY_URGENT);
@@ -315,7 +321,7 @@ describe('holiday.service – calculateTimeline', () => {
     // addWorkingDays(Jun 29, 31) = Aug 11 (Tue)
     const urgentResult = await calculateTimeline({
       unitResponsibilityType: 'SELECTION',
-      deliveryDate: '2026-08-11T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-08-11'),
     });
     expect(urgentResult.remainingWorkingDays).toBe(31);
     expect(urgentResult.urgentLevel).toBe(UrgentType.URGENT);
@@ -324,10 +330,9 @@ describe('holiday.service – calculateTimeline', () => {
     // addWorkingDays(Jun 29, 61) = Sep 22 (Tue)
     const normalResult = await calculateTimeline({
       unitResponsibilityType: 'SELECTION',
-      deliveryDate: '2026-09-22T00:00:00.000Z',
+      deliveryDate: parseBangkokDateTime('2026-09-22'),
     });
     expect(normalResult.remainingWorkingDays).toBe(61);
     expect(normalResult.urgentLevel).toBe(UrgentType.NORMAL);
   });
 });
-

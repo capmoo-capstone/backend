@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AuditEventType, AuditLogType } from '@prisma/client';
+import { BangkokDateTimeSchema } from '../lib/date';
 
 export const AuditLogsQuerySchema = z.object({
   q: z.string().trim().optional(),
@@ -7,8 +8,8 @@ export const AuditLogsQuerySchema = z.object({
   eventType: z.enum(AuditEventType).optional(),
   projectId: z.uuid().optional(),
   actorId: z.uuid().optional(),
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export type AuditLogsQuery = z.infer<typeof AuditLogsQuerySchema>;

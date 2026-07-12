@@ -1,4 +1,11 @@
-import { Prisma, ProjectStatus, ProjectActionType, AuditLogType, AuditEventType, AuditTargetType } from '@prisma/client';
+import {
+  Prisma,
+  ProjectStatus,
+  ProjectActionType,
+  AuditLogType,
+  AuditEventType,
+  AuditTargetType,
+} from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError, AppError } from '../lib/errors';
 import { getProcurementTypeToUnitIdMap } from '../lib/unit-type';
@@ -9,7 +16,18 @@ import {
   ProjectsListResponse,
   UpdateProjectDataResponse,
 } from '../types/project.type';
-import { createProjectHistoryAndAuditEvent, recordAuditEvent, buildContractNumberTargetSnapshot } from './audit-log.service';
+import {
+  createProjectHistoryAndAuditEvent,
+  recordAuditEvent,
+  buildContractNumberTargetSnapshot,
+} from './audit-log.service';
+import { nowUtc, toBangkokParts } from '../lib/date';
+
+const currentBangkokBudgetYear = (): number => {
+  const parts = toBangkokParts(nowUtc());
+  const buddhistYear = parts.year + 543;
+  return parts.month >= 10 ? buddhistYear + 1 : buddhistYear;
+};
 
 const acquireProjectCreationLock = async (tx: Prisma.TransactionClient) => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('project_creation_lock'))`;
@@ -21,9 +39,7 @@ const getReceiveNumberSync = async (
   buffer = 0
 ): Promise<string> => {
   if (!budget_year) {
-    const thisYear = new Date().getFullYear() + 543;
-    const currentMonth = new Date().getMonth() + 1;
-    budget_year = currentMonth >= 10 ? thisYear + 1 : thisYear;
+    budget_year = currentBangkokBudgetYear();
   }
   const count = await tx.project.count({
     where: {
@@ -155,13 +171,7 @@ export const importProjects = async (
 
     const receiveNumbers = await Promise.all(
       data.map((d) => {
-        const year =
-          d.budget_year ||
-          (() => {
-            const thisYear = new Date().getFullYear() + 543;
-            const currentMonth = new Date().getMonth() + 1;
-            return currentMonth >= 10 ? thisYear + 1 : thisYear;
-          })();
+        const year = d.budget_year || currentBangkokBudgetYear();
 
         const currentBuffer = bufferByYear.get(year) ?? 0;
 

@@ -8,6 +8,7 @@ import {
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { BadRequestError, NotFoundError } from '../lib/errors';
+import { nowUtc } from '../lib/date';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import { AuthPayload } from '../types/auth.type';
 import { DelegationDetail } from '../types/delegation.type';
@@ -23,7 +24,7 @@ type DelegableRole =
 
 const activeDelegationWhere = () => ({
   is_active: true,
-  OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
+  OR: [{ end_date: { equals: null } }, { end_date: { gte: nowUtc() } }],
 });
 
 const assertValidDelegationScope = (data: AddDelegationDto) => {
@@ -94,7 +95,7 @@ export const addDelegation = async (
 
     await tx.user.update({
       where: { id: data.delegatee_id },
-      data: { role_updated_at: new Date() },
+      data: { role_updated_at: nowUtc() },
     });
 
     await recordAuditEvent(tx, {
@@ -147,14 +148,14 @@ export const cancelDelegation = async (
       where: { id },
       data: {
         is_active: false,
-        cancelled_at: new Date(),
+        cancelled_at: nowUtc(),
         cancelled_by: user.id,
       },
     });
 
     await tx.user.update({
       where: { id: updated.delegatee_id },
-      data: { role_updated_at: new Date() },
+      data: { role_updated_at: nowUtc() },
     });
 
     await recordAuditEvent(tx, {
@@ -180,7 +181,7 @@ export const cancelDelegation = async (
       },
       sourceTable: 'user_delegations',
       sourceId: updated.id,
-      occurredAt: updated.cancelled_at ?? new Date(),
+      occurredAt: updated.cancelled_at ?? nowUtc(),
     });
 
     return updated;

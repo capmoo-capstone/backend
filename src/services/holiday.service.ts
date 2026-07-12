@@ -1,5 +1,13 @@
 import { Holiday, UnitResponsibleType, UrgentType } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import {
+  addBangkokDays,
+  bangkokDayStartUtc,
+  bangkokTodayStartUtc,
+  bangkokWeekday,
+  formatBangkokDate,
+  formatBangkokOffset,
+} from '../lib/date';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import {
   CalculateTimelineDto,
@@ -33,9 +41,12 @@ const URGENCY_THRESHOLDS: Record<string, UrgencyThresholds> = {
 };
 
 const isWeekend = (date: Date): boolean => {
-  const day = date.getDay();
+  const day = bangkokWeekday(date);
   return day === 0 || day === 6;
 };
+
+const parseHolidayDate = (date: string): Date =>
+  new Date(`${date}T00:00:00.000Z`);
 
 export const getHolidayDates = async (
   from: Date,
@@ -45,7 +56,7 @@ export const getHolidayDates = async (
     where: { date: { gte: from, lte: to } },
     select: { date: true },
   });
-  return new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
+  return new Set(holidays.map((h) => formatBangkokDate(h.date)));
 };
 
 const countWorkingDays = (
@@ -54,20 +65,18 @@ const countWorkingDays = (
   holidaySet: Set<string>
 ): number => {
   let count = 0;
-  const cursor = new Date(from);
-  cursor.setUTCHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setUTCHours(0, 0, 0, 0);
+  let cursor = bangkokDayStartUtc(from);
+  const end = bangkokDayStartUtc(to);
 
   // ไม่นับวันเริ่มต้น (from) เหมือนกับ addWorkingDays
-  cursor.setUTCDate(cursor.getUTCDate() + 1);
+  cursor = addBangkokDays(cursor, 1);
 
   while (cursor <= end) {
-    const isoDate = cursor.toISOString().slice(0, 10);
+    const isoDate = formatBangkokDate(cursor);
     if (!isWeekend(cursor) && !holidaySet.has(isoDate)) {
       count++;
     }
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    cursor = addBangkokDays(cursor, 1);
   }
   return count;
 };
@@ -77,13 +86,12 @@ const addWorkingDays = (
   n: number,
   holidaySet: Set<string>
 ): Date => {
-  const cursor = new Date(startDate);
-  cursor.setUTCHours(0, 0, 0, 0);
+  let cursor = bangkokDayStartUtc(startDate);
   let remaining = n;
 
   while (remaining > 0) {
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-    const isoDate = cursor.toISOString().slice(0, 10);
+    cursor = addBangkokDays(cursor, 1);
+    const isoDate = formatBangkokDate(cursor);
     if (!isWeekend(cursor) && !holidaySet.has(isoDate)) {
       remaining--;
     }
@@ -117,8 +125,8 @@ export const listHolidays = async (year?: number): Promise<Holiday[]> => {
   const where = year
     ? {
         date: {
-          gte: new Date(`${year}-01-01`),
-          lte: new Date(`${year}-12-31`),
+          gte: parseHolidayDate(`${year}-01-01`),
+          lte: parseHolidayDate(`${year}-12-31`),
         },
       }
     : {};
@@ -166,12 +174,14 @@ export const createHolidays = async (
   items: CreateHolidayDto[]
 ): Promise<Holiday[]> => {
   await Promise.all(
-    items.map((item) => checkDuplicateDate(new Date(item.date), item.date))
+    items.map((item) =>
+      checkDuplicateDate(parseHolidayDate(item.date), item.date)
+    )
   );
 
   return prisma.holiday.createManyAndReturn({
     data: items.map((item) => ({
-      date: new Date(item.date),
+      date: parseHolidayDate(item.date),
       name: item.name,
     })),
   });
@@ -185,7 +195,7 @@ export const updateHoliday = async (
 
   let dateValue: Date | undefined;
   if (data.date !== undefined) {
-    dateValue = new Date(data.date);
+    dateValue = parseHolidayDate(data.date);
     await checkDuplicateDate(dateValue, data.date, id);
   }
 
@@ -207,8 +217,7 @@ export const calculateTimeline = async (
   dto: CalculateTimelineDto
 ): Promise<TimelineResult> => {
   const { unitResponsibilityType, deliveryDate } = dto;
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const today = bangkokTodayStartUtc();
 
   const thresholds = URGENCY_THRESHOLDS[unitResponsibilityType];
   const quota = WORKING_DAY_QUOTA[unitResponsibilityType];
@@ -217,12 +226,10 @@ export const calculateTimeline = async (
   let isCustomDate: boolean;
 
   if (deliveryDate) {
-    resolvedDeliveryDate = new Date(deliveryDate);
-    resolvedDeliveryDate.setUTCHours(0, 0, 0, 0);
+    resolvedDeliveryDate = bangkokDayStartUtc(deliveryDate);
     isCustomDate = true;
   } else {
-    const windowEnd = new Date(today);
-    windowEnd.setUTCDate(today.getUTCDate() + quota * 2);
+    const windowEnd = addBangkokDays(today, quota * 2);
     const holidaySet = await getHolidayDates(today, windowEnd);
 
     resolvedDeliveryDate = addWorkingDays(today, quota, holidaySet);
@@ -243,7 +250,7 @@ export const calculateTimeline = async (
   return {
     unitResponsibilityType: unitResponsibilityType as UnitResponsibleType,
     isCustomDate,
-    deliveryDate: resolvedDeliveryDate.toISOString(),
+    deliveryDate: formatBangkokOffset(resolvedDeliveryDate),
     remainingWorkingDays,
     urgentLevel,
     urgencyWarningThreshold: thresholds.urgent,

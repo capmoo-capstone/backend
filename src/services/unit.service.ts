@@ -14,6 +14,7 @@ import {
   UnitRepresentativeResponse,
 } from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
+import { nowUtc } from '../lib/date';
 import {
   addRoleInternal,
   assertNoDuplicatesOrOverlap,
@@ -37,10 +38,11 @@ export const listUnits = async (
     full_name: true,
   };
   if (options.withDelegations) {
+    const now = nowUtc();
     userSelect.delegations_given = {
       where: {
         is_active: true,
-        OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
+        OR: [{ end_date: { equals: null } }, { end_date: { gte: now } }],
       },
       select: {
         id: true,

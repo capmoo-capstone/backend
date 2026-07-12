@@ -31,6 +31,13 @@ import {
 import { OwnProjectTab, ProjectFilterQuery } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
+  addBangkokMonths,
+  bangkokDayEndUtc,
+  bangkokDayStartUtc,
+  bangkokTodayStartUtc,
+  nowUtc,
+} from '../lib/date';
+import {
   PaginatedProjects,
   ProjectDetailsResponse,
   ProjectPhaseProgress,
@@ -62,21 +69,15 @@ const buildWhereClause = (
 
   const hasExplicitDate = Boolean(filters?.dateFrom || filters?.dateTo);
   if (!hasExplicitDate) {
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setHours(0, 0, 0, 0);
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sixMonthsAgo = addBangkokMonths(bangkokTodayStartUtc(), -6);
     and.push({ created_at: { gte: sixMonthsAgo } });
   } else {
     const dateFilter: Prisma.DateTimeFilter = {};
     if (filters?.dateFrom) {
-      const fromDate = new Date(filters.dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      dateFilter.gte = fromDate;
+      dateFilter.gte = bangkokDayStartUtc(filters.dateFrom);
     }
     if (filters?.dateTo) {
-      const toDate = new Date(filters.dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      dateFilter.lte = toDate;
+      dateFilter.lte = bangkokDayEndUtc(filters.dateTo);
     }
     and.push({ created_at: dateFilter });
   }
@@ -507,10 +508,8 @@ export const getAssignedProjects = async (
   dateFrom?: Date,
   dateTo?: Date
 ): Promise<ProjectsListResponse> => {
-  const from = dateFrom ? new Date(dateFrom) : new Date();
-  from.setHours(0, 0, 0, 0);
-  const to = dateTo ? new Date(dateTo) : new Date();
-  to.setHours(23, 59, 59, 999);
+  const from = dateFrom ? bangkokDayStartUtc(dateFrom) : bangkokTodayStartUtc();
+  const to = dateTo ? bangkokDayEndUtc(dateTo) : bangkokDayEndUtc(nowUtc());
 
   const where: any = {
     AND: [

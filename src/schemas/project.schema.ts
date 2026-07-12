@@ -1,5 +1,6 @@
 import { ProcurementType, ProjectStatus, UrgentType } from '@prisma/client';
 import { z } from 'zod';
+import { BangkokDateTimeSchema } from '../lib/date';
 
 export const OwnProjectTabSchema = z
   .enum([
@@ -36,8 +37,8 @@ export const CreateProjectSchema = z.object({
   requesting_unit_id: z.string(),
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
-  expected_approval_date: z.coerce.date().optional(),
-  expected_completion_procurement_date: z.coerce.date().optional(),
+  expected_approval_date: BangkokDateTimeSchema.optional(),
+  expected_completion_procurement_date: BangkokDateTimeSchema.optional(),
   installment_rounds: z.coerce.number().int().min(1).default(1),
 });
 
@@ -103,8 +104,8 @@ export const ProjectFilterQuerySchema = z
   .object({
     search: z.string().optional(),
     title: z.string().optional(),
-    dateFrom: z.coerce.date().optional(),
-    dateTo: z.coerce.date().optional(),
+    dateFrom: BangkokDateTimeSchema.optional(),
+    dateTo: BangkokDateTimeSchema.optional(),
     fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
     status: z.array(z.enum(ProjectStatus)).optional(),
@@ -121,8 +122,8 @@ export const ProjectFilterQuerySchema = z
   .optional();
 
 export const GetAssignedProjectsQuerySchema = z.object({
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
