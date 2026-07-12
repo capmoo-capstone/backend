@@ -1,0 +1,274 @@
+import { ProcurementType, ProjectStatus, UserRole } from '@prisma/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { OPS_DEPT_ID } from '../../lib/constant';
+import { prismaMock } from '../../test/prisma-mock';
+import { AuthPayload } from '../../types/auth.type';
+import {
+  getDeadlines,
+  getPeriodicSummary,
+  getProcurementOverview,
+} from '../dashboard.service';
+
+const supplyUser: AuthPayload = {
+  token: 'token',
+  id: 'head-1',
+  username: 'head',
+  full_name: 'Head User',
+  is_delegated: false,
+  delegated_by: [],
+  roles: [
+    {
+      role: UserRole.HEAD_OF_DEPARTMENT,
+      dept_id: OPS_DEPT_ID,
+      dept_name: 'Supply',
+      unit_id: null,
+      unit_name: null,
+    },
+  ],
+};
+
+const staffUser: AuthPayload = {
+  token: 'token',
+  id: 'staff-1',
+  username: 'staff',
+  full_name: 'Staff User',
+  is_delegated: false,
+  delegated_by: [],
+  roles: [
+    {
+      role: UserRole.GENERAL_STAFF,
+      dept_id: OPS_DEPT_ID,
+      dept_name: 'Supply',
+      unit_id: 'unit-proc',
+      unit_name: 'Procurement',
+    },
+  ],
+};
+
+const externalUser: AuthPayload = {
+  token: 'token',
+  id: 'rep-1',
+  username: 'rep',
+  full_name: 'Rep User',
+  is_delegated: false,
+  delegated_by: [],
+  roles: [
+    {
+      role: UserRole.REPRESENTATIVE,
+      dept_id: 'dept-1',
+      dept_name: 'External Dept',
+      unit_id: 'unit-request',
+      unit_name: 'External Unit',
+    },
+  ],
+};
+
+describe('dashboard.service', () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-07-12T05:00:00.000Z'));
+  });
+
+  it('returns periodic summary comparisons scoped to external user units', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(7);
+    prismaMock.projectHistory.count
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(4);
+
+    const result = await getPeriodicSummary(externalUser, { period: 'month' });
+
+    expect(result.newWork).toEqual({
+      current: 5,
+      previous: 3,
+      change: 2,
+      trend: 'increase',
+    });
+    expect(result.completedWork).toEqual({
+      current: 2,
+      previous: 4,
+      change: -2,
+      trend: 'decrease',
+    });
+    expect(result.pendingWork.trend).toBe('same');
+
+    expect(prismaMock.project.count.mock.calls[0][0].where).toMatchObject({
+      AND: [
+        { requesting_unit_id: { in: ['unit-request'] } },
+        { created_at: expect.any(Object) },
+      ],
+    });
+    expect(
+      prismaMock.projectHistory.count.mock.calls[0][0].where
+    ).toMatchObject({
+      new_value: {
+        path: ['status'],
+        equals: ProjectStatus.CLOSED,
+      },
+      project: { requesting_unit_id: { in: ['unit-request'] } },
+    });
+  });
+
+  it('uses fiscal-year-to-date ranges for periodic fiscal year summaries', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+
+    const result = await getPeriodicSummary(supplyUser, {
+      period: 'fiscalYear',
+    });
+
+    expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
+    expect(result.range.to.toISOString()).toBe('2026-07-12T16:59:59.999Z');
+    expect(result.previousRange.from.toISOString()).toBe(
+      '2024-09-30T17:00:00.000Z'
+    );
+    expect(result.previousRange.to.toISOString()).toBe(
+      '2025-07-12T16:59:59.999Z'
+    );
+  });
+
+  it('builds procurement overview buckets for fiscal Q1', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.budgetPlan.groupBy.mockResolvedValue([
+      {
+        activity_type_name: 'งบประมาณแผ่นดิน',
+        _count: { _all: 2 },
+        _sum: { budget_amount: 1500 },
+      },
+      {
+        activity_type_name: 'เงินรายได้',
+        _count: { _all: 1 },
+        _sum: { budget_amount: 500 },
+      },
+    ]);
+
+    const result = await getProcurementOverview(supplyUser, {
+      mode: 'quarter',
+      fiscalYear: 2569,
+      quarter: 'Q1',
+    });
+
+    expect(result.fiscalYear).toBe(2569);
+    expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
+    expect(result.range.to.toISOString()).toBe('2025-12-31T16:59:59.999Z');
+    expect(result.procurementTypes).toHaveLength(6);
+    expect(result.statusBar.map((point) => point.status)).toEqual([
+      ProjectStatus.UNASSIGNED,
+      ProjectStatus.WAITING_ACCEPT,
+      ProjectStatus.IN_PROGRESS,
+      ProjectStatus.CLOSED,
+      ProjectStatus.CANCELLED,
+    ]);
+    expect(result.budgetInvestment).toEqual([
+      {
+        category: 'งบประมาณแผ่นดิน',
+        planCount: 2,
+        amount: 1500,
+      },
+      {
+        category: 'เงินรายได้',
+        planCount: 1,
+        amount: 500,
+      },
+    ]);
+    expect(result.timeline.map((point) => point.label)).toEqual([
+      '2025-10',
+      '2025-11',
+      '2025-12',
+    ]);
+  });
+
+  it('uses external status buckets and unit visibility for procurement overview', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
+
+    const result = await getProcurementOverview(externalUser, {
+      mode: 'month',
+      fiscalYear: 2569,
+      month: 7,
+    });
+
+    expect(result.statusBar.map((point) => point.status)).toEqual([
+      'NOT_STARTED',
+      ProjectStatus.IN_PROGRESS,
+      ProjectStatus.CLOSED,
+      ProjectStatus.CANCELLED,
+    ]);
+    expect(prismaMock.project.count.mock.calls[0][0].where).toMatchObject({
+      AND: [
+        { requesting_unit_id: { in: ['unit-request'] } },
+        { created_at: expect.any(Object) },
+        { procurement_type: ProcurementType.LT100K },
+      ],
+    });
+  });
+
+  it('returns sorted deadline pages with computed priority levels', async () => {
+    vi.setSystemTime(new Date('2026-07-12T05:00:00.000Z'));
+    prismaMock.project.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'late-1',
+          title: 'Very late',
+          expected_completion_procurement_date: new Date(
+            '2026-06-30T17:00:00.000Z'
+          ),
+        },
+        {
+          id: 'late-2',
+          title: 'Late',
+          expected_completion_procurement_date: new Date(
+            '2026-07-09T17:00:00.000Z'
+          ),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'soon-1',
+          title: 'Urgent',
+          expected_completion_procurement_date: new Date(
+            '2026-07-16T17:00:00.000Z'
+          ),
+        },
+        {
+          id: 'soon-2',
+          title: 'Watch',
+          expected_completion_procurement_date: new Date(
+            '2026-07-18T17:00:00.000Z'
+          ),
+        },
+        {
+          id: 'soon-3',
+          title: 'Normal',
+          expected_completion_procurement_date: new Date(
+            '2026-07-21T17:00:00.000Z'
+          ),
+        },
+      ]);
+    prismaMock.project.count.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
+
+    const result = await getDeadlines(staffUser, { page: 1, limit: 10 });
+
+    expect(result.overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
+    expect(result.dueSoon.data.map((row) => row.priority)).toEqual([
+      'URGENT',
+      'WATCH',
+      'NORMAL',
+    ]);
+    expect(prismaMock.project.findMany.mock.calls[0][0]).toMatchObject({
+      orderBy: { expected_completion_procurement_date: 'asc' },
+      skip: 0,
+      take: 10,
+    });
+  });
+
+  it('rejects deadline access for non-supply users', async () => {
+    await expect(
+      getDeadlines(externalUser, { page: 1, limit: 10 })
+    ).rejects.toThrowError('You do not have permission to view deadlines');
+  });
+});
