@@ -7,6 +7,12 @@ import {
   ProjectActionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import {
+  bangkokDayEndUtc,
+  bangkokDayStartUtc,
+  formatBangkokOffset,
+  nowUtc,
+} from '../lib/date';
 import { ForbiddenError, NotFoundError } from '../lib/errors';
 import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
 import { AuditLogsQuery } from '../schemas/admin.schema';
@@ -398,7 +404,7 @@ export const recordAuditEvent = async (
       search_text,
       source_table: input.sourceTable ?? null,
       source_id: input.sourceId ?? null,
-      occurred_at: input.occurredAt ?? new Date(),
+      occurred_at: input.occurredAt ?? nowUtc(),
     },
   });
 };
@@ -434,7 +440,7 @@ export const createProjectHistoryAndAuditEvent = async (
     metadata: { action: input.action },
     sourceTable: 'project_histories',
     sourceId: history?.id ?? null,
-    occurredAt: history?.changed_at ?? new Date(),
+    occurredAt: history?.changed_at ?? nowUtc(),
   });
 
   return history;
@@ -485,8 +491,8 @@ const buildWhere = (
 
   if (query.dateFrom || query.dateTo) {
     where.occurred_at = {
-      gte: query.dateFrom,
-      lte: query.dateTo,
+      gte: query.dateFrom ? bangkokDayStartUtc(query.dateFrom) : undefined,
+      lte: query.dateTo ? bangkokDayEndUtc(query.dateTo) : undefined,
     };
   }
 
@@ -504,7 +510,7 @@ const mapAuditEvent = (event: AuditEvent): AuditLogItem => ({
   id: event.id,
   kind: event.kind,
   eventType: event.event_type,
-  occurredAt: event.occurred_at.toISOString(),
+  occurredAt: formatBangkokOffset(event.occurred_at),
   title: titleByEventType[event.event_type],
   description: event.comment ?? titleByEventType[event.event_type],
   actor: buildActor(event.actor_snapshot),

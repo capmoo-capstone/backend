@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BangkokDateTimeSchema } from '../lib/date';
 
 export const CreateHolidaySchema = z.object({
   date: z.string().date(),
@@ -27,7 +28,7 @@ export const CalculateTimelineSchema = z.object({
     'SELECTION',
     'EBIDDING',
   ]),
-  deliveryDate: z.string().datetime().optional(),
+  deliveryDate: BangkokDateTimeSchema.optional(),
 });
 
 export type CreateHolidayDto = z.infer<typeof CreateHolidaySchema>;

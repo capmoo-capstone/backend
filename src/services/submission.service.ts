@@ -32,6 +32,7 @@ import {
 } from '../types/submission.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import { generatePresignedDownloadUrl } from './storage.service';
+import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -311,14 +312,10 @@ export const getVendorSubmissions = async (
   if (filter?.dateFrom || filter?.dateTo) {
     const dateFilter: Prisma.DateTimeFilter = {};
     if (filter.dateFrom) {
-      const from = new Date(filter.dateFrom);
-      from.setHours(0, 0, 0, 0);
-      dateFilter.gte = from;
+      dateFilter.gte = bangkokDayStartUtc(filter.dateFrom);
     }
     if (filter.dateTo) {
-      const to = new Date(filter.dateTo);
-      to.setHours(23, 59, 59, 999);
-      dateFilter.lte = to;
+      dateFilter.lte = bangkokDayEndUtc(filter.dateTo);
     }
     and.push({ submitted_at: dateFilter });
   }
@@ -560,7 +557,7 @@ export const rejectSubmission = async (
         status: SubmissionStatus.REJECTED,
         comment: data.comment,
         approved_by: user.id,
-        approved_at: new Date(),
+        approved_at: nowUtc(),
       },
       select: {
         id: true,
@@ -606,9 +603,9 @@ export const approveSubmission = async (
         status: data.required_signature
           ? SubmissionStatus.WAITING_PROPOSAL
           : SubmissionStatus.COMPLETED,
-        approved_at: new Date(),
+        approved_at: nowUtc(),
         approved_by: user.id,
-        completed_at: data.required_signature ? null : new Date(),
+        completed_at: data.required_signature ? null : nowUtc(),
         completed_by: data.required_signature ? null : user.id,
       },
       select: {
@@ -654,7 +651,7 @@ export const proposeSubmission = async (
       where: { id },
       data: {
         status: SubmissionStatus.WAITING_SIGNATURE,
-        proposing_at: new Date(),
+        proposing_at: nowUtc(),
         proposing_by: user.id,
       },
       select: {
@@ -697,7 +694,7 @@ export const signAndCompleteSubmission = async (
       where: { id: data.id },
       data: {
         status: SubmissionStatus.COMPLETED,
-        completed_at: new Date(),
+        completed_at: nowUtc(),
         completed_by: user.id,
       },
       select: {

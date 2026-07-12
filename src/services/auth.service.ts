@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { clearUserAuthCache } from '../lib/auth-cache';
 import { OPS_DEPT_ID } from '../lib/constant';
+import { nowUtc } from '../lib/date';
 import {
   AppError,
   BadRequestError,
@@ -21,7 +22,7 @@ import {
 export const fetchAndFormatUserDetails = async (
   whereClause: any
 ): Promise<FetchAndFormatUserDetailsResponse | null> => {
-  const now = new Date();
+  const now = nowUtc();
 
   const user = await prisma.user.findUnique({
     where: whereClause,

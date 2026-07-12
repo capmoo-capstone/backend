@@ -17,6 +17,13 @@ import {
   isSuperAdmin,
 } from '../lib/permissions';
 import {
+  addBangkokDays,
+  daysInBangkokMonth,
+  fromBangkokDate,
+  nowUtc,
+  toBangkokParts,
+} from '../lib/date';
+import {
   DeadlinesQuery,
   PeriodicSummaryQuery,
   ProcurementOverviewQuery,
@@ -34,7 +41,6 @@ import {
   ProcurementOverviewResponse,
 } from '../types/dashboard.type';
 
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_FISCAL_YEAR_OFFSET = 543;
 
@@ -63,52 +69,10 @@ type DateRange = {
   to: Date;
 };
 
-type DateParts = {
-  year: number;
-  month: number;
-  day: number;
-};
-
-const toBangkokParts = (date: Date): DateParts => {
-  const bangkokDate = new Date(date.getTime() + BANGKOK_OFFSET_MS);
-  return {
-    year: bangkokDate.getUTCFullYear(),
-    month: bangkokDate.getUTCMonth() + 1,
-    day: bangkokDate.getUTCDate(),
-  };
-};
-
-const fromBangkokDate = (
-  year: number,
-  month: number,
-  day: number,
-  endOfDay = false
-): Date => {
-  const time = endOfDay
-    ? Date.UTC(year, month - 1, day, 23, 59, 59, 999)
-    : Date.UTC(year, month - 1, day, 0, 0, 0, 0);
-  return new Date(time - BANGKOK_OFFSET_MS);
-};
-
-const daysInMonth = (year: number, month: number): number =>
-  new Date(Date.UTC(year, month, 0)).getUTCDate();
-
-const addBangkokDays = (date: Date, days: number, endOfDay = false): Date => {
-  const parts = toBangkokParts(date);
-  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-  shifted.setUTCDate(shifted.getUTCDate() + days);
-  return fromBangkokDate(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth() + 1,
-    shifted.getUTCDate(),
-    endOfDay
-  );
-};
-
 const fiscalYearToGregorianEndYear = (fiscalYear: number): number =>
   fiscalYear > 2400 ? fiscalYear - DEFAULT_FISCAL_YEAR_OFFSET : fiscalYear;
 
-const currentFiscalYear = (now = new Date()): number => {
+const currentFiscalYear = (now = nowUtc()): number => {
   const parts = toBangkokParts(now);
   const gregorianEndYear = parts.month >= 10 ? parts.year + 1 : parts.year;
   return gregorianEndYear + DEFAULT_FISCAL_YEAR_OFFSET;
@@ -122,7 +86,7 @@ const fiscalYearRange = (fiscalYear: number): DateRange => {
   };
 };
 
-const currentFiscalYearStart = (now = new Date()): Date => {
+const currentFiscalYearStart = (now = nowUtc()): Date => {
   const parts = toBangkokParts(now);
   const startYear = parts.month >= 10 ? parts.year : parts.year - 1;
   return fromBangkokDate(startYear, 10, 1);
@@ -130,7 +94,7 @@ const currentFiscalYearStart = (now = new Date()): Date => {
 
 const getPeriodicRanges = (
   period: PeriodicSummaryQuery['period'],
-  now = new Date()
+  now = nowUtc()
 ): { current: DateRange; previous: DateRange } => {
   const parts = toBangkokParts(now);
   const today = fromBangkokDate(parts.year, parts.month, parts.day);
@@ -152,7 +116,7 @@ const getPeriodicRanges = (
     const previousMonthYear = parts.month === 1 ? parts.year - 1 : parts.year;
     const previousDay = Math.min(
       parts.day,
-      daysInMonth(previousMonthYear, previousMonth)
+      daysInBangkokMonth(previousMonthYear, previousMonth)
     );
 
     return {
@@ -197,7 +161,7 @@ const getPeriodicRanges = (
 
 const getOverviewRange = (
   query: ProcurementOverviewQuery,
-  now = new Date()
+  now = nowUtc()
 ): { range: DateRange; fiscalYear: number } => {
   const fiscalYear = query.fiscalYear ?? currentFiscalYear(now);
   const endYear = fiscalYearToGregorianEndYear(fiscalYear);
@@ -225,7 +189,7 @@ const getOverviewRange = (
         to: fromBangkokDate(
           finishYear,
           endMonth,
-          daysInMonth(finishYear, endMonth),
+          daysInBangkokMonth(finishYear, endMonth),
           true
         ),
       },
@@ -245,7 +209,7 @@ const getOverviewRange = (
     fiscalYear,
     range: {
       from: fromBangkokDate(year, month, 1),
-      to: fromBangkokDate(year, month, daysInMonth(year, month), true),
+      to: fromBangkokDate(year, month, daysInBangkokMonth(year, month), true),
     },
   };
 };
@@ -482,7 +446,7 @@ const buildTimelineBuckets = (
   if (mode === 'month') {
     const start = toBangkokParts(range.from);
     return Array.from(
-      { length: daysInMonth(start.year, start.month) },
+      { length: daysInBangkokMonth(start.year, start.month) },
       (_, i) => {
         const day = i + 1;
         return {
@@ -502,7 +466,7 @@ const buildTimelineBuckets = (
   while (year < end.year || (year === end.year && month <= end.month)) {
     buckets.push({
       from: fromBangkokDate(year, month, 1),
-      to: fromBangkokDate(year, month, daysInMonth(year, month), true),
+      to: fromBangkokDate(year, month, daysInBangkokMonth(year, month), true),
     });
     month += 1;
     if (month > 12) {
@@ -619,7 +583,7 @@ export const getDeadlines = async (
     throw new ForbiddenError('You do not have permission to view deadlines');
   }
 
-  const now = new Date();
+  const now = nowUtc();
   const today = (() => {
     const parts = toBangkokParts(now);
     return fromBangkokDate(parts.year, parts.month, parts.day);

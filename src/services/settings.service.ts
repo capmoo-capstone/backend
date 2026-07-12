@@ -1,6 +1,7 @@
 import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
+import { nowUtc } from '../lib/date';
 import { NotFoundError } from '../lib/errors';
 import {
   OpsStaffSettingsResponse,
@@ -17,7 +18,7 @@ const opsStaffSettingsRoles: OpsStaffSettingsRole[] = [
 ];
 
 export const getOpsUnits = async (): Promise<OpsUnitSettingsResponse> => {
-  const now = new Date();
+  const now = nowUtc();
   const units = await prisma.unit.findMany({
     where: { dept_id: OPS_DEPT_ID },
     select: {
@@ -155,6 +156,7 @@ export const getRepresentatives =
   };
 
 export const getOpsStaff = async (): Promise<OpsStaffSettingsResponse> => {
+  const now = nowUtc();
   const department = await prisma.department.findUnique({
     where: { id: OPS_DEPT_ID },
     select: {
@@ -174,8 +176,8 @@ export const getOpsStaff = async (): Promise<OpsStaffSettingsResponse> => {
               delegations_given: {
                 where: {
                   is_active: true,
-                  start_date: { lte: new Date() },
-                  OR: [{ end_date: null }, { end_date: { gte: new Date() } }],
+                  start_date: { lte: now },
+                  OR: [{ end_date: null }, { end_date: { gte: now } }],
                 },
                 select: {
                   id: true,

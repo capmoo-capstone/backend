@@ -1,5 +1,6 @@
 import { LRUCache } from 'lru-cache';
 import { AuthPayload } from '../types/auth.type';
+import { nowUtc } from './date';
 
 type CachedAuthData = Omit<
   AuthPayload,
@@ -21,7 +22,7 @@ export const setUserAuthCache = (
 ) => {
   userAuthCache.set(userId, {
     ...value,
-    cached_at: new Date(),
+    cached_at: nowUtc(),
   });
 };
 

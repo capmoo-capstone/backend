@@ -2,10 +2,11 @@ import { Prisma, UserRole } from '@prisma/client';
 import { BadRequestError, NotFoundError } from './errors';
 import { UpdateUserRoleResponse } from '../types/user.type';
 import { OPS_DEPT_ID } from './constant';
+import { nowUtc } from './date';
 
 const activeDelegationWhere = () => ({
   is_active: true,
-  OR: [{ end_date: { equals: null } }, { end_date: { gte: new Date() } }],
+  OR: [{ end_date: { equals: null } }, { end_date: { gte: nowUtc() } }],
 });
 
 const touchActiveDelegatees = async (
@@ -37,7 +38,7 @@ const touchActiveDelegatees = async (
 
   await tx.user.updateMany({
     where: { id: { in: delegateeIds } },
-    data: { role_updated_at: new Date() },
+    data: { role_updated_at: nowUtc() },
   });
 };
 
@@ -111,7 +112,7 @@ export const addRoleInternal = async (
 
   await tx.user.update({
     where: { id: userId },
-    data: { role_updated_at: new Date() },
+    data: { role_updated_at: nowUtc() },
   });
   await touchActiveDelegatees(tx, {
     delegatorId: userId,
@@ -166,7 +167,7 @@ export const removeRoleInternal = async (
 
   await tx.user.update({
     where: { id: userId },
-    data: { role_updated_at: new Date() },
+    data: { role_updated_at: nowUtc() },
   });
   await touchActiveDelegatees(tx, {
     delegatorId: userId,

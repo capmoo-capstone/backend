@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import swaggerDocument from '../swagger-output.json';
+import { bangkokDateResponse } from './middlewares/date-response';
 import { errorHandler } from './middlewares/error';
 import apiV1Routes from './routes/index';
 
@@ -57,6 +58,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(bangkokDateResponse);
 
 // Import API v1 routes
 app.get('/', (req, res, _next) => {
