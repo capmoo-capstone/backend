@@ -100,6 +100,7 @@ type ProjectForUpdate = Pick<
   | 'vendor_name'
   | 'vendor_email'
   | 'contract_no_id'
+  | 'installment_rounds'
 >;
 
 const updateProjectForSubmission = async (
@@ -110,7 +111,7 @@ const updateProjectForSubmission = async (
 ) => {
   const dataToUpdate = {};
   meta_data.forEach((item) => {
-    if (item.field_key && item.value) {
+    if (item.field_key && item.value !== undefined && item.value !== null) {
       dataToUpdate[item.field_key] = item.value;
     }
   });
@@ -724,6 +725,7 @@ export const signAndCompleteSubmission = async (
           asset_code: true,
           vendor_name: true,
           vendor_email: true,
+          installment_rounds: true,
         },
       });
       await updateProjectForSubmission(
