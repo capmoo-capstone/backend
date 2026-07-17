@@ -50,7 +50,13 @@ export const UpdateStatusProjectSchema = z.object({
 export const UpdateStatusProjectsSchema = z.array(UpdateStatusProjectSchema);
 
 export const AcceptProjectsSchema = z.object({
-  id: z.array(z.uuid()),
+  id: z
+    .array(z.uuid())
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Duplicate ids are not allowed',
+      path: ['id'],
+    }),
 });
 
 export const CompleteProcurementPhaseSchema = z.object({
@@ -58,6 +64,16 @@ export const CompleteProcurementPhaseSchema = z.object({
   continue_unit_proc: z.boolean().default(false),
   assignee_contract: z.uuid().optional(),
 });
+
+export const CompleteInstallmentSchema = z
+  .object({
+    id: z.uuid(),
+    installment_no: z.coerce.number().int(),
+  })
+  .refine((data) => data.installment_no > 0, {
+    message: 'Installment No. must be greater than 0',
+    path: ['installment_no'],
+  });
 
 export const CancelProjectSchema = z.object({
   id: z.uuid(),
@@ -77,6 +93,16 @@ export const GetNewContractNumberSchema = z.object({
 export const CancelContractNumberSchema = z.object({
   contractId: z.uuid(),
   reason: z.string(),
+});
+
+export const ExportFinanceDataSchema = z.object({
+  id: z
+    .array(z.uuid())
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Duplicate ids are not allowed',
+      path: ['id'],
+    }),
 });
 
 export const UpdateProjectSchema = z.object({
@@ -135,9 +161,11 @@ export type AcceptProjectsDto = z.infer<typeof AcceptProjectsSchema>;
 export type CompleteProcurementPhaseDto = z.infer<
   typeof CompleteProcurementPhaseSchema
 >;
+export type CompleteInstallmentDto = z.infer<typeof CompleteInstallmentSchema>;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
 export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
+export type ExportFinanceDataDto = z.infer<typeof ExportFinanceDataSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<
   typeof GetProjectsQueryByUnitSchema
 >;

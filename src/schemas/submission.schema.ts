@@ -75,6 +75,7 @@ export const UpdateProjectForSubmissionSchema = z.object({
   asset_code: z.coerce.boolean().optional().nullable(),
   vendor_name: z.string().optional(),
   vendor_email: z.string().optional(),
+  installment_rounds: z.coerce.number().int().min(1).optional(),
 });
 
 export const RejectSubmissionSchema = z.object({

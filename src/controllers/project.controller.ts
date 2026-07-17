@@ -4,8 +4,10 @@ import {
   AcceptProjectsSchema,
   CancelContractNumberSchema,
   CancelProjectSchema,
+  CompleteInstallmentSchema,
   CompleteProcurementPhaseSchema,
   CreateProjectSchema,
+  ExportFinanceDataSchema,
   GetAssignedProjectsQuerySchema,
   GetNewContractNumberSchema,
   GetOwnProjectsQuerySchema,
@@ -20,6 +22,7 @@ import * as AuditLogService from '../services/audit-log.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
 import * as ProjectDataService from '../services/project-data.service';
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
+import * as ProjectFinanceService from '../services/project-finance.service';
 import * as ProjectQueryService from '../services/project-query.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 
@@ -368,7 +371,7 @@ export const completeProcurement = async (
   res.status(200).json(project);
 };
 
-export const completeContract = async (
+export const completeInstallment = async (
   req: AuthenticatedRequest,
   res: Response
 ) => {
@@ -376,11 +379,16 @@ export const completeContract = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const projectId = req.params.id as string;
-  const project = await ProjectLifecycleService.completeContractPhase(
+  const installmentNo = req.params.installmentNo as string;
+  const validatedData = CompleteInstallmentSchema.parse({
+    id: projectId,
+    installment_no: Number(installmentNo),
+  });
+  const requests = await ProjectFinanceService.createFinanceExportRequest(
     payload,
-    projectId
+    validatedData
   );
-  res.status(200).json(project);
+  res.status(200).json(requests);
 };
 
 export const closeProject = async (
@@ -451,6 +459,39 @@ export const cancelContractNumber = async (
     payload,
     contractId,
     reason
+  );
+  res.status(200).json(result);
+};
+
+export const getFinanceExportRequest = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const { page, limit } = req.query;
+  const result = await ProjectFinanceService.getFinanceExportRequest(
+    payload,
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10
+  );
+  res.status(200).json(result);
+};
+
+export const exportFinanceData = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const validatedData = ExportFinanceDataSchema.parse({
+    id: req.body.id,
+  });
+  const result = await ProjectFinanceService.exportFinanceData(
+    payload,
+    validatedData
   );
   res.status(200).json(result);
 };
