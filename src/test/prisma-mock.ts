@@ -16,6 +16,7 @@ const MODEL_METHODS = [
   'groupBy',
   'update',
   'updateMany',
+  'updateManyAndReturn',
   'upsert',
 ] as const;
 
