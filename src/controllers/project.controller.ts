@@ -382,13 +382,13 @@ export const completeInstallment = async (
   const installmentNo = req.params.installmentNo as string;
   const validatedData = CompleteInstallmentSchema.parse({
     id: projectId,
-    installment_no: installmentNo,
+    installment_no: Number(installmentNo),
   });
-  const project = await ProjectFinanceService.createFinanceExportRequest(
+  const requests = await ProjectFinanceService.createFinanceExportRequest(
     payload,
     validatedData
   );
-  res.status(200).json(project);
+  res.status(200).json(requests);
 };
 
 export const closeProject = async (

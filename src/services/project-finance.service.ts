@@ -68,6 +68,7 @@ export const getFinanceExportRequest = async (
 ): Promise<PaginatedResponse<ProjectFinanceExport>> => {
   const [exportData, count] = await Promise.all([
     prisma.projectFinanceExport.findMany({
+      orderBy: { created_at: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -87,20 +88,20 @@ export const exportFinanceData = async (
   user: AuthPayload,
   data: ExportFinanceDataDto
 ): Promise<ListResponse<ProjectFinanceExport>> => {
-  const countExportRequests = await prisma.projectFinanceExport.count({
-    where: {
-      id: {
-        in: data.id,
-      },
-      is_exported: false,
-    },
-  });
-  if (countExportRequests !== data.id.length) {
-    throw new BadRequestError(
-      'Some export requests are already exported or not found'
-    );
-  }
   return await prisma.$transaction(async (tx) => {
+    const countExportRequests = await tx.projectFinanceExport.count({
+      where: {
+        id: {
+          in: data.id,
+        },
+        is_exported: false,
+      },
+    });
+    if (countExportRequests !== data.id.length) {
+      throw new BadRequestError(
+        'Some export requests are already exported or not found'
+      );
+    }
     const updated = await tx.projectFinanceExport.updateManyAndReturn({
       where: {
         id: {

@@ -50,7 +50,13 @@ export const UpdateStatusProjectSchema = z.object({
 export const UpdateStatusProjectsSchema = z.array(UpdateStatusProjectSchema);
 
 export const AcceptProjectsSchema = z.object({
-  id: z.array(z.uuid()),
+  id: z
+    .array(z.uuid())
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Duplicate ids are not allowed',
+      path: ['id'],
+    }),
 });
 
 export const CompleteProcurementPhaseSchema = z.object({
@@ -89,7 +95,15 @@ export const CancelContractNumberSchema = z.object({
   reason: z.string(),
 });
 
-export const ExportFinanceDataSchema = AcceptProjectsSchema;
+export const ExportFinanceDataSchema = z.object({
+  id: z
+    .array(z.uuid())
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Duplicate ids are not allowed',
+      path: ['id'],
+    }),
+});
 
 export const UpdateProjectSchema = z.object({
   id: z.uuid(),
