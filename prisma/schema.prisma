@@ -173,15 +173,16 @@ model User {
   contract_projects    Project[] @relation("ContractProjects")
   created_projects     Project[] @relation("ProjectCreator")
 
-  submitted_submissions    ProjectSubmission[]   @relation("SubmitBy")
-  approved_submissions     ProjectSubmission[]   @relation("ApprovedBy")
-  proposed_submissions     ProjectSubmission[]   @relation("ProposedBy")
-  completed_submissions    ProjectSubmission[]   @relation("CompletedBy")
-  finance_exports          ProjectFinanceExport[] @relation("ProjectFinanceExporter") 
-  cancellation_requests    ProjectCancellation[] @relation("CancelRequester")
-  cancellation_decisions   ProjectCancellation[] @relation("CancelDecider")
-  delegation_creations     UserDelegation[]      @relation("DelegationCreator")
-  delegation_cancellations UserDelegation[]      @relation("DelegationCanceller")
+  submitted_submissions    ProjectSubmission[]    @relation("SubmitBy")
+  approved_submissions     ProjectSubmission[]    @relation("ApprovedBy")
+  proposed_submissions     ProjectSubmission[]    @relation("ProposedBy")
+  completed_submissions    ProjectSubmission[]    @relation("CompletedBy")
+  finance_exports          ProjectFinanceExport[] @relation("ProjectFinanceExporter")
+  finance_export_creations ProjectFinanceExport[] @relation("ProjectFinanceExportCreator")
+  cancellation_requests    ProjectCancellation[]  @relation("CancelRequester")
+  cancellation_decisions   ProjectCancellation[]  @relation("CancelDecider")
+  delegation_creations     UserDelegation[]       @relation("DelegationCreator")
+  delegation_cancellations UserDelegation[]       @relation("DelegationCanceller")
 
   @@map("users")
 }
@@ -267,13 +268,13 @@ model Project {
   responsible_unit Unit?                  @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
   contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id])
 
-  assignee_procurement User[]                @relation("ProcurementProjects")
-  assignee_contract    User[]                @relation("ContractProjects")
-  project_cancellation ProjectCancellation[]
-  project_histories    ProjectHistory[]
+  assignee_procurement   User[]                 @relation("ProcurementProjects")
+  assignee_contract      User[]                 @relation("ContractProjects")
+  project_cancellation   ProjectCancellation[]
+  project_histories      ProjectHistory[]
   project_finance_export ProjectFinanceExport[]
-  submissions          ProjectSubmission[]
-  budget_plans         BudgetPlan[]
+  submissions            ProjectSubmission[]
+  budget_plans           BudgetPlan[]
 
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
@@ -284,17 +285,20 @@ model Project {
 }
 
 model ProjectFinanceExport {
-  id              String   @id @default(uuid())
-  project_id      String
-  installment_no  Int
-  is_exported     Boolean @default(false)
-  exported_by     String
-  exported_at     DateTime @default(now())
+  id             String    @id @default(uuid())
+  project_id     String
+  installment_no Int
+  is_exported    Boolean   @default(false)
+  created_by     String
+  created_at     DateTime  @default(now())
+  exported_by    String?
+  exported_at    DateTime?
 
   project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  exporter User    @relation("ProjectFinanceExporter", fields: [exported_by], references: [id])
+  exporter User?   @relation("ProjectFinanceExporter", fields: [exported_by], references: [id])
+  creator  User    @relation("ProjectFinanceExportCreator", fields: [created_by], references: [id])
 
-  @@index([project_id, installment_no])
+  @@unique([project_id, installment_no])
   @@index([is_exported])
   @@map("project_finance_exports")
 }
