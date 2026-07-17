@@ -1,6 +1,7 @@
 import { UnitResponsibleType, UserRole } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
+import { BadRequestError } from '../../lib/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   createDepartment,
@@ -302,7 +303,7 @@ describe('unit.service', () => {
       role: UserRole.GENERAL_STAFF,
     });
 
-    const result = await updateUnitUsers({
+    const result = await updateUnitUsers(user, {
       unit_id: 'unit-1',
       new_users: ['user-1'],
       remove_users: [],
@@ -317,6 +318,84 @@ describe('unit.service', () => {
         unit_id: 'unit-1',
       },
     });
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'USER_MANAGEMENT',
+          event_type: 'UNIT_STAFF_ADDED',
+          target_type: 'USER',
+          actor_id: user.id,
+        }),
+      })
+    );
+  });
+
+  it('updateUnitUsers does not replace a non-staff role in a unit', async () => {
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      dept_id: OPS_DEPT_ID,
+    });
+    txMock.user.count.mockResolvedValue(1);
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({
+      id: 'ops-role',
+    });
+    txMock.userOrganizationRole.findMany.mockResolvedValue([
+      {
+        id: 'role-1',
+        user_id: 'user-1',
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: OPS_DEPT_ID,
+        unit_id: 'unit-1',
+      },
+    ]);
+
+    await expect(
+      updateUnitUsers(user, {
+        unit_id: 'unit-1',
+        new_users: ['user-1'],
+        remove_users: [],
+      })
+    ).rejects.toBeInstanceOf(BadRequestError);
+
+    expect(txMock.userOrganizationRole.update).not.toHaveBeenCalled();
+    expect(txMock.auditEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('updateUnitUsers records a staff removal audit event', async () => {
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      dept_id: OPS_DEPT_ID,
+    });
+    txMock.user.count.mockResolvedValue(1);
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({
+      id: 'role-1',
+      user_id: 'user-1',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: OPS_DEPT_ID,
+      unit_id: 'unit-1',
+    });
+    txMock.userOrganizationRole.count.mockResolvedValue(1);
+
+    const result = await updateUnitUsers(user, {
+      unit_id: 'unit-1',
+      new_users: [],
+      remove_users: ['user-1'],
+    });
+
+    expect(result).toEqual({ added: 0, removed: 1 });
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          event_type: 'UNIT_STAFF_REMOVED',
+          metadata: expect.objectContaining({
+            userId: 'user-1',
+            role: UserRole.GENERAL_STAFF,
+            departmentId: OPS_DEPT_ID,
+            unitId: 'unit-1',
+          }),
+        }),
+      })
+    );
   });
 
   it('updateRepresentative sets a representative for a non-supply unit', async () => {

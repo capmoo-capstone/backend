@@ -5,6 +5,7 @@ import {
   AuditTargetType,
   Prisma,
   ProjectActionType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import {
@@ -72,6 +73,25 @@ interface CreateProjectHistoryAuditInput {
   comment?: string | null;
 }
 
+interface UserRoleAuditAssignment {
+  id: string;
+  user_id: string;
+  role: UserRole;
+  dept_id: string;
+  unit_id: string | null;
+}
+
+interface RecordUserManagementAuditInput {
+  eventType:
+    | 'USER_ROLE_ASSIGNED'
+    | 'USER_ROLE_REMOVED'
+    | 'UNIT_STAFF_ADDED'
+    | 'UNIT_STAFF_REMOVED';
+  actor: ActorInput;
+  assignment: UserRoleAuditAssignment;
+  diff: AuditFieldDiff[];
+}
+
 const actionToEventType: Record<ProjectActionType, AuditEventType> = {
   [ProjectActionType.INFORMATION_UPDATE]: AuditEventType.PROJECT_DATA_UPDATED,
   [ProjectActionType.ASSIGNEE_UPDATE]: AuditEventType.PROJECT_ASSIGNEE_UPDATED,
@@ -94,6 +114,10 @@ const titleByEventType: Record<AuditEventType, string> = {
     'Project cancellation rejected',
   [AuditEventType.CONTRACT_NUMBER_CREATED]: 'Contract number created',
   [AuditEventType.CONTRACT_NUMBER_CANCELLED]: 'Contract number cancelled',
+  [AuditEventType.USER_ROLE_ASSIGNED]: 'User role assigned',
+  [AuditEventType.USER_ROLE_REMOVED]: 'User role removed',
+  [AuditEventType.UNIT_STAFF_ADDED]: 'Staff added to unit',
+  [AuditEventType.UNIT_STAFF_REMOVED]: 'Staff removed from unit',
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -372,6 +396,47 @@ export const buildDelegationTargetSnapshot = async (
   };
 };
 
+export const buildUserTargetSnapshot = async (
+  tx: AuditClient,
+  assignment: UserRoleAuditAssignment
+) => {
+  const [user, department, unit] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: assignment.user_id },
+      select: { id: true, full_name: true },
+    }),
+    tx.department.findUnique({
+      where: { id: assignment.dept_id },
+      select: { id: true, name: true },
+    }),
+    assignment.unit_id
+      ? tx.unit.findUnique({
+          where: { id: assignment.unit_id },
+          select: { id: true, name: true },
+        })
+      : null,
+  ]);
+
+  return {
+    id: assignment.user_id,
+    type: AuditTargetType.USER,
+    name: user?.full_name ?? assignment.user_id,
+    refNo: null,
+    assignmentId: assignment.id,
+    role: assignment.role,
+    department: {
+      id: assignment.dept_id,
+      name: department?.name ?? assignment.dept_id,
+    },
+    unit: assignment.unit_id
+      ? {
+          id: assignment.unit_id,
+          name: unit?.name ?? assignment.unit_id,
+        }
+      : null,
+  };
+};
+
 export const recordAuditEvent = async (
   tx: AuditClient,
   input: RecordAuditEventInput
@@ -405,6 +470,29 @@ export const recordAuditEvent = async (
       source_table: input.sourceTable ?? null,
       source_id: input.sourceId ?? null,
       occurred_at: input.occurredAt ?? nowUtc(),
+    },
+  });
+};
+
+export const recordUserManagementAuditEvent = async (
+  tx: AuditClient,
+  input: RecordUserManagementAuditInput
+) => {
+  const { assignment } = input;
+
+  return recordAuditEvent(tx, {
+    kind: AuditLogType.USER_MANAGEMENT,
+    eventType: input.eventType,
+    targetType: AuditTargetType.USER,
+    targetId: assignment.user_id,
+    actor: input.actor,
+    targetSnapshot: await buildUserTargetSnapshot(tx, assignment),
+    diff: input.diff,
+    metadata: {
+      userId: assignment.user_id,
+      role: assignment.role,
+      departmentId: assignment.dept_id,
+      unitId: assignment.unit_id,
     },
   });
 };

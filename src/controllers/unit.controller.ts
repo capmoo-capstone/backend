@@ -7,6 +7,7 @@ import {
   UpdateUnitUsersSchema,
 } from '../schemas/unit.schema';
 import * as UnitService from '../services/unit.service';
+import { AuthenticatedRequest } from '../types/auth.type';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
@@ -69,12 +70,15 @@ export const removeUnit = async (req: Request, res: Response) => {
   res.status(204).send();
 };
 
-export const updateUnitUsers = async (req: Request, res: Response) => {
+export const updateUnitUsers = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['Unit']
   // #swagger.security = [{ bearerAuth: [] }]
   const unit_id = req.params.id as string;
   const validatedData = UpdateUnitUsersSchema.parse({ unit_id, ...req.body });
-  const result = await UnitService.updateUnitUsers(validatedData);
+  const result = await UnitService.updateUnitUsers(req.user!, validatedData);
   res.status(200).json(result);
 };
 

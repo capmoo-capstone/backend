@@ -9,6 +9,16 @@ import {
   updateSupplyRole,
 } from '../user.service';
 
+const actor = {
+  id: 'admin-1',
+  username: 'admin',
+  full_name: 'Admin User',
+  token: 'token',
+  roles: [],
+  is_delegated: false,
+  delegated_by: [],
+};
+
 describe('user.service', () => {
   it('listUsers returns all users when no filter is given', async () => {
     prismaMock.user.findMany.mockResolvedValue([
@@ -113,7 +123,7 @@ describe('user.service', () => {
       role: UserRole.GENERAL_STAFF,
     });
 
-    const result = await updateSupplyRole({
+    const result = await updateSupplyRole(actor, {
       role: UserRole.GENERAL_STAFF,
       new_users: ['user-1'],
       remove_users: [],
@@ -129,6 +139,16 @@ describe('user.service', () => {
       },
     });
     expect(txMock.user.update).toHaveBeenCalled();
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'USER_MANAGEMENT',
+          event_type: 'USER_ROLE_ASSIGNED',
+          target_type: 'USER',
+          actor_id: actor.id,
+        }),
+      })
+    );
   });
 
   it('addRole adds a new department-level role to an existing user', async () => {
@@ -139,9 +159,11 @@ describe('user.service', () => {
       id: 'role-1',
       user_id: 'user-1',
       role: UserRole.HEAD_OF_DEPARTMENT,
+      dept_id: 'dept-1',
+      unit_id: null,
     });
 
-    const result = await addRole({
+    const result = await addRole(actor, {
       user_id: 'user-1',
       role: UserRole.HEAD_OF_DEPARTMENT,
       dept_id: 'dept-1',
@@ -156,14 +178,33 @@ describe('user.service', () => {
         unit_id: null,
       },
     });
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          event_type: 'USER_ROLE_ASSIGNED',
+          metadata: expect.objectContaining({
+            userId: 'user-1',
+            role: UserRole.HEAD_OF_DEPARTMENT,
+            departmentId: 'dept-1',
+            unitId: null,
+          }),
+        }),
+      })
+    );
   });
 
   it('removeRole removes the role and falls back to guest when no roles remain', async () => {
     txMock.user.count.mockResolvedValue(1);
-    txMock.userOrganizationRole.findFirst.mockResolvedValue({ id: 'role-1' });
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({
+      id: 'role-1',
+      user_id: 'user-1',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: 'dept-1',
+      unit_id: 'unit-1',
+    });
     txMock.userOrganizationRole.count.mockResolvedValue(0);
 
-    await removeRole({
+    await removeRole(actor, {
       user_id: 'user-1',
       role: UserRole.GENERAL_STAFF,
       dept_id: 'dept-1',
@@ -181,5 +222,19 @@ describe('user.service', () => {
         unit_id: null,
       },
     });
+    expect(txMock.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          event_type: 'USER_ROLE_REMOVED',
+          diff: expect.arrayContaining([
+            expect.objectContaining({
+              field: 'role',
+              oldValue: UserRole.GENERAL_STAFF,
+              newValue: null,
+            }),
+          ]),
+        }),
+      })
+    );
   });
 });

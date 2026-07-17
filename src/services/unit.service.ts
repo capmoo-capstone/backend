@@ -1,5 +1,11 @@
 import { prisma } from '../config/prisma';
-import { Prisma, Unit, UnitResponsibleType, UserRole } from '@prisma/client';
+import {
+  AuditEventType,
+  Prisma,
+  Unit,
+  UnitResponsibleType,
+  UserRole,
+} from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import {
   CreateUnitDto,
@@ -15,6 +21,8 @@ import {
 } from '../types/unit.type';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { nowUtc } from '../lib/date';
+import { AuthPayload } from '../types/auth.type';
+import { recordUserManagementAuditEvent } from './audit-log.service';
 import {
   addRoleInternal,
   assertNoDuplicatesOrOverlap,
@@ -276,6 +284,7 @@ export const getRepresentative = async (
 };
 
 export const updateUnitUsers = async (
+  actor: AuthPayload,
   data: UpdateUnitUsersDto
 ): Promise<{ added: number; removed: number }> => {
   const { unit_id, new_users, remove_users } = data;
@@ -315,22 +324,96 @@ export const updateUnitUsers = async (
         );
       }
 
-      await addRoleInternal(tx, {
+      const existingRoles = await tx.userOrganizationRole.findMany({
+        where: { user_id: userId, dept_id: OPS_DEPT_ID },
+        select: {
+          id: true,
+          user_id: true,
+          role: true,
+          dept_id: true,
+          unit_id: true,
+        },
+      });
+      const existingUnitRole = existingRoles.find(
+        (role) => role.unit_id === unit_id
+      );
+      if (
+        existingUnitRole &&
+        existingUnitRole.role !== UserRole.GENERAL_STAFF
+      ) {
+        throw new BadRequestError(
+          'User already has a different role in this unit'
+        );
+      }
+
+      const replacedRole =
+        existingUnitRole ??
+        (existingRoles.length === 1 && existingRoles[0].role === UserRole.GUEST
+          ? existingRoles[0]
+          : null);
+      const assignment = await addRoleInternal(tx, {
         userId,
         role: UserRole.GENERAL_STAFF,
         deptId: OPS_DEPT_ID,
         unitId: unit_id,
       });
+      await recordUserManagementAuditEvent(tx, {
+        eventType: AuditEventType.UNIT_STAFF_ADDED,
+        actor,
+        assignment: { ...assignment, user_id: userId },
+        diff: [
+          {
+            field: 'role',
+            oldValue: replacedRole?.role ?? null,
+            newValue: assignment.role,
+          },
+          {
+            field: 'unit_id',
+            oldValue: replacedRole?.unit_id ?? null,
+            newValue: assignment.unit_id,
+          },
+        ],
+      });
     }
 
     // REMOVE
     for (const userId of remove_users) {
+      const assignment = await tx.userOrganizationRole.findFirst({
+        where: {
+          user_id: userId,
+          role: UserRole.GENERAL_STAFF,
+          dept_id: OPS_DEPT_ID,
+          unit_id,
+        },
+        select: {
+          id: true,
+          user_id: true,
+          role: true,
+          dept_id: true,
+          unit_id: true,
+        },
+      });
       await removeRoleInternal(tx, {
         userId,
         role: UserRole.GENERAL_STAFF,
         deptId: OPS_DEPT_ID,
         unitId: unit_id,
       });
+      if (assignment) {
+        await recordUserManagementAuditEvent(tx, {
+          eventType: AuditEventType.UNIT_STAFF_REMOVED,
+          actor,
+          assignment,
+          diff: [
+            { field: 'role', oldValue: assignment.role, newValue: null },
+            {
+              field: 'unit_id',
+              oldValue: assignment.unit_id,
+              newValue: null,
+            },
+          ],
+        });
+      }
     }
 
     return { added: new_users.length, removed: remove_users.length };
