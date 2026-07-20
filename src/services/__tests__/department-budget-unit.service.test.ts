@@ -294,10 +294,16 @@ describe('unit.service', () => {
       dept_id: OPS_DEPT_ID,
     });
     txMock.user.count.mockResolvedValue(1);
-    txMock.userOrganizationRole.findFirst
-      .mockResolvedValueOnce({ id: 'ops-role' })
-      .mockResolvedValueOnce(null);
-    txMock.userOrganizationRole.findMany.mockResolvedValue([]);
+    txMock.userOrganizationRole.findFirst.mockResolvedValue(null);
+    txMock.userOrganizationRole.findMany.mockResolvedValue([
+      {
+        id: 'ops-role',
+        user_id: 'user-1',
+        role: UserRole.GENERAL_STAFF,
+        dept_id: OPS_DEPT_ID,
+        unit_id: 'another-unit',
+      },
+    ]);
     txMock.userOrganizationRole.create.mockResolvedValue({
       id: 'role-1',
       role: UserRole.GENERAL_STAFF,
@@ -336,9 +342,6 @@ describe('unit.service', () => {
       dept_id: OPS_DEPT_ID,
     });
     txMock.user.count.mockResolvedValue(1);
-    txMock.userOrganizationRole.findFirst.mockResolvedValue({
-      id: 'ops-role',
-    });
     txMock.userOrganizationRole.findMany.mockResolvedValue([
       {
         id: 'role-1',

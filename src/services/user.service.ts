@@ -69,7 +69,10 @@ const findReplacedRoleAssignment = async (
   });
 
   if (params.unitId !== null) {
-    return roles.find((role) => role.unit_id === params.unitId) ?? null;
+    return (
+      roles.find((role) => role.unit_id === params.unitId) ??
+      (roles.length === 1 && roles[0].role === UserRole.GUEST ? roles[0] : null)
+    );
   }
 
   return roles.length === 1 && roles[0].role === UserRole.GUEST

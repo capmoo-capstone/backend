@@ -311,19 +311,6 @@ export const updateUnitUsers = async (
 
     // ADD — ตรวจว่า user อยู่ใน OPS dept อยู่แล้ว
     for (const userId of new_users) {
-      const inOpsDept = await tx.userOrganizationRole.findFirst({
-        where: { user_id: userId, dept_id: OPS_DEPT_ID },
-      });
-      if (!inOpsDept) {
-        const user = await tx.user.findUnique({
-          where: { id: userId },
-          select: { full_name: true },
-        });
-        throw new BadRequestError(
-          `User ${user?.full_name} cannot be assigned to Supply Operation units`
-        );
-      }
-
       const existingRoles = await tx.userOrganizationRole.findMany({
         where: { user_id: userId, dept_id: OPS_DEPT_ID },
         select: {
@@ -334,6 +321,17 @@ export const updateUnitUsers = async (
           unit_id: true,
         },
       });
+
+      if (existingRoles.length === 0) {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { full_name: true },
+        });
+        throw new BadRequestError(
+          `User ${user?.full_name} cannot be assigned to Supply Operation units`
+        );
+      }
+
       const existingUnitRole = existingRoles.find(
         (role) => role.unit_id === unit_id
       );
