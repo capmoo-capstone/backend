@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { AuditEventType, Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { BadRequestError, NotFoundError } from '../lib/errors';
@@ -13,7 +13,133 @@ import {
   RemoveRoleDto,
   UpdateSupplyRoleDto,
 } from '../schemas/user.schema';
-import { UpdateUserRoleResponse, UserDetailResponse, UserListFilters, UserListResponse } from '../types/user.type';
+import {
+  UpdateUserRoleResponse,
+  UserDetailResponse,
+  UserListFilters,
+  UserListResponse,
+} from '../types/user.type';
+import { AuthPayload } from '../types/auth.type';
+import { recordUserManagementAuditEvent } from './audit-log.service';
+
+type RoleAssignment = {
+  id: string;
+  user_id: string;
+  role: UserRole;
+  dept_id: string;
+  unit_id: string | null;
+};
+
+type RoleMutationParams = {
+  userId: string;
+  role: UserRole;
+  deptId: string;
+  unitId: string | null;
+};
+
+const roleAssignmentSelect = {
+  id: true,
+  user_id: true,
+  role: true,
+  dept_id: true,
+  unit_id: true,
+};
+
+const findRoleAssignment = async (
+  tx: Prisma.TransactionClient,
+  params: RoleMutationParams
+): Promise<RoleAssignment | null> =>
+  await tx.userOrganizationRole.findFirst({
+    where: {
+      user_id: params.userId,
+      role: params.role,
+      dept_id: params.deptId,
+      unit_id: params.unitId,
+    },
+    select: roleAssignmentSelect,
+  });
+
+const findReplacedRoleAssignment = async (
+  tx: Prisma.TransactionClient,
+  params: RoleMutationParams
+): Promise<RoleAssignment | null> => {
+  const roles = await tx.userOrganizationRole.findMany({
+    where: { user_id: params.userId, dept_id: params.deptId },
+    select: roleAssignmentSelect,
+  });
+
+  if (params.unitId !== null) {
+    return (
+      roles.find((role) => role.unit_id === params.unitId) ??
+      (roles.length === 1 && roles[0].role === UserRole.GUEST ? roles[0] : null)
+    );
+  }
+
+  return roles.length === 1 && roles[0].role === UserRole.GUEST
+    ? roles[0]
+    : null;
+};
+
+const buildAssignmentDiff = (
+  previous: RoleAssignment | null,
+  current: RoleAssignment
+) => [
+  {
+    field: 'role',
+    oldValue: previous?.role ?? null,
+    newValue: current.role,
+  },
+  {
+    field: 'unit_id',
+    oldValue: previous?.unit_id ?? null,
+    newValue: current.unit_id,
+  },
+];
+
+const addRoleWithAudit = async (
+  tx: Prisma.TransactionClient,
+  actor: AuthPayload,
+  params: RoleMutationParams,
+  eventType: 'USER_ROLE_ASSIGNED' | 'UNIT_STAFF_ADDED'
+): Promise<UpdateUserRoleResponse> => {
+  const previous = await findReplacedRoleAssignment(tx, params);
+  const assignment = await addRoleInternal(tx, params);
+  const auditAssignment: RoleAssignment = {
+    ...assignment,
+    user_id: params.userId,
+  };
+
+  await recordUserManagementAuditEvent(tx, {
+    eventType,
+    actor,
+    assignment: auditAssignment,
+    diff: buildAssignmentDiff(previous, auditAssignment),
+  });
+
+  return assignment;
+};
+
+const removeRoleWithAudit = async (
+  tx: Prisma.TransactionClient,
+  actor: AuthPayload,
+  params: RoleMutationParams,
+  eventType: 'USER_ROLE_REMOVED' | 'UNIT_STAFF_REMOVED'
+): Promise<void> => {
+  const assignment = await findRoleAssignment(tx, params);
+  await removeRoleInternal(tx, params);
+
+  if (!assignment) return;
+
+  await recordUserManagementAuditEvent(tx, {
+    eventType,
+    actor,
+    assignment,
+    diff: [
+      { field: 'role', oldValue: assignment.role, newValue: null },
+      { field: 'unit_id', oldValue: assignment.unit_id, newValue: null },
+    ],
+  });
+};
 
 export const listUsers = async (
   filters: UserListFilters
@@ -187,6 +313,7 @@ export const deleteUser = async (id: string): Promise<void> => {
 };
 
 export const updateSupplyRole = async (
+  actor: AuthPayload,
   data: UpdateSupplyRoleDto
 ): Promise<{ added: number; removed: number }> => {
   const { role, unit_id, new_users, remove_users } = data;
@@ -250,22 +377,32 @@ export const updateSupplyRole = async (
 
     // REMOVE
     for (const userId of remove_users) {
-      await removeRoleInternal(tx, {
-        userId,
-        role,
-        deptId: OPS_DEPT_ID,
-        unitId,
-      });
+      await removeRoleWithAudit(
+        tx,
+        actor,
+        {
+          userId,
+          role,
+          deptId: OPS_DEPT_ID,
+          unitId,
+        },
+        AuditEventType.USER_ROLE_REMOVED
+      );
     }
 
     // ADD
     for (const userId of new_users) {
-      await addRoleInternal(tx, {
-        userId,
-        role,
-        deptId: OPS_DEPT_ID,
-        unitId,
-      });
+      await addRoleWithAudit(
+        tx,
+        actor,
+        {
+          userId,
+          role,
+          deptId: OPS_DEPT_ID,
+          unitId,
+        },
+        AuditEventType.USER_ROLE_ASSIGNED
+      );
     }
 
     return { added: new_users.length, removed: remove_users.length };
@@ -273,29 +410,43 @@ export const updateSupplyRole = async (
 };
 
 export const addRole = async (
+  actor: AuthPayload,
   data: AddRoleDto
 ): Promise<UpdateUserRoleResponse> => {
   return await prisma.$transaction(async (tx) => {
     await assertUsersExist(tx, [data.user_id]);
 
-    return await addRoleInternal(tx, {
-      userId: data.user_id,
-      role: data.role,
-      deptId: data.dept_id,
-      unitId: data.unit_id ?? null,
-    });
+    return await addRoleWithAudit(
+      tx,
+      actor,
+      {
+        userId: data.user_id,
+        role: data.role,
+        deptId: data.dept_id,
+        unitId: data.unit_id ?? null,
+      },
+      AuditEventType.USER_ROLE_ASSIGNED
+    );
   });
 };
 
-export const removeRole = async (data: RemoveRoleDto): Promise<void> => {
+export const removeRole = async (
+  actor: AuthPayload,
+  data: RemoveRoleDto
+): Promise<void> => {
   return await prisma.$transaction(async (tx) => {
     await assertUsersExist(tx, [data.user_id]);
 
-    await removeRoleInternal(tx, {
-      userId: data.user_id,
-      role: data.role,
-      deptId: data.dept_id,
-      unitId: data.unit_id ?? null,
-    });
+    await removeRoleWithAudit(
+      tx,
+      actor,
+      {
+        userId: data.user_id,
+        role: data.role,
+        deptId: data.dept_id,
+        unitId: data.unit_id ?? null,
+      },
+      AuditEventType.USER_ROLE_REMOVED
+    );
   });
 };

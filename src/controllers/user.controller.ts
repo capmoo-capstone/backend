@@ -6,6 +6,7 @@ import {
   ListUsersQuerySchema,
   UpdateSupplyRoleSchema,
 } from '../schemas/user.schema';
+import { AuthenticatedRequest } from '../types/auth.type';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
@@ -27,29 +28,32 @@ export const getById = async (req: Request, res: Response) => {
   res.status(200).json(user);
 };
 
-export const updateSupplyRole = async (req: Request, res: Response) => {
+export const updateSupplyRole = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const validatedData = UpdateSupplyRoleSchema.parse(req.body);
-  const result = await UserService.updateSupplyRole(validatedData);
+  const result = await UserService.updateSupplyRole(req.user!, validatedData);
   res.status(200).json(result);
 };
 
-export const addRole = async (req: Request, res: Response) => {
+export const addRole = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const user_id = req.params.id as string;
   const validatedData = AddRoleSchema.parse({ user_id, ...req.body });
-  const result = await UserService.addRole(validatedData);
+  const result = await UserService.addRole(req.user!, validatedData);
   res.status(201).json(result);
 };
 
-export const removeRole = async (req: Request, res: Response) => {
+export const removeRole = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const user_id = req.params.id as string;
   const validatedData = RemoveRoleSchema.parse({ user_id, ...req.body });
-  await UserService.removeRole(validatedData);
+  await UserService.removeRole(req.user!, validatedData);
   res.status(204).send();
 };
 
