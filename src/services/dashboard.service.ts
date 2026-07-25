@@ -261,7 +261,8 @@ const toComparison = (
     trend: change > 0 ? 'increase' : change < 0 ? 'decrease' : 'same',
   };
 };
-
+//////////////////////////////////////////////////////////////////////////
+// Periodic Summary
 export const getPeriodicSummary = async (
   user: AuthPayload,
   query: PeriodicSummaryQuery
@@ -306,7 +307,8 @@ export const getPeriodicSummary = async (
     pendingWork: toComparison(currentPending, previousPending),
   };
 };
-
+//////////////////////////////////////////////////////////////////////////
+// Procurement Overview
 const statusWhere = (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange,
@@ -370,13 +372,14 @@ const getStatusBuckets = async (
   }));
 };
 
-const getProcurementTypeBuckets = async (
+const getProcurementTypeDonut = async (
   visibilityWhere: Prisma.ProjectWhereInput,
-  range: DateRange
+  range: DateRange,
+  types?: ProcurementType[]
 ) => {
-  const types = Object.values(ProcurementType);
+  const typeFilters = types || Object.values(ProcurementType);
   const counts = await prisma.$transaction(
-    types.map((type) =>
+    typeFilters.map((type) =>
       prisma.project.count({
         where: andWhere(projectRangeWhere(visibilityWhere, range), {
           procurement_type: type,
@@ -391,23 +394,23 @@ const getProcurementTypeBuckets = async (
   }));
 };
 
-const getBudgetInvestment = async (
+const getBudgetInvestmentDonut = async (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange
 ) => {
   const rows = await prisma.budgetPlan.groupBy({
-    by: ['activity_type_name'],
+    by: ['budget_name'],
     where: {
       project_id: { not: null },
       project: projectRangeWhere(visibilityWhere, range),
     },
     _count: { _all: true },
     _sum: { budget_amount: true },
-    orderBy: { activity_type_name: 'asc' },
+    orderBy: { budget_name: 'asc' },
   });
 
   return rows.map((row) => ({
-    category: row.activity_type_name,
+    category: row.budget_name,
     planCount: row._count._all,
     amount: row._sum.budget_amount ?? 0,
   }));
@@ -455,7 +458,7 @@ const buildTimelineBuckets = (
   return buckets;
 };
 
-const getTimeline = async (
+const getTimelineLine = async (
   mode: ProcurementOverviewQuery['mode'],
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange
@@ -497,10 +500,10 @@ export const getProcurementOverview = async (
 
   const [procurementTypes, statusBar, budgetInvestment, timeline] =
     await Promise.all([
-      getProcurementTypeBuckets(visibilityWhere, range),
+      getProcurementTypeDonut(visibilityWhere, range),
       getStatusBuckets(user, visibilityWhere, range),
-      getBudgetInvestment(visibilityWhere, range),
-      getTimeline(query.mode, visibilityWhere, range),
+      getBudgetInvestmentDonut(visibilityWhere, range),
+      getTimelineLine(query.mode, visibilityWhere, range),
     ]);
 
   return {
@@ -513,7 +516,8 @@ export const getProcurementOverview = async (
     timeline,
   };
 };
-
+//////////////////////////////////////////////////////////////////////////
+// Deadline Chart
 const canViewDeadlines = (user: AuthPayload): boolean => {
   if (isSuperAdmin(user)) return true;
   if (!haveSupplyPermission(user)) return false;
@@ -661,3 +665,4 @@ export const getDueSoonDeadlines = async (
     data: rows,
   };
 };
+//////////////////////////////////////////////////////////////////////////
