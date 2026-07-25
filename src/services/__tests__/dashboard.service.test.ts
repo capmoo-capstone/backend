@@ -4,7 +4,8 @@ import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
 import {
-  getDeadlines,
+  getDueSoonDeadlines,
+  getOverdueDeadlines,
   getPeriodicSummary,
   getProcurementOverview,
 } from '../dashboard.service';
@@ -251,10 +252,11 @@ describe('dashboard.service', () => {
       ]);
     prismaMock.project.count.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
 
-    const result = await getDeadlines(staffUser, { page: 1, limit: 10 });
+    const overdue = await getOverdueDeadlines(staffUser, { page: 1, limit: 10 });
+    const dueSoon = await getDueSoonDeadlines(staffUser, { page: 1, limit: 10 });
 
-    expect(result.overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
-    expect(result.dueSoon.data.map((row) => row.priority)).toEqual([
+    expect(overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
+    expect(dueSoon.data.map((row) => row.priority)).toEqual([
       'URGENT',
       'WATCH',
       'NORMAL',
@@ -268,7 +270,7 @@ describe('dashboard.service', () => {
 
   it('rejects deadline access for non-supply users', async () => {
     await expect(
-      getDeadlines(externalUser, { page: 1, limit: 10 })
+      getOverdueDeadlines(externalUser, { page: 1, limit: 10 })
     ).rejects.toThrowError('You do not have permission to view deadlines');
   });
 });

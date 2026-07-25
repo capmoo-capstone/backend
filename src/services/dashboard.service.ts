@@ -30,16 +30,15 @@ import {
 } from '../schemas/dashboard.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
-  DashboardDeadlinePage,
   DashboardMetricComparison,
   DashboardStatusPoint,
   DeadlinePriority,
-  DeadlinesResponse,
   DueSoonProjectRow,
   OverdueProjectRow,
   PeriodicSummaryResponse,
   ProcurementOverviewResponse,
 } from '../types/dashboard.type';
+import { PaginatedResponse } from '../types/common.type';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_FISCAL_YEAR_OFFSET = 543;
@@ -540,23 +539,10 @@ const dueSoonPriority = (daysRemaining: number): DeadlinePriority => {
   return 'NORMAL';
 };
 
-const toPage = <T>(
-  total: number,
-  page: number,
-  limit: number,
-  data: T[]
-): DashboardDeadlinePage<T> => ({
-  total,
-  page,
-  pageSize: limit,
-  totalPages: Math.ceil(total / limit),
-  data,
-});
-
-export const getDeadlines = async (
+export const getOverdueDeadlines = async (
   user: AuthPayload,
   query: DeadlinesQuery
-): Promise<DeadlinesResponse> => {
+): Promise<PaginatedResponse<OverdueProjectRow>> => {
   if (!canViewDeadlines(user)) {
     throw new ForbiddenError('You do not have permission to view deadlines');
   }
@@ -566,8 +552,6 @@ export const getDeadlines = async (
     const parts = toBangkokParts(now);
     return fromBangkokDate(parts.year, parts.month, parts.day);
   })();
-  const todayEnd = addBangkokDays(today, 0, true);
-  const dueSoonEnd = addBangkokDays(today, 10, true);
   const skip = (query.page - 1) * query.limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
@@ -580,49 +564,84 @@ export const getDeadlines = async (
   const overdueWhere = andWhere(visibilityWhere, activeWhere, {
     expected_completion_procurement_date: { lt: today },
   });
+
+  const [projects, total] = await prisma.$transaction([
+    prisma.project.findMany({
+      where: overdueWhere,
+      skip,
+      take: query.limit,
+      orderBy: { expected_completion_procurement_date: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        expected_completion_procurement_date: true,
+      },
+    }),
+    prisma.project.count({ where: overdueWhere }),
+  ]);
+
+  const rows: OverdueProjectRow[] = projects.map((project) => ({
+    projectId: project.id,
+    title: project.title,
+    dueDate: project.expected_completion_procurement_date!,
+    daysLate: daysBetweenBangkokDates(
+      project.expected_completion_procurement_date!,
+      today
+    ),
+  }));
+
+  return {
+    total,
+    page: query.page,
+    pageSize: query.limit,
+    totalPages: Math.ceil(total / query.limit),
+    data: rows,
+  };
+};
+
+export const getDueSoonDeadlines = async (
+  user: AuthPayload,
+  query: DeadlinesQuery
+): Promise<PaginatedResponse<DueSoonProjectRow>> => {
+  if (!canViewDeadlines(user)) {
+    throw new ForbiddenError('You do not have permission to view deadlines');
+  }
+
+  const now = nowUtc();
+  const today = (() => {
+    const parts = toBangkokParts(now);
+    return fromBangkokDate(parts.year, parts.month, parts.day);
+  })();
+  const dueSoonEnd = addBangkokDays(today, 10, true);
+  const skip = (query.page - 1) * query.limit;
+  const visibilityWhere = buildVisibilityWhere(user);
+  const activeWhere: Prisma.ProjectWhereInput = {
+    status: {
+      notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED],
+    },
+    expected_completion_procurement_date: { not: null },
+  };
+
   const dueSoonWhere = andWhere(visibilityWhere, activeWhere, {
     expected_completion_procurement_date: { gte: today, lte: dueSoonEnd },
   });
 
-  const [overdueProjects, overdueTotal, dueSoonProjects, dueSoonTotal] =
-    await prisma.$transaction([
-      prisma.project.findMany({
-        where: overdueWhere,
-        skip,
-        take: query.limit,
-        orderBy: { expected_completion_procurement_date: 'asc' },
-        select: {
-          id: true,
-          title: true,
-          expected_completion_procurement_date: true,
-        },
-      }),
-      prisma.project.count({ where: overdueWhere }),
-      prisma.project.findMany({
-        where: dueSoonWhere,
-        skip,
-        take: query.limit,
-        orderBy: { expected_completion_procurement_date: 'asc' },
-        select: {
-          id: true,
-          title: true,
-          expected_completion_procurement_date: true,
-        },
-      }),
-      prisma.project.count({ where: dueSoonWhere }),
-    ]);
+  const [projects, total] = await prisma.$transaction([
+    prisma.project.findMany({
+      where: dueSoonWhere,
+      skip,
+      take: query.limit,
+      orderBy: { expected_completion_procurement_date: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        expected_completion_procurement_date: true,
+      },
+    }),
+    prisma.project.count({ where: dueSoonWhere }),
+  ]);
 
-  const overdueRows: OverdueProjectRow[] = overdueProjects.map((project) => {
-    const dueDate = project.expected_completion_procurement_date!;
-    return {
-      projectId: project.id,
-      title: project.title,
-      dueDate,
-      daysLate: daysBetweenBangkokDates(dueDate, today),
-    };
-  });
-
-  const dueSoonRows: DueSoonProjectRow[] = dueSoonProjects.map((project) => {
+  const rows: DueSoonProjectRow[] = projects.map((project) => {
     const dueDate = project.expected_completion_procurement_date!;
     const daysRemaining = daysBetweenBangkokDates(today, dueDate);
     return {
@@ -635,8 +654,10 @@ export const getDeadlines = async (
   });
 
   return {
-    asOf: todayEnd,
-    overdue: toPage(overdueTotal, query.page, query.limit, overdueRows),
-    dueSoon: toPage(dueSoonTotal, query.page, query.limit, dueSoonRows),
+    total,
+    page: query.page,
+    pageSize: query.limit,
+    totalPages: Math.ceil(total / query.limit),
+    data: rows,
   };
 };

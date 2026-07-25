@@ -1,5 +1,6 @@
 import { ProcurementType, ProjectStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/client';
+import { PaginatedResponse } from './common.type';
 
 export type DashboardTrend = 'increase' | 'decrease' | 'same';
 
@@ -82,16 +83,6 @@ export interface DueSoonProjectRow extends DeadlineProjectRow {
   priority: DeadlinePriority;
 }
 
-export interface DashboardDeadlinePage<T> {
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  data: T[];
-}
+export interface OverdueProjectResponse extends PaginatedResponse<OverdueProjectRow> {}
 
-export interface DeadlinesResponse {
-  asOf: Date;
-  overdue: DashboardDeadlinePage<OverdueProjectRow>;
-  dueSoon: DashboardDeadlinePage<DueSoonProjectRow>;
-}
+export interface DueSoonProjectResponse extends PaginatedResponse<DueSoonProjectRow> {}

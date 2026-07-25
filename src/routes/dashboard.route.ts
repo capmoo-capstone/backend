@@ -14,9 +14,14 @@ router.get(
 );
 router.get('/procurement-overview', controller.getProcurementOverview);
 router.get(
-  '/deadlines',
+  '/deadlines/overdue',
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getDeadlines
+  controller.getOverdueDeadlines
+);
+router.get(
+  '/deadlines/due-soon',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getDueSoonDeadlines
 );
 
 export default router;
