@@ -392,7 +392,6 @@ export const getById = async (
       expected_approval_date: projectData.expected_approval_date,
       expected_completion_procurement_date:
         projectData.expected_completion_procurement_date,
-      request_edit_reason: projectData.request_edit_reason,
       created_at: projectData.created_at,
       updated_at: projectData.updated_at,
       vendor: {
@@ -873,7 +872,6 @@ export const getSummaryCards = async (
             in: [
               ProjectStatus.IN_PROGRESS,
               ProjectStatus.WAITING_CANCEL,
-              ProjectStatus.REQUEST_EDIT,
             ],
           },
         },

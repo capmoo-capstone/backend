@@ -1,4 +1,8 @@
-import { ProjectFinanceExport, UnitResponsibleType } from '@prisma/client';
+import {
+  ProjectFinanceExport,
+  ProjectFinanceExportStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AuthPayload } from '../types/auth.type';
 import { BadRequestError, NotFoundError } from '../lib/errors';
@@ -53,10 +57,12 @@ export const createFinanceExportRequest = async (
       create: {
         project_id: data.id,
         installment_no: data.installment_no,
-        is_exported: false,
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
         created_by: user.id,
       },
-      update: {},
+      update: {
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+      },
     });
   });
 };
@@ -94,7 +100,12 @@ export const exportFinanceData = async (
         id: {
           in: data.id,
         },
-        is_exported: false,
+        status: {
+          in: [
+            ProjectFinanceExportStatus.WAITING_EXPORT,
+            ProjectFinanceExportStatus.REQUEST_EDIT,
+          ],
+        },
       },
     });
     if (countExportRequests !== data.id.length) {
@@ -107,17 +118,17 @@ export const exportFinanceData = async (
         id: {
           in: data.id,
         },
-        is_exported: false,
+        status: {
+          in: [
+            ProjectFinanceExportStatus.WAITING_EXPORT,
+            ProjectFinanceExportStatus.REQUEST_EDIT,
+          ],
+        },
       },
       data: {
-        is_exported: true,
+        status: ProjectFinanceExportStatus.EXPORTED,
         exported_by: user.id,
         exported_at: new Date(),
-      },
-      select: {
-        project_id: true,
-        installment_no: true,
-        is_exported: true,
       },
     });
 
@@ -125,5 +136,35 @@ export const exportFinanceData = async (
       total: updated.length,
       data: updated,
     };
+  });
+};
+
+export const requestEditInstallment = async (
+  _user: AuthPayload,
+  exportId: string,
+  reason: string
+): Promise<ProjectFinanceExport> => {
+  return await prisma.$transaction(async (tx) => {
+    const exportRecord = await tx.projectFinanceExport.findUnique({
+      where: { id: exportId },
+    });
+
+    if (!exportRecord) {
+      throw new NotFoundError('Installment export request not found');
+    }
+
+    if (exportRecord.status !== ProjectFinanceExportStatus.EXPORTED) {
+      throw new BadRequestError(
+        'Installment export request must be in EXPORTED status to request edit'
+      );
+    }
+
+    return await tx.projectFinanceExport.update({
+      where: { id: exportId },
+      data: {
+        status: ProjectFinanceExportStatus.REQUEST_EDIT,
+        request_edit_reason: reason,
+      },
+    });
   });
 };

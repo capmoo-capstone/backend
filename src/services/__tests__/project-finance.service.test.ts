@@ -1,4 +1,8 @@
-import { ProjectFinanceExport, UnitResponsibleType } from '@prisma/client';
+import {
+  ProjectFinanceExport,
+  ProjectFinanceExportStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
@@ -7,6 +11,7 @@ import {
   createFinanceExportRequest,
   exportFinanceData,
   getFinanceExportRequest,
+  requestEditInstallment,
 } from '../project-finance.service';
 
 const mockUser = {
@@ -91,7 +96,7 @@ describe('project-finance.service', () => {
         id: 'export-uuid',
         project_id: dto.id,
         installment_no: dto.installment_no,
-        is_exported: false,
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
         created_by: mockUser.id,
       } as ProjectFinanceExport;
 
@@ -110,10 +115,12 @@ describe('project-finance.service', () => {
         create: {
           project_id: dto.id,
           installment_no: dto.installment_no,
-          is_exported: false,
+          status: ProjectFinanceExportStatus.WAITING_EXPORT,
           created_by: mockUser.id,
         },
-        update: {},
+        update: {
+          status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        },
       });
     });
   });
@@ -121,8 +128,18 @@ describe('project-finance.service', () => {
   describe('getFinanceExportRequest', () => {
     it('should return a paginated response with export requests and total count', async () => {
       const mockExports = [
-        { id: '1', project_id: 'p1', installment_no: 1, is_exported: false },
-        { id: '2', project_id: 'p2', installment_no: 2, is_exported: true },
+        {
+          id: '1',
+          project_id: 'p1',
+          installment_no: 1,
+          status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        },
+        {
+          id: '2',
+          project_id: 'p2',
+          installment_no: 2,
+          status: ProjectFinanceExportStatus.EXPORTED,
+        },
       ] as ProjectFinanceExport[];
 
       prismaMock.projectFinanceExport.findMany.mockResolvedValue(mockExports);
@@ -154,8 +171,7 @@ describe('project-finance.service', () => {
       id: ['export-1', 'export-2'],
     };
 
-    it('should throw BadRequestError if requested export requests do not match the non-exported count', async () => {
-      // Return a count that is different from requested ids length
+    it('should throw BadRequestError if requested export requests do not match the expected count', async () => {
       txMock.projectFinanceExport.count.mockResolvedValue(1);
 
       await expect(
@@ -169,20 +185,37 @@ describe('project-finance.service', () => {
       expect(txMock.projectFinanceExport.count).toHaveBeenCalledWith({
         where: {
           id: { in: exportDto.id },
-          is_exported: false,
+          status: {
+            in: [
+              ProjectFinanceExportStatus.WAITING_EXPORT,
+              ProjectFinanceExportStatus.REQUEST_EDIT,
+            ],
+          },
         },
       });
     });
 
-    it('should update requests to is_exported: true and return list response', async () => {
+    it('should update requests to status EXPORTED and return list response', async () => {
       txMock.projectFinanceExport.count.mockResolvedValue(2);
 
       const mockUpdated = [
-        { project_id: 'p1', installment_no: 1, is_exported: true },
-        { project_id: 'p2', installment_no: 2, is_exported: true },
+        {
+          id: 'export-1',
+          project_id: 'p1',
+          installment_no: 1,
+          status: ProjectFinanceExportStatus.EXPORTED,
+        },
+        {
+          id: 'export-2',
+          project_id: 'p2',
+          installment_no: 2,
+          status: ProjectFinanceExportStatus.EXPORTED,
+        },
       ];
 
-      txMock.projectFinanceExport.updateManyAndReturn.mockResolvedValue(mockUpdated);
+      txMock.projectFinanceExport.updateManyAndReturn.mockResolvedValue(
+        mockUpdated as unknown as ProjectFinanceExport[]
+      );
 
       const result = await exportFinanceData(mockUser, exportDto);
 
@@ -194,17 +227,72 @@ describe('project-finance.service', () => {
       expect(txMock.projectFinanceExport.updateManyAndReturn).toHaveBeenCalledWith({
         where: {
           id: { in: exportDto.id },
-          is_exported: false,
+          status: {
+            in: [
+              ProjectFinanceExportStatus.WAITING_EXPORT,
+              ProjectFinanceExportStatus.REQUEST_EDIT,
+            ],
+          },
         },
         data: {
-          is_exported: true,
+          status: ProjectFinanceExportStatus.EXPORTED,
           exported_by: mockUser.id,
           exported_at: new Date('2026-06-01T00:00:00.000Z'),
         },
-        select: {
-          project_id: true,
-          installment_no: true,
-          is_exported: true,
+      });
+    });
+  });
+
+  describe('requestEditInstallment', () => {
+    it('should throw NotFoundError if export record is not found', async () => {
+      txMock.projectFinanceExport.findUnique.mockResolvedValue(null);
+
+      await expect(
+        requestEditInstallment(mockUser, 'non-existent-id', 'Fix details')
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it('should throw BadRequestError if export status is not EXPORTED', async () => {
+      txMock.projectFinanceExport.findUnique.mockResolvedValue({
+        id: 'export-1',
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+      } as ProjectFinanceExport);
+
+      await expect(
+        requestEditInstallment(mockUser, 'export-1', 'Fix details')
+      ).rejects.toThrow(
+        new BadRequestError(
+          'Installment export request must be in EXPORTED status to request edit'
+        )
+      );
+    });
+
+    it('should update status to REQUEST_EDIT and set request_edit_reason', async () => {
+      txMock.projectFinanceExport.findUnique.mockResolvedValue({
+        id: 'export-1',
+        status: ProjectFinanceExportStatus.EXPORTED,
+      } as ProjectFinanceExport);
+
+      const mockUpdated = {
+        id: 'export-1',
+        status: ProjectFinanceExportStatus.REQUEST_EDIT,
+        request_edit_reason: 'Fix details',
+      } as ProjectFinanceExport;
+
+      txMock.projectFinanceExport.update.mockResolvedValue(mockUpdated);
+
+      const result = await requestEditInstallment(
+        mockUser,
+        'export-1',
+        'Fix details'
+      );
+
+      expect(result).toEqual(mockUpdated);
+      expect(txMock.projectFinanceExport.update).toHaveBeenCalledWith({
+        where: { id: 'export-1' },
+        data: {
+          status: ProjectFinanceExportStatus.REQUEST_EDIT,
+          request_edit_reason: 'Fix details',
         },
       });
     });

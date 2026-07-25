@@ -1,5 +1,6 @@
 import {
   ProcurementType,
+  ProjectFinanceExportStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
@@ -206,7 +207,6 @@ describe('project-query.service', () => {
       asset_code: null,
       expected_approval_date: null,
       expected_completion_procurement_date: null,
-      request_edit_reason: null,
       created_at: new Date('2026-06-01T00:00:00.000Z'),
       updated_at: new Date('2026-06-01T00:00:00.000Z'),
       vendor_name: 'Vendor Co',
@@ -471,7 +471,16 @@ describe('project-query.service', () => {
       await getOwnProjects(financeUser, 1, 10, 'waiting_finance_export');
 
       expect(ownProjectWhere()).toEqual({
-        project_finance_export: { some: { is_exported: false } },
+        project_finance_export: {
+          some: {
+            status: {
+              in: [
+                ProjectFinanceExportStatus.WAITING_EXPORT,
+                ProjectFinanceExportStatus.REQUEST_EDIT,
+              ],
+            },
+          },
+        },
       });
     });
 
@@ -481,14 +490,16 @@ describe('project-query.service', () => {
           {
             id: 'partial-export',
             installment_rounds: 2,
-            project_finance_export: [{ installment_no: 1, is_exported: true }],
+            project_finance_export: [
+              { installment_no: 1, status: ProjectFinanceExportStatus.EXPORTED },
+            ],
           },
           {
             id: 'full-export',
             installment_rounds: 2,
             project_finance_export: [
-              { installment_no: 1, is_exported: true },
-              { installment_no: 2, is_exported: true },
+              { installment_no: 1, status: ProjectFinanceExportStatus.EXPORTED },
+              { installment_no: 2, status: ProjectFinanceExportStatus.EXPORTED },
             ],
           },
         ] as any)
@@ -500,7 +511,9 @@ describe('project-query.service', () => {
       expect(prismaMock.project.findMany.mock.calls[0][0].where).toEqual({
         status: { not: ProjectStatus.CLOSED },
         current_workflow_type: UnitResponsibleType.CONTRACT,
-        project_finance_export: { some: { is_exported: true } },
+        project_finance_export: {
+          some: { status: ProjectFinanceExportStatus.EXPORTED },
+        },
       });
       expect(ownProjectWhere()).toEqual({
         AND: [
