@@ -1,4 +1,5 @@
 import {
+  NotificationCategory,
   NotificationPriority,
   Prisma,
   ProjectStatus,
@@ -16,7 +17,6 @@ import {
   NotificationListResponse,
   type NotificationKind,
 } from '../types/notification.type';
-import { NotificationCategory } from '@prisma/client';
 
 export const syncDeadlineNotificationsForUser = async (user: AuthPayload) => {
   const today = new Date();
@@ -204,13 +204,7 @@ export const listNotifications = async (
 
   const hasMore = items.length > query.limit;
   const sliced = hasMore ? items.slice(0, query.limit) : items;
-  const normalized = sliced.sort((a, b) => {
-    if (a.is_read !== b.is_read) return Number(a.is_read) - Number(b.is_read);
-    const priorityDiff =
-      normalizePriorityRank(a.priority) - normalizePriorityRank(b.priority);
-    if (priorityDiff !== 0) return priorityDiff;
-    return b.created_at.getTime() - a.created_at.getTime();
-  });
+  const normalized = sliced;
 
   return {
     items: normalized.map((item) => ({

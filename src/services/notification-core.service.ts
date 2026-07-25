@@ -256,22 +256,20 @@ export const dispatchNotification = async (
     select: { id: true },
   });
 
-  for (const recipient of recipients) {
-    await upsertInAppNotification(tx, recipient.id, input);
-  }
+  await Promise.all(
+    recipients.map((recipient) =>
+      upsertInAppNotification(tx, recipient.id, input)
+    )
+  );
 };
 
 export const wholeDayDiff = (targetDate: Date, now: Date) => {
-  const start = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  ).getTime();
-  const target = new Date(
-    targetDate.getFullYear(),
-    targetDate.getMonth(),
-    targetDate.getDate()
-  ).getTime();
+  const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const target = Date.UTC(
+    targetDate.getUTCFullYear(),
+    targetDate.getUTCMonth(),
+    targetDate.getUTCDate()
+  );
   return Math.round((target - start) / (24 * 60 * 60 * 1000));
 };
 
