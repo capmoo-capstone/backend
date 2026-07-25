@@ -31,6 +31,12 @@ import {
   VendorSubmissionsResponse,
 } from '../types/submission.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+import {
+  notifyApprovalRequired,
+  notifySignatureRequired,
+  notifyVendorSubmissionReceived,
+  notifyWorkflowStepApproved,
+} from './notification-trigger.service';
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
 
@@ -468,6 +474,13 @@ export const createStaffSubmissionsProject = async (
     if (nextStatus === SubmissionStatus.COMPLETED && data.required_updating) {
       await updateProjectForSubmission(tx, project, data.meta_data, user.id);
     }
+    if (nextStatus === SubmissionStatus.WAITING_APPROVAL) {
+      await notifyApprovalRequired(tx, {
+        project_id: submission.project_id,
+        actor_id: user.id,
+        step_order: submission.step_order,
+      });
+    }
     return submission;
   });
 };
@@ -543,6 +556,9 @@ export const createVendorSubmissionsProject = async (
       submission.workflow_type,
       submission.project_id
     );
+    await notifyVendorSubmissionReceived(tx, {
+      project_id: submission.project_id,
+    });
     return submission;
   });
 };
@@ -624,6 +640,20 @@ export const approveSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    if (data.required_signature) {
+      await notifySignatureRequired(tx, {
+        project_id: updated.project_id,
+        actor_id: user.id,
+        step_order: updated.step_order,
+      });
+    } else {
+      await notifyWorkflowStepApproved(tx, {
+        project_id: updated.project_id,
+        actor_id: user.id,
+        submitter_id: submission.submitted_by,
+        step_order: updated.step_order,
+      });
+    }
     return updated;
   });
 };
@@ -735,6 +765,12 @@ export const signAndCompleteSubmission = async (
         user.id
       );
     }
+    await notifyWorkflowStepApproved(tx, {
+      project_id: updated.project_id,
+      actor_id: user.id,
+      submitter_id: submission.submitted_by,
+      step_order: updated.step_order,
+    });
     return updated;
   });
 };

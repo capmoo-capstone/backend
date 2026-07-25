@@ -17,6 +17,7 @@
     "postinstall": "prisma generate",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
+    "notifications:deadlines": "tsx --env-file=.env src/jobs/notification-deadlines.job.ts",
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
     "filegen": "tsx filegen.ts"

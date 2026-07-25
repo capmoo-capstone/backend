@@ -12,6 +12,7 @@ import budgetPlanRoutes from './budget-plan.route';
 import vendorRoutes from './vendor.route';
 import adminRoutes from './admin.route';
 import storageRoutes from './storage.route';
+import notificationRoutes from './notification.route';
 import holidayRoutes from './holiday.route';
 import dashboardRoutes from './dashboard.route';
 import installmentRoutes from './installment.route';
@@ -30,6 +31,7 @@ router.use('/budget-plans', protect, budgetPlanRoutes);
 router.use('/vendors', vendorRoutes);
 router.use('/admin', protect, adminRoutes);
 router.use('/storage', protect, storageRoutes);
+router.use('/notifications', protect, notificationRoutes);
 router.use('/holidays', protect, holidayRoutes);
 router.use('/dashboard', protect, dashboardRoutes);
 

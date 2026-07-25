@@ -16,6 +16,10 @@ import {
   buildDelegationTargetSnapshot,
   recordAuditEvent,
 } from './audit-log.service';
+import {
+  notifyDelegationEnded,
+  notifyDelegationStarted,
+} from './notification-trigger.service';
 import * as UserService from './user.service';
 
 type DelegableRole =
@@ -125,6 +129,15 @@ export const addDelegation = async (
       occurredAt: created.created_at,
     });
 
+    await notifyDelegationStarted(tx, {
+      delegator_id: created.delegator_id,
+      delegatee_id: created.delegatee_id,
+      actor_id: user.id,
+      role_label: created.role ?? 'UNKNOWN',
+      start_date: created.start_date,
+      end_date: created.end_date,
+    });
+
     return created;
   });
 };
@@ -182,6 +195,13 @@ export const cancelDelegation = async (
       sourceTable: 'user_delegations',
       sourceId: updated.id,
       occurredAt: updated.cancelled_at ?? nowUtc(),
+    });
+
+    await notifyDelegationEnded(tx, {
+      delegator_id: updated.delegator_id,
+      delegatee_id: updated.delegatee_id,
+      actor_id: user.id,
+      role_label: updated.role ?? 'UNKNOWN',
     });
 
     return updated;

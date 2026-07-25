@@ -137,6 +137,38 @@ enum UrgentType {
   SUPER_URGENT
 }
 
+enum NotificationCategory {
+  ASSIGNMENTS
+  APPROVALS
+  DEADLINES
+  WORKFLOW_UPDATES
+  CANCELLATIONS
+  DELEGATION
+  VENDOR_SUBMISSIONS
+  FINANCE_HANDOFFS
+  SYSTEM_ACCOUNT
+}
+
+enum NotificationPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL_IMMEDIATE
+  EMAIL_DIGEST
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  SKIPPED
+  FAILED
+}
+
 // --- MODELS ---
 
 model Department {
@@ -194,6 +226,8 @@ model User {
   cancellation_decisions   ProjectCancellation[]  @relation("CancelDecider")
   delegation_creations     UserDelegation[]       @relation("DelegationCreator")
   delegation_cancellations UserDelegation[]       @relation("DelegationCanceller")
+  notifications            Notification[]
+  notification_deliveries  NotificationDelivery[]
 
   @@map("users")
 }
@@ -285,6 +319,7 @@ model Project {
   project_finance_export ProjectFinanceExport[]
   submissions            ProjectSubmission[]
   budget_plans           BudgetPlan[]
+  notifications        Notification[]
 
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
@@ -312,6 +347,59 @@ model ProjectFinanceExport {
   @@unique([project_id, installment_no])
   @@index([status])
   @@map("project_finance_exports")
+}
+
+model Notification {
+  id               String               @id @default(uuid())
+  user_id          String
+  project_id       String?
+  actor_id         String?
+  category         NotificationCategory
+  priority         NotificationPriority
+  title            String
+  body             String
+  target_path      String?
+  action_label     String?
+  requires_action  Boolean              @default(false)
+  is_read          Boolean              @default(false)
+  read_at          DateTime?
+  dedupe_key       String?
+  metadata         Json?
+  created_at       DateTime             @default(now())
+  updated_at       DateTime             @updatedAt
+
+  user       User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  project    Project?              @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([user_id, is_read, created_at(sort: Desc)])
+  @@index([user_id, category, created_at(sort: Desc)])
+  @@index([project_id, created_at(sort: Desc)])
+  @@index([dedupe_key])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id               String                     @id @default(uuid())
+  notification_id  String?
+  user_id          String
+  channel          NotificationChannel
+  status           NotificationDeliveryStatus @default(PENDING)
+  subject          String
+  body             String?
+  dedupe_key       String?
+  error_message    String?
+  sent_at          DateTime?
+  created_at       DateTime                   @default(now())
+  updated_at       DateTime                   @updatedAt
+
+  notification Notification? @relation(fields: [notification_id], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, channel, status, created_at(sort: Desc)])
+  @@index([notification_id])
+  @@index([dedupe_key])
+  @@map("notification_deliveries")
 }
 
 model ProjectContractNumber {
