@@ -13,7 +13,7 @@ import {
   GetOwnProjectsQuerySchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
-  RequestEditProjectSchema,
+  RequestEditInstallmentSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
@@ -406,24 +406,24 @@ export const closeProject = async (
   res.status(200).json(project);
 };
 
-export const requestEditProject = async (
+export const requestEditInstallment = async (
   req: AuthenticatedRequest,
   res: Response
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  // #swagger.requestBody = { schema: { $ref: '#/definitions/RequestEditProjectDto' } }
   const payload = req.user!;
-  const projectId = req.params.id as string;
-  const validatedData = RequestEditProjectSchema.parse({
-    id: projectId,
+  const exportId = req.params.id as string;
+  const validatedData = RequestEditInstallmentSchema.parse({
+    id: exportId,
     ...req.body,
   });
-  const project = await ProjectLifecycleService.requestEditProject(
+  const result = await ProjectFinanceService.requestEditInstallment(
     payload,
-    validatedData
+    validatedData.id,
+    validatedData.reason
   );
-  res.status(200).json(project);
+  res.status(200).json(result);
 };
 
 export const getNewContractNumber = async (

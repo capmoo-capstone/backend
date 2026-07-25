@@ -14,12 +14,14 @@ import adminRoutes from './admin.route';
 import storageRoutes from './storage.route';
 import holidayRoutes from './holiday.route';
 import dashboardRoutes from './dashboard.route';
+import installmentRoutes from './installment.route';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
 router.use('/users', protect, userRoutes);
 router.use('/projects', protect, projectRoutes);
+router.use('/installments', protect, installmentRoutes);
 router.use('/departments', protect, departmentRoutes);
 router.use('/units', protect, unitRoutes);
 router.use('/submissions', protect, submissionRoutes);

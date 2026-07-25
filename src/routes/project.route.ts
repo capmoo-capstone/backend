@@ -84,18 +84,6 @@ router.patch(
   controller.cancelContractNumber
 );
 
-// ── Project Finance ───────────────────────────────────────────────────────────
-router.get(
-  '/finance/export',
-  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getFinanceExportRequest
-);
-router.patch(
-  '/finance/export',
-  requireSupplyRoles([FINANCE_STAFF]),
-  controller.exportFinanceData
-);
-
 // ── Single project ────────────────────────────────────────────────────────────
 router.get('/:id/history', controller.getProjectHistory);
 router.get('/:id/document-summary', controller.getDocumentSummary);
@@ -161,11 +149,6 @@ router.patch(
   controller.closeProject
 );
 
-router.patch(
-  '/:id/request-edit',
-  requireSupplyRoles([FINANCE_STAFF]),
-  controller.requestEditProject
-);
 router.patch(
   '/:id/update',
   requireSupplyRoles([GENERAL_STAFF, DOCUMENT_STAFF, HEAD_OF_UNIT]),
