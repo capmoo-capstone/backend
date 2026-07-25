@@ -42,10 +42,6 @@ export interface CompleteProcurementPhaseResponse extends ProjectIdStatusRespons
 
 export type CompleteContractPhaseResponse = ProjectIdStatusResponse;
 
-export interface RequestEditProjectResponse extends ProjectIdStatusResponse {
-  request_edit_reason: string | null;
-}
-
 export interface ProjectDetailsResponse {
   id: string;
   procurement_type: ProcurementType;
@@ -74,7 +70,6 @@ export interface ProjectDetailsResponse {
   asset_code: boolean | null;
   expected_approval_date: Date | null;
   expected_completion_procurement_date: Date | null;
-  request_edit_reason: string | null;
   created_at: Date;
   updated_at: Date | null;
   vendor: {

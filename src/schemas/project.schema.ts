@@ -80,7 +80,7 @@ export const CancelProjectSchema = z.object({
   reason: z.string(),
 });
 
-export const RequestEditProjectSchema = z.object({
+export const RequestEditInstallmentSchema = z.object({
   id: z.uuid(),
   reason: z.string(),
 });
@@ -163,7 +163,9 @@ export type CompleteProcurementPhaseDto = z.infer<
 >;
 export type CompleteInstallmentDto = z.infer<typeof CompleteInstallmentSchema>;
 export type CancelProjectDto = z.infer<typeof CancelProjectSchema>;
-export type RequestEditProjectDto = z.infer<typeof RequestEditProjectSchema>;
+export type RequestEditInstallmentDto = z.infer<
+  typeof RequestEditInstallmentSchema
+>;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
 export type ExportFinanceDataDto = z.infer<typeof ExportFinanceDataSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<

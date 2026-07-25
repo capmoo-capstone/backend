@@ -32,7 +32,6 @@ export interface DashboardChartPoint {
 
 export interface DashboardStatusPoint {
   status: ProjectStatus | 'NOT_STARTED';
-  label: string;
   count: number;
 }
 
@@ -59,7 +58,6 @@ export interface ProcurementOverviewResponse {
   };
   procurementTypes: Array<{
     type: ProcurementType;
-    label: string;
     count: number;
   }>;
   statusBar: DashboardStatusPoint[];
