@@ -3,8 +3,11 @@ import {
   DeadlinesQuerySchema,
   PeriodicSummaryQuerySchema,
   ProcurementOverviewQuerySchema,
+  UnitGroupOverviewQuerySchema,
+  UnitGroupProcurementQuerySchema,
+  UnitGroupTopDelayedQuerySchema,
 } from '../schemas/dashboard.schema';
-import * as DashboardService from '../services/dashboard.service';
+import * as DashboardService from '../services/dashboard/dashboard.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 
 export const getPeriodicSummary = async (
@@ -59,5 +62,65 @@ export const getDueSoonDeadlines = async (
   const payload = req.user!;
   const query = DeadlinesQuerySchema.parse(req.query);
   const data = await DashboardService.getDueSoonDeadlines(payload, query);
+  res.status(200).json(data);
+};
+
+export const getUnitGroupExecutiveSummary = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupOverviewQuerySchema.parse(req.query);
+  const data = await DashboardService.getUnitGroupExecutiveSummary(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
+export const getUnitGroupProcurementMetrics = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupProcurementQuerySchema.parse(req.query);
+  const data = await DashboardService.getUnitGroupProcurementMetrics(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
+export const getUnitGroupProcurementDetails = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupProcurementQuerySchema.parse(req.query);
+  const data = await DashboardService.getUnitGroupProcurementDetails(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
+export const getUnitGroupTopDelayedProjects = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupTopDelayedQuerySchema.parse(req.query);
+  const data = await DashboardService.getUnitGroupTopDelayedProjects(
+    payload,
+    query
+  );
   res.status(200).json(data);
 };

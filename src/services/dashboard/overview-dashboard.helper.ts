@@ -5,30 +5,30 @@ import {
   ProjectStatus,
   UserRole,
 } from '@prisma/client';
-import { prisma } from '../config/prisma';
+import { prisma } from '../../config/prisma';
 import {
   IN_PROGRESS_STATUSES,
   PROCUREMENT_WORKFLOW_TYPES,
-} from '../lib/constant';
-import { ForbiddenError } from '../lib/errors';
+} from '../../lib/constant';
+import { ForbiddenError } from '../../lib/errors';
 import {
   getUnitIdsForUser,
   haveSupplyPermission,
   isSuperAdmin,
-} from '../lib/permissions';
+} from '../../lib/permissions';
 import {
   addBangkokDays,
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
   toBangkokParts,
-} from '../lib/date';
+} from '../../lib/date';
 import {
   DeadlinesQuery,
   PeriodicSummaryQuery,
   ProcurementOverviewQuery,
-} from '../schemas/dashboard.schema';
-import { AuthPayload } from '../types/auth.type';
+} from '../../schemas/dashboard.schema';
+import { AuthPayload } from '../../types/auth.type';
 import {
   DashboardMetricComparison,
   DashboardStatusPoint,
@@ -37,41 +37,39 @@ import {
   OverdueProjectRow,
   PeriodicSummaryResponse,
   ProcurementOverviewResponse,
-} from '../types/dashboard.type';
-import { PaginatedResponse } from '../types/common.type';
+} from '../../types/dashboard.type';
+import { PaginatedResponse } from '../../types/common.type';
+import {
+  DAY_MS,
+  DEFAULT_FISCAL_YEAR_OFFSET,
+  DateRange,
+  fiscalYearToGregorianEndYear,
+  currentFiscalYear,
+  fiscalYearRange,
+  currentFiscalYearStart,
+  daysBetweenBangkokDates,
+  andWhere,
+  projectRangeWhere,
+  toComparison,
+  getProcurementTypeDonut,
+} from './dashboard.helper';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_FISCAL_YEAR_OFFSET = 543;
-
-type DateRange = {
-  from: Date;
-  to: Date;
+export {
+  DAY_MS,
+  DEFAULT_FISCAL_YEAR_OFFSET,
+  DateRange,
+  fiscalYearToGregorianEndYear,
+  currentFiscalYear,
+  fiscalYearRange,
+  currentFiscalYearStart,
+  daysBetweenBangkokDates,
+  andWhere,
+  projectRangeWhere,
+  toComparison,
+  getProcurementTypeDonut,
 };
 
-const fiscalYearToGregorianEndYear = (fiscalYear: number): number =>
-  fiscalYear > 2400 ? fiscalYear - DEFAULT_FISCAL_YEAR_OFFSET : fiscalYear;
-
-const currentFiscalYear = (now = nowUtc()): number => {
-  const parts = toBangkokParts(now);
-  const gregorianEndYear = parts.month >= 10 ? parts.year + 1 : parts.year;
-  return gregorianEndYear + DEFAULT_FISCAL_YEAR_OFFSET;
-};
-
-const fiscalYearRange = (fiscalYear: number): DateRange => {
-  const endYear = fiscalYearToGregorianEndYear(fiscalYear);
-  return {
-    from: fromBangkokDate(endYear - 1, 10, 1),
-    to: fromBangkokDate(endYear, 9, 30, true),
-  };
-};
-
-const currentFiscalYearStart = (now = nowUtc()): Date => {
-  const parts = toBangkokParts(now);
-  const startYear = parts.month >= 10 ? parts.year : parts.year - 1;
-  return fromBangkokDate(startYear, 10, 1);
-};
-
-const getPeriodicRanges = (
+export const getPeriodicRanges = (
   period: PeriodicSummaryQuery['period'],
   now = nowUtc()
 ): { current: DateRange; previous: DateRange } => {
@@ -138,7 +136,7 @@ const getPeriodicRanges = (
   };
 };
 
-const getOverviewRange = (
+export const getOverviewRange = (
   query: ProcurementOverviewQuery,
   now = nowUtc()
 ): { range: DateRange; fiscalYear: number } => {
@@ -193,7 +191,9 @@ const getOverviewRange = (
   };
 };
 
-const buildVisibilityWhere = (user: AuthPayload): Prisma.ProjectWhereInput => {
+export const buildVisibilityWhere = (
+  user: AuthPayload
+): Prisma.ProjectWhereInput => {
   if (haveSupplyPermission(user)) {
     return {};
   }
@@ -204,31 +204,7 @@ const buildVisibilityWhere = (user: AuthPayload): Prisma.ProjectWhereInput => {
     : { id: { in: [] } };
 };
 
-const andWhere = (
-  ...clauses: Prisma.ProjectWhereInput[]
-): Prisma.ProjectWhereInput => {
-  const filtered = clauses
-    .filter((clause) => Object.keys(clause).length > 0)
-    .flatMap((clause) => {
-      const maybeAnd = clause as { AND?: Prisma.ProjectWhereInput[] };
-      return Object.keys(clause).length === 1 && Array.isArray(maybeAnd.AND)
-        ? maybeAnd.AND
-        : [clause];
-    });
-  if (filtered.length === 0) return {};
-  if (filtered.length === 1) return filtered[0];
-  return { AND: filtered };
-};
-
-const projectRangeWhere = (
-  visibilityWhere: Prisma.ProjectWhereInput,
-  range: DateRange
-): Prisma.ProjectWhereInput =>
-  andWhere(visibilityWhere, {
-    created_at: { gte: range.from, lte: range.to },
-  });
-
-const completedHistoryWhere = (
+export const completedHistoryWhere = (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange
 ): Prisma.ProjectHistoryWhereInput => ({
@@ -241,7 +217,7 @@ const completedHistoryWhere = (
   project: visibilityWhere,
 });
 
-const pendingWorkWhere = (
+export const pendingWorkWhere = (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange
 ): Prisma.ProjectWhereInput =>
@@ -249,20 +225,6 @@ const pendingWorkWhere = (
     status: { in: IN_PROGRESS_STATUSES },
   });
 
-const toComparison = (
-  current: number,
-  previous: number
-): DashboardMetricComparison => {
-  const change = current - previous;
-  return {
-    current,
-    previous,
-    change,
-    trend: change > 0 ? 'increase' : change < 0 ? 'decrease' : 'same',
-  };
-};
-//////////////////////////////////////////////////////////////////////////
-// Periodic Summary
 export const getPeriodicSummary = async (
   user: AuthPayload,
   query: PeriodicSummaryQuery
@@ -307,8 +269,7 @@ export const getPeriodicSummary = async (
     pendingWork: toComparison(currentPending, previousPending),
   };
 };
-//////////////////////////////////////////////////////////////////////////
-// Procurement Overview
+
 const statusWhere = (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange,
@@ -372,28 +333,6 @@ const getStatusBuckets = async (
   }));
 };
 
-const getProcurementTypeDonut = async (
-  visibilityWhere: Prisma.ProjectWhereInput,
-  range: DateRange,
-  types?: ProcurementType[]
-) => {
-  const typeFilters = types || Object.values(ProcurementType);
-  const counts = await prisma.$transaction(
-    typeFilters.map((type) =>
-      prisma.project.count({
-        where: andWhere(projectRangeWhere(visibilityWhere, range), {
-          procurement_type: type,
-        }),
-      })
-    )
-  );
-
-  return types.map((type, index) => ({
-    type,
-    count: counts[index],
-  }));
-};
-
 const getBudgetInvestmentDonut = async (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange
@@ -410,7 +349,12 @@ const getBudgetInvestmentDonut = async (
   });
 
   return rows.map((row) => ({
-    category: row.budget_name,
+    category:
+      (row as unknown as { budget_name?: string; activity_type_name?: string })
+        .budget_name ??
+      (row as unknown as { budget_name?: string; activity_type_name?: string })
+        .activity_type_name ??
+      '',
     planCount: row._count._all,
     amount: row._sum.budget_amount ?? 0,
   }));
@@ -516,8 +460,7 @@ export const getProcurementOverview = async (
     timeline,
   };
 };
-//////////////////////////////////////////////////////////////////////////
-// Deadline Chart
+
 const canViewDeadlines = (user: AuthPayload): boolean => {
   if (isSuperAdmin(user)) return true;
   if (!haveSupplyPermission(user)) return false;
@@ -527,14 +470,6 @@ const canViewDeadlines = (user: AuthPayload): boolean => {
       role.role === UserRole.HEAD_OF_UNIT ||
       role.role === UserRole.HEAD_OF_DEPARTMENT
   );
-};
-
-const daysBetweenBangkokDates = (from: Date, to: Date): number => {
-  const fromParts = toBangkokParts(from);
-  const toParts = toBangkokParts(to);
-  const fromDate = Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day);
-  const toDate = Date.UTC(toParts.year, toParts.month - 1, toParts.day);
-  return Math.ceil((toDate - fromDate) / DAY_MS);
 };
 
 const dueSoonPriority = (daysRemaining: number): DeadlinePriority => {
@@ -665,4 +600,4 @@ export const getDueSoonDeadlines = async (
     data: rows,
   };
 };
-//////////////////////////////////////////////////////////////////////////
+

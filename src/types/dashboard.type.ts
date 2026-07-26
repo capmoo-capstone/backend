@@ -86,3 +86,75 @@ export interface DueSoonProjectRow extends DeadlineProjectRow {
 export interface OverdueProjectResponse extends PaginatedResponse<OverdueProjectRow> {}
 
 export interface DueSoonProjectResponse extends PaginatedResponse<DueSoonProjectRow> {}
+
+// --- Unit Group KPI Dashboard Types ---
+
+export interface WorkloadVsDurationPoint {
+  label: string;
+  from: Date;
+  to: Date;
+  workloadCount: number;
+  avgDurationDays: number;
+}
+
+export interface UnitGroupExecutiveSummaryResponse {
+  unitId: string;
+  fiscalYear: number;
+  mode: 'month' | 'quarter' | 'fiscalYear';
+  range: { from: Date; to: Date };
+  longestProcurementMethod: ProcurementType | null;
+  avgDurationDays: DashboardMetricComparison;
+  onTimeCompletionPercentage: DashboardMetricComparison;
+  workloadVsDurationTimeline: WorkloadVsDurationPoint[];
+}
+
+export interface UnitGroupProcurementMetricsResponse {
+  unitId: string;
+  totalProjects: {
+    total: number;
+    byProcurementType: Array<{ type: ProcurementType; count: number }>;
+  };
+  delayedProjects: {
+    total: number;
+    byProcurementType: Array<{ type: ProcurementType; count: number }>;
+  };
+}
+
+export interface ProcurementMethodDetailItem {
+  procurementType: ProcurementType;
+  delayedCount: number;
+  totalCount: number;
+  delayedPercentage: number;
+  comparisonTrend: DashboardTrend;
+  statusDistribution: Array<{ status: ProjectStatus | 'NOT_STARTED'; count: number }>;
+  avgPhaseDurationDays: {
+    procurementPhaseDays: number;
+    contractPhaseDays: number;
+  };
+}
+
+export interface UnitGroupProcurementDetailsResponse {
+  unitId: string;
+  methods: ProcurementMethodDetailItem[];
+}
+
+export interface TopDelayedProjectItem {
+  projectId: string;
+  title: string;
+  procurementType: ProcurementType;
+  totalDays: number;
+  stageBreakdownDays: {
+    taskAssignmentDays: number;
+    procurementPhaseDays: number;
+    contractPhaseDays: number;
+    inspectionApprovalDays: number;
+    revisionDays: number;
+  };
+}
+
+export interface UnitGroupTopDelayedProjectsResponse {
+  unitId: string;
+  procurementTypeFilter: ProcurementType | null;
+  projects: TopDelayedProjectItem[];
+}
+

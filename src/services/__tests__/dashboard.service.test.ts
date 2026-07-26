@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
+import * as DashboardService from '../dashboard/dashboard.service';
 import {
   getDueSoonDeadlines,
   getOverdueDeadlines,
   getPeriodicSummary,
   getProcurementOverview,
-} from '../dashboard.service';
+} from '../dashboard/dashboard.service';
 
 const supplyUser: AuthPayload = {
   token: 'token',
@@ -252,8 +253,14 @@ describe('dashboard.service', () => {
       ]);
     prismaMock.project.count.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
 
-    const overdue = await getOverdueDeadlines(staffUser, { page: 1, limit: 10 });
-    const dueSoon = await getDueSoonDeadlines(staffUser, { page: 1, limit: 10 });
+    const overdue = await getOverdueDeadlines(staffUser, {
+      page: 1,
+      limit: 10,
+    });
+    const dueSoon = await getDueSoonDeadlines(staffUser, {
+      page: 1,
+      limit: 10,
+    });
 
     expect(overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
     expect(dueSoon.data.map((row) => row.priority)).toEqual([
@@ -272,5 +279,104 @@ describe('dashboard.service', () => {
     await expect(
       getOverdueDeadlines(externalUser, { page: 1, limit: 10 })
     ).rejects.toThrowError('You do not have permission to view deadlines');
+  });
+
+  describe('Unit Group KPI Dashboard', () => {
+    it('returns executive summary metrics for unit staff', async () => {
+      prismaMock.project.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'p1',
+            procurement_type: ProcurementType.LT100K,
+            status: ProjectStatus.CLOSED,
+            created_at: new Date('2026-07-01T00:00:00.000Z'),
+            updated_at: new Date('2026-07-10T00:00:00.000Z'),
+            expected_completion_procurement_date: new Date(
+              '2026-07-15T00:00:00.000Z'
+            ),
+          },
+          {
+            id: 'p2',
+            procurement_type: ProcurementType.LT500K,
+            status: ProjectStatus.IN_PROGRESS,
+            created_at: new Date('2026-07-05T00:00:00.000Z'),
+            updated_at: null,
+            expected_completion_procurement_date: null,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const result = await DashboardService.getUnitGroupExecutiveSummary(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          mode: 'fiscalYear',
+        }
+      );
+
+      expect(result.unitId).toBe('unit-proc');
+      expect(result.longestProcurementMethod).toBe(ProcurementType.LT100K);
+      expect(result.onTimeCompletionPercentage.current).toBe(100);
+      expect(result.workloadVsDurationTimeline.length).toBeGreaterThan(0);
+    });
+
+    it('returns procurement metrics donut distributions', async () => {
+      prismaMock.project.count
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0);
+
+      const result = await DashboardService.getUnitGroupProcurementMetrics(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          mode: 'fiscalYear',
+        }
+      );
+
+      expect(result.unitId).toBe('unit-proc');
+      expect(result.totalProjects.total).toBe(1);
+      expect(result.delayedProjects.total).toBe(1);
+    });
+
+    it('returns top delayed projects stage breakdown', async () => {
+      prismaMock.project.findMany.mockResolvedValueOnce([
+        {
+          id: 'p-delayed-1',
+          title: 'Delayed Project 1',
+          procurement_type: ProcurementType.LT100K,
+          created_at: new Date('2026-06-01T00:00:00.000Z'),
+          expected_completion_procurement_date: new Date(
+            '2026-07-01T00:00:00.000Z'
+          ),
+        },
+      ]);
+
+      const result = await DashboardService.getUnitGroupTopDelayedProjects(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          limit: 5,
+        }
+      );
+
+      expect(result.projects).toHaveLength(1);
+      expect(result.projects[0].projectId).toBe('p-delayed-1');
+      expect(result.projects[0].stageBreakdownDays).toHaveProperty(
+        'taskAssignmentDays'
+      );
+      expect(result.projects[0].stageBreakdownDays).toHaveProperty(
+        'procurementPhaseDays'
+      );
+    });
   });
 });
