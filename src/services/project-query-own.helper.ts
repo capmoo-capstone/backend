@@ -1,5 +1,6 @@
 import {
   Prisma,
+  ProjectFinanceExportStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
@@ -280,7 +281,18 @@ const roleTabWhere = (
       return andWhere(
         scope.where,
         orWhere([
-          { project_finance_export: { some: { is_exported: false } } },
+          {
+            project_finance_export: {
+              some: {
+                status: {
+                  in: [
+                    ProjectFinanceExportStatus.WAITING_EXPORT,
+                    ProjectFinanceExportStatus.REQUEST_EDIT,
+                  ],
+                },
+              },
+            },
+          },
           financeCloseWhere(waitingCloseProjectIds),
         ])
       );
@@ -345,7 +357,16 @@ const roleTabWhere = (
   if (scope.role === UserRole.FINANCE_STAFF) {
     if (tab === 'waiting_finance_export') {
       return andWhere(scope.where, {
-        project_finance_export: { some: { is_exported: false } },
+        project_finance_export: {
+          some: {
+            status: {
+              in: [
+                ProjectFinanceExportStatus.WAITING_EXPORT,
+                ProjectFinanceExportStatus.REQUEST_EDIT,
+              ],
+            },
+          },
+        },
       });
     }
     if (tab === 'waiting_close_project') {
@@ -361,13 +382,15 @@ const getWaitingCloseProjectIds = async (): Promise<string[]> => {
     where: {
       status: { not: ProjectStatus.CLOSED },
       current_workflow_type: UnitResponsibleType.CONTRACT,
-      project_finance_export: { some: { is_exported: true } },
+      project_finance_export: {
+        some: { status: ProjectFinanceExportStatus.EXPORTED },
+      },
     },
     select: {
       id: true,
       installment_rounds: true,
       project_finance_export: {
-        where: { is_exported: true },
+        where: { status: ProjectFinanceExportStatus.EXPORTED },
         select: { installment_no: true },
       },
     },

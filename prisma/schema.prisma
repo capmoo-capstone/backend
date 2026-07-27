@@ -32,6 +32,11 @@ enum ProjectStatus {
   WAITING_CANCEL
   CANCELLED
   CLOSED
+}
+
+enum ProjectFinanceExportStatus {
+  WAITING_EXPORT
+  EXPORTED
   REQUEST_EDIT
 }
 
@@ -263,7 +268,6 @@ model Project {
   asset_code                           Boolean?
   vendor_name                          String?
   vendor_email                         String?
-  request_edit_reason                  String?
   created_by                           String
   created_at                           DateTime            @default(now())
   updated_at                           DateTime?           @updatedAt
@@ -291,21 +295,22 @@ model Project {
 }
 
 model ProjectFinanceExport {
-  id             String    @id @default(uuid())
-  project_id     String
-  installment_no Int
-  is_exported    Boolean   @default(false)
-  created_by     String
-  created_at     DateTime  @default(now())
-  exported_by    String?
-  exported_at    DateTime?
+  id                  String                     @id @default(uuid())
+  project_id          String
+  installment_no      Int
+  status              ProjectFinanceExportStatus @default(WAITING_EXPORT)
+  request_edit_reason String?
+  created_by          String
+  created_at          DateTime                   @default(now())
+  exported_by         String?
+  exported_at         DateTime?
 
   project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
   exporter User?   @relation("ProjectFinanceExporter", fields: [exported_by], references: [id])
   creator  User    @relation("ProjectFinanceExportCreator", fields: [created_by], references: [id])
 
   @@unique([project_id, installment_no])
-  @@index([is_exported])
+  @@index([status])
   @@map("project_finance_exports")
 }
 

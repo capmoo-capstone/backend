@@ -16,7 +16,6 @@ import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,
-  RequestEditProjectDto,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
@@ -24,7 +23,6 @@ import {
   CompleteProcurementPhaseResponse,
   ProjectCancellationResponse,
   ProjectIdStatusResponse,
-  RequestEditProjectResponse,
 } from '../types/project.type';
 import {
   AuditFieldDiff,
@@ -537,19 +535,11 @@ export const closeProject = async (
     if (!project) {
       throw new NotFoundError('Project not found');
     }
-    const closableStatuses: ProjectStatus[] = [
-      ProjectStatus.IN_PROGRESS,
-      ProjectStatus.REQUEST_EDIT,
-    ];
-
-    if (!closableStatuses.includes(project.status)) {
+    if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError(
-        'Project cannot be closed unless it is in IN_PROGRESS or REQUEST_EDIT status'
+        'Project cannot be closed unless it is in IN_PROGRESS status'
       );
     }
-    // if (project.contract_phase !== ProjectPhaseStatus.COMPLETED) {
-    //   throw new BadRequestError('Contract phase is not in COMPLETED status');
-    // }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {
       throw new BadRequestError('Project is not in CONTRACT workflow type');
     }
@@ -573,42 +563,6 @@ export const closeProject = async (
       changedBy: user,
     });
 
-    return updated;
-  });
-};
-
-export const requestEditProject = async (
-  user: AuthPayload,
-  data: RequestEditProjectDto
-): Promise<RequestEditProjectResponse> => {
-  return await prisma.$transaction(async (tx) => {
-    const project = await tx.project.findUnique({
-      where: { id: data.id },
-      select: { status: true },
-    });
-    if (!project) {
-      throw new NotFoundError('Project not found');
-    }
-    if (project.status !== ProjectStatus.CLOSED) {
-      throw new BadRequestError('Project is not in CLOSED status');
-    }
-
-    const updated = await tx.project.update({
-      where: { id: data.id },
-      data: {
-        status: ProjectStatus.REQUEST_EDIT,
-        request_edit_reason: data.reason,
-      },
-      select: { id: true, status: true, request_edit_reason: true },
-    });
-
-    await createProjectHistoryAndAuditEvent(tx, {
-      projectId: data.id,
-      action: ProjectActionType.STATUS_UPDATE,
-      oldValue: { status: project.status },
-      newValue: { status: updated.status, request_edit_reason: data.reason },
-      changedBy: user,
-    });
     return updated;
   });
 };

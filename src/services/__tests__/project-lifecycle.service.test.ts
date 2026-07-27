@@ -8,7 +8,6 @@ import {
   closeProject,
   completeProcurementPhase,
   rejectCancellation,
-  requestEditProject,
 } from '../project-lifecycle.service';
 
 const staffUser = {
@@ -225,26 +224,5 @@ describe('project-lifecycle.service', () => {
     const result = await closeProject(headUser, 'project-1');
 
     expect(result.status).toBe(ProjectStatus.CLOSED);
-  });
-
-  it('requestEditProject reopens closed projects with a reason', async () => {
-    txMock.project.findUnique.mockResolvedValue({
-      status: ProjectStatus.CLOSED,
-    });
-    txMock.project.update.mockResolvedValue({
-      id: 'project-1',
-      status: ProjectStatus.REQUEST_EDIT,
-      request_edit_reason: 'Fix vendor details',
-    });
-
-    const result = await requestEditProject(headUser, {
-      id: 'project-1',
-      reason: 'Fix vendor details',
-    });
-
-    expect(result).toMatchObject({
-      status: ProjectStatus.REQUEST_EDIT,
-      request_edit_reason: 'Fix vendor details',
-    });
   });
 });

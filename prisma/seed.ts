@@ -2,6 +2,7 @@ import {
   ProcurementType,
   ProjectActionType,
   ProjectCancellationStatus,
+  ProjectFinanceExportStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
@@ -510,7 +511,6 @@ const createProject = async (data: {
   migo105No?: string;
   vendorName?: string;
   vendorEmail?: string;
-  requestEditReason?: string;
   procurementAssigneeIds?: string[];
   contractAssigneeIds?: string[];
 }) => {
@@ -554,7 +554,6 @@ const createProject = async (data: {
       migo_105_no: data.migo105No,
       vendor_name: data.vendorName,
       vendor_email: data.vendorEmail,
-      request_edit_reason: data.requestEditReason,
       assignee_procurement:
         data.procurementAssigneeIds && data.procurementAssigneeIds.length > 0
           ? { connect: data.procurementAssigneeIds.map((id) => ({ id })) }
@@ -936,14 +935,14 @@ const seedProjects = async () => {
     procurementAssigneeIds: [ids.users.procurementLt],
   });
 
-  // 11. REQUEST_EDIT — both phases completed
+  // 11. Closed project with completed contract phase
   await createProject({
     id: ids.projects.requestEdit,
     receiveSuffix: 11,
     title: 'User Testing - Edited projector purchase',
-    description: 'REQUEST_EDIT project with a requester-provided reason.',
+    description: 'Closed project with completed contract phase.',
     budget: 155000,
-    status: ProjectStatus.REQUEST_EDIT,
+    status: ProjectStatus.CLOSED,
     procurementType: ProcurementType.LT500K,
     workflowType: UnitResponsibleType.CONTRACT,
     requestingDeptId: 'DEPT-STUAFF',
@@ -951,7 +950,6 @@ const seedProjects = async () => {
     createdBy: ids.users.libraryStaff,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: COMPLETED_PHASE,
-    requestEditReason: 'Requester needs to update warranty details.',
     prNo: `${fy}-PR-UT-11`,
     poNo: `${fy}-PO-UT-11`,
     procurementAssigneeIds: [ids.users.procurementLt],
@@ -1045,17 +1043,6 @@ const seedCancellationsAndHistory = async () => {
         changed_by: ids.users.supplyHead,
         changed_at: daysFromNow(-7),
       },
-      {
-        project_id: ids.projects.requestEdit,
-        action: ProjectActionType.STATUS_UPDATE,
-        old_value: { status: ProjectStatus.CLOSED },
-        new_value: {
-          status: ProjectStatus.REQUEST_EDIT,
-          request_edit_reason: 'Requester needs to update warranty details.',
-        },
-        changed_by: ids.users.libraryStaff,
-        changed_at: daysFromNow(-4),
-      },
     ],
   });
 };
@@ -1111,6 +1098,36 @@ const seedBudgetPlans = async () => {
   });
 };
 
+const seedFinanceExports = async () => {
+  await prisma.projectFinanceExport.createMany({
+    data: [
+      {
+        project_id: ids.projects.contractActive,
+        installment_no: 1,
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        created_by: ids.users.facilitiesRep,
+      },
+      {
+        project_id: ids.projects.requestEdit,
+        installment_no: 1,
+        status: ProjectFinanceExportStatus.EXPORTED,
+        created_by: ids.users.libraryStaff,
+        exported_by: ids.users.financeStaff,
+        exported_at: daysFromNow(-2),
+      },
+      {
+        project_id: ids.projects.requestEdit,
+        installment_no: 2,
+        status: ProjectFinanceExportStatus.REQUEST_EDIT,
+        request_edit_reason: 'Requester needs to update warranty details.',
+        created_by: ids.users.libraryStaff,
+        exported_by: ids.users.financeStaff,
+        exported_at: daysFromNow(-3),
+      },
+    ],
+  });
+};
+
 async function main() {
   console.log('--- Start User Testing Seed ---');
   await cleanup();
@@ -1121,6 +1138,7 @@ async function main() {
   await seedProjects();
   await seedCancellationsAndHistory();
   await seedBudgetPlans();
+  await seedFinanceExports();
 
   console.log('--- User Testing Seed Completed ---');
 }

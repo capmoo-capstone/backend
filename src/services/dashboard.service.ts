@@ -44,26 +44,6 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_FISCAL_YEAR_OFFSET = 543;
 
-const PROCUREMENT_TYPE_LABELS: Record<ProcurementType, string> = {
-  [ProcurementType.LT100K]: 'ต่ำกว่า 100,000',
-  [ProcurementType.LT500K]: '100,000 - 500,000',
-  [ProcurementType.MT500K]: 'มากกว่า 500,000',
-  [ProcurementType.SELECTION]: 'วิธีคัดเลือก',
-  [ProcurementType.EBIDDING]: 'e-bidding',
-  [ProcurementType.INTERNAL]: 'ภายในหน่วยงาน',
-};
-
-const STATUS_LABELS: Record<ProjectStatus | 'NOT_STARTED', string> = {
-  [ProjectStatus.UNASSIGNED]: 'ยังไม่ได้มอบหมาย',
-  [ProjectStatus.WAITING_ACCEPT]: 'รอการตอบรับ',
-  [ProjectStatus.IN_PROGRESS]: 'กำลังดำเนินการ',
-  [ProjectStatus.WAITING_CANCEL]: 'รอยกเลิก',
-  [ProjectStatus.CANCELLED]: 'ยกเลิก',
-  [ProjectStatus.CLOSED]: 'เสร็จสิ้น',
-  [ProjectStatus.REQUEST_EDIT]: 'รอแก้ไข',
-  NOT_STARTED: 'ยังไม่เริ่ม',
-};
-
 type DateRange = {
   from: Date;
   to: Date;
@@ -387,7 +367,6 @@ const getStatusBuckets = async (
 
   return statuses.map((status, index) => ({
     status,
-    label: STATUS_LABELS[status],
     count: counts[index],
   }));
 };
@@ -409,7 +388,6 @@ const getProcurementTypeBuckets = async (
 
   return types.map((type, index) => ({
     type,
-    label: PROCUREMENT_TYPE_LABELS[type],
     count: counts[index],
   }));
 };
