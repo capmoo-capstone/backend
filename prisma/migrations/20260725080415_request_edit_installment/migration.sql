@@ -11,6 +11,7 @@ CREATE TYPE "ProjectFinanceExportStatus" AS ENUM ('WAITING_EXPORT', 'EXPORTED', 
 
 -- AlterEnum
 BEGIN;
+UPDATE "projects" SET "status" = 'CLOSED' WHERE "status" = 'REQUEST_EDIT';
 CREATE TYPE "ProjectStatus_new" AS ENUM ('UNASSIGNED', 'WAITING_ACCEPT', 'IN_PROGRESS', 'WAITING_CANCEL', 'CANCELLED', 'CLOSED');
 ALTER TABLE "projects" ALTER COLUMN "status" TYPE "ProjectStatus_new" USING ("status"::text::"ProjectStatus_new");
 ALTER TYPE "ProjectStatus" RENAME TO "ProjectStatus_old";
@@ -22,9 +23,14 @@ COMMIT;
 DROP INDEX "project_finance_exports_is_exported_idx";
 
 -- AlterTable
-ALTER TABLE "project_finance_exports" DROP COLUMN "is_exported",
+ALTER TABLE "project_finance_exports"
 ADD COLUMN     "request_edit_reason" TEXT,
 ADD COLUMN     "status" "ProjectFinanceExportStatus" NOT NULL DEFAULT 'WAITING_EXPORT';
+ 
+-- Data migration: preserve exported state from the old boolean column
+UPDATE "project_finance_exports"
+SET "status" = CASE WHEN "is_exported" THEN 'EXPORTED' ELSE 'WAITING_EXPORT' END;
+ALTER TABLE "project_finance_exports" DROP COLUMN "is_exported";
 
 -- AlterTable
 ALTER TABLE "projects" DROP COLUMN "request_edit_reason";

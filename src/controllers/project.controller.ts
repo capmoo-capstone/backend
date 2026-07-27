@@ -415,8 +415,8 @@ export const requestEditInstallment = async (
   const payload = req.user!;
   const exportId = req.params.id as string;
   const validatedData = RequestEditInstallmentSchema.parse({
-    id: exportId,
     ...req.body,
+    id: exportId,
   });
   const result = await ProjectFinanceService.requestEditInstallment(
     payload,
