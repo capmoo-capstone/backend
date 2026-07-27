@@ -473,8 +473,8 @@ const canViewDeadlines = (user: AuthPayload): boolean => {
 };
 
 const dueSoonPriority = (daysRemaining: number): DeadlinePriority => {
-  if (daysRemaining <= 5) return 'URGENT';
-  if (daysRemaining <= 7) return 'WATCH';
+  if (daysRemaining <= 3) return 'URGENT';
+  if (daysRemaining <= 5) return 'WATCH';
   return 'NORMAL';
 };
 
@@ -495,7 +495,10 @@ export const getOverdueDeadlines = async (
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
     status: {
-      notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED],
+      in: IN_PROGRESS_STATUSES,
+    },
+    current_workflow_type: {
+      in: PROCUREMENT_WORKFLOW_TYPES,
     },
     expected_completion_procurement_date: { not: null },
   };
@@ -551,12 +554,15 @@ export const getDueSoonDeadlines = async (
     const parts = toBangkokParts(now);
     return fromBangkokDate(parts.year, parts.month, parts.day);
   })();
-  const dueSoonEnd = addBangkokDays(today, 10, true);
+  const dueSoonEnd = addBangkokDays(today, 7, true);
   const skip = (query.page - 1) * query.limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
     status: {
-      notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED],
+      in: IN_PROGRESS_STATUSES,
+    },
+    current_workflow_type: {
+      in: PROCUREMENT_WORKFLOW_TYPES,
     },
     expected_completion_procurement_date: { not: null },
   };
@@ -600,4 +606,3 @@ export const getDueSoonDeadlines = async (
     data: rows,
   };
 };
-

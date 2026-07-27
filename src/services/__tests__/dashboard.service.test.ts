@@ -233,21 +233,21 @@ describe('dashboard.service', () => {
           id: 'soon-1',
           title: 'Urgent',
           expected_completion_procurement_date: new Date(
-            '2026-07-16T17:00:00.000Z'
+            '2026-07-14T17:00:00.000Z'
           ),
         },
         {
           id: 'soon-2',
           title: 'Watch',
           expected_completion_procurement_date: new Date(
-            '2026-07-18T17:00:00.000Z'
+            '2026-07-16T17:00:00.000Z'
           ),
         },
         {
           id: 'soon-3',
           title: 'Normal',
           expected_completion_procurement_date: new Date(
-            '2026-07-21T17:00:00.000Z'
+            '2026-07-18T17:00:00.000Z'
           ),
         },
       ]);
@@ -268,7 +268,27 @@ describe('dashboard.service', () => {
       'WATCH',
       'NORMAL',
     ]);
+    expect(dueSoon.data.map((row) => row.daysRemaining)).toEqual([3, 5, 7]);
     expect(prismaMock.project.findMany.mock.calls[0][0]).toMatchObject({
+      where: expect.objectContaining({
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            status: {
+              in: [ProjectStatus.IN_PROGRESS, ProjectStatus.WAITING_CANCEL],
+            },
+            current_workflow_type: {
+              in: [
+                'LT100K',
+                'LT500K',
+                'MT500K',
+                'SELECTION',
+                'EBIDDING',
+                'INTERNAL',
+              ],
+            },
+          }),
+        ]),
+      }),
       orderBy: { expected_completion_procurement_date: 'asc' },
       skip: 0,
       take: 10,
