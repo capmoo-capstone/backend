@@ -29,34 +29,36 @@ app.use(
     },
   })
 );
+
 const allowedOrigins = [
   'http://localhost:5173', // Vite local dev
   `http://localhost:${PORT}`, // Express local dev
+  'https://www.nexus-procure.com', // VPS production frontend
+  'https://vendor.nexus-procure.com', // VPS production vendor portal
   'https://nexus-procure.pages.dev', // Cloudflare Pages production
   'https://dev.nexus-procure.pages.dev', // Cloudflare Pages development
   'https://nexus-procure-vendors-portal.pages.dev', // Cloudflare Pages production for vendor portal
-  'https://nexus-procure-backend.vercel.app', // Vercel production
-  'https://dev-nexus-procure-backend.vercel.app', // Vercel development
-  `${process.env.FRONTEND_URL}`,
 ];
 
-app.options('/{*path}', cors());
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
+const corsOptions = {
+  origin: (
+    origin: string | undefined,
+    callback: (error: Error | null, allowed?: boolean) => void
+  ) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: origin ${origin} not allowed`));
-      }
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-  })
-);
+    callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
+
+app.options('/{*path}', cors(corsOptions));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(bangkokDateResponse);
 
@@ -73,21 +75,41 @@ const swaggerUiOptions: swaggerUi.SwaggerUiOptions = {
     'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-standalone-preset.min.js',
   ],
+  swaggerUrl: '/api-docs/swagger.json',
 };
 
-const serverUrl =
-  process.env.NODE_ENV === 'production'
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/v1`
-    : process.env.NODE_ENV === 'development'
-      ? `https://dev-nexus-procure-backend.vercel.app/api/v1`
-      : `http://localhost:${PORT}/api/v1`;
+const swaggerServerUrls: Record<string, string> = {
+  [`localhost:${PORT}`]: `http://localhost:${PORT}/api/v1`,
+  'api.nexus-procure.com': 'https://api.nexus-procure.com/api/v1',
+  'nexus-procure-backend.vercel.app':
+    'https://nexus-procure-backend.vercel.app/api/v1',
+  'dev-nexus-procure-backend.vercel.app':
+    'https://dev-nexus-procure-backend.vercel.app/api/v1',
+};
 
-(swaggerDocument as any).servers = [{ url: serverUrl }];
+const getSwaggerServerUrl = (host: string | undefined) => {
+  if (!host) return undefined;
+
+  return swaggerServerUrls[host.toLowerCase()];
+};
+
+app.get('/api-docs/swagger.json', (req, res) => {
+  const serverUrl = getSwaggerServerUrl(req.get('host'));
+
+  if (!serverUrl) {
+    return res.status(400).json({ message: 'Unsupported Swagger host' });
+  }
+
+  return res.json({
+    ...swaggerDocument,
+    servers: [{ url: serverUrl }],
+  });
+});
 
 app.use(
   '/api-docs',
   swaggerUi.serve,
-  swaggerUi.setup(swaggerDocument, swaggerUiOptions)
+  swaggerUi.setup(undefined, swaggerUiOptions)
 );
 
 app.use(errorHandler);
