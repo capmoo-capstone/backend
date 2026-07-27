@@ -18,6 +18,11 @@ import {
   ProjectIdStatusResponse,
 } from '../types/project.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+import {
+  notifyProjectAssigned,
+  notifyResponsibleAdded,
+  notifyResponsibleRemoved,
+} from './notification/notification.service';
 
 const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
   workflowType === UnitResponsibleType.CONTRACT
@@ -36,6 +41,7 @@ export const assignProjectsToUser = async (
       where: { id: { in: projectIds } },
       select: {
         id: true,
+        title: true,
         status: true,
         current_workflow_type: true,
         assignee_contract: true,
@@ -97,6 +103,11 @@ export const assignProjectsToUser = async (
             [assigneeField]: [assignee.full_name],
           },
           changedBy: user,
+        }),
+        notifyProjectAssigned(tx, {
+          project_id: id,
+          assignee_ids: [assigneeId],
+          actor_id: user.id,
         })
       );
     }
@@ -161,6 +172,18 @@ export const changeAssignee = async (
       },
       newValue: { [assigneeField]: [newAssignee.full_name] },
       changedBy: user,
+    });
+    if (oldAssigneeId) {
+      await notifyResponsibleRemoved(tx, {
+        project_id: id,
+        removed_user_id: oldAssigneeId,
+        actor_id: user.id,
+      });
+    }
+    await notifyProjectAssigned(tx, {
+      project_id: id,
+      assignee_ids: [newAssigneeId],
+      actor_id: user.id,
     });
     return updated as unknown as ProjectAssigneeResponse;
   });
@@ -355,6 +378,11 @@ export const addAssignee = async (
       },
       changedBy: user,
     });
+    await notifyResponsibleAdded(tx, {
+      project_id: data.id,
+      added_user_id: data.userId,
+      actor_id: user.id,
+    });
     return updated as unknown as ProjectAssigneeResponse;
   });
 };
@@ -416,6 +444,11 @@ export const returnProject = async (
       },
       newValue: { status: updated.status, [assigneeField]: [] },
       changedBy: user,
+    });
+    await notifyResponsibleRemoved(tx, {
+      project_id: projectId,
+      removed_user_id: user.id,
+      actor_id: user.id,
     });
     return updated;
   });

@@ -243,6 +243,15 @@ describe('submission.service', () => {
       current_workflow_type: UnitResponsibleType.CONTRACT,
       installment_rounds: 2,
     });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
     txMock.projectSubmission.findFirst.mockResolvedValue(null);
     txMock.projectSubmission.create.mockResolvedValue({
       id: 'submission-1',
@@ -373,6 +382,15 @@ describe('submission.service', () => {
     txMock.projectSubmission.findUnique.mockResolvedValue({
       status: SubmissionStatus.WAITING_APPROVAL,
       submitted_by: 'submitter-1',
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
     });
     txMock.projectSubmission.update.mockResolvedValue({
       id: 'submission-1',
