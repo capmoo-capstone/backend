@@ -9,6 +9,7 @@ import {
   getRoleRecipients,
   type TxClient,
 } from './notification-core.service';
+import { formatBangkokDate } from '../../lib/date';
 
 export const notifyProjectAssigned = async (
   tx: TxClient,
@@ -326,20 +327,10 @@ export const notifyDelegationStarted = async (
   }
 ) => {
   const startDateStr = input.start_date
-    ? (input.start_date instanceof Date
-        ? input.start_date
-        : new Date(input.start_date)
-      )
-        .toISOString()
-        .slice(0, 10)
+    ? formatBangkokDate(input.start_date)
     : '';
   const endDateStr = input.end_date
-    ? (input.end_date instanceof Date
-        ? input.end_date
-        : new Date(input.end_date)
-      )
-        .toISOString()
-        .slice(0, 10)
+    ? formatBangkokDate(input.end_date)
     : '';
   const dateLabel = endDateStr
     ? `ตั้งแต่ ${startDateStr} ถึง ${endDateStr}`

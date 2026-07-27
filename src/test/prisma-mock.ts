@@ -26,6 +26,8 @@ const MODEL_NAMES = [
   'budgetPlan',
   'department',
   'holiday',
+  'notification',
+  'notificationDelivery',
   'project',
   'projectCancellation',
   'projectContractNumber',

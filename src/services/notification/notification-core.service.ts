@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { OPS_DEPT_ID } from '../../lib/constant';
+import { toBangkokParts } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
 import type { NotificationKind } from '../../types/notification.type';
 import {
@@ -266,15 +267,17 @@ export const dispatchNotification = async (
 };
 
 export const wholeDayDiff = (targetDate: Date, now: Date) => {
+  const nowParts = toBangkokParts(now);
+  const targetParts = toBangkokParts(targetDate);
   const start = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate()
+    nowParts.year,
+    nowParts.month - 1,
+    nowParts.day
   );
   const target = Date.UTC(
-    targetDate.getUTCFullYear(),
-    targetDate.getUTCMonth(),
-    targetDate.getUTCDate()
+    targetParts.year,
+    targetParts.month - 1,
+    targetParts.day
   );
   return Math.round((target - start) / (24 * 60 * 60 * 1000));
 };

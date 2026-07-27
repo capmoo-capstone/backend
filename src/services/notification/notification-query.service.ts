@@ -10,6 +10,7 @@ import {
   wholeDayDiff,
 } from './notification-core.service';
 import { NotFoundError } from '../../lib/errors';
+import { formatBangkokDate } from '../../lib/date';
 import { ListNotificationsQueryDto } from '../../schemas/notification.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
@@ -84,7 +85,7 @@ export const syncDeadlineNotificationsForUser = async (user: AuthPayload) => {
           requires_action: true,
           dedupe_key:
             diff < 0
-              ? `deadline:${project.id}:${target.key}:overdue:${today.toISOString().slice(0, 10)}`
+              ? `deadline:${project.id}:${target.key}:overdue:${formatBangkokDate(today)}`
               : `deadline:${project.id}:${target.key}:${diff}`,
           metadata: {
             target_date: target.date.toISOString(),
