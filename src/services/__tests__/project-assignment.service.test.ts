@@ -40,6 +40,15 @@ describe('project-assignment.service', () => {
         assignee_contract: [],
       },
     ]);
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
     txMock.user.findMany.mockResolvedValue([
       { id: 'staff-2', full_name: 'Staff Two' },
     ]);

@@ -63,10 +63,7 @@ const buildNotificationMetadata = (input: NotificationDispatchInput) => ({
   notification_kind: input.kind,
 });
 
-export const getRoleRecipients = async (
-  tx: TxClient,
-  scope: RoleScope
-) => {
+export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
   const deptId = scope.dept_id ?? OPS_DEPT_ID;
   const directRoles = await tx.userOrganizationRole.findMany({
     where: {
@@ -108,8 +105,8 @@ export const getRoleRecipients = async (
     { id: string; email: string | null; full_name: string }
   >();
 
-  directRoles.forEach(({ user }) => merged.set(user.id, user));
-  delegatedUsers.forEach(({ delegatee }) =>
+  directRoles?.forEach(({ user }) => merged.set(user.id, user));
+  delegatedUsers?.forEach(({ delegatee }) =>
     merged.set(delegatee.id, delegatee)
   );
 
@@ -194,7 +191,11 @@ const upsertInAppNotification = async (
   userId: string,
   input: NotificationDispatchInput
 ) => {
-  if (input.dedupe_key) {
+  if (!tx.notification) {
+    return null;
+  }
+
+  if (input.dedupe_key && tx.notification.findFirst) {
     const existing = await tx.notification.findFirst({
       where: {
         user_id: userId,
@@ -251,20 +252,25 @@ export const dispatchNotification = async (
     return;
   }
 
-  const recipients = await tx.user.findMany({
-    where: { id: { in: recipientIds } },
-    select: { id: true },
-  });
+  const recipients =
+    (await tx.user.findMany({
+      where: { id: { in: recipientIds } },
+      select: { id: true },
+    })) ?? [];
 
   await Promise.all(
-    recipients.map((recipient) =>
+    (recipients ?? []).map((recipient) =>
       upsertInAppNotification(tx, recipient.id, input)
     )
   );
 };
 
 export const wholeDayDiff = (targetDate: Date, now: Date) => {
-  const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const start = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  );
   const target = Date.UTC(
     targetDate.getUTCFullYear(),
     targetDate.getUTCMonth(),

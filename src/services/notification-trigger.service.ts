@@ -323,11 +323,15 @@ export const notifyDelegationStarted = async (
     end_date: Date | null;
   }
 ) => {
-  const dateLabel = input.end_date
-    ? `ตั้งแต่ ${input.start_date.toISOString().slice(0, 10)} ถึง ${input.end_date
-        .toISOString()
-        .slice(0, 10)}`
-    : `เริ่ม ${input.start_date.toISOString().slice(0, 10)}`;
+  const startDateStr = input.start_date
+    ? (input.start_date instanceof Date ? input.start_date : new Date(input.start_date)).toISOString().slice(0, 10)
+    : '';
+  const endDateStr = input.end_date
+    ? (input.end_date instanceof Date ? input.end_date : new Date(input.end_date)).toISOString().slice(0, 10)
+    : '';
+  const dateLabel = endDateStr
+    ? `ตั้งแต่ ${startDateStr} ถึง ${endDateStr}`
+    : `เริ่ม ${startDateStr}`;
 
   await dispatchNotification(tx, {
     recipient_ids: [input.delegator_id, input.delegatee_id],
@@ -339,7 +343,7 @@ export const notifyDelegationStarted = async (
     body: `มีการมอบหมายสิทธิ์ ${input.role_label} ${dateLabel}`,
     target_path: '/app/me/profile',
     action_label: 'ดูโปรไฟล์',
-    dedupe_key: `delegation-start:${input.delegator_id}:${input.delegatee_id}:${input.role_label}:${input.start_date.toISOString()}`,
+    dedupe_key: `delegation-start:${input.delegator_id}:${input.delegatee_id}:${input.role_label}:${startDateStr}`,
   });
 };
 
