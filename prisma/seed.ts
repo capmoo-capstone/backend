@@ -78,14 +78,21 @@ const workflowUnitByProcurement: Record<ProcurementType, string> = {
   [ProcurementType.INTERNAL]: 'UNIT-PROC-2',
 };
 
+type ContractNumberType = 'CU' | 'SP' | 'PSY' | 'NUR' | 'HS';
+
 const cleanup = async () => {
+  await prisma.notificationDelivery.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.projectDocument.deleteMany();
   await prisma.projectSubmission.deleteMany();
+  await prisma.projectFinanceExport.deleteMany();
   await prisma.auditEvent.deleteMany();
   await prisma.projectCancellation.deleteMany();
   await prisma.projectHistory.deleteMany();
   await prisma.budgetPlan.deleteMany();
   await prisma.project.deleteMany();
+  await prisma.projectContractNumber.deleteMany();
+  await prisma.holiday.deleteMany();
   await prisma.userDelegation.deleteMany();
   await prisma.userOrganizationRole.deleteMany();
   await prisma.user.deleteMany();
@@ -501,12 +508,16 @@ const createProject = async (data: {
   urgent?: UrgentType;
   expectedApprovalDays?: number;
   expectedCompletionDays?: number;
+  installmentRounds?: number;
   procurementProgress?: ProjectPhaseProgress;
   contractProgress?: ProjectPhaseProgress;
   prNo?: string;
   poNo?: string;
   lessNo?: string;
-  contractNo?: string;
+  contractNo?: {
+    type: ContractNumberType;
+    value: string;
+  };
   migo103No?: string;
   migo105No?: string;
   vendorName?: string;
@@ -519,6 +530,14 @@ const createProject = async (data: {
     workflowType === UnitResponsibleType.CONTRACT
       ? 'UNIT-CONT'
       : workflowUnitByProcurement[data.procurementType];
+  const contractNumber = data.contractNo
+    ? await prisma.projectContractNumber.create({
+        data: {
+          type: data.contractNo.type,
+          contract_no: data.contractNo.value,
+        },
+      })
+    : null;
 
   return await prisma.project.create({
     data: {
@@ -543,6 +562,7 @@ const createProject = async (data: {
         data.expectedCompletionDays === undefined
           ? null
           : daysFromNow(data.expectedCompletionDays),
+      installment_rounds: data.installmentRounds ?? 1,
       procurement_progress: (data.procurementProgress ??
         DEFAULT_PHASE) as unknown as InputJsonValue,
       contract_progress: (data.contractProgress ??
@@ -552,6 +572,7 @@ const createProject = async (data: {
       less_no: data.lessNo,
       migo_103_no: data.migo103No,
       migo_105_no: data.migo105No,
+      contract_no_id: contractNumber?.id ?? null,
       vendor_name: data.vendorName,
       vendor_email: data.vendorEmail,
       assignee_procurement:
@@ -577,6 +598,7 @@ const createSubmission = async (data: {
   completedBy?: string | null;
   submittedDaysAgo?: number;
   submissionType?: SubmissionType;
+  installmentNo?: number | null;
   poNo?: string;
   comment?: string;
   fieldKey?: string;
@@ -591,6 +613,7 @@ const createSubmission = async (data: {
       step_order: data.stepOrder,
       submission_type: data.submissionType ?? SubmissionType.STAFF,
       submission_round: 1,
+      installment_no: data.installmentNo ?? null,
       po_no: data.poNo,
       status: data.status,
       submitted_by: data.submittedBy ?? null,
@@ -629,7 +652,8 @@ const seedCompletedSteps = async (
   workflowType: UnitResponsibleType,
   submitterId: string,
   completedById: string,
-  count: number
+  count: number,
+  installmentNo?: number
 ) => {
   const steps = WORKFLOW_STEP_ORDERS[workflowType].slice(0, count);
   const approverId =
@@ -650,6 +674,7 @@ const seedCompletedSteps = async (
       approvedBy: approverId,
       completedBy: completedById,
       submittedDaysAgo: count - stepOrder + 2,
+      installmentNo,
     });
   }
 };
@@ -805,9 +830,21 @@ const seedProjects = async () => {
     createdBy: ids.users.facilitiesRep,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: {
-      GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 2 },
-      HEAD_OF_UNIT: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
-      DOCUMENT_STAFF: { status: ProjectPhaseStatus.NOT_STARTED, step: null },
+      GENERAL_STAFF: {
+        status: ProjectPhaseStatus.IN_PROGRESS,
+        step: 2,
+        installment_no: 1,
+      },
+      HEAD_OF_UNIT: {
+        status: ProjectPhaseStatus.NOT_STARTED,
+        step: null,
+        installment_no: null,
+      },
+      DOCUMENT_STAFF: {
+        status: ProjectPhaseStatus.NOT_STARTED,
+        step: null,
+        installment_no: null,
+      },
     },
     prNo: `${fy}-PR-UT-6`,
     poNo: `${fy}-PO-UT-6`,
@@ -822,6 +859,7 @@ const seedProjects = async () => {
     UnitResponsibleType.CONTRACT,
     ids.users.contractStaff,
     ids.users.contractStaff,
+    1,
     1
   );
 
@@ -847,7 +885,7 @@ const seedProjects = async () => {
     prNo: `${fy}-PR-UT-7`,
     poNo: `${fy}-PO-UT-7`,
     lessNo: `${fy}-LESS-UT-7`,
-    contractNo: `${fy}-CON-UT-7`,
+    contractNo: { type: 'CU', value: `1/${fy}` },
     vendorName: 'Maintain Plus User Testing Ltd.',
     vendorEmail: 'vendor.maintenance@example.test',
     procurementAssigneeIds: [ids.users.procurementHigh],
@@ -858,7 +896,8 @@ const seedProjects = async () => {
     UnitResponsibleType.CONTRACT,
     ids.users.contractStaff,
     ids.users.contractStaff,
-    WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].length
+    WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].length,
+    1
   );
   await createSubmission({
     projectId: ids.projects.contractReadyExport,
@@ -868,6 +907,7 @@ const seedProjects = async () => {
     submittedBy: null,
     completedBy: ids.users.contractStaff,
     submissionType: SubmissionType.VENDOR,
+    installmentNo: 1,
     poNo: `${fy}-PO-UT-7`,
     fieldKey: 'vendor_invoice',
     fileName: 'vendor_invoice_7.pdf',
@@ -890,7 +930,7 @@ const seedProjects = async () => {
     contractProgress: COMPLETED_PHASE,
     prNo: `${fy}-PR-UT-8`,
     poNo: `${fy}-PO-UT-8`,
-    contractNo: `${fy}-CON-UT-8`,
+    contractNo: { type: 'SP', value: `1/${fy}` },
     migo103No: `${fy}-MIGO-UT-8`,
     migo105No: `${fy}-MIGO-UT-8`,
     vendorName: 'Tablet Supply User Testing Co.',
@@ -898,6 +938,14 @@ const seedProjects = async () => {
     procurementAssigneeIds: [ids.users.procurementLt],
     contractAssigneeIds: [ids.users.contractStaff],
   });
+  await seedCompletedSteps(
+    ids.projects.closed,
+    UnitResponsibleType.CONTRACT,
+    ids.users.contractStaff,
+    ids.users.contractStaff,
+    WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].length,
+    1
+  );
 
   // 9. WAITING_CANCEL — in progress procurement at step 1
   await createProject({
@@ -952,9 +1000,21 @@ const seedProjects = async () => {
     contractProgress: COMPLETED_PHASE,
     prNo: `${fy}-PR-UT-11`,
     poNo: `${fy}-PO-UT-11`,
+    installmentRounds: 2,
+    contractNo: { type: 'PSY', value: `1/${fy}` },
     procurementAssigneeIds: [ids.users.procurementLt],
     contractAssigneeIds: [ids.users.contractStaff],
   });
+  for (const installmentNo of [1, 2]) {
+    await seedCompletedSteps(
+      ids.projects.requestEdit,
+      UnitResponsibleType.CONTRACT,
+      ids.users.contractStaff,
+      ids.users.contractStaff,
+      WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].length,
+      installmentNo
+    );
+  }
 
   // 12. INTERNAL — in progress at step 2
   await createProject({
@@ -1102,10 +1162,10 @@ const seedFinanceExports = async () => {
   await prisma.projectFinanceExport.createMany({
     data: [
       {
-        project_id: ids.projects.contractActive,
+        project_id: ids.projects.contractReadyExport,
         installment_no: 1,
         status: ProjectFinanceExportStatus.WAITING_EXPORT,
-        created_by: ids.users.facilitiesRep,
+        created_by: ids.users.contractStaff,
       },
       {
         project_id: ids.projects.requestEdit,
