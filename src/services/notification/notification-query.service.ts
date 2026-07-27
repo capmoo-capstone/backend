@@ -6,7 +6,6 @@ import {
 } from '@prisma/client';
 import {
   dispatchNotification,
-  normalizePriorityRank,
   prisma,
   wholeDayDiff,
 } from './notification-core.service';
@@ -125,16 +124,22 @@ export const syncDeadlineNotificationsForAllUsers = async () => {
     )
   );
 
-  for (const userId of userIds) {
-    await syncDeadlineNotificationsForUser({
-      token: '',
-      id: userId,
-      username: '',
-      full_name: '',
-      roles: [],
-      is_delegated: false,
-      delegated_by: [],
-    });
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+    const batch = userIds.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map((userId) =>
+        syncDeadlineNotificationsForUser({
+          token: '',
+          id: userId,
+          username: '',
+          full_name: '',
+          roles: [],
+          is_delegated: false,
+          delegated_by: [],
+        })
+      )
+    );
   }
 };
 
@@ -200,10 +205,9 @@ export const listNotifications = async (
 
   const hasMore = items.length > query.limit;
   const sliced = hasMore ? items.slice(0, query.limit) : items;
-  const normalized = sliced;
 
   return {
-    items: normalized.map((item) => ({
+    items: sliced.map((item) => ({
       id: item.id,
       kind: getNotificationKind(item),
       category: item.category,

@@ -31,7 +31,7 @@ export const notifyProjectAssigned = async (
     target_path: `/app/projects/${project.id}`,
     action_label: 'เปิดโครงการ',
     requires_action: true,
-    dedupe_key: `assignment:${project.id}:${input.assignee_ids.sort().join(',')}`,
+    dedupe_key: `assignment:${project.id}:${[...input.assignee_ids].sort().join(',')}`,
   });
 };
 
@@ -45,7 +45,7 @@ export const notifyResponsibleAdded = async (
 ) => {
   const project = await getProjectContext(tx, input.project_id);
   await dispatchNotification(tx, {
-    recipient_ids: [input.added_user_id],
+    recipient_ids: [input.added_user_id].filter((id) => id !== input.actor_id),
     actor_id: input.actor_id,
     project_id: input.project_id,
     kind: 'RESPONSIBLE_ADDED',
