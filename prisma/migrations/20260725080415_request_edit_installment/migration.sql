@@ -29,7 +29,7 @@ ADD COLUMN     "status" "ProjectFinanceExportStatus" NOT NULL DEFAULT 'WAITING_E
  
 -- Data migration: preserve exported state from the old boolean column
 UPDATE "project_finance_exports"
-SET "status" = CASE WHEN "is_exported" THEN 'EXPORTED' ELSE 'WAITING_EXPORT' END;
+SET "status" = CASE WHEN "is_exported" THEN 'EXPORTED'::"ProjectFinanceExportStatus" ELSE 'WAITING_EXPORT'::"ProjectFinanceExportStatus" END;
 ALTER TABLE "project_finance_exports" DROP COLUMN "is_exported";
 
 -- AlterTable
