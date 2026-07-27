@@ -70,7 +70,9 @@ export const notifyResponsibleRemoved = async (
 ) => {
   const project = await getProjectContext(tx, input.project_id);
   await dispatchNotification(tx, {
-    recipient_ids: [input.removed_user_id],
+    recipient_ids: [input.removed_user_id].filter(
+      (id) => id !== input.actor_id
+    ),
     actor_id: input.actor_id,
     project_id: input.project_id,
     kind: 'RESPONSIBLE_REMOVED',
@@ -324,10 +326,20 @@ export const notifyDelegationStarted = async (
   }
 ) => {
   const startDateStr = input.start_date
-    ? (input.start_date instanceof Date ? input.start_date : new Date(input.start_date)).toISOString().slice(0, 10)
+    ? (input.start_date instanceof Date
+        ? input.start_date
+        : new Date(input.start_date)
+      )
+        .toISOString()
+        .slice(0, 10)
     : '';
   const endDateStr = input.end_date
-    ? (input.end_date instanceof Date ? input.end_date : new Date(input.end_date)).toISOString().slice(0, 10)
+    ? (input.end_date instanceof Date
+        ? input.end_date
+        : new Date(input.end_date)
+      )
+        .toISOString()
+        .slice(0, 10)
     : '';
   const dateLabel = endDateStr
     ? `ตั้งแต่ ${startDateStr} ถึง ${endDateStr}`
