@@ -19,7 +19,7 @@ import {
 import {
   notifyDelegationEnded,
   notifyDelegationStarted,
-} from './notification-trigger.service';
+} from './notification/notification.service';
 import * as UserService from './user.service';
 
 type DelegableRole =

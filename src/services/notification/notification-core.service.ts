@@ -6,10 +6,10 @@ import {
   Prisma,
   UserRole,
 } from '@prisma/client';
-import { prisma } from '../config/prisma';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { NotFoundError } from '../lib/errors';
-import type { NotificationKind } from '../types/notification.type';
+import { prisma } from '../../config/prisma';
+import { OPS_DEPT_ID } from '../../lib/constant';
+import { NotFoundError } from '../../lib/errors';
+import type { NotificationKind } from '../../types/notification.type';
 import {
   notificationEmailTransport,
   type EmailDeliveryDraft,

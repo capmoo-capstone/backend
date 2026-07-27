@@ -1,4 +1,4 @@
-import { syncDeadlineNotificationsForAllUsers } from '../services/notification-query.service';
+import { syncDeadlineNotificationsForAllUsers } from '../services/notification/notification.service';
 
 const run = async () => {
   await syncDeadlineNotificationsForAllUsers();

@@ -3,7 +3,7 @@ import {
   ListNotificationsQuerySchema,
   MarkNotificationReadSchema,
 } from '../schemas/notification.schema';
-import * as NotificationQueryService from '../services/notification-query.service';
+import * as NotificationQueryService from '../services/notification/notification.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 
 export const listNotifications = async (

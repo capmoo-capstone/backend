@@ -36,7 +36,7 @@ import {
   notifySignatureRequired,
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
-} from './notification-trigger.service';
+} from './notification/notification.service';
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
 

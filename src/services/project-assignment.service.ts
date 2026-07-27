@@ -22,7 +22,7 @@ import {
   notifyProjectAssigned,
   notifyResponsibleAdded,
   notifyResponsibleRemoved,
-} from './notification-trigger.service';
+} from './notification/notification.service';
 
 const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
   workflowType === UnitResponsibleType.CONTRACT

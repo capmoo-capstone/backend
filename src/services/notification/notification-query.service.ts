@@ -10,13 +10,13 @@ import {
   prisma,
   wholeDayDiff,
 } from './notification-core.service';
-import { NotFoundError } from '../lib/errors';
-import { ListNotificationsQueryDto } from '../schemas/notification.schema';
-import { AuthPayload } from '../types/auth.type';
+import { NotFoundError } from '../../lib/errors';
+import { ListNotificationsQueryDto } from '../../schemas/notification.schema';
+import { AuthPayload } from '../../types/auth.type';
 import {
   NotificationListResponse,
   type NotificationKind,
-} from '../types/notification.type';
+} from '../../types/notification.type';
 
 export const syncDeadlineNotificationsForUser = async (user: AuthPayload) => {
   const today = new Date();
@@ -186,11 +186,7 @@ export const listNotifications = async (
 
   const items = await prisma.notification.findMany({
     where,
-    orderBy: [
-      { is_read: 'asc' },
-      { priority: 'asc' },
-      { created_at: 'desc' },
-    ],
+    orderBy: [{ is_read: 'asc' }, { priority: 'asc' }, { created_at: 'desc' }],
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     take: query.limit + 1,
   });
@@ -224,7 +220,7 @@ export const listNotifications = async (
     })),
     unread_count: unreadCount,
     has_more: hasMore,
-    next_cursor: hasMore ? sliced[sliced.length - 1]?.id ?? null : null,
+    next_cursor: hasMore ? (sliced[sliced.length - 1]?.id ?? null) : null,
   };
 };
 
