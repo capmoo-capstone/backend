@@ -14,9 +14,36 @@ router.get(
 );
 router.get('/procurement-overview', controller.getProcurementOverview);
 router.get(
-  '/deadlines',
+  '/deadlines/overdue',
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getDeadlines
+  controller.getOverdueDeadlines
+);
+router.get(
+  '/deadlines/due-soon',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getDueSoonDeadlines
+);
+
+router.get(
+  '/unit-group/executive-summary',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getUnitGroupExecutiveSummary
+);
+router.get(
+  '/unit-group/procurement-metrics',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getUnitGroupProcurementMetrics
+);
+router.get(
+  '/unit-group/procurement-details',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getUnitGroupProcurementDetails
+);
+router.get(
+  '/unit-group/top-delayed',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getUnitGroupTopDelayedProjects
 );
 
 export default router;
+
