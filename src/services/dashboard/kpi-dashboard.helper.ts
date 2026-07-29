@@ -7,8 +7,7 @@ import {
   toBangkokParts,
 } from '../../lib/date';
 import {
-  UnitGroupOverviewQuery,
-  UnitGroupProcurementQuery,
+  UnitGroupQuery,
   UnitGroupTopDelayedQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
@@ -23,108 +22,21 @@ import {
 } from '../../types/dashboard.type';
 import {
   daysBetweenBangkokDates,
-  DEFAULT_FISCAL_YEAR_OFFSET,
-  fiscalYearRange,
-  fiscalYearToGregorianEndYear,
+  getPreviousRange,
   getProcurementTypeDonut,
   projectRangeWhere,
   resolveTargetUnitId,
   toComparison,
 } from './dashboard.helper';
-
-const getKpiRange = (
-  query: {
-    mode?: 'month' | 'quarter' | 'fiscalYear';
-    fiscalYear?: number;
-    month?: number;
-    quarter?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
-  },
-  now = nowUtc()
-) => {
-  const mode = query.mode ?? 'fiscalYear';
-  const fiscalYear =
-    query.fiscalYear ??
-    (() => {
-      const parts = toBangkokParts(now);
-      const gregorianEndYear = parts.month >= 10 ? parts.year + 1 : parts.year;
-      return gregorianEndYear + DEFAULT_FISCAL_YEAR_OFFSET;
-    })();
-  const endYear = fiscalYearToGregorianEndYear(fiscalYear);
-
-  if (mode === 'fiscalYear') {
-    return { range: fiscalYearRange(fiscalYear), fiscalYear, mode };
-  }
-
-  if (mode === 'quarter') {
-    const quarterMonths = {
-      Q1: [10, 11, 12],
-      Q2: [1, 2, 3],
-      Q3: [4, 5, 6],
-      Q4: [7, 8, 9],
-    }[query.quarter ?? 'Q1'];
-    const startMonth = quarterMonths[0];
-    const endMonth = quarterMonths[quarterMonths.length - 1];
-    const startYear = startMonth >= 10 ? endYear - 1 : endYear;
-    const finishYear = endMonth >= 10 ? endYear - 1 : endYear;
-
-    return {
-      mode,
-      fiscalYear,
-      range: {
-        from: fromBangkokDate(startYear, startMonth, 1),
-        to: fromBangkokDate(
-          finishYear,
-          endMonth,
-          daysInBangkokMonth(finishYear, endMonth),
-          true
-        ),
-      },
-    };
-  }
-
-  const currentParts = toBangkokParts(now);
-  const month = query.month ?? currentParts.month;
-  const year =
-    query.fiscalYear === undefined
-      ? currentParts.year
-      : month >= 10
-        ? endYear - 1
-        : endYear;
-
-  return {
-    mode,
-    fiscalYear,
-    range: {
-      from: fromBangkokDate(year, month, 1),
-      to: fromBangkokDate(year, month, daysInBangkokMonth(year, month), true),
-    },
-  };
-};
-
-const getPreviousPeriodRange = (range: { from: Date; to: Date }) => {
-  const fromParts = toBangkokParts(range.from);
-  const toParts = toBangkokParts(range.to);
-  const previousFrom = fromBangkokDate(
-    fromParts.year - 1,
-    fromParts.month,
-    fromParts.day
-  );
-  const previousTo = fromBangkokDate(
-    toParts.year - 1,
-    toParts.month,
-    toParts.day,
-    true
-  );
-  return { from: previousFrom, to: previousTo };
-};
+import { IN_PROGRESS_STATUSES } from '../../lib/constant';
 
 export const getUnitGroupExecutiveSummary = async (
   user: AuthPayload,
-  query: UnitGroupOverviewQuery
+  query: UnitGroupQuery
 ): Promise<UnitGroupExecutiveSummaryResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
-  const { range, fiscalYear, mode } = getKpiRange(query);
-  const previousRange = getPreviousPeriodRange(range);
+  const range = { from: query.dateFrom, to: query.dateTo };
+  const previousRange = getPreviousRange(range, query.mode);
 
   const unitWhere: Prisma.ProjectWhereInput = {
     OR: [{ responsible_unit_id: unitId }, { requesting_unit_id: unitId }],
@@ -142,7 +54,7 @@ export const getUnitGroupExecutiveSummary = async (
         status: true,
         created_at: true,
         updated_at: true,
-        expected_completion_procurement_date: true,
+        expected_approval_date: true,
       },
     }),
     prisma.project.findMany({
@@ -152,7 +64,7 @@ export const getUnitGroupExecutiveSummary = async (
         status: true,
         created_at: true,
         updated_at: true,
-        expected_completion_procurement_date: true,
+        expected_approval_date: true,
       },
     }),
   ]);
@@ -210,15 +122,15 @@ export const getUnitGroupExecutiveSummary = async (
     projects: Array<{
       status: ProjectStatus;
       updated_at: Date | null;
-      expected_completion_procurement_date: Date | null;
+      expected_approval_date: Date | null;
     }>
   ) => {
     const completed = projects.filter((p) => p.status === ProjectStatus.CLOSED);
     if (completed.length === 0) return 100;
     const onTime = completed.filter((p) => {
-      if (!p.expected_completion_procurement_date) return true;
+      if (!p.expected_approval_date) return true;
       const closedAt = p.updated_at ?? nowUtc();
-      return closedAt <= p.expected_completion_procurement_date;
+      return closedAt <= p.expected_approval_date;
     });
     return Math.round((onTime.length / completed.length) * 100);
   };
@@ -267,8 +179,7 @@ export const getUnitGroupExecutiveSummary = async (
 
   return {
     unitId,
-    fiscalYear,
-    mode,
+    mode: query.mode,
     range,
     longestProcurementMethod: longestMethod,
     avgDurationDays: avgDurationComparison,
@@ -277,12 +188,31 @@ export const getUnitGroupExecutiveSummary = async (
   };
 };
 
+const getUnitProcurementTypes = async (
+  unitId: string
+): Promise<ProcurementType[]> => {
+  const unit = await prisma.unit.findUnique({
+    where: { id: unitId },
+    select: { type: true },
+  });
+  if (!unit || !unit.type) {
+    return Object.values(ProcurementType);
+  }
+  if (unit.type.length === 0) {
+    return [];
+  }
+  const validTypes = new Set(Object.values(ProcurementType));
+  return unit.type
+    .filter((t) => validTypes.has(t as unknown as ProcurementType))
+    .map((t) => t as unknown as ProcurementType);
+};
+
 export const getUnitGroupProcurementMetrics = async (
   user: AuthPayload,
-  query: UnitGroupProcurementQuery
+  query: UnitGroupQuery
 ): Promise<UnitGroupProcurementMetricsResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
-  const { range } = getKpiRange(query);
+  const range = { from: query.dateFrom, to: query.dateTo };
   const now = nowUtc();
   const today = fromBangkokDate(
     toBangkokParts(now).year,
@@ -295,13 +225,15 @@ export const getUnitGroupProcurementMetrics = async (
   };
 
   const delayedWhere: Prisma.ProjectWhereInput = {
-    status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] },
-    expected_completion_procurement_date: { lt: today },
+    status: { in: IN_PROGRESS_STATUSES },
+    expected_approval_date: { lt: today },
   };
 
+  const types = await getUnitProcurementTypes(unitId);
+
   const [byTotalType, byDelayedType] = await Promise.all([
-    getProcurementTypeDonut(unitWhere, range),
-    getProcurementTypeDonut(unitWhere, range, undefined, delayedWhere),
+    getProcurementTypeDonut(unitWhere, range, types),
+    getProcurementTypeDonut(unitWhere, range, types, delayedWhere),
   ]);
 
   const total = byTotalType.reduce((sum, item) => sum + item.count, 0);
@@ -322,10 +254,10 @@ export const getUnitGroupProcurementMetrics = async (
 
 export const getUnitGroupProcurementDetails = async (
   user: AuthPayload,
-  query: UnitGroupProcurementQuery
+  query: UnitGroupQuery
 ): Promise<UnitGroupProcurementDetailsResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
-  const { range } = getKpiRange(query);
+  const range = { from: query.dateFrom, to: query.dateTo };
   const now = nowUtc();
   const today = fromBangkokDate(
     toBangkokParts(now).year,
@@ -334,26 +266,29 @@ export const getUnitGroupProcurementDetails = async (
   );
 
   const unitWhere: Prisma.ProjectWhereInput = {
-    OR: [{ responsible_unit_id: unitId }, { requesting_unit_id: unitId }],
+    responsible_unit_id: unitId,
   };
 
   const baseWhere = projectRangeWhere(unitWhere, range);
 
-  const projects = await prisma.project.findMany({
-    where: baseWhere,
-    select: {
-      id: true,
-      procurement_type: true,
-      status: true,
-      expected_completion_procurement_date: true,
-      created_at: true,
-      updated_at: true,
-    },
-  });
+  const [projects, types] = await Promise.all([
+    prisma.project.findMany({
+      where: baseWhere,
+      select: {
+        id: true,
+        procurement_type: true,
+        status: true,
+        expected_approval_date: true,
+        created_at: true,
+        updated_at: true,
+      },
+    }),
+    getUnitProcurementTypes(unitId),
+  ]);
 
   const methods: ProcurementMethodDetailItem[] = [];
 
-  for (const type of Object.values(ProcurementType)) {
+  for (const type of types) {
     const typeProjects = projects.filter((p) => p.procurement_type === type);
     const totalCount = typeProjects.length;
 
@@ -363,8 +298,8 @@ export const getUnitGroupProcurementDetails = async (
         p.status === ProjectStatus.CANCELLED;
       return (
         !isClosed &&
-        p.expected_completion_procurement_date &&
-        p.expected_completion_procurement_date < today
+        p.expected_approval_date &&
+        p.expected_approval_date < today
       );
     });
 
@@ -380,7 +315,6 @@ export const getUnitGroupProcurementDetails = async (
       IN_PROGRESS: 0,
       CLOSED: 0,
       CANCELLED: 0,
-      REQUEST_EDIT: 0,
     };
 
     for (const p of typeProjects) {
@@ -428,6 +362,8 @@ export const getUnitGroupProcurementDetails = async (
 
   return {
     unitId,
+    mode: query.mode,
+    range,
     methods,
   };
 };
@@ -436,6 +372,7 @@ export const getUnitGroupTopDelayedProjects = async (
   user: AuthPayload,
   query: UnitGroupTopDelayedQuery
 ): Promise<UnitGroupTopDelayedProjectsResponse> => {
+  const TOP_DELAYED_LIMIT = 5;
   const unitId = resolveTargetUnitId(user, query.unitId);
   const now = nowUtc();
   const today = fromBangkokDate(
@@ -445,9 +382,9 @@ export const getUnitGroupTopDelayedProjects = async (
   );
 
   const unitWhere: Prisma.ProjectWhereInput = {
-    OR: [{ responsible_unit_id: unitId }, { requesting_unit_id: unitId }],
+    responsible_unit_id: unitId,
     status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] },
-    expected_completion_procurement_date: { lt: today },
+    expected_approval_date: { lt: today },
   };
 
   if (query.procurementType) {
@@ -456,21 +393,21 @@ export const getUnitGroupTopDelayedProjects = async (
 
   const projects = await prisma.project.findMany({
     where: unitWhere,
-    take: query.limit,
-    orderBy: { expected_completion_procurement_date: 'asc' },
+    take: TOP_DELAYED_LIMIT,
+    orderBy: { expected_approval_date: 'asc' },
     select: {
       id: true,
       title: true,
       procurement_type: true,
       created_at: true,
-      expected_completion_procurement_date: true,
+      expected_approval_date: true,
     },
   });
 
   const topProjects: TopDelayedProjectItem[] = projects.map((p) => {
     const totalDays = daysBetweenBangkokDates(
       p.created_at,
-      p.expected_completion_procurement_date ?? today
+      p.expected_approval_date ?? today
     );
     const unitPortion = Math.max(1, Math.floor(totalDays / 5));
 
@@ -495,4 +432,3 @@ export const getUnitGroupTopDelayedProjects = async (
     projects: topProjects,
   };
 };
-
