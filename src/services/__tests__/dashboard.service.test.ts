@@ -155,8 +155,7 @@ describe('dashboard.service', () => {
 
     const result = await getProcurementOverview(supplyUser, {
       mode: 'quarter',
-      fiscalYear: 2569,
-      quarter: 'Q1',
+      deptId: OPS_DEPT_ID,
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2025-12-31T16:59:59.999Z'),
     });
@@ -197,8 +196,7 @@ describe('dashboard.service', () => {
 
     const result = await getProcurementOverview(externalUser, {
       mode: 'month',
-      fiscalYear: 2569,
-      month: 7,
+      deptId: OPS_DEPT_ID,
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
     });
@@ -354,6 +352,7 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
+          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -371,9 +370,7 @@ describe('dashboard.service', () => {
           title: 'Delayed Project 1',
           procurement_type: ProcurementType.LT100K,
           created_at: new Date('2026-06-01T00:00:00.000Z'),
-          expected_completion_procurement_date: new Date(
-            '2026-07-01T00:00:00.000Z'
-          ),
+          expected_approval_date: new Date('2026-07-01T00:00:00.000Z'),
         },
       ]);
 
@@ -381,7 +378,10 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          limit: 5,
+          procurementType: ProcurementType.LT100K,
+          mode: 'fiscalYear',
+          dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
       );
 
