@@ -76,8 +76,8 @@ export const PeriodicSummaryQuerySchema = z
 
 export const ProcurementOverviewQuerySchema = z
   .object({
+    deptId: z.string().optional(),
     mode: DashboardModeEnum.default('month'),
-    deptId: z.string(),
     dateFrom: DateFromSchema,
     dateTo: DateToSchema,
   })

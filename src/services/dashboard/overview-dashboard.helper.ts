@@ -322,7 +322,10 @@ export const getProcurementOverview = async (
   query: ProcurementOverviewQuery
 ): Promise<ProcurementOverviewResponse> => {
   const { range } = getOverviewRange(query);
-  const visibilityWhere = buildVisibilityWhere(user);
+  const baseVisibilityWhere = buildVisibilityWhere(user);
+  const visibilityWhere = query.deptId
+    ? andWhere(baseVisibilityWhere, { requesting_dept_id: query.deptId })
+    : baseVisibilityWhere;
 
   const [procurementTypes, statusBar, budgetInvestment, timeline] =
     await Promise.all([

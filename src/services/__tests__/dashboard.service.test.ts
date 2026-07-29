@@ -196,7 +196,6 @@ describe('dashboard.service', () => {
 
     const result = await getProcurementOverview(externalUser, {
       mode: 'month',
-      deptId: OPS_DEPT_ID,
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
     });
