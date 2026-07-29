@@ -80,7 +80,11 @@ describe('dashboard.service', () => {
       .mockResolvedValueOnce(2)
       .mockResolvedValueOnce(4);
 
-    const result = await getPeriodicSummary(externalUser, { period: 'month' });
+    const result = await getPeriodicSummary(externalUser, {
+      mode: 'month',
+      dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+      dateTo: new Date('2026-07-31T16:59:59.999Z'),
+    });
 
     expect(result.newWork).toEqual({
       current: 5,
@@ -113,12 +117,14 @@ describe('dashboard.service', () => {
     });
   });
 
-  it('uses fiscal-year-to-date ranges for periodic fiscal year summaries', async () => {
+  it('uses dateFrom and dateTo ranges for periodic fiscal year summaries', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
 
     const result = await getPeriodicSummary(supplyUser, {
-      period: 'fiscalYear',
+      mode: 'fiscalYear',
+      dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+      dateTo: new Date('2026-07-12T16:59:59.999Z'),
     });
 
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
@@ -151,9 +157,10 @@ describe('dashboard.service', () => {
       mode: 'quarter',
       fiscalYear: 2569,
       quarter: 'Q1',
+      dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+      dateTo: new Date('2025-12-31T16:59:59.999Z'),
     });
 
-    expect(result.fiscalYear).toBe(2569);
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
     expect(result.range.to.toISOString()).toBe('2025-12-31T16:59:59.999Z');
     expect(result.procurementTypes).toHaveLength(6);
@@ -192,6 +199,8 @@ describe('dashboard.service', () => {
       mode: 'month',
       fiscalYear: 2569,
       month: 7,
+      dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+      dateTo: new Date('2026-07-31T16:59:59.999Z'),
     });
 
     expect(result.statusBar.map((point) => point.status)).toEqual([
@@ -216,51 +225,35 @@ describe('dashboard.service', () => {
         {
           id: 'late-1',
           title: 'Very late',
-          expected_completion_procurement_date: new Date(
-            '2026-06-30T17:00:00.000Z'
-          ),
+          expected_approval_date: new Date('2026-06-30T17:00:00.000Z'),
         },
         {
           id: 'late-2',
           title: 'Late',
-          expected_completion_procurement_date: new Date(
-            '2026-07-09T17:00:00.000Z'
-          ),
+          expected_approval_date: new Date('2026-07-09T17:00:00.000Z'),
         },
       ])
       .mockResolvedValueOnce([
         {
           id: 'soon-1',
           title: 'Urgent',
-          expected_completion_procurement_date: new Date(
-            '2026-07-14T17:00:00.000Z'
-          ),
+          expected_approval_date: new Date('2026-07-14T17:00:00.000Z'),
         },
         {
           id: 'soon-2',
           title: 'Watch',
-          expected_completion_procurement_date: new Date(
-            '2026-07-16T17:00:00.000Z'
-          ),
+          expected_approval_date: new Date('2026-07-16T17:00:00.000Z'),
         },
         {
           id: 'soon-3',
           title: 'Normal',
-          expected_completion_procurement_date: new Date(
-            '2026-07-18T17:00:00.000Z'
-          ),
+          expected_approval_date: new Date('2026-07-18T17:00:00.000Z'),
         },
       ]);
     prismaMock.project.count.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
 
-    const overdue = await getOverdueDeadlines(staffUser, {
-      page: 1,
-      limit: 10,
-    });
-    const dueSoon = await getDueSoonDeadlines(staffUser, {
-      page: 1,
-      limit: 10,
-    });
+    const overdue = await getOverdueDeadlines(staffUser, 1, 10);
+    const dueSoon = await getDueSoonDeadlines(staffUser, 1, 10);
 
     expect(overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
     expect(dueSoon.data.map((row) => row.priority)).toEqual([
@@ -289,7 +282,7 @@ describe('dashboard.service', () => {
           }),
         ]),
       }),
-      orderBy: { expected_completion_procurement_date: 'asc' },
+      orderBy: { expected_approval_date: 'asc' },
       skip: 0,
       take: 10,
     });
@@ -297,7 +290,7 @@ describe('dashboard.service', () => {
 
   it('rejects deadline access for non-supply users', async () => {
     await expect(
-      getOverdueDeadlines(externalUser, { page: 1, limit: 10 })
+      getOverdueDeadlines(externalUser, 1, 10)
     ).rejects.toThrowError('You do not have permission to view deadlines');
   });
 
@@ -331,6 +324,8 @@ describe('dashboard.service', () => {
         {
           unitId: 'unit-proc',
           mode: 'fiscalYear',
+          dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
       );
 
@@ -359,7 +354,8 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'fiscalYear',
+          dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
       );
 
