@@ -1,6 +1,7 @@
 import { ProcurementType, ProjectStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/client';
 import { PaginatedResponse } from './common.type';
+import { DashboardMode } from '../schemas/dashboard.schema';
 
 export type DashboardTrend = 'increase' | 'decrease' | 'same';
 
@@ -12,7 +13,7 @@ export interface DashboardMetricComparison {
 }
 
 export interface PeriodicSummaryResponse {
-  period: 'today' | 'month' | 'fiscalYear';
+  mode: 'today' | 'month' | 'quarter' | 'fiscalYear';
   range: {
     from: Date;
     to: Date;
@@ -51,8 +52,7 @@ export interface DashboardTimelinePoint {
 }
 
 export interface ProcurementOverviewResponse {
-  mode: 'month' | 'quarter' | 'fiscalYear';
-  fiscalYear: number;
+  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
@@ -99,8 +99,7 @@ export interface WorkloadVsDurationPoint {
 
 export interface UnitGroupExecutiveSummaryResponse {
   unitId: string;
-  fiscalYear: number;
-  mode: 'month' | 'quarter' | 'fiscalYear';
+  mode: 'today' | 'month' | 'quarter' | 'fiscalYear';
   range: { from: Date; to: Date };
   longestProcurementMethod: ProcurementType | null;
   avgDurationDays: DashboardMetricComparison;
@@ -126,7 +125,10 @@ export interface ProcurementMethodDetailItem {
   totalCount: number;
   delayedPercentage: number;
   comparisonTrend: DashboardTrend;
-  statusDistribution: Array<{ status: ProjectStatus | 'NOT_STARTED'; count: number }>;
+  statusDistribution: Array<{
+    status: ProjectStatus | 'NOT_STARTED';
+    count: number;
+  }>;
   avgPhaseDurationDays: {
     procurementPhaseDays: number;
     contractPhaseDays: number;
@@ -135,6 +137,11 @@ export interface ProcurementMethodDetailItem {
 
 export interface UnitGroupProcurementDetailsResponse {
   unitId: string;
+  mode: DashboardMode;
+  range: {
+    from: Date;
+    to: Date;
+  };
   methods: ProcurementMethodDetailItem[];
 }
 
@@ -157,4 +164,3 @@ export interface UnitGroupTopDelayedProjectsResponse {
   procurementTypeFilter: ProcurementType | null;
   projects: TopDelayedProjectItem[];
 }
-

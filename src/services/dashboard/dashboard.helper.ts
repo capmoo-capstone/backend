@@ -7,10 +7,13 @@ import {
   isSuperAdmin,
 } from '../../lib/permissions';
 import {
+  addBangkokDays,
+  daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
   toBangkokParts,
 } from '../../lib/date';
+import { DashboardMode } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import { DashboardMetricComparison } from '../../types/dashboard.type';
 
@@ -20,6 +23,40 @@ export const DEFAULT_FISCAL_YEAR_OFFSET = 543;
 export type DateRange = {
   from: Date;
   to: Date;
+};
+
+export const getPreviousRange = (
+  current: DateRange,
+  mode?: DashboardMode
+): DateRange => {
+  const fromParts = toBangkokParts(current.from);
+  const toParts = toBangkokParts(current.to);
+
+  if (mode === 'today') {
+    return {
+      from: addBangkokDays(current.from, -1),
+      to: addBangkokDays(current.to, -1, true),
+    };
+  }
+
+  if (mode === 'month') {
+    const prevFromMonth = fromParts.month === 1 ? 12 : fromParts.month - 1;
+    const prevFromYear = fromParts.month === 1 ? fromParts.year - 1 : fromParts.year;
+    const prevToMonth = toParts.month === 1 ? 12 : toParts.month - 1;
+    const prevToYear = toParts.month === 1 ? toParts.year - 1 : toParts.year;
+    const prevFromDay = Math.min(fromParts.day, daysInBangkokMonth(prevFromYear, prevFromMonth));
+    const prevToDay = Math.min(toParts.day, daysInBangkokMonth(prevToYear, prevToMonth));
+
+    return {
+      from: fromBangkokDate(prevFromYear, prevFromMonth, prevFromDay),
+      to: fromBangkokDate(prevToYear, prevToMonth, prevToDay, true),
+    };
+  }
+
+  return {
+    from: fromBangkokDate(fromParts.year - 1, fromParts.month, fromParts.day),
+    to: fromBangkokDate(toParts.year - 1, toParts.month, toParts.day, true),
+  };
 };
 
 export const fiscalYearToGregorianEndYear = (fiscalYear: number): number =>

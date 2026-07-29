@@ -24,13 +24,11 @@ import {
   toBangkokParts,
 } from '../../lib/date';
 import {
-  DeadlinesQuery,
   PeriodicSummaryQuery,
   ProcurementOverviewQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
-  DashboardMetricComparison,
   DashboardStatusPoint,
   DeadlinePriority,
   DueSoonProjectRow,
@@ -52,143 +50,22 @@ import {
   projectRangeWhere,
   toComparison,
   getProcurementTypeDonut,
+  getPreviousRange,
 } from './dashboard.helper';
 
-export {
-  DAY_MS,
-  DEFAULT_FISCAL_YEAR_OFFSET,
-  DateRange,
-  fiscalYearToGregorianEndYear,
-  currentFiscalYear,
-  fiscalYearRange,
-  currentFiscalYearStart,
-  daysBetweenBangkokDates,
-  andWhere,
-  projectRangeWhere,
-  toComparison,
-  getProcurementTypeDonut,
-};
-
 export const getPeriodicRanges = (
-  period: PeriodicSummaryQuery['period'],
-  now = nowUtc()
+  query: PeriodicSummaryQuery
 ): { current: DateRange; previous: DateRange } => {
-  const parts = toBangkokParts(now);
-  const today = fromBangkokDate(parts.year, parts.month, parts.day);
-  const todayEnd = fromBangkokDate(parts.year, parts.month, parts.day, true);
-
-  if (period === 'today') {
-    const previousDay = addBangkokDays(today, -1);
-    return {
-      current: { from: today, to: todayEnd },
-      previous: {
-        from: previousDay,
-        to: addBangkokDays(previousDay, 0, true),
-      },
-    };
-  }
-
-  if (period === 'month') {
-    const previousMonth = parts.month === 1 ? 12 : parts.month - 1;
-    const previousMonthYear = parts.month === 1 ? parts.year - 1 : parts.year;
-    const previousDay = Math.min(
-      parts.day,
-      daysInBangkokMonth(previousMonthYear, previousMonth)
-    );
-
-    return {
-      current: {
-        from: fromBangkokDate(parts.year, parts.month, 1),
-        to: todayEnd,
-      },
-      previous: {
-        from: fromBangkokDate(previousMonthYear, previousMonth, 1),
-        to: fromBangkokDate(
-          previousMonthYear,
-          previousMonth,
-          previousDay,
-          true
-        ),
-      },
-    };
-  }
-
-  const fiscalStart = currentFiscalYearStart(now);
-  const fiscalStartParts = toBangkokParts(fiscalStart);
-  const previousFiscalStart = fromBangkokDate(
-    fiscalStartParts.year - 1,
-    fiscalStartParts.month,
-    fiscalStartParts.day
-  );
-  const elapsedDays = Math.floor(
-    (today.getTime() - fiscalStart.getTime()) / DAY_MS
-  );
-
-  return {
-    current: {
-      from: fiscalStart,
-      to: todayEnd,
-    },
-    previous: {
-      from: previousFiscalStart,
-      to: addBangkokDays(previousFiscalStart, elapsedDays, true),
-    },
-  };
+  const current = { from: query.dateFrom, to: query.dateTo };
+  const previous = getPreviousRange(current, query.mode);
+  return { current, previous };
 };
 
 export const getOverviewRange = (
-  query: ProcurementOverviewQuery,
-  now = nowUtc()
-): { range: DateRange; fiscalYear: number } => {
-  const fiscalYear = query.fiscalYear ?? currentFiscalYear(now);
-  const endYear = fiscalYearToGregorianEndYear(fiscalYear);
-
-  if (query.mode === 'fiscalYear') {
-    return { range: fiscalYearRange(fiscalYear), fiscalYear };
-  }
-
-  if (query.mode === 'quarter') {
-    const quarterMonths = {
-      Q1: [10, 11, 12],
-      Q2: [1, 2, 3],
-      Q3: [4, 5, 6],
-      Q4: [7, 8, 9],
-    }[query.quarter ?? 'Q1'];
-    const startMonth = quarterMonths[0];
-    const endMonth = quarterMonths[quarterMonths.length - 1];
-    const startYear = startMonth >= 10 ? endYear - 1 : endYear;
-    const finishYear = endMonth >= 10 ? endYear - 1 : endYear;
-
-    return {
-      fiscalYear,
-      range: {
-        from: fromBangkokDate(startYear, startMonth, 1),
-        to: fromBangkokDate(
-          finishYear,
-          endMonth,
-          daysInBangkokMonth(finishYear, endMonth),
-          true
-        ),
-      },
-    };
-  }
-
-  const currentParts = toBangkokParts(now);
-  const month = query.month ?? currentParts.month;
-  const year =
-    query.fiscalYear === undefined
-      ? currentParts.year
-      : month >= 10
-        ? endYear - 1
-        : endYear;
-
-  return {
-    fiscalYear,
-    range: {
-      from: fromBangkokDate(year, month, 1),
-      to: fromBangkokDate(year, month, daysInBangkokMonth(year, month), true),
-    },
-  };
+  query: ProcurementOverviewQuery
+): { range: DateRange } => {
+  const range = { from: query.dateFrom, to: query.dateTo };
+  return { range };
 };
 
 export const buildVisibilityWhere = (
@@ -229,7 +106,7 @@ export const getPeriodicSummary = async (
   user: AuthPayload,
   query: PeriodicSummaryQuery
 ): Promise<PeriodicSummaryResponse> => {
-  const ranges = getPeriodicRanges(query.period);
+  const ranges = getPeriodicRanges(query);
   const visibilityWhere = buildVisibilityWhere(user);
 
   const [
@@ -261,7 +138,7 @@ export const getPeriodicSummary = async (
   ]);
 
   return {
-    period: query.period,
+    mode: query.mode,
     range: ranges.current,
     previousRange: ranges.previous,
     newWork: toComparison(currentNew, previousNew),
@@ -367,7 +244,10 @@ const buildTimelineBuckets = (
   mode: ProcurementOverviewQuery['mode'],
   range: DateRange
 ): DateRange[] => {
-  if (mode === 'month') {
+  const days = daysBetweenBangkokDates(range.from, range.to);
+  const effectiveMode = mode ?? (days <= 31 ? 'month' : 'fiscalYear');
+
+  if (effectiveMode === 'month') {
     const start = toBangkokParts(range.from);
     return Array.from(
       { length: daysInBangkokMonth(start.year, start.month) },
@@ -403,10 +283,12 @@ const buildTimelineBuckets = (
 };
 
 const getTimelineLine = async (
-  mode: ProcurementOverviewQuery['mode'],
   visibilityWhere: Prisma.ProjectWhereInput,
-  range: DateRange
+  range: DateRange,
+  mode: ProcurementOverviewQuery['mode']
 ) => {
+  const days = daysBetweenBangkokDates(range.from, range.to);
+  const effectiveMode = mode ?? (days <= 31 ? 'month' : 'fiscalYear');
   const buckets = buildTimelineBuckets(mode, range);
 
   return Promise.all(
@@ -423,7 +305,7 @@ const getTimelineLine = async (
 
       return {
         label:
-          mode === 'month'
+          effectiveMode === 'month'
             ? parts.day.toString()
             : thaiMonthLabel(parts.year, parts.month),
         from: bucket.from,
@@ -439,7 +321,7 @@ export const getProcurementOverview = async (
   user: AuthPayload,
   query: ProcurementOverviewQuery
 ): Promise<ProcurementOverviewResponse> => {
-  const { range, fiscalYear } = getOverviewRange(query);
+  const { range } = getOverviewRange(query);
   const visibilityWhere = buildVisibilityWhere(user);
 
   const [procurementTypes, statusBar, budgetInvestment, timeline] =
@@ -447,12 +329,11 @@ export const getProcurementOverview = async (
       getProcurementTypeDonut(visibilityWhere, range),
       getStatusBuckets(user, visibilityWhere, range),
       getBudgetInvestmentDonut(visibilityWhere, range),
-      getTimelineLine(query.mode, visibilityWhere, range),
+      getTimelineLine(visibilityWhere, range, query.mode),
     ]);
 
   return {
     mode: query.mode,
-    fiscalYear,
     range,
     procurementTypes,
     statusBar,
@@ -480,7 +361,8 @@ const dueSoonPriority = (daysRemaining: number): DeadlinePriority => {
 
 export const getOverdueDeadlines = async (
   user: AuthPayload,
-  query: DeadlinesQuery
+  page: number,
+  limit: number
 ): Promise<PaginatedResponse<OverdueProjectRow>> => {
   if (!canViewDeadlines(user)) {
     throw new ForbiddenError('You do not have permission to view deadlines');
@@ -491,7 +373,7 @@ export const getOverdueDeadlines = async (
     const parts = toBangkokParts(now);
     return fromBangkokDate(parts.year, parts.month, parts.day);
   })();
-  const skip = (query.page - 1) * query.limit;
+  const skip = (page - 1) * limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
     status: {
@@ -500,23 +382,23 @@ export const getOverdueDeadlines = async (
     current_workflow_type: {
       in: PROCUREMENT_WORKFLOW_TYPES,
     },
-    expected_completion_procurement_date: { not: null },
+    expected_approval_date: { not: null },
   };
 
   const overdueWhere = andWhere(visibilityWhere, activeWhere, {
-    expected_completion_procurement_date: { lt: today },
+    expected_approval_date: { lt: today },
   });
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where: overdueWhere,
       skip,
-      take: query.limit,
-      orderBy: { expected_completion_procurement_date: 'asc' },
+      take: limit,
+      orderBy: { expected_approval_date: 'asc' },
       select: {
         id: true,
         title: true,
-        expected_completion_procurement_date: true,
+        expected_approval_date: true,
       },
     }),
     prisma.project.count({ where: overdueWhere }),
@@ -525,25 +407,23 @@ export const getOverdueDeadlines = async (
   const rows: OverdueProjectRow[] = projects.map((project) => ({
     projectId: project.id,
     title: project.title,
-    dueDate: project.expected_completion_procurement_date!,
-    daysLate: daysBetweenBangkokDates(
-      project.expected_completion_procurement_date!,
-      today
-    ),
+    dueDate: project.expected_approval_date!,
+    daysLate: daysBetweenBangkokDates(project.expected_approval_date!, today),
   }));
 
   return {
     total,
-    page: query.page,
-    pageSize: query.limit,
-    totalPages: Math.ceil(total / query.limit),
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
     data: rows,
   };
 };
 
 export const getDueSoonDeadlines = async (
   user: AuthPayload,
-  query: DeadlinesQuery
+  page: number,
+  limit: number
 ): Promise<PaginatedResponse<DueSoonProjectRow>> => {
   if (!canViewDeadlines(user)) {
     throw new ForbiddenError('You do not have permission to view deadlines');
@@ -555,7 +435,7 @@ export const getDueSoonDeadlines = async (
     return fromBangkokDate(parts.year, parts.month, parts.day);
   })();
   const dueSoonEnd = addBangkokDays(today, 7, true);
-  const skip = (query.page - 1) * query.limit;
+  const skip = (page - 1) * limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
     status: {
@@ -564,30 +444,30 @@ export const getDueSoonDeadlines = async (
     current_workflow_type: {
       in: PROCUREMENT_WORKFLOW_TYPES,
     },
-    expected_completion_procurement_date: { not: null },
+    expected_approval_date: { not: null },
   };
 
   const dueSoonWhere = andWhere(visibilityWhere, activeWhere, {
-    expected_completion_procurement_date: { gte: today, lte: dueSoonEnd },
+    expected_approval_date: { gte: today, lte: dueSoonEnd },
   });
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where: dueSoonWhere,
       skip,
-      take: query.limit,
-      orderBy: { expected_completion_procurement_date: 'asc' },
+      take: limit,
+      orderBy: { expected_approval_date: 'asc' },
       select: {
         id: true,
         title: true,
-        expected_completion_procurement_date: true,
+        expected_approval_date: true,
       },
     }),
     prisma.project.count({ where: dueSoonWhere }),
   ]);
 
   const rows: DueSoonProjectRow[] = projects.map((project) => {
-    const dueDate = project.expected_completion_procurement_date!;
+    const dueDate = project.expected_approval_date!;
     const daysRemaining = daysBetweenBangkokDates(today, dueDate);
     return {
       projectId: project.id,
@@ -600,9 +480,9 @@ export const getDueSoonDeadlines = async (
 
   return {
     total,
-    page: query.page,
-    pageSize: query.limit,
-    totalPages: Math.ceil(total / query.limit),
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
     data: rows,
   };
 };
