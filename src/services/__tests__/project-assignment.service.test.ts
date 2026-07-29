@@ -36,6 +36,7 @@ describe('project-assignment.service', () => {
         id: 'project-1',
         status: ProjectStatus.UNASSIGNED,
         current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_started_at: null,
         assignee_procurement: [],
         assignee_contract: [],
       },
@@ -70,10 +71,11 @@ describe('project-assignment.service', () => {
           status: ProjectStatus.UNASSIGNED,
           assignee_procurement: { none: {} },
         },
-        data: {
+        data: expect.objectContaining({
           status: ProjectStatus.WAITING_ACCEPT,
           assignee_procurement: { connect: { id: 'staff-2' } },
-        },
+          procurement_started_at: expect.any(Date),
+        }),
       })
     );
     expect(txMock.projectHistory.create).toHaveBeenCalledWith(
@@ -127,6 +129,7 @@ describe('project-assignment.service', () => {
     txMock.project.findUnique.mockResolvedValue({
       status: ProjectStatus.UNASSIGNED,
       current_workflow_type: UnitResponsibleType.LT100K,
+      procurement_started_at: null,
     });
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
@@ -141,6 +144,13 @@ describe('project-assignment.service', () => {
       txMock,
       UnitResponsibleType.LT100K,
       'project-1'
+    );
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          procurement_started_at: expect.any(Date),
+        }),
+      })
     );
   });
 

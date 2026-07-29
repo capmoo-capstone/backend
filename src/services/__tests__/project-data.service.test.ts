@@ -137,6 +137,61 @@ describe('project-data.service', () => {
     );
   });
 
+  it('allows installment-round updates during CONTRACT before the first export', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 1,
+    });
+    txMock.projectFinanceExport.count.mockResolvedValue(0);
+    txMock.project.findFirst.mockResolvedValue(null);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      installment_rounds: 2,
+    });
+
+    const result = await updateProjectData(user, {
+      id: 'project-1',
+      updateData: { installment_rounds: 2 },
+    } as any);
+
+    expect(result.installment_rounds).toBe(2);
+    expect(txMock.projectFinanceExport.count).toHaveBeenCalledWith({
+      where: { project_id: 'project-1' },
+    });
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: { installment_rounds: 2 },
+    });
+  });
+
+  it('rejects installment-round updates before CONTRACT or after an export exists', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+    });
+
+    await expect(
+      updateProjectData(user, {
+        id: 'project-1',
+        updateData: { installment_rounds: 2 },
+      } as any)
+    ).rejects.toBeInstanceOf(BadRequestError);
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+    txMock.projectFinanceExport.count.mockResolvedValue(1);
+
+    await expect(
+      updateProjectData(user, {
+        id: 'project-1',
+        updateData: { installment_rounds: 2 },
+      } as any)
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
   it('rejects duplicate PR numbers inside one import request', async () => {
     await expect(
       importProjects(user, [

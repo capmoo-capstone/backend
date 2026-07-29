@@ -41,7 +41,11 @@ describe('project-finance.service', () => {
 
       expect(txMock.project.findUnique).toHaveBeenCalledWith({
         where: { id: dto.id },
-        select: { installment_rounds: true, current_workflow_type: true },
+        select: {
+          installment_rounds: true,
+          current_workflow_type: true,
+          contract_completed_at: true,
+        },
       });
     });
 
@@ -64,6 +68,7 @@ describe('project-finance.service', () => {
       txMock.project.findUnique.mockResolvedValue({
         installment_rounds: 3,
         current_workflow_type: UnitResponsibleType.CONTRACT,
+        contract_completed_at: null,
       });
 
       await expect(
@@ -98,9 +103,11 @@ describe('project-finance.service', () => {
         installment_no: dto.installment_no,
         status: ProjectFinanceExportStatus.WAITING_EXPORT,
         created_by: mockUser.id,
+        created_at: new Date('2026-06-01T00:00:00.000Z'),
       } as ProjectFinanceExport;
 
       txMock.projectFinanceExport.upsert.mockResolvedValue(mockExportResult);
+      txMock.projectFinanceExport.count.mockResolvedValue(2);
 
       const result = await createFinanceExportRequest(mockUser, dto);
 
@@ -122,6 +129,53 @@ describe('project-finance.service', () => {
           status: ProjectFinanceExportStatus.WAITING_EXPORT,
         },
       });
+    });
+
+    it('records contract completion when the final installment export is created', async () => {
+      const completedAt = new Date('2026-06-02T00:00:00.000Z');
+      txMock.project.findUnique.mockResolvedValue({
+        installment_rounds: 2,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+        contract_completed_at: null,
+      });
+      txMock.projectFinanceExport.upsert.mockResolvedValue({
+        id: 'export-final',
+        project_id: dto.id,
+        installment_no: dto.installment_no,
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        created_by: mockUser.id,
+        created_at: completedAt,
+      });
+      txMock.projectFinanceExport.count.mockResolvedValue(2);
+
+      await createFinanceExportRequest(mockUser, dto);
+
+      expect(txMock.project.update).toHaveBeenCalledWith({
+        where: { id: dto.id },
+        data: { contract_completed_at: completedAt },
+      });
+    });
+
+    it('does not overwrite an existing contract completion timestamp', async () => {
+      const existingCompletion = new Date('2026-06-01T00:00:00.000Z');
+      txMock.project.findUnique.mockResolvedValue({
+        installment_rounds: 2,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+        contract_completed_at: existingCompletion,
+      });
+      txMock.projectFinanceExport.upsert.mockResolvedValue({
+        id: 'export-final',
+        project_id: dto.id,
+        installment_no: dto.installment_no,
+        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        created_by: mockUser.id,
+        created_at: new Date('2026-06-02T00:00:00.000Z'),
+      });
+      txMock.projectFinanceExport.count.mockResolvedValue(2);
+
+      await createFinanceExportRequest(mockUser, dto);
+
+      expect(txMock.project.update).not.toHaveBeenCalled();
     });
   });
 

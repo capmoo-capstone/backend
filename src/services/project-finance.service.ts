@@ -11,17 +11,24 @@ import {
   CompleteInstallmentDto,
   ExportFinanceDataDto,
 } from '../schemas/project.schema';
+import { acquireProjectInstallmentLock } from '../lib/project-installment';
 
 export const createFinanceExportRequest = async (
   user: AuthPayload,
   data: CompleteInstallmentDto
 ): Promise<ProjectFinanceExport> => {
   return await prisma.$transaction(async (tx) => {
+    await acquireProjectInstallmentLock(tx, data.id);
+
     const installmentData = await tx.project.findUnique({
       where: {
         id: data.id,
       },
-      select: { installment_rounds: true, current_workflow_type: true },
+      select: {
+        installment_rounds: true,
+        current_workflow_type: true,
+        contract_completed_at: true,
+      },
     });
 
     if (!installmentData) {
@@ -47,7 +54,7 @@ export const createFinanceExportRequest = async (
 
     // TODO: Check that the submission in this installment is all COMPLETED
 
-    return await tx.projectFinanceExport.upsert({
+    const exportRequest = await tx.projectFinanceExport.upsert({
       where: {
         project_id_installment_no: {
           project_id: data.id,
@@ -64,6 +71,22 @@ export const createFinanceExportRequest = async (
         status: ProjectFinanceExportStatus.WAITING_EXPORT,
       },
     });
+
+    const exportCount = await tx.projectFinanceExport.count({
+      where: { project_id: data.id },
+    });
+
+    if (
+      exportCount === installmentData.installment_rounds &&
+      !installmentData.contract_completed_at
+    ) {
+      await tx.project.update({
+        where: { id: data.id },
+        data: { contract_completed_at: exportRequest.created_at },
+      });
+    }
+
+    return exportRequest;
   });
 };
 

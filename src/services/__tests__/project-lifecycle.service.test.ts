@@ -187,6 +187,8 @@ describe('project-lifecycle.service', () => {
       current_workflow_type: UnitResponsibleType.LT100K,
       procurement_progress: {},
       responsible_unit_id: 'unit-proc',
+      procurement_completed_at: null,
+      contract_started_at: null,
       assignee_procurement: [],
     });
     txMock.project.update.mockResolvedValue({
@@ -208,6 +210,14 @@ describe('project-lifecycle.service', () => {
       responsible_unit_id: CONTRACT_UNIT_ID,
     });
     expect(txMock.projectHistory.create).toHaveBeenCalled();
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          procurement_completed_at: expect.any(Date),
+          contract_started_at: expect.any(Date),
+        }),
+      })
+    );
   });
 
   it('closeProject closes contract projects that are in progress', async () => {
