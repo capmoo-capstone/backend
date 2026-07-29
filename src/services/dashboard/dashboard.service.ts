@@ -1,9 +1,7 @@
 import {
-  DeadlinesQuery,
   PeriodicSummaryQuery,
   ProcurementOverviewQuery,
-  UnitGroupOverviewQuery,
-  UnitGroupProcurementQuery,
+  UnitGroupQuery,
   UnitGroupTopDelayedQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
@@ -35,31 +33,33 @@ export const getProcurementOverview = (
 
 export const getOverdueDeadlines = (
   user: AuthPayload,
-  query: DeadlinesQuery
+  page: number,
+  limit: number
 ): Promise<PaginatedResponse<OverdueProjectRow>> =>
-  overviewHelper.getOverdueDeadlines(user, query);
+  overviewHelper.getOverdueDeadlines(user, page, limit);
 
 export const getDueSoonDeadlines = (
   user: AuthPayload,
-  query: DeadlinesQuery
+  page: number,
+  limit: number
 ): Promise<PaginatedResponse<DueSoonProjectRow>> =>
-  overviewHelper.getDueSoonDeadlines(user, query);
+  overviewHelper.getDueSoonDeadlines(user, page, limit);
 
 export const getUnitGroupExecutiveSummary = (
   user: AuthPayload,
-  query: UnitGroupOverviewQuery
+  query: UnitGroupQuery
 ): Promise<UnitGroupExecutiveSummaryResponse> =>
   kpiHelper.getUnitGroupExecutiveSummary(user, query);
 
 export const getUnitGroupProcurementMetrics = (
   user: AuthPayload,
-  query: UnitGroupProcurementQuery
+  query: UnitGroupQuery
 ): Promise<UnitGroupProcurementMetricsResponse> =>
   kpiHelper.getUnitGroupProcurementMetrics(user, query);
 
 export const getUnitGroupProcurementDetails = (
   user: AuthPayload,
-  query: UnitGroupProcurementQuery
+  query: UnitGroupQuery
 ): Promise<UnitGroupProcurementDetailsResponse> =>
   kpiHelper.getUnitGroupProcurementDetails(user, query);
 
@@ -68,4 +68,3 @@ export const getUnitGroupTopDelayedProjects = (
   query: UnitGroupTopDelayedQuery
 ): Promise<UnitGroupTopDelayedProjectsResponse> =>
   kpiHelper.getUnitGroupTopDelayedProjects(user, query);
-

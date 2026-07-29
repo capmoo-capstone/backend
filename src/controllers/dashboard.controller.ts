@@ -3,8 +3,7 @@ import {
   DeadlinesQuerySchema,
   PeriodicSummaryQuerySchema,
   ProcurementOverviewQuerySchema,
-  UnitGroupOverviewQuerySchema,
-  UnitGroupProcurementQuerySchema,
+  UnitGroupQuerySchema,
   UnitGroupTopDelayedQuerySchema,
 } from '../schemas/dashboard.schema';
 import * as DashboardService from '../services/dashboard/dashboard.service';
@@ -17,8 +16,7 @@ export const getPeriodicSummary = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const { period } = req.query;
-  const query = PeriodicSummaryQuerySchema.parse({ period });
+  const query = PeriodicSummaryQuerySchema.parse(req.query);
   const data = await DashboardService.getPeriodicSummary(payload, query);
   res.status(200).json(data);
 };
@@ -30,13 +28,7 @@ export const getProcurementOverview = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const { mode, fiscalYear, month, quarter } = req.query;
-  const query = ProcurementOverviewQuerySchema.parse({
-    mode,
-    fiscalYear,
-    month,
-    quarter,
-  });
+  const query = ProcurementOverviewQuerySchema.parse(req.query);
   const data = await DashboardService.getProcurementOverview(payload, query);
   res.status(200).json(data);
 };
@@ -48,8 +40,12 @@ export const getOverdueDeadlines = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const query = DeadlinesQuerySchema.parse(req.query);
-  const data = await DashboardService.getOverdueDeadlines(payload, query);
+  const { page, limit } = req.query;
+  const data = await DashboardService.getOverdueDeadlines(
+    payload,
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10
+  );
   res.status(200).json(data);
 };
 
@@ -60,8 +56,12 @@ export const getDueSoonDeadlines = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const query = DeadlinesQuerySchema.parse(req.query);
-  const data = await DashboardService.getDueSoonDeadlines(payload, query);
+  const { page, limit } = req.query;
+  const data = await DashboardService.getDueSoonDeadlines(
+    payload,
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10
+  );
   res.status(200).json(data);
 };
 
@@ -72,7 +72,7 @@ export const getUnitGroupExecutiveSummary = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const query = UnitGroupOverviewQuerySchema.parse(req.query);
+  const query = UnitGroupQuerySchema.parse(req.query);
   const data = await DashboardService.getUnitGroupExecutiveSummary(
     payload,
     query
@@ -87,7 +87,7 @@ export const getUnitGroupProcurementMetrics = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const query = UnitGroupProcurementQuerySchema.parse(req.query);
+  const query = UnitGroupQuerySchema.parse(req.query);
   const data = await DashboardService.getUnitGroupProcurementMetrics(
     payload,
     query
@@ -102,7 +102,7 @@ export const getUnitGroupProcurementDetails = async (
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const query = UnitGroupProcurementQuerySchema.parse(req.query);
+  const query = UnitGroupQuerySchema.parse(req.query);
   const data = await DashboardService.getUnitGroupProcurementDetails(
     payload,
     query
