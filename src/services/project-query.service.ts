@@ -359,6 +359,16 @@ export const getById = async (
         contract_no: {
           select: { contract_no: true },
         },
+        project_installments: {
+          select: {
+            id: true,
+            installment_no: true,
+            status: true,
+            request_edit_reason: true,
+            creator: { select: { id: true, full_name: true, roles: true } },
+            exporter: { select: { id: true, full_name: true, roles: true } },
+          },
+        },
       },
     });
     if (!projectData) {
@@ -423,6 +433,22 @@ export const getById = async (
             decider: {
               id: c.decider?.id,
               full_name: c.decider?.full_name,
+            },
+          }))
+        : null,
+      installment: projectData.project_installments
+        ? projectData.project_installments.map((i) => ({
+            id: i.id,
+            installment_no: i.installment_no,
+            status: i.status,
+            request_edit_reason: i.request_edit_reason,
+            creator: {
+              id: i.creator.id,
+              full_name: i.creator.full_name,
+            },
+            exporter: {
+              id: i.exporter?.id,
+              full_name: i.exporter?.full_name,
             },
           }))
         : null,
@@ -869,10 +895,7 @@ export const getSummaryCards = async (
       prisma.project.count({
         where: {
           status: {
-            in: [
-              ProjectStatus.IN_PROGRESS,
-              ProjectStatus.WAITING_CANCEL,
-            ],
+            in: [ProjectStatus.IN_PROGRESS, ProjectStatus.WAITING_CANCEL],
           },
         },
       }),

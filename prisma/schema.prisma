@@ -296,8 +296,8 @@ model Project {
   procurement_completed_at             DateTime?
   contract_started_at                  DateTime?
   contract_completed_at                DateTime?
-  procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
-  contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   pr_no                                String?
   po_no                                String?
   less_no                              String?
