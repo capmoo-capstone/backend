@@ -4,11 +4,15 @@ import {
   addBangkokDays,
   bangkokDayStartUtc,
   bangkokTodayStartUtc,
-  bangkokWeekday,
   formatBangkokDate,
   formatBangkokOffset,
 } from '../lib/date';
 import { BadRequestError, NotFoundError } from '../lib/errors';
+import {
+  addBangkokWorkingDays,
+  countBangkokWorkingDays,
+  createBangkokWorkingDayHolidayIndex,
+} from '../lib/working-days';
 import {
   CalculateTimelineDto,
   CreateHolidayDto,
@@ -40,11 +44,6 @@ const URGENCY_THRESHOLDS: Record<string, UrgencyThresholds> = {
   EBIDDING: { veryUrgent: 60, urgent: 90 },
 };
 
-const isWeekend = (date: Date): boolean => {
-  const day = bangkokWeekday(date);
-  return day === 0 || day === 6;
-};
-
 const parseHolidayDate = (date: string): Date =>
   new Date(`${date}T00:00:00.000Z`);
 
@@ -57,46 +56,6 @@ export const getHolidayDates = async (
     select: { date: true },
   });
   return new Set(holidays.map((h) => formatBangkokDate(h.date)));
-};
-
-const countWorkingDays = (
-  from: Date,
-  to: Date,
-  holidaySet: Set<string>
-): number => {
-  let count = 0;
-  let cursor = bangkokDayStartUtc(from);
-  const end = bangkokDayStartUtc(to);
-
-  // ไม่นับวันเริ่มต้น (from) เหมือนกับ addWorkingDays
-  cursor = addBangkokDays(cursor, 1);
-
-  while (cursor <= end) {
-    const isoDate = formatBangkokDate(cursor);
-    if (!isWeekend(cursor) && !holidaySet.has(isoDate)) {
-      count++;
-    }
-    cursor = addBangkokDays(cursor, 1);
-  }
-  return count;
-};
-
-const addWorkingDays = (
-  startDate: Date,
-  n: number,
-  holidaySet: Set<string>
-): Date => {
-  let cursor = bangkokDayStartUtc(startDate);
-  let remaining = n;
-
-  while (remaining > 0) {
-    cursor = addBangkokDays(cursor, 1);
-    const isoDate = formatBangkokDate(cursor);
-    if (!isWeekend(cursor) && !holidaySet.has(isoDate)) {
-      remaining--;
-    }
-  }
-  return cursor;
 };
 
 const resolveUrgencyLevel = (
@@ -232,17 +191,22 @@ export const calculateTimeline = async (
     const windowEnd = addBangkokDays(today, quota * 2);
     const holidaySet = await getHolidayDates(today, windowEnd);
 
-    resolvedDeliveryDate = addWorkingDays(today, quota, holidaySet);
+    resolvedDeliveryDate = addBangkokWorkingDays(
+      today,
+      quota,
+      createBangkokWorkingDayHolidayIndex(holidaySet)
+    );
     isCustomDate = false;
   }
 
   const from = today < resolvedDeliveryDate ? today : resolvedDeliveryDate;
   const to = today < resolvedDeliveryDate ? resolvedDeliveryDate : today;
   const holidaySet = await getHolidayDates(from, to);
+  const holidayIndex = createBangkokWorkingDayHolidayIndex(holidaySet);
 
   const remainingWorkingDays =
     today <= resolvedDeliveryDate
-      ? countWorkingDays(today, resolvedDeliveryDate, holidaySet)
+      ? countBangkokWorkingDays(today, resolvedDeliveryDate, holidayIndex)
       : 0;
 
   const urgentLevel = resolveUrgencyLevel(remainingWorkingDays, thresholds);

@@ -1,9 +1,9 @@
 import { Response } from 'express';
 import {
-  DeadlinesQuerySchema,
   PeriodicSummaryQuerySchema,
   ProcurementOverviewQuerySchema,
   UnitGroupQuerySchema,
+  UnitGroupStaffPerformanceQuerySchema,
   UnitGroupTopDelayedQuerySchema,
 } from '../schemas/dashboard.schema';
 import * as DashboardService from '../services/dashboard/dashboard.service';
@@ -119,6 +119,21 @@ export const getUnitGroupTopDelayedProjects = async (
   const payload = req.user!;
   const query = UnitGroupTopDelayedQuerySchema.parse(req.query);
   const data = await DashboardService.getUnitGroupTopDelayedProjects(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
+export const getUnitGroupStaffPerformance = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupStaffPerformanceQuerySchema.parse(req.query);
+  const data = await DashboardService.getUnitGroupStaffPerformance(
     payload,
     query
   );

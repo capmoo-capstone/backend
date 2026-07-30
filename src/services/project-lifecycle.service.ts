@@ -450,6 +450,8 @@ export const completeProcurementPhase = async (
         current_workflow_type: true,
         procurement_progress: true,
         responsible_unit_id: true,
+        procurement_completed_at: true,
+        contract_started_at: true,
         assignee_procurement: true,
       },
     });
@@ -463,8 +465,13 @@ export const completeProcurementPhase = async (
       throw new BadRequestError('Project is already in CONTRACT workflow type');
     }
 
+    const transitionAt = nowUtc();
     let dataToUpdate: any = {
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      ...(project.procurement_completed_at
+        ? {}
+        : { procurement_completed_at: transitionAt }),
+      ...(project.contract_started_at ? {} : { contract_started_at: transitionAt }),
     };
 
     if (data.continue_unit_proc) {

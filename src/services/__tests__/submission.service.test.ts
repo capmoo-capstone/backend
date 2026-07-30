@@ -481,6 +481,7 @@ describe('submission.service', () => {
       asset_code: null,
       vendor_name: null,
       vendor_email: null,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
     });
 
     const result = await signAndCompleteSubmission(user, {
@@ -514,6 +515,43 @@ describe('submission.service', () => {
       signAndCompleteSubmission(user, {
         id: 'submission-1',
         required_updating: false,
+      } as any)
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('rejects installment-round changes from submission metadata outside CONTRACT workflow', async () => {
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_SIGNATURE,
+      submitted_by: 'submitter-1',
+      meta_data: [{ field_key: 'installment_rounds', value: 2 }],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+      installment_rounds: 1,
+      current_workflow_type: UnitResponsibleType.LT100K,
+    });
+
+    await expect(
+      signAndCompleteSubmission(user, {
+        id: 'submission-1',
+        required_updating: true,
       } as any)
     ).rejects.toBeInstanceOf(BadRequestError);
   });

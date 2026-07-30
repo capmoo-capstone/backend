@@ -44,6 +44,10 @@ router.get(
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getUnitGroupTopDelayedProjects
 );
+router.get(
+  '/unit-group/staff-performance',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getUnitGroupStaffPerformance
+);
 
 export default router;
-

@@ -68,6 +68,18 @@ export const errorHandler = (
     });
   }
 
+  if (
+    err instanceof SyntaxError &&
+    'status' in err &&
+    (err as { status?: number }).status === 400 &&
+    'body' in err
+  ) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid JSON payload format',
+    });
+  }
+
   const prismaErrorResponse = getPrismaErrorResponse(err);
   if (prismaErrorResponse) {
     logServerError(err, req, 'Prisma error');

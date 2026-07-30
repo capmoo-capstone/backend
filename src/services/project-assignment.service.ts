@@ -18,6 +18,7 @@ import {
   ProjectIdStatusResponse,
 } from '../types/project.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+import { nowUtc } from '../lib/date';
 import {
   notifyProjectAssigned,
   notifyResponsibleAdded,
@@ -44,6 +45,7 @@ export const assignProjectsToUser = async (
         title: true,
         status: true,
         current_workflow_type: true,
+        procurement_started_at: true,
         assignee_contract: true,
         assignee_procurement: true,
       },
@@ -78,6 +80,10 @@ export const assignProjectsToUser = async (
         throw new BadRequestError(`Project ${id} is already assigned`);
       }
 
+      const shouldStartProcurement =
+        project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
+        !project.procurement_started_at;
+
       updatePromises.push(
         tx.project.update({
           where: {
@@ -88,6 +94,9 @@ export const assignProjectsToUser = async (
           data: {
             status: ProjectStatus.WAITING_ACCEPT,
             [assigneeField]: { connect: { id: assigneeId } },
+            ...(shouldStartProcurement
+              ? { procurement_started_at: nowUtc() }
+              : {}),
           },
           select: { id: true, status: true, [assigneeField]: true },
         })
@@ -199,6 +208,7 @@ export const claimProject = async (
       select: {
         status: true,
         current_workflow_type: true,
+        procurement_started_at: true,
       },
     });
 
@@ -220,6 +230,10 @@ export const claimProject = async (
       data: {
         status: ProjectStatus.IN_PROGRESS,
         [assigneeField]: { connect: { id: user.id } },
+        ...(project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
+        !project.procurement_started_at
+          ? { procurement_started_at: nowUtc() }
+          : {}),
       },
       select: { id: true, status: true, [assigneeField]: true },
     });

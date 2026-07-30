@@ -39,6 +39,7 @@ import {
 } from './notification/notification.service';
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
+import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -127,6 +128,10 @@ const updateProjectForSubmission = async (
     throw new BadRequestError(
       'Meta data contains invalid fields for project update'
     );
+  }
+
+  if (validated.data.installment_rounds !== undefined) {
+    await assertInstallmentRoundsCanBeUpdated(tx, project.id);
   }
 
   const oldValue = {};
@@ -756,6 +761,7 @@ export const signAndCompleteSubmission = async (
           vendor_name: true,
           vendor_email: true,
           installment_rounds: true,
+          current_workflow_type: true,
         },
       });
       await updateProjectForSubmission(

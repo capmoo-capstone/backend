@@ -291,6 +291,10 @@ model Project {
   expected_approval_date               DateTime?
   expected_completion_procurement_date DateTime?
   installment_rounds                   Int                 @default(1)
+  procurement_started_at               DateTime?
+  procurement_completed_at             DateTime?
+  contract_started_at                  DateTime?
+  contract_completed_at                DateTime?
   procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"other\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
   pr_no                                String?
@@ -326,6 +330,8 @@ model Project {
   @@index([requesting_dept_id])
   @@index([responsible_unit_id])
   @@index([created_at])
+  @@index([procurement_completed_at])
+  @@index([contract_completed_at])
   @@map("projects")
 }
 

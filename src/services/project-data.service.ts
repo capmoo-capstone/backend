@@ -22,6 +22,7 @@ import {
   buildContractNumberTargetSnapshot,
 } from './audit-log.service';
 import { nowUtc, toBangkokParts } from '../lib/date';
+import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
 
 const currentBangkokBudgetYear = (): number => {
   const parts = toBangkokParts(nowUtc());
@@ -224,6 +225,10 @@ export const updateProjectData = async (
     });
     if (!current) {
       throw new NotFoundError('Project not found');
+    }
+
+    if (data.updateData.installment_rounds !== undefined) {
+      await assertInstallmentRoundsCanBeUpdated(tx, current.id);
     }
 
     await checkRefNumberDuplication(
