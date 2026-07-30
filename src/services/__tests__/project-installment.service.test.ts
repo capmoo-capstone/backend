@@ -388,5 +388,85 @@ describe('project-finance.service', () => {
         },
       });
     });
+
+    it('should revert project status from WAITING_CLOSE to IN_PROGRESS when requestEditInstallment is called', async () => {
+      txMock.projectInstallment.findUnique.mockResolvedValue({
+        id: 'export-1',
+        project_id: 'p1',
+        status: ProjectInstallmentStatus.EXPORTED,
+      } as ProjectInstallment);
+
+      const mockUpdated = {
+        id: 'export-1',
+        project_id: 'p1',
+        status: ProjectInstallmentStatus.REQUEST_EDIT,
+        request_edit_reason: 'Fix details',
+      } as ProjectInstallment;
+
+      txMock.projectInstallment.update.mockResolvedValue(mockUpdated);
+
+      txMock.project.findUnique.mockResolvedValue({
+        id: 'p1',
+        status: ProjectStatus.WAITING_CLOSE,
+      });
+
+      txMock.project.update.mockResolvedValue({
+        id: 'p1',
+        status: ProjectStatus.IN_PROGRESS,
+      });
+
+      const result = await requestEditInstallment(
+        mockUser,
+        'export-1',
+        'Fix details'
+      );
+
+      expect(result).toEqual(mockUpdated);
+      expect(txMock.project.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { status: ProjectStatus.IN_PROGRESS },
+        select: { id: true, status: true },
+      });
+    });
+
+    it('should revert project status from CLOSED to IN_PROGRESS when requestEditInstallment is called', async () => {
+      txMock.projectInstallment.findUnique.mockResolvedValue({
+        id: 'export-1',
+        project_id: 'p1',
+        status: ProjectInstallmentStatus.EXPORTED,
+      } as ProjectInstallment);
+
+      const mockUpdated = {
+        id: 'export-1',
+        project_id: 'p1',
+        status: ProjectInstallmentStatus.REQUEST_EDIT,
+        request_edit_reason: 'Fix details',
+      } as ProjectInstallment;
+
+      txMock.projectInstallment.update.mockResolvedValue(mockUpdated);
+
+      txMock.project.findUnique.mockResolvedValue({
+        id: 'p1',
+        status: ProjectStatus.CLOSED,
+      });
+
+      txMock.project.update.mockResolvedValue({
+        id: 'p1',
+        status: ProjectStatus.IN_PROGRESS,
+      });
+
+      const result = await requestEditInstallment(
+        mockUser,
+        'export-1',
+        'Fix details'
+      );
+
+      expect(result).toEqual(mockUpdated);
+      expect(txMock.project.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { status: ProjectStatus.IN_PROGRESS },
+        select: { id: true, status: true },
+      });
+    });
   });
 });

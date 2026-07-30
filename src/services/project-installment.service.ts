@@ -200,7 +200,7 @@ export const exportFinanceData = async (
 };
 
 export const requestEditInstallment = async (
-  _user: AuthPayload,
+  user: AuthPayload,
   exportId: string,
   reason: string
 ): Promise<ProjectInstallment> => {
@@ -219,12 +219,39 @@ export const requestEditInstallment = async (
       );
     }
 
-    return await tx.projectInstallment.update({
+    const updatedInstallment = await tx.projectInstallment.update({
       where: { id: exportId },
       data: {
         status: ProjectInstallmentStatus.REQUEST_EDIT,
         request_edit_reason: reason,
       },
     });
+
+    const project = await tx.project.findUnique({
+      where: { id: exportRecord.project_id },
+      select: { id: true, status: true },
+    });
+
+    if (
+      project &&
+      (project.status === ProjectStatus.WAITING_CLOSE ||
+        project.status === ProjectStatus.CLOSED)
+    ) {
+      const updatedProject = await tx.project.update({
+        where: { id: project.id },
+        data: { status: ProjectStatus.IN_PROGRESS },
+        select: { id: true, status: true },
+      });
+
+      await createProjectHistoryAndAuditEvent(tx, {
+        projectId: project.id,
+        action: ProjectActionType.STATUS_UPDATE,
+        oldValue: { status: project.status },
+        newValue: { status: updatedProject.status },
+        changedBy: user,
+      });
+    }
+
+    return updatedInstallment;
   });
 };
