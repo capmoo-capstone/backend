@@ -1,6 +1,6 @@
 import {
   Prisma,
-  ProjectFinanceExportStatus,
+  ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
@@ -250,17 +250,13 @@ const isProgressRole = (role: OwnRole): role is SupplyProgressRole =>
   role === UserRole.HEAD_OF_UNIT ||
   role === UserRole.DOCUMENT_STAFF;
 
-const financeCloseWhere = (projectIds: string[]): Prisma.ProjectWhereInput =>
-  andWhere(
-    { id: { in: projectIds } },
-    { status: { not: ProjectStatus.CLOSED } },
-    { current_workflow_type: UnitResponsibleType.CONTRACT }
-  );
+const financeCloseWhere = (): Prisma.ProjectWhereInput => ({
+  status: ProjectStatus.WAITING_CLOSE,
+});
 
 const roleTabWhere = (
   scope: RoleScope,
-  tab: OwnProjectTab,
-  waitingCloseProjectIds: string[]
+  tab: OwnProjectTab
 ): Prisma.ProjectWhereInput | null => {
   const urgentStatus = URGENT_TAB[tab];
   if (urgentStatus) {
@@ -282,18 +278,18 @@ const roleTabWhere = (
         scope.where,
         orWhere([
           {
-            project_finance_export: {
+            project_installments: {
               some: {
                 status: {
                   in: [
-                    ProjectFinanceExportStatus.WAITING_EXPORT,
-                    ProjectFinanceExportStatus.REQUEST_EDIT,
+                    ProjectInstallmentStatus.WAITING_EXPORT,
+                    ProjectInstallmentStatus.REQUEST_EDIT,
                   ],
                 },
               },
             },
           },
-          financeCloseWhere(waitingCloseProjectIds),
+          financeCloseWhere(),
         ])
       );
     }
@@ -357,12 +353,12 @@ const roleTabWhere = (
   if (scope.role === UserRole.FINANCE_STAFF) {
     if (tab === 'waiting_finance_export') {
       return andWhere(scope.where, {
-        project_finance_export: {
+        project_installments: {
           some: {
             status: {
               in: [
-                ProjectFinanceExportStatus.WAITING_EXPORT,
-                ProjectFinanceExportStatus.REQUEST_EDIT,
+                ProjectInstallmentStatus.WAITING_EXPORT,
+                ProjectInstallmentStatus.REQUEST_EDIT,
               ],
             },
           },
@@ -370,53 +366,11 @@ const roleTabWhere = (
       });
     }
     if (tab === 'waiting_close_project') {
-      return andWhere(scope.where, financeCloseWhere(waitingCloseProjectIds));
+      return andWhere(scope.where, financeCloseWhere());
     }
   }
 
   return null;
-};
-
-const getWaitingCloseProjectIds = async (): Promise<string[]> => {
-  const projects = await prisma.project.findMany({
-    where: {
-      status: { not: ProjectStatus.CLOSED },
-      current_workflow_type: UnitResponsibleType.CONTRACT,
-      project_finance_export: {
-        some: { status: ProjectFinanceExportStatus.EXPORTED },
-      },
-    },
-    select: {
-      id: true,
-      installment_rounds: true,
-      project_finance_export: {
-        where: { status: ProjectFinanceExportStatus.EXPORTED },
-        select: { installment_no: true },
-      },
-    },
-  });
-
-  return projects
-    .filter((project) => {
-      const exportedInstallments = new Set(
-        project.project_finance_export.map(
-          (financeExport) => financeExport.installment_no
-        )
-      );
-
-      for (
-        let installmentNo = 1;
-        installmentNo <= project.installment_rounds;
-        installmentNo++
-      ) {
-        if (!exportedInstallments.has(installmentNo)) {
-          return false;
-        }
-      }
-
-      return true;
-    })
-    .map((project) => project.id);
 };
 
 const broadAccessWhere = (
@@ -446,15 +400,9 @@ const ownProjectWhereClause = async (
   }
 
   const scopes = await buildRoleScopes(user);
-  const needsWaitingCloseProjectIds =
-    (tab === 'waiting_close_project' || tab === 'all') &&
-    scopes.some((scope) => scope.role === UserRole.FINANCE_STAFF);
-  const waitingCloseProjectIds = needsWaitingCloseProjectIds
-    ? await getWaitingCloseProjectIds()
-    : [];
 
   const clauses = scopes
-    .map((scope) => roleTabWhere(scope, tab, waitingCloseProjectIds))
+    .map((scope) => roleTabWhere(scope, tab))
     .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause));
 
   return orWhere(clauses);

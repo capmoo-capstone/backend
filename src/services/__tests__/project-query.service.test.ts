@@ -1,6 +1,6 @@
 import {
   ProcurementType,
-  ProjectFinanceExportStatus,
+  ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
@@ -471,12 +471,12 @@ describe('project-query.service', () => {
       await getOwnProjects(financeUser, 1, 10, 'waiting_finance_export');
 
       expect(ownProjectWhere()).toEqual({
-        project_finance_export: {
+        project_installments: {
           some: {
             status: {
               in: [
-                ProjectFinanceExportStatus.WAITING_EXPORT,
-                ProjectFinanceExportStatus.REQUEST_EDIT,
+                ProjectInstallmentStatus.WAITING_EXPORT,
+                ProjectInstallmentStatus.REQUEST_EDIT,
               ],
             },
           },
@@ -484,43 +484,14 @@ describe('project-query.service', () => {
       });
     });
 
-    it('filters finance close tab to projects exported for every installment', async () => {
-      prismaMock.project.findMany
-        .mockResolvedValueOnce([
-          {
-            id: 'partial-export',
-            installment_rounds: 2,
-            project_finance_export: [
-              { installment_no: 1, status: ProjectFinanceExportStatus.EXPORTED },
-            ],
-          },
-          {
-            id: 'full-export',
-            installment_rounds: 2,
-            project_finance_export: [
-              { installment_no: 1, status: ProjectFinanceExportStatus.EXPORTED },
-              { installment_no: 2, status: ProjectFinanceExportStatus.EXPORTED },
-            ],
-          },
-        ] as any)
-        .mockResolvedValueOnce([projectRow]);
+    it('filters finance close tab to projects with WAITING_CLOSE status', async () => {
+      prismaMock.project.findMany.mockResolvedValueOnce([projectRow]);
       prismaMock.project.count.mockResolvedValue(1);
 
       await getOwnProjects(financeUser, 1, 10, 'waiting_close_project');
 
-      expect(prismaMock.project.findMany.mock.calls[0][0].where).toEqual({
-        status: { not: ProjectStatus.CLOSED },
-        current_workflow_type: UnitResponsibleType.CONTRACT,
-        project_finance_export: {
-          some: { status: ProjectFinanceExportStatus.EXPORTED },
-        },
-      });
       expect(ownProjectWhere()).toEqual({
-        AND: [
-          { id: { in: ['full-export'] } },
-          { status: { not: ProjectStatus.CLOSED } },
-          { current_workflow_type: UnitResponsibleType.CONTRACT },
-        ],
+        status: ProjectStatus.WAITING_CLOSE,
       });
     });
   });

@@ -264,7 +264,11 @@ describe('dashboard.service', () => {
         AND: expect.arrayContaining([
           expect.objectContaining({
             status: {
-              in: [ProjectStatus.IN_PROGRESS, ProjectStatus.WAITING_CANCEL],
+              in: [
+                ProjectStatus.IN_PROGRESS,
+                ProjectStatus.WAITING_CANCEL,
+                ProjectStatus.WAITING_CLOSE,
+              ],
             },
             current_workflow_type: {
               in: [
@@ -507,7 +511,7 @@ describe('dashboard.service', () => {
         })
       );
       expect(prismaMock.projectHistory.findMany).not.toHaveBeenCalled();
-      expect(prismaMock.projectFinanceExport.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.projectInstallment.findMany).not.toHaveBeenCalled();
     });
 
     it('returns a not-found error when the selected unit does not exist', async () => {

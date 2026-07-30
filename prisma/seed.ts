@@ -2,7 +2,7 @@ import {
   ProcurementType,
   ProjectActionType,
   ProjectCancellationStatus,
-  ProjectFinanceExportStatus,
+  ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
@@ -85,7 +85,7 @@ const cleanup = async () => {
   await prisma.notification.deleteMany();
   await prisma.projectDocument.deleteMany();
   await prisma.projectSubmission.deleteMany();
-  await prisma.projectFinanceExport.deleteMany();
+  await prisma.projectInstallment.deleteMany();
   await prisma.auditEvent.deleteMany();
   await prisma.projectCancellation.deleteMany();
   await prisma.projectHistory.deleteMany();
@@ -1159,18 +1159,18 @@ const seedBudgetPlans = async () => {
 };
 
 const seedFinanceExports = async () => {
-  await prisma.projectFinanceExport.createMany({
+  await prisma.projectInstallment.createMany({
     data: [
       {
         project_id: ids.projects.contractReadyExport,
         installment_no: 1,
-        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        status: ProjectInstallmentStatus.WAITING_EXPORT,
         created_by: ids.users.contractStaff,
       },
       {
         project_id: ids.projects.requestEdit,
         installment_no: 1,
-        status: ProjectFinanceExportStatus.EXPORTED,
+        status: ProjectInstallmentStatus.EXPORTED,
         created_by: ids.users.libraryStaff,
         exported_by: ids.users.financeStaff,
         exported_at: daysFromNow(-2),
@@ -1178,7 +1178,7 @@ const seedFinanceExports = async () => {
       {
         project_id: ids.projects.requestEdit,
         installment_no: 2,
-        status: ProjectFinanceExportStatus.REQUEST_EDIT,
+        status: ProjectInstallmentStatus.REQUEST_EDIT,
         request_edit_reason: 'Requester needs to update warranty details.',
         created_by: ids.users.libraryStaff,
         exported_by: ids.users.financeStaff,

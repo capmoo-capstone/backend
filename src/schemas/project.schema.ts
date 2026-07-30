@@ -33,6 +33,7 @@ export const CreateProjectSchema = z.object({
   budget_plan_id: z.array(z.string()).optional(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),
+  po_no: z.string().optional(),
   requesting_dept_id: z.string(),
   requesting_unit_id: z.string(),
   procurement_type: z.enum(ProcurementType),

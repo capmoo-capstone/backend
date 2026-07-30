@@ -31,7 +31,7 @@ const MODEL_NAMES = [
   'project',
   'projectCancellation',
   'projectContractNumber',
-  'projectFinanceExport',
+  'projectInstallment',
   'projectHistory',
   'projectSubmission',
   'submissionDocument',

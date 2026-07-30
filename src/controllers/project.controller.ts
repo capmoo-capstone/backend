@@ -22,7 +22,7 @@ import * as AuditLogService from '../services/audit-log.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
 import * as ProjectDataService from '../services/project-data.service';
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
-import * as ProjectFinanceService from '../services/project-finance.service';
+import * as ProjectFinanceService from '../services/project-installment.service';
 import * as ProjectQueryService from '../services/project-query.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 

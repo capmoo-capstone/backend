@@ -30,11 +30,13 @@ export const WORKLOAD_STATUSES = [
   ProjectStatus.WAITING_ACCEPT,
   ProjectStatus.IN_PROGRESS,
   ProjectStatus.WAITING_CANCEL,
+  ProjectStatus.WAITING_CLOSE,
 ];
 
 export const IN_PROGRESS_STATUSES: ProjectStatus[] = [
   ProjectStatus.IN_PROGRESS,
   ProjectStatus.WAITING_CANCEL,
+  ProjectStatus.WAITING_CLOSE,
 ];
 
 export const IN_PROGRESS_PHASE_STATUSES = [

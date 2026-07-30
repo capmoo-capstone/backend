@@ -220,9 +220,9 @@ describe('project-lifecycle.service', () => {
     );
   });
 
-  it('closeProject closes contract projects that are in progress', async () => {
+  it('closeProject closes contract projects that are in WAITING_CLOSE status', async () => {
     txMock.project.findUnique.mockResolvedValue({
-      status: ProjectStatus.IN_PROGRESS,
+      status: ProjectStatus.WAITING_CLOSE,
       current_workflow_type: UnitResponsibleType.CONTRACT,
       contract_progress: {},
     });
@@ -234,5 +234,17 @@ describe('project-lifecycle.service', () => {
     const result = await closeProject(headUser, 'project-1');
 
     expect(result.status).toBe(ProjectStatus.CLOSED);
+  });
+
+  it('closeProject throws BadRequestError if project is in IN_PROGRESS status', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      contract_progress: {},
+    });
+
+    await expect(closeProject(headUser, 'project-1')).rejects.toThrow(
+      'Project cannot be closed unless it is in WAITING_CLOSE status'
+    );
   });
 });

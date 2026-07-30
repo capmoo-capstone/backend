@@ -143,7 +143,7 @@ describe('project-data.service', () => {
       current_workflow_type: UnitResponsibleType.CONTRACT,
       installment_rounds: 1,
     });
-    txMock.projectFinanceExport.count.mockResolvedValue(0);
+    txMock.projectInstallment.count.mockResolvedValue(0);
     txMock.project.findFirst.mockResolvedValue(null);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
@@ -156,7 +156,7 @@ describe('project-data.service', () => {
     } as any);
 
     expect(result.installment_rounds).toBe(2);
-    expect(txMock.projectFinanceExport.count).toHaveBeenCalledWith({
+    expect(txMock.projectInstallment.count).toHaveBeenCalledWith({
       where: { project_id: 'project-1' },
     });
     expect(txMock.project.update).toHaveBeenCalledWith({
@@ -182,7 +182,7 @@ describe('project-data.service', () => {
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.CONTRACT,
     });
-    txMock.projectFinanceExport.count.mockResolvedValue(1);
+    txMock.projectInstallment.count.mockResolvedValue(1);
 
     await expect(
       updateProjectData(user, {
@@ -201,16 +201,39 @@ describe('project-data.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
+  it('rejects duplicate PO numbers inside one import request', async () => {
+    await expect(
+      importProjects(user, [
+        createProjectDto({ po_no: 'PO-DUP' }),
+        createProjectDto({ po_no: 'PO-DUP' }),
+      ])
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
   it('rejects an existing PR or LESS conflict from the database', async () => {
     txMock.project.findFirst.mockResolvedValue({
       id: 'existing-project',
       pr_no: 'PR-1',
       less_no: null,
+      po_no: null,
     });
 
     await expect(
       createProject(user, createProjectDto())
     ).rejects.toBeInstanceOf(AppError);
+  });
+
+  it('rejects an existing PO conflict from the database', async () => {
+    txMock.project.findFirst.mockResolvedValue({
+      id: 'existing-project',
+      pr_no: null,
+      less_no: null,
+      po_no: 'PO-1',
+    });
+
+    await expect(
+      createProject(user, createProjectDto({ po_no: 'PO-1' }))
+    ).rejects.toThrow('Duplicate PO number: PO-1');
   });
 
   it('rejects missing budget plans before creating the project', async () => {

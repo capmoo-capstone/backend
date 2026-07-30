@@ -30,11 +30,12 @@ enum ProjectStatus {
   WAITING_ACCEPT
   IN_PROGRESS
   WAITING_CANCEL
+  WAITING_CLOSE
   CANCELLED
   CLOSED
 }
 
-enum ProjectFinanceExportStatus {
+enum ProjectInstallmentStatus {
   WAITING_EXPORT
   EXPORTED
   REQUEST_EDIT
@@ -220,8 +221,8 @@ model User {
   approved_submissions     ProjectSubmission[]    @relation("ApprovedBy")
   proposed_submissions     ProjectSubmission[]    @relation("ProposedBy")
   completed_submissions    ProjectSubmission[]    @relation("CompletedBy")
-  finance_exports          ProjectFinanceExport[] @relation("ProjectFinanceExporter")
-  finance_export_creations ProjectFinanceExport[] @relation("ProjectFinanceExportCreator")
+  installment_exports      ProjectInstallment[]   @relation("ProjectInstallmentExporter")
+  installment_creations    ProjectInstallment[]   @relation("ProjectInstallmentCreator")
   cancellation_requests    ProjectCancellation[]  @relation("CancelRequester")
   cancellation_decisions   ProjectCancellation[]  @relation("CancelDecider")
   delegation_creations     UserDelegation[]       @relation("DelegationCreator")
@@ -320,7 +321,7 @@ model Project {
   assignee_contract      User[]                 @relation("ContractProjects")
   project_cancellation   ProjectCancellation[]
   project_histories      ProjectHistory[]
-  project_finance_export ProjectFinanceExport[]
+  project_installments   ProjectInstallment[]
   submissions            ProjectSubmission[]
   budget_plans           BudgetPlan[]
   notifications        Notification[]
@@ -335,11 +336,11 @@ model Project {
   @@map("projects")
 }
 
-model ProjectFinanceExport {
+model ProjectInstallment {
   id                  String                     @id @default(uuid())
   project_id          String
   installment_no      Int
-  status              ProjectFinanceExportStatus @default(WAITING_EXPORT)
+  status              ProjectInstallmentStatus @default(WAITING_EXPORT)
   request_edit_reason String?
   created_by          String
   created_at          DateTime                   @default(now())
@@ -347,12 +348,12 @@ model ProjectFinanceExport {
   exported_at         DateTime?
 
   project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  exporter User?   @relation("ProjectFinanceExporter", fields: [exported_by], references: [id])
-  creator  User    @relation("ProjectFinanceExportCreator", fields: [created_by], references: [id])
+  exporter User?   @relation("ProjectInstallmentExporter", fields: [exported_by], references: [id])
+  creator  User    @relation("ProjectInstallmentCreator", fields: [created_by], references: [id])
 
   @@unique([project_id, installment_no])
   @@index([status])
-  @@map("project_finance_exports")
+  @@map("project_installments")
 }
 
 model Notification {
