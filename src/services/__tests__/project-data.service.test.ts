@@ -143,7 +143,7 @@ describe('project-data.service', () => {
       current_workflow_type: UnitResponsibleType.CONTRACT,
       installment_rounds: 1,
     });
-    txMock.projectFinanceExport.count.mockResolvedValue(0);
+    txMock.projectInstallment.count.mockResolvedValue(0);
     txMock.project.findFirst.mockResolvedValue(null);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
@@ -156,7 +156,7 @@ describe('project-data.service', () => {
     } as any);
 
     expect(result.installment_rounds).toBe(2);
-    expect(txMock.projectFinanceExport.count).toHaveBeenCalledWith({
+    expect(txMock.projectInstallment.count).toHaveBeenCalledWith({
       where: { project_id: 'project-1' },
     });
     expect(txMock.project.update).toHaveBeenCalledWith({
@@ -182,7 +182,7 @@ describe('project-data.service', () => {
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.CONTRACT,
     });
-    txMock.projectFinanceExport.count.mockResolvedValue(1);
+    txMock.projectInstallment.count.mockResolvedValue(1);
 
     await expect(
       updateProjectData(user, {

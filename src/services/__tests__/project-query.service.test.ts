@@ -1,6 +1,6 @@
 import {
   ProcurementType,
-  ProjectFinanceExportStatus,
+  ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   SubmissionStatus,
@@ -471,12 +471,12 @@ describe('project-query.service', () => {
       await getOwnProjects(financeUser, 1, 10, 'waiting_finance_export');
 
       expect(ownProjectWhere()).toEqual({
-        project_finance_export: {
+        project_installments: {
           some: {
             status: {
               in: [
-                ProjectFinanceExportStatus.WAITING_EXPORT,
-                ProjectFinanceExportStatus.REQUEST_EDIT,
+                ProjectInstallmentStatus.WAITING_EXPORT,
+                ProjectInstallmentStatus.REQUEST_EDIT,
               ],
             },
           },
@@ -490,16 +490,16 @@ describe('project-query.service', () => {
           {
             id: 'partial-export',
             installment_rounds: 2,
-            project_finance_export: [
-              { installment_no: 1, status: ProjectFinanceExportStatus.EXPORTED },
+            project_installments: [
+              { installment_no: 1, status: ProjectInstallmentStatus.EXPORTED },
             ],
           },
           {
             id: 'full-export',
             installment_rounds: 2,
-            project_finance_export: [
-              { installment_no: 1, status: ProjectFinanceExportStatus.EXPORTED },
-              { installment_no: 2, status: ProjectFinanceExportStatus.EXPORTED },
+            project_installments: [
+              { installment_no: 1, status: ProjectInstallmentStatus.EXPORTED },
+              { installment_no: 2, status: ProjectInstallmentStatus.EXPORTED },
             ],
           },
         ] as any)
@@ -511,8 +511,8 @@ describe('project-query.service', () => {
       expect(prismaMock.project.findMany.mock.calls[0][0].where).toEqual({
         status: { not: ProjectStatus.CLOSED },
         current_workflow_type: UnitResponsibleType.CONTRACT,
-        project_finance_export: {
-          some: { status: ProjectFinanceExportStatus.EXPORTED },
+        project_installments: {
+          some: { status: ProjectInstallmentStatus.EXPORTED },
         },
       });
       expect(ownProjectWhere()).toEqual({

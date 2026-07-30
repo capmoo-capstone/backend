@@ -34,7 +34,7 @@ export const assertInstallmentRoundsCanBeUpdated = async (
     );
   }
 
-  const exportCount = await tx.projectFinanceExport.count({
+  const exportCount = await tx.projectInstallment.count({
     where: { project_id: projectId },
   });
 

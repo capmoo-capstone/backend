@@ -1,6 +1,6 @@
 import {
   Prisma,
-  ProjectFinanceExportStatus,
+  ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
@@ -282,12 +282,12 @@ const roleTabWhere = (
         scope.where,
         orWhere([
           {
-            project_finance_export: {
+            project_installments: {
               some: {
                 status: {
                   in: [
-                    ProjectFinanceExportStatus.WAITING_EXPORT,
-                    ProjectFinanceExportStatus.REQUEST_EDIT,
+                    ProjectInstallmentStatus.WAITING_EXPORT,
+                    ProjectInstallmentStatus.REQUEST_EDIT,
                   ],
                 },
               },
@@ -357,12 +357,12 @@ const roleTabWhere = (
   if (scope.role === UserRole.FINANCE_STAFF) {
     if (tab === 'waiting_finance_export') {
       return andWhere(scope.where, {
-        project_finance_export: {
+        project_installments: {
           some: {
             status: {
               in: [
-                ProjectFinanceExportStatus.WAITING_EXPORT,
-                ProjectFinanceExportStatus.REQUEST_EDIT,
+                ProjectInstallmentStatus.WAITING_EXPORT,
+                ProjectInstallmentStatus.REQUEST_EDIT,
               ],
             },
           },
@@ -382,15 +382,15 @@ const getWaitingCloseProjectIds = async (): Promise<string[]> => {
     where: {
       status: { not: ProjectStatus.CLOSED },
       current_workflow_type: UnitResponsibleType.CONTRACT,
-      project_finance_export: {
-        some: { status: ProjectFinanceExportStatus.EXPORTED },
+      project_installments: {
+        some: { status: ProjectInstallmentStatus.EXPORTED },
       },
     },
     select: {
       id: true,
       installment_rounds: true,
-      project_finance_export: {
-        where: { status: ProjectFinanceExportStatus.EXPORTED },
+      project_installments: {
+        where: { status: ProjectInstallmentStatus.EXPORTED },
         select: { installment_no: true },
       },
     },
@@ -399,7 +399,7 @@ const getWaitingCloseProjectIds = async (): Promise<string[]> => {
   return projects
     .filter((project) => {
       const exportedInstallments = new Set(
-        project.project_finance_export.map(
+        project.project_installments.map(
           (financeExport) => financeExport.installment_no
         )
       );

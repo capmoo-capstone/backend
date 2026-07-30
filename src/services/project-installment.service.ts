@@ -1,6 +1,6 @@
 import {
-  ProjectFinanceExport,
-  ProjectFinanceExportStatus,
+  ProjectInstallment,
+  ProjectInstallmentStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
@@ -16,7 +16,7 @@ import { acquireProjectInstallmentLock } from '../lib/project-installment';
 export const createFinanceExportRequest = async (
   user: AuthPayload,
   data: CompleteInstallmentDto
-): Promise<ProjectFinanceExport> => {
+): Promise<ProjectInstallment> => {
   return await prisma.$transaction(async (tx) => {
     await acquireProjectInstallmentLock(tx, data.id);
 
@@ -54,7 +54,7 @@ export const createFinanceExportRequest = async (
 
     // TODO: Check that the submission in this installment is all COMPLETED
 
-    const exportRequest = await tx.projectFinanceExport.upsert({
+    const exportRequest = await tx.projectInstallment.upsert({
       where: {
         project_id_installment_no: {
           project_id: data.id,
@@ -64,15 +64,15 @@ export const createFinanceExportRequest = async (
       create: {
         project_id: data.id,
         installment_no: data.installment_no,
-        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        status: ProjectInstallmentStatus.WAITING_EXPORT,
         created_by: user.id,
       },
       update: {
-        status: ProjectFinanceExportStatus.WAITING_EXPORT,
+        status: ProjectInstallmentStatus.WAITING_EXPORT,
       },
     });
 
-    const exportCount = await tx.projectFinanceExport.count({
+    const exportCount = await tx.projectInstallment.count({
       where: { project_id: data.id },
     });
 
@@ -94,14 +94,14 @@ export const getFinanceExportRequest = async (
   _user: AuthPayload,
   page: number,
   limit: number
-): Promise<PaginatedResponse<ProjectFinanceExport>> => {
+): Promise<PaginatedResponse<ProjectInstallment>> => {
   const [exportData, count] = await Promise.all([
-    prisma.projectFinanceExport.findMany({
+    prisma.projectInstallment.findMany({
       orderBy: { created_at: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.projectFinanceExport.count(),
+    prisma.projectInstallment.count(),
   ]);
 
   return {
@@ -116,17 +116,17 @@ export const getFinanceExportRequest = async (
 export const exportFinanceData = async (
   user: AuthPayload,
   data: ExportFinanceDataDto
-): Promise<ListResponse<ProjectFinanceExport>> => {
+): Promise<ListResponse<ProjectInstallment>> => {
   return await prisma.$transaction(async (tx) => {
-    const countExportRequests = await tx.projectFinanceExport.count({
+    const countExportRequests = await tx.projectInstallment.count({
       where: {
         id: {
           in: data.id,
         },
         status: {
           in: [
-            ProjectFinanceExportStatus.WAITING_EXPORT,
-            ProjectFinanceExportStatus.REQUEST_EDIT,
+            ProjectInstallmentStatus.WAITING_EXPORT,
+            ProjectInstallmentStatus.REQUEST_EDIT,
           ],
         },
       },
@@ -136,20 +136,20 @@ export const exportFinanceData = async (
         'Some export requests are already exported or not found'
       );
     }
-    const updated = await tx.projectFinanceExport.updateManyAndReturn({
+    const updated = await tx.projectInstallment.updateManyAndReturn({
       where: {
         id: {
           in: data.id,
         },
         status: {
           in: [
-            ProjectFinanceExportStatus.WAITING_EXPORT,
-            ProjectFinanceExportStatus.REQUEST_EDIT,
+            ProjectInstallmentStatus.WAITING_EXPORT,
+            ProjectInstallmentStatus.REQUEST_EDIT,
           ],
         },
       },
       data: {
-        status: ProjectFinanceExportStatus.EXPORTED,
+        status: ProjectInstallmentStatus.EXPORTED,
         exported_by: user.id,
         exported_at: new Date(),
       },
@@ -166,9 +166,9 @@ export const requestEditInstallment = async (
   _user: AuthPayload,
   exportId: string,
   reason: string
-): Promise<ProjectFinanceExport> => {
+): Promise<ProjectInstallment> => {
   return await prisma.$transaction(async (tx) => {
-    const exportRecord = await tx.projectFinanceExport.findUnique({
+    const exportRecord = await tx.projectInstallment.findUnique({
       where: { id: exportId },
     });
 
@@ -176,16 +176,16 @@ export const requestEditInstallment = async (
       throw new NotFoundError('Installment export request not found');
     }
 
-    if (exportRecord.status !== ProjectFinanceExportStatus.EXPORTED) {
+    if (exportRecord.status !== ProjectInstallmentStatus.EXPORTED) {
       throw new BadRequestError(
         'Installment export request must be in EXPORTED status to request edit'
       );
     }
 
-    return await tx.projectFinanceExport.update({
+    return await tx.projectInstallment.update({
       where: { id: exportId },
       data: {
-        status: ProjectFinanceExportStatus.REQUEST_EDIT,
+        status: ProjectInstallmentStatus.REQUEST_EDIT,
         request_edit_reason: reason,
       },
     });
