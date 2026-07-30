@@ -67,6 +67,40 @@ const URGENT_TAB: Partial<Record<OwnProjectTab, UrgentType>> = {
   super_urgent: UrgentType.SUPER_URGENT,
 };
 
+const ROLE_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
+  [UserRole.GENERAL_STAFF]: [
+    'waiting_accept',
+    'need_action',
+    'rejected',
+    'waiting_others',
+    'urgent',
+    'very_urgent',
+    'super_urgent',
+  ],
+  [UserRole.HEAD_OF_UNIT]: [
+    'waiting_approval',
+    'waiting_others',
+    'waiting_cancel',
+    'urgent',
+    'very_urgent',
+    'super_urgent',
+  ],
+  [UserRole.DOCUMENT_STAFF]: [
+    'waiting_proposal',
+    'waiting_signature',
+    'urgent',
+    'very_urgent',
+    'super_urgent',
+  ],
+  [UserRole.FINANCE_STAFF]: [
+    'waiting_finance_export',
+    'waiting_close_project',
+    'urgent',
+    'very_urgent',
+    'super_urgent',
+  ],
+};
+
 const NON_COMPLETED_PHASE_STATUSES = Object.values(ProjectPhaseStatus).filter(
   (status) => status !== ProjectPhaseStatus.COMPLETED
 ) as ProjectPhaseStatus[];
@@ -245,15 +279,6 @@ const buildRoleScopes = async (user: AuthPayload): Promise<RoleScope[]> => {
   return scopes;
 };
 
-const isProgressRole = (role: OwnRole): role is SupplyProgressRole =>
-  role === UserRole.GENERAL_STAFF ||
-  role === UserRole.HEAD_OF_UNIT ||
-  role === UserRole.DOCUMENT_STAFF;
-
-const financeCloseWhere = (): Prisma.ProjectWhereInput => ({
-  status: ProjectStatus.WAITING_CLOSE,
-});
-
 const roleTabWhere = (
   scope: RoleScope,
   tab: OwnProjectTab
@@ -264,45 +289,42 @@ const roleTabWhere = (
   }
 
   if (tab === 'all') {
-    if (scope.role === UserRole.DOCUMENT_STAFF) {
-      return andWhere(
-        scope.where,
-        progressStatusWhere(scope.role, [
-          ProjectPhaseStatus.WAITING_PROPOSAL,
-          ProjectPhaseStatus.WAITING_SIGNATURE,
-        ])
-      );
-    }
-    if (scope.role === UserRole.FINANCE_STAFF) {
-      return andWhere(
-        scope.where,
-        orWhere([
-          {
-            project_installments: {
-              some: {
-                status: {
-                  in: [
-                    ProjectInstallmentStatus.WAITING_EXPORT,
-                    ProjectInstallmentStatus.REQUEST_EDIT,
-                  ],
-                },
-              },
-            },
-          },
-          financeCloseWhere(),
-        ])
-      );
-    }
-    return scope.where;
+    return orWhere(
+      ROLE_TAB_UNION[scope.role]
+        .map((roleTab) => roleTabWhere(scope, roleTab))
+        .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause))
+    );
   }
 
   if (tab === 'waiting_others') {
-    return isProgressRole(scope.role)
-      ? andWhere(
-          scope.where,
-          progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED])
+    if (scope.role === UserRole.GENERAL_STAFF) {
+      return andWhere(
+        scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
+        progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+        progressStatusWhere(
+          UserRole.HEAD_OF_UNIT,
+          NON_COMPLETED_PHASE_STATUSES
+        ),
+        progressStatusWhere(
+          UserRole.DOCUMENT_STAFF,
+          NON_COMPLETED_PHASE_STATUSES
         )
-      : null;
+      );
+    }
+
+    if (scope.role === UserRole.HEAD_OF_UNIT) {
+      return andWhere(
+        scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
+        progressStatusWhere(UserRole.GENERAL_STAFF, [
+          ProjectPhaseStatus.REJECTED,
+        ]),
+        progressStatusWhere(scope.role, [ProjectPhaseStatus.NOT_STARTED])
+      );
+    }
+
+    return null;
   }
 
   if (scope.role === UserRole.GENERAL_STAFF) {
@@ -312,12 +334,27 @@ const roleTabWhere = (
     if (tab === 'need_action') {
       return andWhere(
         scope.where,
-        progressStatusWhere(scope.role, NON_COMPLETED_PHASE_STATUSES)
+        { status: ProjectStatus.IN_PROGRESS },
+        orWhere([
+          progressStatusWhere(scope.role, [ProjectPhaseStatus.IN_PROGRESS]),
+          andWhere(
+            { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
+            progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+            progressStatusWhere(UserRole.HEAD_OF_UNIT, [
+              ProjectPhaseStatus.COMPLETED,
+            ]),
+            progressStatusWhere(UserRole.DOCUMENT_STAFF, [
+              ProjectPhaseStatus.COMPLETED,
+            ]),
+            { project_installments: { none: {} } }
+          ),
+        ])
       );
     }
     if (tab === 'rejected') {
       return andWhere(
         scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
         progressStatusWhere(scope.role, [ProjectPhaseStatus.REJECTED])
       );
     }
@@ -327,6 +364,7 @@ const roleTabWhere = (
     if (tab === 'waiting_approval') {
       return andWhere(
         scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
         progressStatusWhere(scope.role, [ProjectPhaseStatus.WAITING_APPROVAL])
       );
     }
@@ -339,12 +377,14 @@ const roleTabWhere = (
     if (tab === 'waiting_proposal') {
       return andWhere(
         scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
         progressStatusWhere(scope.role, [ProjectPhaseStatus.WAITING_PROPOSAL])
       );
     }
     if (tab === 'waiting_signature') {
       return andWhere(
         scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
         progressStatusWhere(scope.role, [ProjectPhaseStatus.WAITING_SIGNATURE])
       );
     }
@@ -352,21 +392,28 @@ const roleTabWhere = (
 
   if (scope.role === UserRole.FINANCE_STAFF) {
     if (tab === 'waiting_finance_export') {
-      return andWhere(scope.where, {
-        project_installments: {
-          some: {
-            status: {
-              in: [
-                ProjectInstallmentStatus.WAITING_EXPORT,
-                ProjectInstallmentStatus.REQUEST_EDIT,
-              ],
+      return andWhere(
+        scope.where,
+        { status: ProjectStatus.IN_PROGRESS },
+        { current_workflow_type: UnitResponsibleType.CONTRACT },
+        {
+          project_installments: {
+            some: {
+              status: {
+                in: [
+                  ProjectInstallmentStatus.WAITING_EXPORT,
+                  ProjectInstallmentStatus.REQUEST_EDIT,
+                ],
+              },
             },
           },
-        },
-      });
+        }
+      );
     }
     if (tab === 'waiting_close_project') {
-      return andWhere(scope.where, financeCloseWhere());
+      return andWhere(scope.where, {
+        status: ProjectStatus.WAITING_CLOSE,
+      });
     }
   }
 

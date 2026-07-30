@@ -289,7 +289,7 @@ describe('project-query.service', () => {
       });
     });
 
-    it('scopes general staff all tab to assigned projects in matching workflow types', async () => {
+    it('combines general staff tab conditions on the all tab', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
       ]);
@@ -297,12 +297,16 @@ describe('project-query.service', () => {
 
       await getOwnProjects(staffUser, 1, 10);
 
-      expect(ownProjectWhere()).toEqual({
-        AND: [
-          { current_workflow_type: { in: [UnitResponsibleType.LT100K] } },
-          { assignee_procurement: { some: { id: 'staff-1' } } },
-        ],
-      });
+      expect(ownProjectWhere().OR).toHaveLength(7);
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.WAITING_ACCEPT}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"is_urgent":"${UrgentType.SUPER_URGENT}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"assignee_procurement":{"some":{"id":"staff-1"}}'
+      );
     });
 
     it('filters general staff waiting_accept by project status', async () => {
@@ -318,7 +322,7 @@ describe('project-query.service', () => {
       });
     });
 
-    it('filters general staff need_action to non-completed own progress', async () => {
+    it('filters general staff need_action to active work or completed procurement handoff', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
       ]);
@@ -327,13 +331,25 @@ describe('project-query.service', () => {
       await getOwnProjects(staffUser, 1, 10, 'need_action');
 
       expect(ownProjectWhereJson()).toContain(
-        `"equals":"${ProjectPhaseStatus.NOT_STARTED}"`
+        `"status":"${ProjectStatus.IN_PROGRESS}"`
       );
       expect(ownProjectWhereJson()).toContain(
-        `"equals":"${ProjectPhaseStatus.REJECTED}"`
+        '"path":["GENERAL_STAFF","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.IN_PROGRESS}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"path":["HEAD_OF_UNIT","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"path":["DOCUMENT_STAFF","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"project_installments":{"none":{}}'
       );
       expect(ownProjectWhereJson()).not.toContain(
-        `"equals":"${ProjectPhaseStatus.COMPLETED}"`
+        `"equals":"${ProjectPhaseStatus.REJECTED}"`
       );
     });
 
@@ -351,9 +367,12 @@ describe('project-query.service', () => {
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.REJECTED}"`
       );
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.IN_PROGRESS}"`
+      );
     });
 
-    it('scopes head-of-unit all tab to projects in their unit workflow types', async () => {
+    it('combines head-of-unit tab conditions on the all tab', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
       ]);
@@ -361,12 +380,16 @@ describe('project-query.service', () => {
 
       await getOwnProjects(headUnitUser, 1, 10);
 
-      expect(ownProjectWhere()).toEqual({
-        AND: [
-          { responsible_unit_id: PROC1_UNIT_ID },
-          { current_workflow_type: { in: [UnitResponsibleType.LT100K] } },
-        ],
-      });
+      expect(ownProjectWhere().OR).toHaveLength(6);
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.WAITING_CANCEL}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.WAITING_APPROVAL}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"responsible_unit_id":"UNIT-PROC-1"'
+      );
     });
 
     it('filters head-of-unit waiting_approval to own progress approval state', async () => {
@@ -382,6 +405,9 @@ describe('project-query.service', () => {
       );
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.WAITING_APPROVAL}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.IN_PROGRESS}"`
       );
     });
 
@@ -417,9 +443,12 @@ describe('project-query.service', () => {
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.WAITING_SIGNATURE}"`
       );
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.IN_PROGRESS}"`
+      );
     });
 
-    it('filters waiting_others to completed progress for progress-based roles', async () => {
+    it('filters general staff waiting_others to completed work awaiting another role', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
       ]);
@@ -430,12 +459,51 @@ describe('project-query.service', () => {
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.COMPLETED}"`
       );
+      expect(ownProjectWhereJson()).toContain(
+        '"path":["HEAD_OF_UNIT","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"path":["DOCUMENT_STAFF","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.IN_PROGRESS}"`
+      );
+    });
+
+    it('filters head-of-unit waiting_others to a rejected general staff project', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(headUnitUser, 1, 10, 'waiting_others');
+
+      expect(ownProjectWhereJson()).toContain(
+        '"path":["GENERAL_STAFF","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.REJECTED}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"path":["HEAD_OF_UNIT","status"]'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.NOT_STARTED}"`
+      );
     });
 
     it('returns no waiting_others rows for finance-only users', async () => {
       mockOwnProjectPage(0);
 
       await getOwnProjects(financeUser, 1, 10, 'waiting_others');
+
+      expect(ownProjectWhere()).toEqual({ id: { in: [] } });
+    });
+
+    it('returns no waiting_others rows for document-staff-only users', async () => {
+      mockOwnProjectPage(0);
+
+      await getOwnProjects(documentUser, 1, 10, 'waiting_others');
 
       expect(ownProjectWhere()).toEqual({ id: { in: [] } });
     });
@@ -465,23 +533,52 @@ describe('project-query.service', () => {
       expect(ownProjectWhere()).toEqual({ id: { in: [] } });
     });
 
-    it('filters finance export tab to projects with unexported finance rows', async () => {
+    it('filters finance export tab to active contract projects with pending export rows', async () => {
       mockOwnProjectPage();
 
       await getOwnProjects(financeUser, 1, 10, 'waiting_finance_export');
 
       expect(ownProjectWhere()).toEqual({
-        project_installments: {
-          some: {
-            status: {
-              in: [
-                ProjectInstallmentStatus.WAITING_EXPORT,
-                ProjectInstallmentStatus.REQUEST_EDIT,
-              ],
+        AND: [
+          { status: ProjectStatus.IN_PROGRESS },
+          { current_workflow_type: UnitResponsibleType.CONTRACT },
+          {
+            project_installments: {
+              some: {
+                status: {
+                  in: [
+                    ProjectInstallmentStatus.WAITING_EXPORT,
+                    ProjectInstallmentStatus.REQUEST_EDIT,
+                  ],
+                },
+              },
             },
           },
-        },
+        ],
       });
+    });
+
+    it('combines document and finance tab conditions on their all tabs', async () => {
+      mockOwnProjectPage();
+
+      await getOwnProjects(documentUser, 1, 10, 'all');
+      expect(ownProjectWhere().OR).toHaveLength(5);
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.WAITING_PROPOSAL}"`
+      );
+
+      prismaMock.project.findMany.mockClear();
+      prismaMock.project.count.mockClear();
+      mockOwnProjectPage();
+
+      await getOwnProjects(financeUser, 1, 10, 'all');
+      expect(ownProjectWhere().OR).toHaveLength(5);
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.WAITING_CLOSE}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"is_urgent":"${UrgentType.URGENT}"`
+      );
     });
 
     it('filters finance close tab to projects with WAITING_CLOSE status', async () => {

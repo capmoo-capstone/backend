@@ -2,9 +2,11 @@ import {
   ProjectInstallment,
   ProjectInstallmentStatus,
   ProjectStatus,
+  SubmissionStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { WORKFLOW_STEP_ORDERS } from '../../lib/constant';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
@@ -22,6 +24,13 @@ const mockUser = {
   roles: [],
 } as unknown as AuthPayload;
 
+const completedContractInstallment = (installmentNo: number) =>
+  WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].map((step_order) => ({
+    step_order,
+    status: SubmissionStatus.COMPLETED,
+    installment_no: installmentNo,
+  }));
+
 describe('project-finance.service', () => {
   beforeEach(() => {
     vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
@@ -32,6 +41,12 @@ describe('project-finance.service', () => {
       id: 'project-uuid-1',
       installment_no: 2,
     };
+
+    beforeEach(() => {
+      txMock.projectSubmission.findMany.mockResolvedValue(
+        completedContractInstallment(dto.installment_no)
+      );
+    });
 
     it('should throw NotFoundError if project is not found', async () => {
       txMock.project.findUnique.mockResolvedValue(null);
@@ -90,6 +105,29 @@ describe('project-finance.service', () => {
       );
     });
 
+    it('should throw BadRequestError when a contract step is not completed', async () => {
+      txMock.project.findUnique.mockResolvedValue({
+        installment_rounds: 3,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+      });
+      txMock.projectSubmission.findMany.mockResolvedValue([
+        ...completedContractInstallment(dto.installment_no).slice(0, 4),
+        {
+          step_order: 5,
+          status: SubmissionStatus.WAITING_SIGNATURE,
+          installment_no: dto.installment_no,
+        },
+      ]);
+
+      await expect(createFinanceExportRequest(mockUser, dto)).rejects.toThrow(
+        new BadRequestError(
+          'All contract steps for this installment must be completed before requesting finance export'
+        )
+      );
+
+      expect(txMock.projectInstallment.upsert).not.toHaveBeenCalled();
+    });
+
     it('should upsert projectInstallment when all validations pass', async () => {
       txMock.project.findUnique.mockResolvedValue({
         installment_rounds: 3,
@@ -127,6 +165,15 @@ describe('project-finance.service', () => {
         update: {
           status: ProjectInstallmentStatus.WAITING_EXPORT,
         },
+      });
+      expect(txMock.projectSubmission.findMany).toHaveBeenCalledWith({
+        where: {
+          project_id: dto.id,
+          workflow_type: UnitResponsibleType.CONTRACT,
+          installment_no: dto.installment_no,
+        },
+        orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
+        select: { step_order: true, status: true },
       });
     });
 

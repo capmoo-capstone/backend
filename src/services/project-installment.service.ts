@@ -1,8 +1,10 @@
 import {
+  Prisma,
   ProjectActionType,
   ProjectInstallment,
   ProjectInstallmentStatus,
   ProjectStatus,
+  SubmissionStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
@@ -13,8 +15,43 @@ import {
   CompleteInstallmentDto,
   ExportFinanceDataDto,
 } from '../schemas/project.schema';
+import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
 import { acquireProjectInstallmentLock } from '../lib/project-installment';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+
+const assertContractInstallmentCompleted = async (
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  installmentNo: number
+) => {
+  const submissions = await tx.projectSubmission.findMany({
+    where: {
+      project_id: projectId,
+      workflow_type: UnitResponsibleType.CONTRACT,
+      installment_no: installmentNo,
+    },
+    orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
+    select: { step_order: true, status: true },
+  });
+
+  const latestStatusByStep = new Map<number, SubmissionStatus>();
+  for (const submission of submissions) {
+    if (!latestStatusByStep.has(submission.step_order)) {
+      latestStatusByStep.set(submission.step_order, submission.status);
+    }
+  }
+
+  const isCompleted = WORKFLOW_STEP_ORDERS[UnitResponsibleType.CONTRACT].every(
+    (stepOrder) =>
+      latestStatusByStep.get(stepOrder) === SubmissionStatus.COMPLETED
+  );
+
+  if (!isCompleted) {
+    throw new BadRequestError(
+      'All contract steps for this installment must be completed before requesting finance export'
+    );
+  }
+};
 
 export const createFinanceExportRequest = async (
   user: AuthPayload,
@@ -55,7 +92,7 @@ export const createFinanceExportRequest = async (
       );
     }
 
-    // TODO: Check that the submission in this installment is all COMPLETED
+    await assertContractInstallmentCompleted(tx, data.id, data.installment_no);
 
     const exportRequest = await tx.projectInstallment.upsert({
       where: {
