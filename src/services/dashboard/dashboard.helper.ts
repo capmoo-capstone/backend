@@ -16,9 +16,7 @@ import {
 import { DashboardMode } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import { DashboardMetricComparison } from '../../types/dashboard.type';
-
-export const DAY_MS = 24 * 60 * 60 * 1000;
-export const DEFAULT_FISCAL_YEAR_OFFSET = 543;
+import { DAY_MS, DEFAULT_FISCAL_YEAR_OFFSET } from '../../lib/constant';
 
 export type DateRange = {
   from: Date;
@@ -41,11 +39,18 @@ export const getPreviousRange = (
 
   if (mode === 'month') {
     const prevFromMonth = fromParts.month === 1 ? 12 : fromParts.month - 1;
-    const prevFromYear = fromParts.month === 1 ? fromParts.year - 1 : fromParts.year;
+    const prevFromYear =
+      fromParts.month === 1 ? fromParts.year - 1 : fromParts.year;
     const prevToMonth = toParts.month === 1 ? 12 : toParts.month - 1;
     const prevToYear = toParts.month === 1 ? toParts.year - 1 : toParts.year;
-    const prevFromDay = Math.min(fromParts.day, daysInBangkokMonth(prevFromYear, prevFromMonth));
-    const prevToDay = Math.min(toParts.day, daysInBangkokMonth(prevToYear, prevToMonth));
+    const prevFromDay = Math.min(
+      fromParts.day,
+      daysInBangkokMonth(prevFromYear, prevFromMonth)
+    );
+    const prevToDay = Math.min(
+      toParts.day,
+      daysInBangkokMonth(prevToYear, prevToMonth)
+    );
 
     return {
       from: fromBangkokDate(prevFromYear, prevFromMonth, prevFromDay),

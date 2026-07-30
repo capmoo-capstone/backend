@@ -83,9 +83,9 @@ export interface DueSoonProjectRow extends DeadlineProjectRow {
   priority: DeadlinePriority;
 }
 
-export interface OverdueProjectResponse extends PaginatedResponse<OverdueProjectRow> {}
+export type OverdueProjectResponse = PaginatedResponse<OverdueProjectRow>;
 
-export interface DueSoonProjectResponse extends PaginatedResponse<DueSoonProjectRow> {}
+export type DueSoonProjectResponse = PaginatedResponse<DueSoonProjectRow>;
 
 // --- Unit Group KPI Dashboard Types ---
 
@@ -163,4 +163,20 @@ export interface UnitGroupTopDelayedProjectsResponse {
   unitId: string;
   procurementTypeFilter: ProcurementType | null;
   projects: TopDelayedProjectItem[];
+}
+
+export interface UnitGroupStaffPerformanceRow {
+  userId: string;
+  fullName: string;
+  projectCount: number;
+  avgWorkingDurationDays: number | null;
+}
+
+export interface UnitGroupStaffPerformanceResponse extends PaginatedResponse<UnitGroupStaffPerformanceRow> {
+  unitId: string;
+  mode: DashboardMode;
+  range: {
+    from: Date;
+    to: Date;
+  };
 }

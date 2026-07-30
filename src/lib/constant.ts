@@ -7,6 +7,8 @@ import { ProjectPhaseProgress } from '../types/project.type';
 
 export const PRESIGN_UPLOAD_EXPIRES = 5 * 60; // 5 minutes — client must upload within this window
 export const PRESIGN_DOWNLOAD_EXPIRES = 15 * 60; // 15 minutes — download link stays valid this long
+export const DAY_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_FISCAL_YEAR_OFFSET = 543;
 
 export const OPS_DEPT_ID = 'DEPT-SUP-OPS';
 export const PROC1_UNIT_ID = 'UNIT-PROC-1';

@@ -128,6 +128,25 @@ export const UnitGroupTopDelayedQuerySchema = z.object({
   dateTo: DateToSchema,
 });
 
+export const UnitGroupStaffPerformanceQuerySchema = z
+  .object({
+    unitId: z.string(),
+    mode: DashboardModeEnum,
+    dateFrom: DateFromSchema,
+    dateTo: DateToSchema,
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dateFrom > value.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
+
 export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<
   typeof ProcurementOverviewQuerySchema
@@ -137,4 +156,6 @@ export type UnitGroupQuery = z.infer<typeof UnitGroupQuerySchema>;
 export type UnitGroupTopDelayedQuery = z.infer<
   typeof UnitGroupTopDelayedQuerySchema
 >;
-
+export type UnitGroupStaffPerformanceQuery = z.infer<
+  typeof UnitGroupStaffPerformanceQuerySchema
+>;

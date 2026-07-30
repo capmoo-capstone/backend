@@ -2,6 +2,7 @@ import {
   PeriodicSummaryQuery,
   ProcurementOverviewQuery,
   UnitGroupQuery,
+  UnitGroupStaffPerformanceQuery,
   UnitGroupTopDelayedQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
@@ -13,6 +14,7 @@ import {
   UnitGroupExecutiveSummaryResponse,
   UnitGroupProcurementDetailsResponse,
   UnitGroupProcurementMetricsResponse,
+  UnitGroupStaffPerformanceResponse,
   UnitGroupTopDelayedProjectsResponse,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
@@ -68,3 +70,9 @@ export const getUnitGroupTopDelayedProjects = (
   query: UnitGroupTopDelayedQuery
 ): Promise<UnitGroupTopDelayedProjectsResponse> =>
   kpiHelper.getUnitGroupTopDelayedProjects(user, query);
+
+export const getUnitGroupStaffPerformance = (
+  user: AuthPayload,
+  query: UnitGroupStaffPerformanceQuery
+): Promise<UnitGroupStaffPerformanceResponse> =>
+  kpiHelper.getUnitGroupStaffPerformance(user, query);

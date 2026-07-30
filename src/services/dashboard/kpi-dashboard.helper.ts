@@ -1,13 +1,26 @@
-import { Prisma, ProcurementType, ProjectStatus } from '@prisma/client';
+import {
+  Prisma,
+  ProcurementType,
+  ProjectStatus,
+  UserRole,
+} from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import {
+  bangkokDayEndUtc,
+  bangkokDayStartUtc,
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
   toBangkokParts,
 } from '../../lib/date';
+import { NotFoundError } from '../../lib/errors';
+import {
+  countBangkokWorkingDays,
+  createBangkokWorkingDayHolidayIndex,
+} from '../../lib/working-days';
 import {
   UnitGroupQuery,
+  UnitGroupStaffPerformanceQuery,
   UnitGroupTopDelayedQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
@@ -17,9 +30,11 @@ import {
   UnitGroupExecutiveSummaryResponse,
   UnitGroupProcurementDetailsResponse,
   UnitGroupProcurementMetricsResponse,
+  UnitGroupStaffPerformanceResponse,
   UnitGroupTopDelayedProjectsResponse,
   WorkloadVsDurationPoint,
 } from '../../types/dashboard.type';
+import { getHolidayDates } from '../holiday.service';
 import {
   daysBetweenBangkokDates,
   getPreviousRange,
@@ -29,6 +44,189 @@ import {
   toComparison,
 } from './dashboard.helper';
 import { IN_PROGRESS_STATUSES } from '../../lib/constant';
+
+type CompletedPhase = {
+  startedAt: Date;
+  completedAt: Date;
+  assigneeIds: string[];
+};
+
+const isCompletedInRange = (
+  startedAt: Date | null,
+  completedAt: Date | null,
+  range: { from: Date; to: Date }
+): startedAt is Date =>
+  startedAt !== null &&
+  completedAt !== null &&
+  completedAt >= range.from &&
+  completedAt <= range.to;
+
+export const getUnitGroupStaffPerformance = async (
+  user: AuthPayload,
+  query: UnitGroupStaffPerformanceQuery
+): Promise<UnitGroupStaffPerformanceResponse> => {
+  const unitId = resolveTargetUnitId(user, query.unitId);
+  const range = { from: query.dateFrom, to: query.dateTo };
+
+  const unit = await prisma.unit.findUnique({
+    where: { id: unitId },
+    select: { id: true },
+  });
+  if (!unit) {
+    throw new NotFoundError('Unit not found');
+  }
+
+  const staff = await prisma.user.findMany({
+    where: {
+      roles: {
+        some: {
+          unit_id: unitId,
+          role: UserRole.GENERAL_STAFF,
+        },
+      },
+    },
+    select: { id: true, full_name: true },
+  });
+  const staffIds = staff.map((member) => member.id);
+
+  const projects =
+    staffIds.length === 0
+      ? []
+      : await prisma.project.findMany({
+          where: {
+            OR: [
+              {
+                procurement_started_at: { not: null },
+                procurement_completed_at: {
+                  gte: range.from,
+                  lte: range.to,
+                },
+                assignee_procurement: { some: { id: { in: staffIds } } },
+              },
+              {
+                contract_started_at: { not: null },
+                contract_completed_at: { gte: range.from, lte: range.to },
+                assignee_contract: { some: { id: { in: staffIds } } },
+              },
+            ],
+          },
+          select: {
+            procurement_started_at: true,
+            procurement_completed_at: true,
+            contract_started_at: true,
+            contract_completed_at: true,
+            assignee_procurement: { select: { id: true } },
+            assignee_contract: { select: { id: true } },
+          },
+        });
+
+  const completedPhases: CompletedPhase[] = [];
+  for (const project of projects) {
+    if (
+      isCompletedInRange(
+        project.procurement_started_at,
+        project.procurement_completed_at,
+        range
+      )
+    ) {
+      completedPhases.push({
+        startedAt: project.procurement_started_at,
+        completedAt: project.procurement_completed_at!,
+        assigneeIds: project.assignee_procurement.map(
+          (assignee) => assignee.id
+        ),
+      });
+    }
+
+    if (
+      isCompletedInRange(
+        project.contract_started_at,
+        project.contract_completed_at,
+        range
+      )
+    ) {
+      completedPhases.push({
+        startedAt: project.contract_started_at,
+        completedAt: project.contract_completed_at!,
+        assigneeIds: project.assignee_contract.map((assignee) => assignee.id),
+      });
+    }
+  }
+
+  const holidayDates =
+    completedPhases.length === 0
+      ? new Set<string>()
+      : await getHolidayDates(
+          bangkokDayStartUtc(
+            completedPhases.reduce(
+              (earliest, phase) =>
+                phase.startedAt < earliest ? phase.startedAt : earliest,
+              completedPhases[0].startedAt
+            )
+          ),
+          bangkokDayEndUtc(
+            completedPhases.reduce(
+              (latest, phase) =>
+                phase.completedAt > latest ? phase.completedAt : latest,
+              completedPhases[0].completedAt
+            )
+          )
+        );
+  const holidayIndex = createBangkokWorkingDayHolidayIndex(holidayDates);
+
+  const staffTotals = new Map(
+    staff.map((member) => [
+      member.id,
+      { fullName: member.full_name, projectCount: 0, totalWorkingDays: 0 },
+    ])
+  );
+
+  for (const phase of completedPhases) {
+    const duration = countBangkokWorkingDays(
+      phase.startedAt,
+      phase.completedAt,
+      holidayIndex
+    );
+    for (const assigneeId of new Set(phase.assigneeIds)) {
+      const total = staffTotals.get(assigneeId);
+      if (total) {
+        total.projectCount++;
+        total.totalWorkingDays += duration;
+      }
+    }
+  }
+
+  const rows = [...staffTotals.entries()]
+    .map(([userId, total]) => ({
+      userId,
+      fullName: total.fullName,
+      projectCount: total.projectCount,
+      avgWorkingDurationDays:
+        total.projectCount === 0
+          ? null
+          : Math.round(total.totalWorkingDays / total.projectCount),
+    }))
+    .sort(
+      (left, right) =>
+        right.projectCount - left.projectCount ||
+        left.fullName.localeCompare(right.fullName)
+    );
+
+  const total = rows.length;
+  const totalPages = Math.ceil(total / query.limit);
+  const start = (query.page - 1) * query.limit;
+
+  return {
+    unitId,
+    mode: query.mode,
+    range,
+    total,
+    page: query.page,
+    pageSize: query.limit,
+    totalPages,
+    data: rows.slice(start, start + query.limit),
+  };
+};
 
 export const getUnitGroupExecutiveSummary = async (
   user: AuthPayload,
