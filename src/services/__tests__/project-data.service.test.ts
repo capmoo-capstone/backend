@@ -201,16 +201,39 @@ describe('project-data.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
+  it('rejects duplicate PO numbers inside one import request', async () => {
+    await expect(
+      importProjects(user, [
+        createProjectDto({ po_no: 'PO-DUP' }),
+        createProjectDto({ po_no: 'PO-DUP' }),
+      ])
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
   it('rejects an existing PR or LESS conflict from the database', async () => {
     txMock.project.findFirst.mockResolvedValue({
       id: 'existing-project',
       pr_no: 'PR-1',
       less_no: null,
+      po_no: null,
     });
 
     await expect(
       createProject(user, createProjectDto())
     ).rejects.toBeInstanceOf(AppError);
+  });
+
+  it('rejects an existing PO conflict from the database', async () => {
+    txMock.project.findFirst.mockResolvedValue({
+      id: 'existing-project',
+      pr_no: null,
+      less_no: null,
+      po_no: 'PO-1',
+    });
+
+    await expect(
+      createProject(user, createProjectDto({ po_no: 'PO-1' }))
+    ).rejects.toThrow('Duplicate PO number: PO-1');
   });
 
   it('rejects missing budget plans before creating the project', async () => {

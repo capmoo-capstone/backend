@@ -60,14 +60,18 @@ const checkRefNumberDuplication = async (
   tx: Prisma.TransactionClient,
   pr_no: string[] = [],
   less_no: string[] = [],
+  po_no: string[] = [],
   excludeProjectId?: string
 ) => {
-  if (pr_no.length === 0 && less_no.length === 0) return;
+  if (pr_no.length === 0 && less_no.length === 0 && po_no.length === 0) return;
   if (pr_no.length > 1 && new Set(pr_no).size !== pr_no.length) {
     throw new BadRequestError('Duplicate PR numbers in request');
   }
   if (less_no.length > 1 && new Set(less_no).size !== less_no.length) {
     throw new BadRequestError('Duplicate LESS numbers in request');
+  }
+  if (po_no.length > 1 && new Set(po_no).size !== po_no.length) {
+    throw new BadRequestError('Duplicate PO numbers in request');
   }
 
   const whereClause: any = {
@@ -79,20 +83,26 @@ const checkRefNumberDuplication = async (
   if (less_no.length > 0) {
     whereClause.OR.push({ less_no: { in: less_no } });
   }
+  if (po_no.length > 0) {
+    whereClause.OR.push({ po_no: { in: po_no } });
+  }
   if (excludeProjectId) {
     whereClause.NOT = { id: excludeProjectId };
   }
 
   const existing = await tx.project.findFirst({
     where: whereClause,
-    select: { id: true, pr_no: true, less_no: true },
+    select: { id: true, pr_no: true, less_no: true, po_no: true },
   });
   if (existing) {
-    if (pr_no.includes(existing.pr_no)) {
+    if (existing.pr_no && pr_no.includes(existing.pr_no)) {
       throw new AppError(`Duplicate PR number: ${existing.pr_no}`, 409);
     }
-    if (less_no.includes(existing.less_no)) {
+    if (existing.less_no && less_no.includes(existing.less_no)) {
       throw new AppError(`Duplicate LESS number: ${existing.less_no}`, 409);
+    }
+    if (existing.po_no && po_no.includes(existing.po_no)) {
+      throw new AppError(`Duplicate PO number: ${existing.po_no}`, 409);
     }
   }
 };
@@ -107,7 +117,8 @@ export const createProject = async (
     await checkRefNumberDuplication(
       tx,
       data.pr_no ? [data.pr_no] : [],
-      data.less_no ? [data.less_no] : []
+      data.less_no ? [data.less_no] : [],
+      data.po_no ? [data.po_no] : []
     );
 
     if (data.budget_plan_id && data.budget_plan_id.length > 0) {
@@ -162,7 +173,8 @@ export const importProjects = async (
     await checkRefNumberDuplication(
       tx,
       data.map((d) => d.pr_no).filter((n): n is string => !!n),
-      data.map((d) => d.less_no).filter((n): n is string => !!n)
+      data.map((d) => d.less_no).filter((n): n is string => !!n),
+      data.map((d) => d.po_no).filter((n): n is string => !!n)
     );
 
     const unitType = await getProcurementTypeToUnitIdMap(tx);
@@ -235,6 +247,7 @@ export const updateProjectData = async (
       tx,
       data.updateData.pr_no ? [data.updateData.pr_no] : [],
       data.updateData.less_no ? [data.updateData.less_no] : [],
+      data.updateData.po_no ? [data.updateData.po_no] : [],
       current.id
     );
 
