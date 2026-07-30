@@ -1,6 +1,8 @@
 import {
+  ProjectActionType,
   ProjectInstallment,
   ProjectInstallmentStatus,
+  ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
@@ -12,6 +14,7 @@ import {
   ExportFinanceDataDto,
 } from '../schemas/project.schema';
 import { acquireProjectInstallmentLock } from '../lib/project-installment';
+import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 
 export const createFinanceExportRequest = async (
   user: AuthPayload,
@@ -154,6 +157,40 @@ export const exportFinanceData = async (
         exported_at: new Date(),
       },
     });
+
+    const projectIds = [...new Set(updated.map((item) => item.project_id))];
+
+    for (const projectId of projectIds) {
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, status: true, installment_rounds: true },
+      });
+
+      if (project && project.status === ProjectStatus.IN_PROGRESS) {
+        const exportedCount = await tx.projectInstallment.count({
+          where: {
+            project_id: projectId,
+            status: ProjectInstallmentStatus.EXPORTED,
+          },
+        });
+
+        if (exportedCount === project.installment_rounds) {
+          const updatedProject = await tx.project.update({
+            where: { id: projectId },
+            data: { status: ProjectStatus.WAITING_CLOSE },
+            select: { id: true, status: true },
+          });
+
+          await createProjectHistoryAndAuditEvent(tx, {
+            projectId,
+            action: ProjectActionType.STATUS_UPDATE,
+            oldValue: { status: project.status },
+            newValue: { status: updatedProject.status },
+            changedBy: user,
+          });
+        }
+      }
+    }
 
     return {
       total: updated.length,

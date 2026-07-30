@@ -542,9 +542,9 @@ export const closeProject = async (
     if (!project) {
       throw new NotFoundError('Project not found');
     }
-    if (project.status !== ProjectStatus.IN_PROGRESS) {
+    if (project.status !== ProjectStatus.WAITING_CLOSE) {
       throw new BadRequestError(
-        'Project cannot be closed unless it is in IN_PROGRESS status'
+        'Project cannot be closed unless it is in WAITING_CLOSE status'
       );
     }
     if (project.current_workflow_type !== UnitResponsibleType.CONTRACT) {

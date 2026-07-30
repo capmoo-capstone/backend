@@ -1,6 +1,7 @@
 import {
   ProjectInstallment,
   ProjectInstallmentStatus,
+  ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -291,6 +292,45 @@ describe('project-finance.service', () => {
           exported_by: mockUser.id,
           exported_at: new Date('2026-06-01T00:00:00.000Z'),
         },
+      });
+    });
+
+    it('should update project status to WAITING_CLOSE when all installments are exported', async () => {
+      txMock.projectInstallment.count.mockResolvedValueOnce(1);
+
+      const mockUpdated = [
+        {
+          id: 'export-1',
+          project_id: 'p1',
+          installment_no: 1,
+          status: ProjectInstallmentStatus.EXPORTED,
+        },
+      ];
+
+      txMock.projectInstallment.updateManyAndReturn.mockResolvedValue(
+        mockUpdated as unknown as ProjectInstallment[]
+      );
+
+      txMock.project.findUnique.mockResolvedValue({
+        id: 'p1',
+        status: ProjectStatus.IN_PROGRESS,
+        installment_rounds: 1,
+      });
+
+      txMock.projectInstallment.count.mockResolvedValueOnce(1);
+
+      txMock.project.update.mockResolvedValue({
+        id: 'p1',
+        status: ProjectStatus.WAITING_CLOSE,
+      });
+
+      const result = await exportFinanceData(mockUser, { id: ['export-1'] });
+
+      expect(result.total).toBe(1);
+      expect(txMock.project.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { status: ProjectStatus.WAITING_CLOSE },
+        select: { id: true, status: true },
       });
     });
   });
