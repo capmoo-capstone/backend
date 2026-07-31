@@ -7,8 +7,9 @@ import {
   CompleteInstallmentSchema,
   CompleteProcurementPhaseSchema,
   CreateProjectSchema,
-  ExportFinanceDataSchema,
+  ExportInstallmentSchema,
   GetAssignedProjectsQuerySchema,
+  GetInstallmentsQuerySchema,
   GetNewContractNumberSchema,
   GetOwnProjectsQuerySchema,
   GetProjectsQueryByUnitSchema,
@@ -21,8 +22,8 @@ import {
 import * as AuditLogService from '../services/audit-log.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
 import * as ProjectDataService from '../services/project-data.service';
+import * as ProjectInstallmentService from '../services/project-installment.service';
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
-import * as ProjectFinanceService from '../services/project-installment.service';
 import * as ProjectQueryService from '../services/project-query.service';
 import { AuthenticatedRequest } from '../types/auth.type';
 
@@ -384,7 +385,7 @@ export const completeInstallment = async (
     id: projectId,
     installment_no: Number(installmentNo),
   });
-  const requests = await ProjectFinanceService.createFinanceExportRequest(
+  const requests = await ProjectInstallmentService.createInstallment(
     payload,
     validatedData
   );
@@ -418,7 +419,7 @@ export const requestEditInstallment = async (
     ...req.body,
     id: exportId,
   });
-  const result = await ProjectFinanceService.requestEditInstallment(
+  const result = await ProjectInstallmentService.requestEditInstallment(
     payload,
     validatedData.id,
     validatedData.reason
@@ -463,7 +464,7 @@ export const cancelContractNumber = async (
   res.status(200).json(result);
 };
 
-export const getFinanceExportRequest = async (
+export const getInstallments = async (
   req: AuthenticatedRequest,
   res: Response
 ) => {
@@ -471,25 +472,28 @@ export const getFinanceExportRequest = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const { page, limit } = req.query;
-  const result = await ProjectFinanceService.getFinanceExportRequest(
+  const query = GetInstallmentsQuerySchema.parse(req.query);
+
+  const result = await ProjectInstallmentService.getInstallments(
     payload,
     parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
+    parseInt(limit as string) || 10,
+    query
   );
   res.status(200).json(result);
 };
 
-export const exportFinanceData = async (
+export const exportInstallments = async (
   req: AuthenticatedRequest,
   res: Response
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const validatedData = ExportFinanceDataSchema.parse({
+  const validatedData = ExportInstallmentSchema.parse({
     id: req.body.id,
   });
-  const result = await ProjectFinanceService.exportFinanceData(
+  const result = await ProjectInstallmentService.exportInstallments(
     payload,
     validatedData
   );

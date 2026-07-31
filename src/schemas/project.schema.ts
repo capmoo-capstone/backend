@@ -1,4 +1,9 @@
-import { ProcurementType, ProjectStatus, UrgentType } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectInstallmentStatus,
+  ProjectStatus,
+  UrgentType,
+} from '@prisma/client';
 import { z } from 'zod';
 import { BangkokDateTimeSchema } from '../lib/date';
 
@@ -96,7 +101,7 @@ export const CancelContractNumberSchema = z.object({
   reason: z.string(),
 });
 
-export const ExportFinanceDataSchema = z.object({
+export const ExportInstallmentSchema = z.object({
   id: z
     .array(z.uuid())
     .min(1)
@@ -153,6 +158,12 @@ export const GetAssignedProjectsQuerySchema = z.object({
   dateTo: BangkokDateTimeSchema.optional(),
 });
 
+export const GetInstallmentsQuerySchema = z.object({
+  title: z.string().trim().optional(),
+  receive_no: z.string().trim().optional(),
+  status: z.enum(ProjectInstallmentStatus).optional(),
+});
+
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
 export type UpdateStatusProjectDto = z.infer<typeof UpdateStatusProjectSchema>;
 export type UpdateStatusProjectsDto = z.infer<
@@ -168,7 +179,7 @@ export type RequestEditInstallmentDto = z.infer<
   typeof RequestEditInstallmentSchema
 >;
 export type UpdateProjectDto = z.infer<typeof UpdateProjectSchema>;
-export type ExportFinanceDataDto = z.infer<typeof ExportFinanceDataSchema>;
+export type ExportInstallmentDto = z.infer<typeof ExportInstallmentSchema>;
 export type GetProjectsQueryByUnitDto = z.infer<
   typeof GetProjectsQueryByUnitSchema
 >;
@@ -177,3 +188,4 @@ export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
 export type OwnProjectTab = z.infer<typeof OwnProjectTabSchema>;
+export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;

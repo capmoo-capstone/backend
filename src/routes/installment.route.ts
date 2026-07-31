@@ -13,13 +13,13 @@ router.get(
     UserRole.HEAD_OF_DEPARTMENT,
     UserRole.FINANCE_STAFF,
   ]),
-  controller.getFinanceExportRequest
+  controller.getInstallments
 );
 
 router.patch(
   '/export',
   requireSupplyRoles([UserRole.FINANCE_STAFF]),
-  controller.exportFinanceData
+  controller.exportInstallments
 );
 
 router.patch(

@@ -11,13 +11,14 @@ import { prisma } from '../config/prisma';
 import { AuthPayload } from '../types/auth.type';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { ListResponse, PaginatedResponse } from '../types/common.type';
-import {
-  CompleteInstallmentDto,
-  ExportFinanceDataDto,
-} from '../schemas/project.schema';
 import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
 import { acquireProjectInstallmentLock } from '../lib/project-installment';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+import {
+  CompleteInstallmentDto,
+  ExportInstallmentDto,
+  GetInstallmentsQuery,
+} from '../schemas/project.schema';
 
 const assertContractInstallmentCompleted = async (
   tx: Prisma.TransactionClient,
@@ -53,7 +54,7 @@ const assertContractInstallmentCompleted = async (
   }
 };
 
-export const createFinanceExportRequest = async (
+export const createInstallment = async (
   user: AuthPayload,
   data: CompleteInstallmentDto
 ): Promise<ProjectInstallment> => {
@@ -130,18 +131,72 @@ export const createFinanceExportRequest = async (
   });
 };
 
-export const getFinanceExportRequest = async (
+export const getInstallments = async (
   _user: AuthPayload,
   page: number,
-  limit: number
+  limit: number,
+  filters?: GetInstallmentsQuery
 ): Promise<PaginatedResponse<ProjectInstallment>> => {
+  const where: Prisma.ProjectInstallmentWhereInput = {};
+
+  if (filters) {
+    const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
+
+    if (filters.title?.trim()) {
+      conditions.push({
+        project: {
+          title: {
+            contains: filters.title.trim(),
+            mode: 'insensitive',
+          },
+        },
+      });
+    }
+
+    if (filters.receive_no?.trim()) {
+      conditions.push({
+        project: {
+          receive_no: {
+            contains: filters.receive_no.trim(),
+            mode: 'insensitive',
+          },
+        },
+      });
+    }
+
+    if (filters.status) {
+      conditions.push({
+        status: filters.status,
+      });
+    }
+
+    if (conditions.length > 0) {
+      where.AND = conditions;
+    }
+  }
+
   const [exportData, count] = await Promise.all([
     prisma.projectInstallment.findMany({
+      where,
       orderBy: { created_at: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
+      select: {
+        id: true,
+        project: {
+          select: {
+            id: true,
+            receive_no: true,
+            title: true,
+            budget: true,
+          },
+        },
+        installment_no: true,
+        status: true,
+        request_edit_reason: true,
+      },
     }),
-    prisma.projectInstallment.count(),
+    prisma.projectInstallment.count({ where }),
   ]);
 
   return {
@@ -153,9 +208,9 @@ export const getFinanceExportRequest = async (
   };
 };
 
-export const exportFinanceData = async (
+export const exportInstallments = async (
   user: AuthPayload,
-  data: ExportFinanceDataDto
+  data: ExportInstallmentDto
 ): Promise<ListResponse<ProjectInstallment>> => {
   return await prisma.$transaction(async (tx) => {
     const countExportRequests = await tx.projectInstallment.count({

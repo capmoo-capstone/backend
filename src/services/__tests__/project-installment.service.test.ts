@@ -11,9 +11,9 @@ import { BadRequestError, NotFoundError } from '../../lib/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
 import {
-  createFinanceExportRequest,
-  exportFinanceData,
-  getFinanceExportRequest,
+  createInstallment as createFinanceExportRequest,
+  exportInstallments as exportFinanceData,
+  getInstallments,
   requestEditInstallment,
 } from '../project-installment.service';
 
@@ -225,7 +225,7 @@ describe('project-finance.service', () => {
     });
   });
 
-  describe('getFinanceExportRequest', () => {
+  describe('getInstallments', () => {
     it('should return a paginated response with export requests and total count', async () => {
       const mockExports = [
         {
@@ -247,7 +247,7 @@ describe('project-finance.service', () => {
 
       const page = 2;
       const limit = 2;
-      const result = await getFinanceExportRequest(mockUser, page, limit);
+      const result = await getInstallments(mockUser, page, limit);
 
       expect(result).toEqual({
         total: 10,
@@ -258,11 +258,59 @@ describe('project-finance.service', () => {
       });
 
       expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith({
+        where: {},
         orderBy: { created_at: 'desc' },
         skip: 2,
         take: 2,
+        select: expect.any(Object),
       });
-      expect(prismaMock.projectInstallment.count).toHaveBeenCalled();
+      expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
+        where: {},
+      });
+    });
+
+    it('should apply filters for title, receive_no, and status', async () => {
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(mockUser, 1, 10, {
+        title: 'Chairs',
+        receive_no: '2569/001',
+        status: ProjectInstallmentStatus.WAITING_EXPORT,
+      });
+
+      const expectedWhere = {
+        AND: [
+          {
+            project: {
+              title: {
+                contains: 'Chairs',
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            project: {
+              receive_no: {
+                contains: '2569/001',
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            status: ProjectInstallmentStatus.WAITING_EXPORT,
+          },
+        ],
+      };
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+        })
+      );
+      expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
     });
   });
 
