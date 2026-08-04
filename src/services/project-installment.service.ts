@@ -153,20 +153,42 @@ export const getInstallments = async (
       });
     }
 
-    if (filters.receive_no?.trim()) {
+    if (filters.receiveNo?.trim()) {
       conditions.push({
         project: {
           receive_no: {
-            contains: filters.receive_no.trim(),
+            contains: filters.receiveNo.trim(),
             mode: 'insensitive',
           },
         },
       });
     }
 
-    if (filters.status) {
+    if (filters.status && filters.status.length > 0) {
       conditions.push({
-        status: filters.status,
+        status: { in: filters.status },
+      });
+    }
+
+    if (filters.procurementType && filters.procurementType.length > 0) {
+      conditions.push({
+        project: {
+          procurement_type: { in: filters.procurementType },
+        },
+      });
+    }
+
+    if (filters.departments && filters.departments.length > 0) {
+      conditions.push({
+        project: {
+          requesting_dept_id: { in: filters.departments },
+        },
+      });
+    }
+
+    if (filters.installment && filters.installment > 0) {
+      conditions.push({
+        installment_no: filters.installment,
       });
     }
 
@@ -189,6 +211,13 @@ export const getInstallments = async (
             receive_no: true,
             title: true,
             budget: true,
+            procurement_type: true,
+            assignee_contract: {
+              select: { id: true, full_name: true },
+            },
+            requesting_dept: {
+              select: { id: true, name: true },
+            },
           },
         },
         installment_no: true,

@@ -161,8 +161,11 @@ export const GetAssignedProjectsQuerySchema = z.object({
 
 export const GetInstallmentsQuerySchema = z.object({
   title: z.string().trim().optional(),
-  receive_no: z.string().trim().optional(),
-  status: z.enum(ProjectInstallmentStatus).optional(),
+  receiveNo: z.string().trim().optional(),
+  status: z.array(z.enum(ProjectInstallmentStatus)).optional(),
+  installment: z.coerce.number().int().optional(),
+  procurementType: z.array(z.enum(ProcurementType)).optional(),
+  departments: z.array(z.string()).optional(),
 });
 
 export type CreateProjectDto = z.infer<typeof CreateProjectSchema>;
