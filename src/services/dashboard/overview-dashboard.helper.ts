@@ -373,9 +373,6 @@ export const getOverdueDeadlines = async (
   const skip = (page - 1) * limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
-    status: {
-      in: IN_PROGRESS_STATUSES,
-    },
     current_workflow_type: {
       in: PROCUREMENT_WORKFLOW_TYPES,
     },
@@ -435,9 +432,6 @@ export const getDueSoonDeadlines = async (
   const skip = (page - 1) * limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
-    status: {
-      in: IN_PROGRESS_STATUSES,
-    },
     current_workflow_type: {
       in: PROCUREMENT_WORKFLOW_TYPES,
     },
