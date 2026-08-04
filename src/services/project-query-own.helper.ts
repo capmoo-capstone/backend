@@ -10,7 +10,7 @@ import {
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../lib/constant';
 import { isHeadOfSupplyDept, isSuperAdmin } from '../lib/permissions';
-import { OwnProjectTab } from '../schemas/project.schema';
+import { OwnProjectTab, OwnProjectTabEnum } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import { PaginatedProjects } from '../types/project.type';
 
@@ -490,4 +490,47 @@ export const getOwnProjects = async (
     totalPages: Math.ceil(total / limit),
     data: projects,
   } as PaginatedProjects;
+};
+
+const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
+  if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
+    return OwnProjectTabEnum.options;
+  }
+
+  const roleTabs = user.roles
+    .filter((r) => r.dept_id === OPS_DEPT_ID)
+    .flatMap((r) => ROLE_TAB_UNION[r.role as OwnRole] ?? []);
+
+  if (roleTabs.length === 0) {
+    return [];
+  }
+
+  return ['all', ...unique(roleTabs)];
+};
+
+export const getOwnProjectsTotal = async (
+  user: AuthPayload
+): Promise<Record<string, number>> => {
+  const tabs = getApplicableTabs(user);
+  if (tabs.length === 0) {
+    return {};
+  }
+
+  const whereEntries = await Promise.all(
+    tabs.map(async (tab) => ({
+      tab,
+      where: await ownProjectWhereClause(user, tab),
+    }))
+  );
+
+  const counts = await prisma.$transaction(
+    whereEntries.map((entry) => prisma.project.count({ where: entry.where }))
+  );
+
+  const result: Record<string, number> = {};
+  whereEntries.forEach((entry, idx) => {
+    result[entry.tab] = counts[idx];
+  });
+
+  return result;
 };

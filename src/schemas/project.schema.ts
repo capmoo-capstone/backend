@@ -7,25 +7,25 @@ import {
 import { z } from 'zod';
 import { BangkokDateTimeSchema } from '../lib/date';
 
-export const OwnProjectTabSchema = z
-  .enum([
-    'all',
-    'waiting_accept',
-    'need_action',
-    'rejected',
-    'waiting_approval',
-    'waiting_cancel',
-    'waiting_proposal',
-    'waiting_signature',
-    'waiting_others',
-    'urgent',
-    'very_urgent',
-    'super_urgent',
-    'waiting_finance_export',
-    'waiting_close_project',
-    'waiting_edit',
-  ])
-  .default('all');
+export const OwnProjectTabEnum = z.enum([
+  'all',
+  'waiting_accept',
+  'need_action',
+  'rejected',
+  'waiting_approval',
+  'waiting_cancel',
+  'waiting_proposal',
+  'waiting_signature',
+  'waiting_others',
+  'urgent',
+  'very_urgent',
+  'super_urgent',
+  'waiting_finance_export',
+  'waiting_close_project',
+  'waiting_edit',
+]);
+
+export const OwnProjectTabSchema = OwnProjectTabEnum.default('all');
 
 export const GetOwnProjectsQuerySchema = z.object({
   tab: OwnProjectTabSchema,

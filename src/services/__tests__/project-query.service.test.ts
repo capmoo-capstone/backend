@@ -17,6 +17,7 @@ import {
   getById,
   getDocumentSummary,
   getOwnProjects,
+  getOwnProjectsTotal,
   getSummaryCards,
   getUnassignedProjectsByUnit,
   getWorkload,
@@ -587,6 +588,29 @@ describe('project-query.service', () => {
 
       expect(ownProjectWhere()).toEqual({
         status: ProjectStatus.WAITING_CLOSE,
+      });
+    });
+
+    describe('getOwnProjectsTotal', () => {
+      it('returns project counts per tab for finance user', async () => {
+        prismaMock.project.count.mockResolvedValue(3);
+
+        const totals = await getOwnProjectsTotal(financeUser);
+
+        expect(totals).toEqual({
+          all: 3,
+          waiting_finance_export: 3,
+          waiting_edit: 3,
+          waiting_close_project: 3,
+          urgent: 3,
+          very_urgent: 3,
+          super_urgent: 3,
+        });
+      });
+
+      it('returns empty object for user with no supply roles', async () => {
+        const totals = await getOwnProjectsTotal(unsupportedSupplyUser);
+        expect(totals).toEqual({});
       });
     });
   });

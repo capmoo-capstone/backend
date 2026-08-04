@@ -47,7 +47,10 @@ import {
   UnitWorkload,
   WorkloadStatsResponse,
 } from '../types/project.type';
-import { getOwnProjects as getOwnProjectsFromHelper } from './project-query-own.helper';
+import {
+  getOwnProjects as getOwnProjectsFromHelper,
+  getOwnProjectsTotal as getOwnProjectsTotalFromHelper,
+} from './project-query-own.helper';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -751,6 +754,12 @@ export const getOwnProjects = async (
   tab: OwnProjectTab = 'all'
 ): Promise<PaginatedProjects> => {
   return getOwnProjectsFromHelper(user, page, limit, tab);
+};
+
+export const getOwnProjectsTotal = async (
+  user: AuthPayload
+): Promise<Record<string, number>> => {
+  return getOwnProjectsTotalFromHelper(user);
 };
 
 const aggregateByStaff = (

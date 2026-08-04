@@ -150,6 +150,17 @@ export const getOwnProjects = async (
   res.status(200).json(projects);
 };
 
+export const getOwnProjectsTotal = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const totals = await ProjectQueryService.getOwnProjectsTotal(payload);
+  res.status(200).json(totals);
+};
+
 export const getWorkload = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
