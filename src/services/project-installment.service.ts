@@ -142,26 +142,38 @@ export const getInstallments = async (
   if (filters) {
     const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
 
-    if (filters.title?.trim()) {
+    if (filters.search?.trim()) {
       conditions.push({
-        project: {
-          title: {
-            contains: filters.title.trim(),
-            mode: 'insensitive',
+        OR: [
+          {
+            project: {
+              title: {
+                contains: filters.search.trim(),
+                mode: 'insensitive',
+              },
+            },
           },
-        },
-      });
-    }
-
-    if (filters.receiveNo?.trim()) {
-      conditions.push({
-        project: {
-          receive_no: {
-            contains: filters.receiveNo.trim(),
-            mode: 'insensitive',
+          {
+            project: {
+              receive_no: {
+                contains: filters.search.trim(),
+                mode: 'insensitive',
+              },
+            },
           },
-        },
+        ],
       });
+    } else {
+      if (filters.title?.trim()) {
+        conditions.push({
+          project: {
+            title: {
+              contains: filters.title.trim(),
+              mode: 'insensitive',
+            },
+          },
+        });
+      }
     }
 
     if (filters.status && filters.status.length > 0) {
@@ -189,6 +201,18 @@ export const getInstallments = async (
     if (filters.installment && filters.installment > 0) {
       conditions.push({
         installment_no: filters.installment,
+      });
+    }
+
+    if (filters.assignees && filters.assignees.length > 0) {
+      conditions.push({
+        project: {
+          assignee_contract: {
+            some: {
+              id: { in: filters.assignees },
+            },
+          },
+        },
       });
     }
 

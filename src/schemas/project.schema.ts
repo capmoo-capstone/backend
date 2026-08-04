@@ -160,10 +160,11 @@ export const GetAssignedProjectsQuerySchema = z.object({
 });
 
 export const GetInstallmentsQuerySchema = z.object({
+  search: z.string().trim().optional(),
   title: z.string().trim().optional(),
-  receiveNo: z.string().trim().optional(),
   status: z.array(z.enum(ProjectInstallmentStatus)).optional(),
   installment: z.coerce.number().int().optional(),
+  assignees: z.array(z.string()).optional(),
   procurementType: z.array(z.enum(ProcurementType)).optional(),
   departments: z.array(z.string()).optional(),
 });
