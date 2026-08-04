@@ -23,6 +23,7 @@ export const OwnProjectTabSchema = z
     'super_urgent',
     'waiting_finance_export',
     'waiting_close_project',
+    'waiting_edit',
   ])
   .default('all');
 

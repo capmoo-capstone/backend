@@ -545,12 +545,10 @@ describe('project-query.service', () => {
           {
             project_installments: {
               some: {
-                status: {
-                  in: [
-                    ProjectInstallmentStatus.WAITING_EXPORT,
-                    ProjectInstallmentStatus.REQUEST_EDIT,
-                  ],
-                },
+                status: ProjectInstallmentStatus.WAITING_EXPORT,
+              },
+              none: {
+                status: ProjectInstallmentStatus.REQUEST_EDIT,
               },
             },
           },
@@ -572,7 +570,7 @@ describe('project-query.service', () => {
       mockOwnProjectPage();
 
       await getOwnProjects(financeUser, 1, 10, 'all');
-      expect(ownProjectWhere().OR).toHaveLength(5);
+      expect(ownProjectWhere().OR).toHaveLength(6);
       expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.WAITING_CLOSE}"`
       );
