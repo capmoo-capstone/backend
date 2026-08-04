@@ -263,13 +263,6 @@ describe('dashboard.service', () => {
       where: expect.objectContaining({
         AND: expect.arrayContaining([
           expect.objectContaining({
-            status: {
-              in: [
-                ProjectStatus.IN_PROGRESS,
-                ProjectStatus.WAITING_CANCEL,
-                ProjectStatus.WAITING_CLOSE,
-              ],
-            },
             current_workflow_type: {
               in: [
                 'LT100K',

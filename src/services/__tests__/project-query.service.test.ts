@@ -298,12 +298,9 @@ describe('project-query.service', () => {
 
       await getOwnProjects(staffUser, 1, 10);
 
-      expect(ownProjectWhere().OR).toHaveLength(7);
+      expect(ownProjectWhere().OR).toHaveLength(4);
       expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.WAITING_ACCEPT}"`
-      );
-      expect(ownProjectWhereJson()).toContain(
-        `"is_urgent":"${UrgentType.SUPER_URGENT}"`
       );
       expect(ownProjectWhereJson()).toContain(
         '"assignee_procurement":{"some":{"id":"staff-1"}}'
@@ -381,7 +378,7 @@ describe('project-query.service', () => {
 
       await getOwnProjects(headUnitUser, 1, 10);
 
-      expect(ownProjectWhere().OR).toHaveLength(6);
+      expect(ownProjectWhere().OR).toHaveLength(3);
       expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.WAITING_CANCEL}"`
       );
@@ -561,7 +558,7 @@ describe('project-query.service', () => {
       mockOwnProjectPage();
 
       await getOwnProjects(documentUser, 1, 10, 'all');
-      expect(ownProjectWhere().OR).toHaveLength(5);
+      expect(ownProjectWhere().OR).toHaveLength(2);
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.WAITING_PROPOSAL}"`
       );
@@ -571,12 +568,22 @@ describe('project-query.service', () => {
       mockOwnProjectPage();
 
       await getOwnProjects(financeUser, 1, 10, 'all');
-      expect(ownProjectWhere().OR).toHaveLength(6);
+      expect(ownProjectWhere().OR).toHaveLength(3);
       expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.WAITING_CLOSE}"`
       );
+    });
+
+    it('filters urgent tab by combining the role action tabs with is_urgent status', async () => {
+      mockOwnProjectPage();
+
+      await getOwnProjects(financeUser, 1, 10, 'urgent');
+      expect(ownProjectWhere().AND).toBeDefined();
       expect(ownProjectWhereJson()).toContain(
         `"is_urgent":"${UrgentType.URGENT}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.WAITING_CLOSE}"`
       );
     });
 

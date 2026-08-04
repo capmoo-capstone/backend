@@ -275,8 +275,8 @@ describe('project-finance.service', () => {
 
       await getInstallments(mockUser, 1, 10, {
         title: 'Chairs',
-        receive_no: '2569/001',
-        status: ProjectInstallmentStatus.WAITING_EXPORT,
+        receiveNo: '2569/001',
+        status: [ProjectInstallmentStatus.WAITING_EXPORT],
       });
 
       const expectedWhere = {
@@ -298,7 +298,7 @@ describe('project-finance.service', () => {
             },
           },
           {
-            status: ProjectInstallmentStatus.WAITING_EXPORT,
+            status: { in: [ProjectInstallmentStatus.WAITING_EXPORT] },
           },
         ],
       };

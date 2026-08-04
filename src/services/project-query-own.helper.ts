@@ -67,38 +67,44 @@ const URGENT_TAB: Partial<Record<OwnProjectTab, UrgentType>> = {
   super_urgent: UrgentType.SUPER_URGENT,
 };
 
-const ROLE_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
+const ACTION_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
   [UserRole.GENERAL_STAFF]: [
     'waiting_accept',
     'need_action',
     'rejected',
     'waiting_others',
-    'urgent',
-    'very_urgent',
-    'super_urgent',
   ],
   [UserRole.HEAD_OF_UNIT]: [
     'waiting_approval',
     'waiting_others',
     'waiting_cancel',
-    'urgent',
-    'very_urgent',
-    'super_urgent',
   ],
-  [UserRole.DOCUMENT_STAFF]: [
-    'waiting_proposal',
-    'waiting_signature',
-    'urgent',
-    'very_urgent',
-    'super_urgent',
-  ],
+  [UserRole.DOCUMENT_STAFF]: ['waiting_proposal', 'waiting_signature'],
   [UserRole.FINANCE_STAFF]: [
     'waiting_finance_export',
     'waiting_edit',
     'waiting_close_project',
-    'urgent',
-    'very_urgent',
-    'super_urgent',
+  ],
+};
+
+const URGENT_TABS: OwnProjectTab[] = ['urgent', 'very_urgent', 'super_urgent'];
+
+const ROLE_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
+  [UserRole.GENERAL_STAFF]: [
+    ...ACTION_TAB_UNION[UserRole.GENERAL_STAFF],
+    ...URGENT_TABS,
+  ],
+  [UserRole.HEAD_OF_UNIT]: [
+    ...ACTION_TAB_UNION[UserRole.HEAD_OF_UNIT],
+    ...URGENT_TABS,
+  ],
+  [UserRole.DOCUMENT_STAFF]: [
+    ...ACTION_TAB_UNION[UserRole.DOCUMENT_STAFF],
+    ...URGENT_TABS,
+  ],
+  [UserRole.FINANCE_STAFF]: [
+    ...ACTION_TAB_UNION[UserRole.FINANCE_STAFF],
+    ...URGENT_TABS,
   ],
 };
 
@@ -280,21 +286,24 @@ const buildRoleScopes = async (user: AuthPayload): Promise<RoleScope[]> => {
   return scopes;
 };
 
+const roleAllTabWhere = (scope: RoleScope): Prisma.ProjectWhereInput =>
+  orWhere(
+    ACTION_TAB_UNION[scope.role]
+      .map((roleTab) => roleTabWhere(scope, roleTab))
+      .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause))
+  );
+
 const roleTabWhere = (
   scope: RoleScope,
   tab: OwnProjectTab
 ): Prisma.ProjectWhereInput | null => {
   const urgentStatus = URGENT_TAB[tab];
   if (urgentStatus) {
-    return andWhere(scope.where, { is_urgent: urgentStatus });
+    return andWhere(roleAllTabWhere(scope), { is_urgent: urgentStatus });
   }
 
   if (tab === 'all') {
-    return orWhere(
-      ROLE_TAB_UNION[scope.role]
-        .map((roleTab) => roleTabWhere(scope, roleTab))
-        .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause))
-    );
+    return roleAllTabWhere(scope);
   }
 
   if (scope.role === UserRole.GENERAL_STAFF) {
