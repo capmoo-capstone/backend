@@ -140,6 +140,7 @@ describe('dashboard.service', () => {
   it('builds procurement overview buckets for fiscal Q1', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([
       {
         activity_type_name: 'งบประมาณแผ่นดิน',
@@ -154,6 +155,7 @@ describe('dashboard.service', () => {
     ]);
 
     const result = await getProcurementOverview(supplyUser, {
+      page: 'dashboard',
       mode: 'quarter',
       deptId: OPS_DEPT_ID,
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
@@ -192,9 +194,11 @@ describe('dashboard.service', () => {
   it('uses external status buckets and unit visibility for procurement overview', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
 
     const result = await getProcurementOverview(externalUser, {
+      page: 'dashboard',
       mode: 'month',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
@@ -212,6 +216,61 @@ describe('dashboard.service', () => {
         { created_at: expect.any(Object) },
         { procurement_type: ProcurementType.LT100K },
       ],
+    });
+  });
+
+  it('returns null budgetPlanSummary when mode is not fiscalYear on home page', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
+
+    const result = await getProcurementOverview(externalUser, {
+      page: 'home',
+      mode: 'month',
+      deptId: 'dept-1',
+      dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+      dateTo: new Date('2026-07-31T16:59:59.999Z'),
+    });
+
+    expect(result.budgetPlanSummary).toBeNull();
+  });
+
+  it('queries budget plans by fiscal year when mode is fiscalYear on home page', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
+    prismaMock.budgetPlan.aggregate
+      .mockResolvedValueOnce({ _sum: { budget_amount: 50000 } })
+      .mockResolvedValueOnce({ _sum: { budget_amount: 30000 } });
+    prismaMock.budgetPlan.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(2);
+
+    const result = await getProcurementOverview(externalUser, {
+      page: 'home',
+      mode: 'fiscalYear',
+      deptId: 'dept-1',
+      dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+      dateTo: new Date('2026-09-30T16:59:59.999Z'),
+    });
+
+    expect(result.budgetPlanSummary).toEqual({
+      totalBudget: 50000,
+      usedBudget: 30000,
+      totalPlans: 10,
+      notStartedPlans: 3,
+      inProgressPlans: 5,
+      completedPlans: 2,
+    });
+
+    expect(prismaMock.budgetPlan.aggregate.mock.calls[0][0].where).toEqual({
+      budget_year: 2569,
+      unit: { dept_id: 'dept-1' },
+      unit_id: { in: ['unit-request'] },
     });
   });
 

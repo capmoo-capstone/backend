@@ -51,6 +51,15 @@ export interface DashboardTimelinePoint {
   completed: number;
 }
 
+export interface ProcurementPlanSummary {
+  totalBudget: number;
+  usedBudget: number;
+  totalPlans: number;
+  notStartedPlans: number;
+  inProgressPlans: number;
+  completedPlans: number;
+}
+
 export interface ProcurementOverviewResponse {
   mode: DashboardMode;
   range: {
@@ -61,9 +70,10 @@ export interface ProcurementOverviewResponse {
     type: ProcurementType;
     count: number;
   }>;
-  statusBar: DashboardStatusPoint[];
-  budgetInvestment: DashboardBudgetPoint[];
-  timeline: DashboardTimelinePoint[];
+  statusBar?: DashboardStatusPoint[];
+  budgetInvestment?: DashboardBudgetPoint[];
+  timeline?: DashboardTimelinePoint[];
+  budgetPlanSummary?: ProcurementPlanSummary | null;
 }
 
 export type DeadlinePriority = 'URGENT' | 'WATCH' | 'NORMAL';

@@ -35,6 +35,7 @@ import {
   OverdueProjectRow,
   PeriodicSummaryResponse,
   ProcurementOverviewResponse,
+  ProcurementPlanSummary,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
 import {
@@ -45,6 +46,7 @@ import {
   toComparison,
   getProcurementTypeDonut,
   getPreviousRange,
+  currentFiscalYear,
 } from './dashboard.helper';
 
 export const getPeriodicRanges = (
@@ -212,7 +214,9 @@ const getBudgetInvestmentDonut = async (
     by: ['budget_name'],
     where: {
       project_id: { not: null },
-      project: projectRangeWhere(visibilityWhere, range),
+      project: andWhere(projectRangeWhere(visibilityWhere, range), {
+        status: { not: ProjectStatus.CANCELLED },
+      }),
     },
     _count: { _all: true },
     _sum: { budget_amount: true },
@@ -311,6 +315,109 @@ const getTimelineLine = async (
   );
 };
 
+const buildBudgetPlanWhere = (
+  user: AuthPayload,
+  budgetYear: number,
+  deptId?: string
+): Prisma.BudgetPlanWhereInput => {
+  const where: Prisma.BudgetPlanWhereInput = {
+    budget_year: budgetYear,
+  };
+
+  if (deptId) {
+    where.unit = { dept_id: deptId };
+  }
+
+  if (!haveSupplyPermission(user)) {
+    const unitIds = getUnitIdsForUser(user);
+    where.unit_id = { in: unitIds };
+  }
+
+  return where;
+};
+
+const ACTIVE_PLAN_PROJECT_STATUSES: ProjectStatus[] = [
+  ProjectStatus.UNASSIGNED,
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.IN_PROGRESS,
+  ProjectStatus.WAITING_CANCEL,
+  ProjectStatus.WAITING_CLOSE,
+];
+
+const getPlanSummary = async (
+  user: AuthPayload,
+  visibilityWhere: Prisma.ProjectWhereInput,
+  range: DateRange,
+  mode?: ProcurementOverviewQuery['mode'],
+  deptId?: string
+): Promise<ProcurementPlanSummary | null> => {
+  if (mode !== 'fiscalYear') {
+    return null;
+  }
+
+  const budgetYear = currentFiscalYear(range.from);
+  const rangeWhere = projectRangeWhere(visibilityWhere, range);
+  const baseBudgetWhere = buildBudgetPlanWhere(user, budgetYear, deptId);
+
+  const [
+    totalBudgetAggr,
+    usedBudgetAggr,
+    totalPlans,
+    notStartedPlans,
+    inProgressPlans,
+    completedPlans,
+  ] = await prisma.$transaction([
+    prisma.budgetPlan.aggregate({
+      where: baseBudgetWhere,
+      _sum: { budget_amount: true },
+    }),
+    prisma.budgetPlan.aggregate({
+      where: {
+        ...baseBudgetWhere,
+        project: andWhere(rangeWhere, {
+          status: { not: ProjectStatus.CANCELLED },
+        }),
+      },
+      _sum: { budget_amount: true },
+    }),
+    prisma.budgetPlan.count({
+      where: baseBudgetWhere,
+    }),
+    prisma.budgetPlan.count({
+      where: {
+        ...baseBudgetWhere,
+        OR: [
+          { project_id: null },
+          { project: { status: ProjectStatus.CANCELLED } },
+        ],
+      },
+    }),
+    prisma.budgetPlan.count({
+      where: {
+        ...baseBudgetWhere,
+        project: andWhere(rangeWhere, {
+          status: { in: ACTIVE_PLAN_PROJECT_STATUSES },
+        }),
+      },
+    }),
+    prisma.budgetPlan.count({
+      where: {
+        ...baseBudgetWhere,
+        project: andWhere(rangeWhere, { status: ProjectStatus.CLOSED }),
+      },
+    }),
+  ]);
+
+  return {
+    totalBudget: Number(totalBudgetAggr?._sum?.budget_amount ?? 0),
+    usedBudget: Number(usedBudgetAggr?._sum?.budget_amount ?? 0),
+    totalPlans: totalPlans ?? 0,
+    notStartedPlans: notStartedPlans ?? 0,
+    inProgressPlans: inProgressPlans ?? 0,
+    completedPlans: completedPlans ?? 0,
+  };
+};
+
 export const getProcurementOverview = async (
   user: AuthPayload,
   query: ProcurementOverviewQuery
@@ -320,6 +427,20 @@ export const getProcurementOverview = async (
   const visibilityWhere = query.deptId
     ? andWhere(baseVisibilityWhere, { requesting_dept_id: query.deptId })
     : baseVisibilityWhere;
+
+  if (query.page === 'home') {
+    const [procurementTypes, budgetPlanSummary] = await Promise.all([
+      getProcurementTypeDonut(visibilityWhere, range),
+      getPlanSummary(user, visibilityWhere, range, query.mode, query.deptId),
+    ]);
+
+    return {
+      mode: query.mode,
+      range,
+      procurementTypes,
+      budgetPlanSummary,
+    };
+  }
 
   const [procurementTypes, statusBar, budgetInvestment, timeline] =
     await Promise.all([

@@ -76,8 +76,9 @@ export const PeriodicSummaryQuerySchema = z
 
 export const ProcurementOverviewQuerySchema = z
   .object({
+    page: z.enum(['home', 'dashboard']),
     deptId: z.string().optional(),
-    mode: DashboardModeEnum.default('month'),
+    mode: DashboardModeEnum.default('fiscalYear'),
     dateFrom: DateFromSchema,
     dateTo: DateToSchema,
   })
@@ -94,6 +95,13 @@ export const ProcurementOverviewQuerySchema = z
         code: 'custom',
         path: ['dateFrom'],
         message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+    if (value.page === 'home' && value.mode !== 'fiscalYear') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mode'],
+        message: 'mode in home page must be fiscalYear',
       });
     }
   });
