@@ -16,6 +16,7 @@ import {
   UnitGroupProcurementMetricsResponse,
   UnitGroupStaffPerformanceResponse,
   UnitGroupTopDelayedProjectsResponse,
+  ContractUnitSummaryResponse,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
 import * as overviewHelper from './overview-dashboard.helper';
@@ -76,3 +77,10 @@ export const getUnitGroupStaffPerformance = (
   query: UnitGroupStaffPerformanceQuery
 ): Promise<UnitGroupStaffPerformanceResponse> =>
   kpiHelper.getUnitGroupStaffPerformance(user, query);
+
+export const getContractUnitSummary = (
+  user: AuthPayload,
+  query: UnitGroupQuery
+): Promise<ContractUnitSummaryResponse> =>
+  kpiHelper.getContractUnitSummary(user, query);
+

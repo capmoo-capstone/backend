@@ -139,3 +139,19 @@ export const getUnitGroupStaffPerformance = async (
   );
   res.status(200).json(data);
 };
+
+export const getContractUnitSummary = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupQuerySchema.parse(req.query);
+  const data = await DashboardService.getContractUnitSummary(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+

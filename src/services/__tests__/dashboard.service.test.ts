@@ -1,4 +1,4 @@
-import { ProcurementType, ProjectStatus, UserRole } from '@prisma/client';
+import { ProcurementType, ProjectStatus, UnitResponsibleType, UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock } from '../../test/prisma-mock';
@@ -595,5 +595,69 @@ describe('dashboard.service', () => {
       ).rejects.toThrowError('You do not have access to this unit');
       expect(prismaMock.unit.findUnique).not.toHaveBeenCalled();
     });
+
+    describe('getContractUnitSummary', () => {
+      it('throws BadRequestError when the unit is not a contract unit', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+          dept_id: OPS_DEPT_ID,
+          name: 'Procurement Unit',
+          type: [UnitResponsibleType.LT100K],
+        } as any);
+
+        await expect(
+          DashboardService.getContractUnitSummary(supplyUser, {
+            unitId: 'unit-proc',
+            mode: 'month',
+            dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+            dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          })
+        ).rejects.toThrowError('Unit is not a contract unit');
+      });
+
+      it('returns status breakdown and average contract duration for contract unit', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-contract',
+          dept_id: OPS_DEPT_ID,
+          name: 'Contract Unit',
+          type: [UnitResponsibleType.CONTRACT],
+        } as any);
+        prismaMock.holiday.findMany.mockResolvedValue([]);
+
+        prismaMock.project.groupBy.mockResolvedValueOnce([
+          { status: ProjectStatus.UNASSIGNED, _count: { _all: 1 } },
+          { status: ProjectStatus.WAITING_ACCEPT, _count: { _all: 1 } },
+          { status: ProjectStatus.IN_PROGRESS, _count: { _all: 1 } },
+          { status: ProjectStatus.WAITING_CLOSE, _count: { _all: 1 } },
+          { status: ProjectStatus.CLOSED, _count: { _all: 2 } },
+          { status: ProjectStatus.CANCELLED, _count: { _all: 1 } },
+        ] as any);
+
+        prismaMock.project.findMany.mockResolvedValueOnce([
+          {
+            contract_started_at: new Date('2026-07-01T00:00:00.000Z'),
+            contract_completed_at: new Date('2026-07-06T00:00:00.000Z'),
+          },
+        ] as any);
+
+        const result = await DashboardService.getContractUnitSummary(supplyUser, {
+          unitId: 'unit-contract',
+          mode: 'month',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        });
+
+        expect(result.unitId).toBe('unit-contract');
+        expect(result.statusBreakdown).toEqual({
+          unassigned: 1,
+          waitingAccept: 1,
+          inProgress: 2,
+          completed: 2,
+          cancelled: 1,
+        });
+        expect(result.avgContractDurationDays).toBeGreaterThanOrEqual(0);
+      });
+    });
   });
 });
+
