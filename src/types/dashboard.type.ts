@@ -190,3 +190,23 @@ export interface UnitGroupStaffPerformanceResponse extends PaginatedResponse<Uni
     to: Date;
   };
 }
+
+export interface UnitContractStatusBreakdown {
+  unassigned: number;
+  waitingAccept: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+}
+
+export interface ContractUnitSummaryResponse {
+  unitId: string;
+  mode: DashboardMode;
+  range: {
+    from: Date;
+    to: Date;
+  };
+  statusBreakdown: UnitContractStatusBreakdown;
+  avgContractDurationDays: number;
+}
+
