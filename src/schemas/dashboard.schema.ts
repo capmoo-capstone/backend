@@ -155,6 +155,11 @@ export const UnitGroupStaffPerformanceQuerySchema = z
     }
   });
 
+export const IndividualDashboardQuerySchema = z.object({
+  unitId: z.string(),
+  targetUserId: z.string(),
+});
+
 export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<
   typeof ProcurementOverviewQuerySchema
@@ -167,3 +172,7 @@ export type UnitGroupTopDelayedQuery = z.infer<
 export type UnitGroupStaffPerformanceQuery = z.infer<
   typeof UnitGroupStaffPerformanceQuerySchema
 >;
+export type IndividualDashboardQuery = z.infer<
+  typeof IndividualDashboardQuerySchema
+>;
+

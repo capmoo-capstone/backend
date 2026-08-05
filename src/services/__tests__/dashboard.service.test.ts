@@ -658,6 +658,75 @@ describe('dashboard.service', () => {
         expect(result.avgContractDurationDays).toBeGreaterThanOrEqual(0);
       });
     });
+
+    describe('getIndividualStaffDashboard', () => {
+      it('throws NotFoundError when staff user is not in the unit', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc' } as any);
+        prismaMock.user.findFirst.mockResolvedValue(null);
+
+        await expect(
+          DashboardService.getIndividualStaffDashboard(supplyUser, {
+            unitId: 'unit-proc',
+            targetUserId: 'nonexistent-user',
+          })
+        ).rejects.toThrowError('Staff user not found in this unit');
+      });
+
+      it('returns individual staff dashboard with duration comparison and procurement method metrics', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc', type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K] } as any);
+        prismaMock.user.findFirst.mockResolvedValue({
+          id: 'staff-1',
+          full_name: 'Somchai Jaidee',
+        } as any);
+        prismaMock.holiday.findMany.mockResolvedValue([]);
+
+        prismaMock.project.findMany
+          .mockResolvedValueOnce([
+            { procurement_type: ProcurementType.LT100K },
+            { procurement_type: ProcurementType.LT100K },
+            { procurement_type: ProcurementType.LT500K },
+          ] as any)
+          .mockResolvedValueOnce([
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-11T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-1' }],
+              assignee_contract: [],
+            },
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-08T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-2' }],
+              assignee_contract: [],
+            },
+          ] as any);
+
+        const result = await DashboardService.getIndividualStaffDashboard(supplyUser, {
+          unitId: 'unit-proc',
+          targetUserId: 'staff-1',
+        });
+
+        expect(result.unitId).toBe('unit-proc');
+        expect(result.user).toEqual({
+          id: 'staff-1',
+          fullName: 'Somchai Jaidee',
+        });
+        expect(result.procurementMethodMetrics?.total).toBe(3);
+        expect(result.procurementMethodMetrics?.byProcurementType).toEqual([
+          { type: ProcurementType.LT100K, count: 2 },
+          { type: ProcurementType.LT500K, count: 1 },
+        ]);
+        expect(result.durationComparison.length).toBeGreaterThan(0);
+        expect(result.durationComparison[0].workflowType).toBeDefined();
+      });
+    });
   });
 });
+
 

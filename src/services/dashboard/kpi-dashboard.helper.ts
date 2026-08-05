@@ -388,7 +388,7 @@ export const getUnitGroupExecutiveSummary = async (
   };
 };
 
-const getUnitProcurementTypes = async (
+export const getUnitProcurementTypes = async (
   unitId: string
 ): Promise<ProcurementType[]> => {
   const unit = await prisma.unit.findUnique({

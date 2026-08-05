@@ -4,6 +4,7 @@ import {
   UnitGroupQuery,
   UnitGroupStaffPerformanceQuery,
   UnitGroupTopDelayedQuery,
+  IndividualDashboardQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
@@ -17,10 +18,12 @@ import {
   UnitGroupStaffPerformanceResponse,
   UnitGroupTopDelayedProjectsResponse,
   ContractUnitSummaryResponse,
+  IndividualDashboardResponse,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
 import * as overviewHelper from './overview-dashboard.helper';
 import * as kpiHelper from './kpi-dashboard.helper';
+import * as individualHelper from './individual-dashboard.helper';
 
 export const getPeriodicSummary = (
   user: AuthPayload,
@@ -83,4 +86,11 @@ export const getContractUnitSummary = (
   query: UnitGroupQuery
 ): Promise<ContractUnitSummaryResponse> =>
   kpiHelper.getContractUnitSummary(user, query);
+
+export const getIndividualStaffDashboard = (
+  user: AuthPayload,
+  query: IndividualDashboardQuery
+): Promise<IndividualDashboardResponse> =>
+  individualHelper.getIndividualStaffDashboard(user, query);
+
 
