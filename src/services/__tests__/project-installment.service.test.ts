@@ -269,13 +269,12 @@ describe('project-finance.service', () => {
       });
     });
 
-    it('should apply filters for title, receive_no, and status', async () => {
+    it('should apply filters for title and status', async () => {
       prismaMock.projectInstallment.findMany.mockResolvedValue([]);
       prismaMock.projectInstallment.count.mockResolvedValue(0);
 
       await getInstallments(mockUser, 1, 10, {
         title: 'Chairs',
-        receiveNo: '2569/001',
         status: [ProjectInstallmentStatus.WAITING_EXPORT],
       });
 
@@ -285,14 +284,6 @@ describe('project-finance.service', () => {
             project: {
               title: {
                 contains: 'Chairs',
-                mode: 'insensitive',
-              },
-            },
-          },
-          {
-            project: {
-              receive_no: {
-                contains: '2569/001',
                 mode: 'insensitive',
               },
             },
