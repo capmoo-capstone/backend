@@ -5,6 +5,7 @@ import {
   UnitGroupQuerySchema,
   UnitGroupStaffPerformanceQuerySchema,
   UnitGroupTopDelayedQuerySchema,
+  IndividualDashboardQuerySchema,
 } from '../schemas/dashboard.schema';
 import * as DashboardService from '../services/dashboard/dashboard.service';
 import { AuthenticatedRequest } from '../types/auth.type';
@@ -154,4 +155,20 @@ export const getContractUnitSummary = async (
   );
   res.status(200).json(data);
 };
+
+export const getIndividualStaffDashboard = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = IndividualDashboardQuerySchema.parse(req.query);
+  const data = await DashboardService.getIndividualStaffDashboard(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
 

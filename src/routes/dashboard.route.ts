@@ -54,6 +54,12 @@ router.get(
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getContractUnitSummary
 );
+router.get(
+  '/individual-summary',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getIndividualStaffDashboard
+);
 
 export default router;
+
 
