@@ -121,6 +121,8 @@ export const UpdateProjectSchema = z.object({
     pr_no: z.string().optional(),
     po_no: z.string().optional(),
     less_no: z.string().optional(),
+    migo_103_no: z.string().optional(),
+    migo_105_no: z.string().optional(),
     asset_code: z.boolean().optional(),
     budget_plan_id: z.array(z.string()).optional(),
     vendor_name: z.string().optional(),

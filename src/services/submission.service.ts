@@ -31,6 +31,7 @@ import {
   VendorSubmissionsResponse,
 } from '../types/submission.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
+import { checkRefNumberDuplication } from './project-data.service';
 import {
   notifyApprovalRequired,
   notifySignatureRequired,
@@ -128,10 +129,6 @@ const updateProjectForSubmission = async (
     throw new BadRequestError(
       'Meta data contains invalid fields for project update'
     );
-  }
-
-  if (validated.data.installment_rounds !== undefined) {
-    await assertInstallmentRoundsCanBeUpdated(tx, project.id);
   }
 
   const oldValue = {};
@@ -423,6 +420,44 @@ export const createStaffSubmissionsProject = async (
         'Workflow type does not match project current workflow'
       );
     }
+
+    const metaDataMap: Record<string, any> = {};
+    if (data.meta_data && Array.isArray(data.meta_data)) {
+      data.meta_data.forEach((item) => {
+        if (item.field_key && item.value !== undefined && item.value !== null) {
+          metaDataMap[item.field_key] = item.value;
+        }
+      });
+    }
+    const validatedMeta =
+      UpdateProjectForSubmissionSchema.safeParse(metaDataMap);
+    if (validatedMeta.success) {
+      if (
+        validatedMeta.data.pr_no ||
+        validatedMeta.data.less_no ||
+        validatedMeta.data.po_no ||
+        validatedMeta.data.migo_103_no ||
+        validatedMeta.data.migo_105_no
+      ) {
+        await checkRefNumberDuplication(
+          tx,
+          validatedMeta.data.pr_no ? [validatedMeta.data.pr_no] : [],
+          validatedMeta.data.less_no ? [validatedMeta.data.less_no] : [],
+          validatedMeta.data.po_no ? [validatedMeta.data.po_no] : [],
+          validatedMeta.data.migo_103_no
+            ? [validatedMeta.data.migo_103_no]
+            : [],
+          validatedMeta.data.migo_105_no
+            ? [validatedMeta.data.migo_105_no]
+            : [],
+          project.id
+        );
+      }
+      if (validatedMeta.data.installment_rounds !== undefined) {
+        await assertInstallmentRoundsCanBeUpdated(tx, project.id);
+      }
+    }
+
     const installmentNo = validateInstallmentNo(
       data.workflow_type,
       data.installment_no,

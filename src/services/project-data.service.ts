@@ -56,22 +56,29 @@ const getReceiveNumberSync = async (
     .concat((count + 1 + buffer).toString().padStart(5, '0'));
 };
 
-const checkRefNumberDuplication = async (
+export const checkRefNumberDuplication = async (
   tx: Prisma.TransactionClient,
   pr_no: string[] = [],
   less_no: string[] = [],
   po_no: string[] = [],
+  migo_103_no: string[] = [],
+  migo_105_no: string[] = [],
   excludeProjectId?: string
 ) => {
-  if (pr_no.length === 0 && less_no.length === 0 && po_no.length === 0) return;
+  if (
+    pr_no.length === 0 &&
+    less_no.length === 0 &&
+    po_no.length === 0 &&
+    migo_103_no.length === 0 &&
+    migo_105_no.length === 0
+  )
+    return;
+  // For Import Projects
   if (pr_no.length > 1 && new Set(pr_no).size !== pr_no.length) {
     throw new BadRequestError('Duplicate PR numbers in request');
   }
   if (less_no.length > 1 && new Set(less_no).size !== less_no.length) {
     throw new BadRequestError('Duplicate LESS numbers in request');
-  }
-  if (po_no.length > 1 && new Set(po_no).size !== po_no.length) {
-    throw new BadRequestError('Duplicate PO numbers in request');
   }
 
   const whereClause: any = {
@@ -86,13 +93,26 @@ const checkRefNumberDuplication = async (
   if (po_no.length > 0) {
     whereClause.OR.push({ po_no: { in: po_no } });
   }
+  if (migo_103_no.length > 0) {
+    whereClause.OR.push({ migo_103_no: { in: migo_103_no } });
+  }
+  if (migo_105_no.length > 0) {
+    whereClause.OR.push({ migo_105_no: { in: migo_105_no } });
+  }
   if (excludeProjectId) {
     whereClause.NOT = { id: excludeProjectId };
   }
 
   const existing = await tx.project.findFirst({
     where: whereClause,
-    select: { id: true, pr_no: true, less_no: true, po_no: true },
+    select: {
+      id: true,
+      pr_no: true,
+      less_no: true,
+      po_no: true,
+      migo_103_no: true,
+      migo_105_no: true,
+    },
   });
   if (existing) {
     if (existing.pr_no && pr_no.includes(existing.pr_no)) {
@@ -103,6 +123,18 @@ const checkRefNumberDuplication = async (
     }
     if (existing.po_no && po_no.includes(existing.po_no)) {
       throw new AppError(`Duplicate PO number: ${existing.po_no}`, 409);
+    }
+    if (existing.migo_103_no && migo_103_no.includes(existing.migo_103_no)) {
+      throw new AppError(
+        `Duplicate MIGO 103 number: ${existing.migo_103_no}`,
+        409
+      );
+    }
+    if (existing.migo_105_no && migo_105_no.includes(existing.migo_105_no)) {
+      throw new AppError(
+        `Duplicate MIGO 105 number: ${existing.migo_105_no}`,
+        409
+      );
     }
   }
 };
@@ -248,6 +280,8 @@ export const updateProjectData = async (
       data.updateData.pr_no ? [data.updateData.pr_no] : [],
       data.updateData.less_no ? [data.updateData.less_no] : [],
       data.updateData.po_no ? [data.updateData.po_no] : [],
+      data.updateData.migo_103_no ? [data.updateData.migo_103_no] : [],
+      data.updateData.migo_105_no ? [data.updateData.migo_105_no] : [],
       current.id
     );
 
