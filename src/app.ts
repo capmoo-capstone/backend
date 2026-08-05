@@ -1,4 +1,5 @@
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import express from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
@@ -60,6 +61,8 @@ const corsOptions = {
 app.options('/{*path}', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false })); // CU Portal sends SAMLResponse to the ACS as an HTML form POST.
+app.use(cookieParser());
 app.use(bangkokDateResponse);
 
 // Import API v1 routes

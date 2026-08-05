@@ -34,6 +34,8 @@ const MODEL_NAMES = [
   'projectInstallment',
   'projectHistory',
   'projectSubmission',
+  'samlRequestCache',
+  'samlResponseReplay',
   'submissionDocument',
   'unit',
   'user',

@@ -12,6 +12,7 @@ import {
 } from '../lib/errors';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
 import { RegisterUserDto } from '../schemas/user.schema';
+import type { CuPortalClaims } from './saml.service';
 import {
   AuthPayload,
   FetchAndFormatUserDetailsResponse,
@@ -141,7 +142,13 @@ export const login = async (
     throw new UnauthorizedError('Invalid username or password');
   }
 
-  const result = await fetchAndFormatUserDetails({ id: userRecord.id });
+  return issueLoginForUserId(userRecord.id);
+};
+
+export const issueLoginForUserId = async (
+  userId: string
+): Promise<LoginResponse> => {
+  const result = await fetchAndFormatUserDetails({ id: userId });
 
   if (!result) {
     throw new UnauthorizedError('Invalid credentials');
@@ -164,6 +171,47 @@ export const login = async (
     id: user.id,
     ...authData, // Spread the roles and delegations perfectly
   };
+};
+
+/**
+ * CU Portal remains the source of identity attributes, while this database
+ * remains the source of authorization.  It never provisions an unknown user.
+ */
+export const loginWithSamlClaims = async (
+  claims: CuPortalClaims
+): Promise<LoginResponse> => {
+  const user = await prisma.user.findUnique({
+    where: { username: claims.screenName },
+    select: { id: true },
+  });
+
+  if (!user) {
+    throw new UnauthorizedError(
+      'No system account is assigned to this SSO user'
+    );
+  }
+
+  const emailOwner = await prisma.user.findFirst({
+    where: {
+      email: claims.emailAddress,
+      NOT: { id: user.id },
+    },
+    select: { id: true },
+  });
+
+  if (emailOwner) {
+    throw new UnauthorizedError('SSO email address belongs to another user');
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      email: claims.emailAddress,
+      full_name: `${claims.firstName} ${claims.lastName}`.trim(),
+    },
+  });
+
+  return issueLoginForUserId(user.id);
 };
 export const register = async (
   data: RegisterUserDto

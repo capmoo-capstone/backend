@@ -7,6 +7,7 @@ import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../services/auth.service';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
+import { AUTH_COOKIE_NAME } from '../lib/auth-cookie';
 
 interface JwtPayload {
   id: string;
@@ -21,17 +22,22 @@ export const protect = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      throw new UnauthorizedError('Authorization header missing');
+    let token: string | undefined;
+
+    if (authHeader) {
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        throw new UnauthorizedError(
+          'Authorization header must start with Bearer'
+        );
+      }
+      token = authHeader.split(' ')[1];
+    } else {
+      token = req.cookies?.[AUTH_COOKIE_NAME];
     }
 
-    if (!authHeader.toLowerCase().startsWith('bearer ')) {
-      throw new UnauthorizedError(
-        'Authorization header must start with Bearer'
-      );
+    if (!token || typeof token !== 'string') {
+      throw new UnauthorizedError('Authentication token missing');
     }
-
-    const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET as string

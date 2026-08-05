@@ -376,6 +376,20 @@ Authentication uses stateless JWT tokens. On each authenticated request, the mid
 
 Tokens expire after **3 hours**.
 
+### CU Portal SAML SSO
+
+The API can act as a SAML 2.0 Service Provider for CU Portal while retaining
+the existing username/password endpoint. Configure the `SAML_*` values in
+`.env.example`, deploy the API on its public HTTPS URL, then provide CU Portal
+with `GET /api/v1/auth/saml/metadata`. The SP Name and Entity ID are both
+`nexusproc` by default.
+
+The frontend starts SSO at `GET /api/v1/auth/saml/login`. CU Portal returns to
+`POST /api/v1/auth/saml/acs`; successful sign-in sets a host-only, HttpOnly
+cookie and redirects to `SAML_FRONTEND_SUCCESS_URL`. The API accepts that
+cookie or the existing Bearer JWT. Only a pre-existing user whose `username`
+matches CU Portal's `screenName` can sign in; SSO never creates a user or role.
+
 ---
 
 ## Key Architectural Decisions
@@ -395,4 +409,3 @@ Tokens expire after **3 hours**.
 - **`unit.service.ts` self-exclusion bug**: `checkValidateType` does not exclude the unit currently being updated, so updating a unit's type incorrectly conflicts with itself.
 - **`getReceiveNumber` hardcoded year**: The `budget_year` parameter is unconditionally overwritten with a hardcoded value (`2569`) inside the function body.
 - **`resolveAssigneeField` duplication**: An inline ternary still exists in `getAssignedProjects` within `project-query.service.ts` rather than using the shared `resolveAssigneeField` helper from `project-assignment.service.ts`.
-

@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearUserAuthCache } from '../../lib/auth-cache';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
-import { clearSessionCache, login, register } from '../auth.service';
+import {
+  clearSessionCache,
+  login,
+  loginWithSamlClaims,
+  register,
+} from '../auth.service';
 
 vi.mock('bcrypt', () => ({
   default: {
@@ -154,6 +159,68 @@ describe('auth.service', () => {
         end_date: null,
       },
     ]);
+  });
+
+  it('uses an existing user for SAML and preserves their authorization roles', async () => {
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ id: 'user-1' })
+      .mockResolvedValueOnce({
+        id: 'user-1',
+        username: 'portal.staff',
+        full_name: 'Portal Staff',
+        roles: [
+          {
+            role: UserRole.GENERAL_STAFF,
+            department: { id: 'dept-1', name: 'Dept One' },
+            unit: { id: 'unit-1', name: 'Unit One' },
+          },
+        ],
+        delegations_received: [],
+      });
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.user.update.mockResolvedValue({ id: 'user-1' });
+    mockedJwt.sign.mockReturnValue('saml-token' as any);
+
+    const result = await loginWithSamlClaims({
+      screenName: 'portal.staff',
+      emailAddress: 'staff@chula.ac.th',
+      firstName: 'Portal',
+      lastName: 'Staff',
+    });
+
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        email: 'staff@chula.ac.th',
+        full_name: 'Portal Staff',
+      },
+    });
+    expect(result).toMatchObject({
+      token: 'saml-token',
+      roles: [
+        expect.objectContaining({
+          role: UserRole.GENERAL_STAFF,
+          dept_id: 'dept-1',
+          unit_id: 'unit-1',
+        }),
+      ],
+    });
+  });
+
+  it('rejects an SSO user that does not already exist', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+
+    await expect(
+      loginWithSamlClaims({
+        screenName: 'unknown.user',
+        emailAddress: 'unknown@chula.ac.th',
+        firstName: 'Unknown',
+        lastName: 'User',
+      })
+    ).rejects.toThrow('No system account is assigned');
+
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
   it('register creates a department-level role without a unit', async () => {

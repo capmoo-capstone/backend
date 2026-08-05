@@ -233,6 +233,25 @@ model User {
   @@map("users")
 }
 
+model SamlRequestCache {
+  key        String   @id
+  value      String
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@index([expires_at])
+  @@map("saml_request_cache")
+}
+
+model SamlResponseReplay {
+  response_hash String   @id
+  expires_at    DateTime
+  created_at    DateTime @default(now())
+
+  @@index([expires_at])
+  @@map("saml_response_replays")
+}
+
 model UserDelegation {
   id           String    @id @default(uuid())
   delegator_id String
