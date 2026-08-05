@@ -341,7 +341,10 @@ const roleTabWhere = (
       return andWhere(
         scope.where,
         { status: ProjectStatus.IN_PROGRESS },
-        progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+        progressStatusWhere(scope.role, [
+          ProjectPhaseStatus.WAITING_APPROVAL,
+          ProjectPhaseStatus.COMPLETED,
+        ]),
         progressStatusWhere(
           UserRole.HEAD_OF_UNIT,
           NON_COMPLETED_PHASE_STATUSES
