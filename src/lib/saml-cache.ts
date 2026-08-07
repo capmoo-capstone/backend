@@ -2,6 +2,7 @@ import { CacheItem, CacheProvider } from '@node-saml/node-saml';
 import { createHash } from 'crypto';
 import { prisma } from '../config/prisma';
 import { UnauthorizedError } from './errors';
+import { AuthPayload } from '../types/auth.type';
 
 export const SAML_REQUEST_TTL_MS = 5 * 60 * 1000;
 
@@ -95,14 +96,14 @@ export const createSsoExchangeCode = async (
   return code;
 };
 
-export const exchangeSsoCode = async <T = unknown>(
+export const exchangeSsoCode = async (
   code: string
-): Promise<T> => {
+): Promise<AuthPayload> => {
   const cache = new PrismaSamlRequestCache(SSO_CODE_TTL_MS);
   const rawValue = await cache.getAsync(`sso_code:${code}`);
   if (!rawValue) {
     throw new UnauthorizedError('Invalid or expired SSO exchange code');
   }
   await cache.removeAsync(`sso_code:${code}`);
-  return JSON.parse(rawValue) as T;
+  return JSON.parse(rawValue);
 };

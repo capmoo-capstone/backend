@@ -19,14 +19,6 @@ export interface DelegatedByUser {
   end_date: Date | null;
 }
 
-export interface LoginResponse {
-  token: string;
-  id: string;
-  roles: AuthRoleDetail[];
-  is_delegated: boolean;
-  delegated_by: DelegatedByUser[];
-}
-
 export interface RegisterResponse {
   id: string;
   username: string;

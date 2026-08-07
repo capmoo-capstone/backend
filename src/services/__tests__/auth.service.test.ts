@@ -7,6 +7,7 @@ import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   clearSessionCache,
+  exchangeSsoCode,
   login,
   loginWithSamlClaims,
   register,
@@ -68,6 +69,8 @@ describe('auth.service', () => {
     expect(result).toMatchObject({
       token: 'signed-token',
       id: 'user-1',
+      username: 'staff',
+      full_name: 'Staff User',
       roles: [
         {
           role: UserRole.GENERAL_STAFF,
@@ -161,7 +164,7 @@ describe('auth.service', () => {
     ]);
   });
 
-  it('uses an existing user for SAML and preserves their authorization roles', async () => {
+  it('uses an existing user for SAML and returns an SSO exchange code', async () => {
     prismaMock.user.findUnique
       .mockResolvedValueOnce({ id: 'user-1' })
       .mockResolvedValueOnce({
@@ -178,7 +181,8 @@ describe('auth.service', () => {
         delegations_received: [],
       });
     prismaMock.user.findFirst.mockResolvedValue(null);
-    prismaMock.user.update.mockResolvedValue({ id: 'user-1' });
+    prismaMock.samlRequestCache.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.samlRequestCache.upsert.mockResolvedValue({});
     mockedJwt.sign.mockReturnValue('saml-token' as any);
 
     const result = await loginWithSamlClaims({
@@ -188,16 +192,39 @@ describe('auth.service', () => {
       lastName: 'Staff',
     });
 
-    expect(result).toMatchObject({
+    expect(typeof result).toBe('string');
+    expect(result).toHaveLength(32);
+  });
+
+  it('exchanges SSO code for user authorization details and JWT token', async () => {
+    const mockAuthPayload = {
       token: 'saml-token',
+      id: 'user-1',
+      username: 'portal.staff',
+      full_name: 'Portal Staff',
       roles: [
-        expect.objectContaining({
+        {
           role: UserRole.GENERAL_STAFF,
           dept_id: 'dept-1',
+          dept_name: 'Dept One',
           unit_id: 'unit-1',
-        }),
+          unit_name: 'Unit One',
+        },
       ],
+      is_delegated: false,
+      delegated_by: [],
+    };
+
+    prismaMock.samlRequestCache.findUnique.mockResolvedValueOnce({
+      key: 'sso_code:test-code-123',
+      value: JSON.stringify(mockAuthPayload),
+      expires_at: new Date(Date.now() + 60000),
     });
+    prismaMock.samlRequestCache.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await exchangeSsoCode('test-code-123');
+
+    expect(result).toEqual(mockAuthPayload);
   });
 
   it('rejects an SSO user that does not already exist', async () => {

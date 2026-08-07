@@ -12,14 +12,9 @@ import {
 } from '../lib/errors';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
 import { RegisterUserDto } from '../schemas/user.schema';
-import { exchangeSsoCode as exchangeSsoCodeCache } from '../lib/saml-cache';
+import { createSsoExchangeCode, exchangeSsoCode as exchangeSsoCodeCache } from '../lib/saml-cache';
 import type { CuPortalClaims } from './saml.service';
-import {
-  AuthPayload,
-  FetchAndFormatUserDetailsResponse,
-  LoginResponse,
-  RegisterResponse,
-} from '../types/auth.type';
+import { AuthPayload, FetchAndFormatUserDetailsResponse, RegisterResponse } from '../types/auth.type';
 
 export const fetchAndFormatUserDetails = async (
   whereClause: any
@@ -124,7 +119,7 @@ export const fetchAndFormatUserDetails = async (
 export const login = async (
   username: string,
   password: string
-): Promise<LoginResponse> => {
+): Promise<AuthPayload> => {
   const userRecord = await prisma.user.findUnique({
     where: { username },
     select: { id: true, password: true },
@@ -148,7 +143,7 @@ export const login = async (
 
 export const issueLoginForUserId = async (
   userId: string
-): Promise<LoginResponse> => {
+): Promise<AuthPayload> => {
   const result = await fetchAndFormatUserDetails({ id: userId });
 
   if (!result) {
@@ -170,6 +165,9 @@ export const issueLoginForUserId = async (
   return {
     token,
     id: user.id,
+    username: user.username,
+    full_name: user.full_name,
+    email: user.email,
     ...authData, // Spread the roles and delegations perfectly
   };
 };
@@ -180,7 +178,7 @@ export const issueLoginForUserId = async (
  */
 export const loginWithSamlClaims = async (
   claims: CuPortalClaims
-): Promise<LoginResponse> => {
+): Promise<string> => {
   let user = await prisma.user.findUnique({
     where: { username: claims.screenName },
     select: { id: true },
@@ -213,7 +211,9 @@ export const loginWithSamlClaims = async (
     throw new UnauthorizedError('SSO email address belongs to another user');
   }
 
-  return issueLoginForUserId(user.id);
+  const authPayload = await issueLoginForUserId(user.id);
+  const code = await createSsoExchangeCode(authPayload);
+  return code;
 };
 export const register = async (
   data: RegisterUserDto
@@ -307,6 +307,6 @@ export const clearSessionCache = async (
 // prefer `clearSessionCache` to avoid implying JWT revocation.
 export const logout = clearSessionCache;
 
-export const exchangeSsoCode = async (code: string): Promise<LoginResponse> => {
-  return exchangeSsoCodeCache<LoginResponse>(code);
+export const exchangeSsoCode = async (code: string): Promise<AuthPayload> => {
+  return exchangeSsoCodeCache(code);
 };

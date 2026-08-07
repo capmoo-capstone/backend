@@ -68,9 +68,8 @@ export const samlAcs = async (
   // #swagger.tags = ['Auth']
   try {
     const claims = await validateSamlResponse(req.body?.SAMLResponse);
-    const login = await AuthService.loginWithSamlClaims(claims);
+    const code = await AuthService.loginWithSamlClaims(claims);
 
-    const code = await createSsoExchangeCode(login);
     const successUrl = new URL(getSamlFrontendSuccessUrl());
     successUrl.searchParams.set('code', code);
 
