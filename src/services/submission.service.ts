@@ -131,6 +131,10 @@ const updateProjectForSubmission = async (
     );
   }
 
+  if (validated.data.installment_rounds !== undefined) {
+    await assertInstallmentRoundsCanBeUpdated(tx, project.id);
+  }
+
   const oldValue = {};
   Object.keys(validated.data).forEach((key) => {
     oldValue[key] = project[key];
