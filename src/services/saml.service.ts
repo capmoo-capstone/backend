@@ -322,7 +322,7 @@ export const getSamlMetadata = (): string => {
   const cleanCert = cert
     ? cert
         .replace(
-          /-----\BEGIN CERTIFICATE-----|-----\END CERTIFICATE-----|\r|\n/g,
+          /-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|[\r\n]/g,
           ''
         )
         .trim()
