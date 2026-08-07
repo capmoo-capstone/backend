@@ -12,7 +12,7 @@ const getCookieOptions = (): CookieOptions => {
     httpOnly: true,
     secure: isProd || sameSite === 'none',
     sameSite,
-    path: '/api/v1',
+    path: '/',
     maxAge: 3 * 60 * 60 * 1000,
   };
 

@@ -180,10 +180,19 @@ export const issueLoginForUserId = async (
 export const loginWithSamlClaims = async (
   claims: CuPortalClaims
 ): Promise<LoginResponse> => {
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { username: claims.screenName },
     select: { id: true },
   });
+
+  if (!user) {
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: claims.emailAddress }, { username: claims.emailAddress }],
+      },
+      select: { id: true },
+    });
+  }
 
   if (!user) {
     throw new UnauthorizedError(
@@ -202,14 +211,6 @@ export const loginWithSamlClaims = async (
   if (emailOwner) {
     throw new UnauthorizedError('SSO email address belongs to another user');
   }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      email: claims.emailAddress,
-      full_name: `${claims.firstName} ${claims.lastName}`.trim(),
-    },
-  });
 
   return issueLoginForUserId(user.id);
 };

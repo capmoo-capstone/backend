@@ -22,7 +22,7 @@ describe('authentication cookie', () => {
       'signed-token',
       expect.objectContaining({
         httpOnly: true,
-        path: '/api/v1',
+        path: '/',
         maxAge: 3 * 60 * 60 * 1000,
       })
     );
@@ -30,7 +30,7 @@ describe('authentication cookie', () => {
     clearAuthCookie(response);
     expect(clearCookie).toHaveBeenCalledWith(
       AUTH_COOKIE_NAME,
-      expect.objectContaining({ path: '/api/v1' })
+      expect.objectContaining({ path: '/' })
     );
   });
 });

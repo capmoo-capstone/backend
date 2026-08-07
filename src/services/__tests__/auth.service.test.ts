@@ -188,13 +188,6 @@ describe('auth.service', () => {
       lastName: 'Staff',
     });
 
-    expect(prismaMock.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: {
-        email: 'staff@chula.ac.th',
-        full_name: 'Portal Staff',
-      },
-    });
     expect(result).toMatchObject({
       token: 'saml-token',
       roles: [
