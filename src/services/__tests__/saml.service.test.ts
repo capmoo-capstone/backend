@@ -51,7 +51,8 @@ describe('SAML service', () => {
     const metadata = getSamlMetadata();
 
     expect(metadata).toContain('entityID="nexusproc"');
-    expect(metadata).toContain('WantAssertionsSigned="true"');
+    expect(metadata).toContain('AuthnRequestsSigned="true"');
+    expect(metadata).toContain('WantAssertionsSigned="false"');
   });
 
   it('starts a ForceAuthn request and persists its request ID', async () => {

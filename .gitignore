@@ -4,3 +4,5 @@ dist/
 .env.production
 .vercel
 swagger-output.json
+certs/
+*.key

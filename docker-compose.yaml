@@ -21,6 +21,8 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
+    volumes:
+      - ./certs:/app/certs
     environment:
       NODE_ENV: production
       PORT: 3000
