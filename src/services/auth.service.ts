@@ -12,6 +12,7 @@ import {
 } from '../lib/errors';
 import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
 import { RegisterUserDto } from '../schemas/user.schema';
+import { exchangeSsoCode as exchangeSsoCodeCache } from '../lib/saml-cache';
 import type { CuPortalClaims } from './saml.service';
 import {
   AuthPayload,
@@ -305,3 +306,7 @@ export const clearSessionCache = async (
 // Backward-compatible alias; retains existing behavior but callers should
 // prefer `clearSessionCache` to avoid implying JWT revocation.
 export const logout = clearSessionCache;
+
+export const exchangeSsoCode = async (code: string): Promise<LoginResponse> => {
+  return exchangeSsoCodeCache<LoginResponse>(code);
+};

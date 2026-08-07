@@ -2,7 +2,8 @@ import { NextFunction, Request, Response } from 'express';
 import * as AuthService from '../services/auth.service';
 import { RegisterUserSchema } from '../schemas/user.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { clearAuthCookie, setAuthCookie } from '../lib/auth-cookie';
+import { BadRequestError } from '../lib/errors';
+import { createSsoExchangeCode } from '../lib/saml-cache';
 import {
   createSamlLoginUrl,
   getSamlFrontendFailureUrl,
@@ -45,7 +46,6 @@ export const logout = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   await AuthService.logout(payload);
-  clearAuthCookie(res);
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
@@ -69,8 +69,12 @@ export const samlAcs = async (
   try {
     const claims = await validateSamlResponse(req.body?.SAMLResponse);
     const login = await AuthService.loginWithSamlClaims(claims);
-    setAuthCookie(res, login.token);
-    res.redirect(303, getSamlFrontendSuccessUrl());
+
+    const code = await createSsoExchangeCode(login);
+    const successUrl = new URL(getSamlFrontendSuccessUrl());
+    successUrl.searchParams.set('code', code);
+
+    res.redirect(303, successUrl.toString());
   } catch (err) {
     console.error(
       'SAML assertion consumer service failed:',
@@ -83,4 +87,15 @@ export const samlAcs = async (
       next(configurationError);
     }
   }
+};
+
+export const exchangeSsoCode = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Auth']
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') {
+    throw new BadRequestError('SSO exchange code is required');
+  }
+
+  const loginData = await AuthService.exchangeSsoCode(code);
+  res.status(200).json(loginData);
 };

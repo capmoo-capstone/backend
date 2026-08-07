@@ -83,3 +83,26 @@ export const claimSamlResponse = async (encodedResponse: string) => {
     throw err;
   }
 };
+
+export const SSO_CODE_TTL_MS = 60 * 1000; // 1 minute
+
+export const createSsoExchangeCode = async (
+  loginData: unknown
+): Promise<string> => {
+  const code = require('crypto').randomBytes(16).toString('hex');
+  const cache = new PrismaSamlRequestCache(SSO_CODE_TTL_MS);
+  await cache.saveAsync(`sso_code:${code}`, JSON.stringify(loginData));
+  return code;
+};
+
+export const exchangeSsoCode = async <T = unknown>(
+  code: string
+): Promise<T> => {
+  const cache = new PrismaSamlRequestCache(SSO_CODE_TTL_MS);
+  const rawValue = await cache.getAsync(`sso_code:${code}`);
+  if (!rawValue) {
+    throw new UnauthorizedError('Invalid or expired SSO exchange code');
+  }
+  await cache.removeAsync(`sso_code:${code}`);
+  return JSON.parse(rawValue) as T;
+};

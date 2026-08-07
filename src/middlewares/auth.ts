@@ -7,7 +7,6 @@ import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../services/auth.service';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
-import { AUTH_COOKIE_NAME } from '../lib/auth-cookie';
 
 interface JwtPayload {
   id: string;
@@ -31,8 +30,6 @@ export const protect = async (
         );
       }
       token = authHeader.split(' ')[1];
-    } else {
-      token = req.cookies?.[AUTH_COOKIE_NAME];
     }
 
     if (!token || typeof token !== 'string') {

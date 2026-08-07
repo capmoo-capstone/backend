@@ -7,6 +7,7 @@ const router = Router();
 router.get('/saml/metadata', controller.samlMetadata);
 router.get('/saml/login', controller.startSamlLogin);
 router.post('/saml/acs', controller.samlAcs);
+router.post('/saml/exchange', controller.exchangeSsoCode);
 router.post('/register', controller.register);
 router.post('/login', controller.login);
 router.get('/me', protect, controller.getMe);
