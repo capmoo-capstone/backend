@@ -60,6 +60,16 @@ const requireHttpsUrl = (
 };
 
 const getRuntimeConfig = (): SamlRuntimeConfig => {
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NODE_ENV !== 'test' &&
+    !process.env.VITEST
+  ) {
+    throw new ServiceUnavailableError(
+      'SAML authentication is only enabled in production environment'
+    );
+  }
+
   const spEntityId = process.env.SAML_SP_ENTITY_ID || 'nexusproc';
   if (!/^[A-Za-z0-9]{8,10}$/.test(spEntityId)) {
     throw new ServiceUnavailableError(

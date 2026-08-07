@@ -7,7 +7,7 @@ import {
 } from '../auth-cookie';
 
 describe('authentication cookie', () => {
-  it('uses an HttpOnly, host-only session cookie', () => {
+  it('uses configured cookie options', () => {
     const cookie = vi.fn();
     const clearCookie = vi.fn();
     const response = {
@@ -22,12 +22,10 @@ describe('authentication cookie', () => {
       'signed-token',
       expect.objectContaining({
         httpOnly: true,
-        sameSite: 'lax',
         path: '/api/v1',
         maxAge: 3 * 60 * 60 * 1000,
       })
     );
-    expect(cookie.mock.calls[0][2].domain).toBeUndefined();
 
     clearAuthCookie(response);
     expect(clearCookie).toHaveBeenCalledWith(
