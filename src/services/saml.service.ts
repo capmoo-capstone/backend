@@ -294,12 +294,13 @@ export const extractCuPortalClaims = (profile: Profile): CuPortalClaims => ({
 
 export const getSamlMetadata = (): string => {
   const config = getRuntimeConfig();
-  return generateServiceProviderMetadata({
-    issuer: config.spEntityId,
-    callbackUrl: config.acsUrl,
-    identifierFormat: NAME_ID_UNSPECIFIED,
-    wantAssertionsSigned: true,
-  });
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="${config.spEntityId}">
+  <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:NameIDFormat>${NAME_ID_UNSPECIFIED}</md:NameIDFormat>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${config.acsUrl}" index="1" isDefault="true"/>
+  </md:SPSSODescriptor>
+</md:EntityDescriptor>`;
 };
 
 export const createSamlLoginUrl = async (host: string | undefined) => {
