@@ -16,10 +16,12 @@ import notificationRoutes from './notification.route';
 import holidayRoutes from './holiday.route';
 import dashboardRoutes from './dashboard.route';
 import installmentRoutes from './installment.route';
+import cronRoutes from './cron.route';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/cron', cronRoutes);
 router.use('/users', protect, userRoutes);
 router.use('/projects', protect, projectRoutes);
 router.use('/installments', protect, installmentRoutes);
