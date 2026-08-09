@@ -58,27 +58,45 @@ jobs:
     needs: build-and-push
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.prod.yaml to VPS
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.prod.yaml"
+          target: "/opt/nexus-procure"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: ENV_PRODUCTION
           script: |
             cd /opt/nexus-procure
+
+            # Create or update .env.production from GitHub Secret
+            printf '%s\n' "$ENV_PRODUCTION" > .env.production
 
             # Log in to ghcr.io
             echo ${{ secrets.GHCR_TOKEN }} | \
               docker login ghcr.io -u ${{ secrets.VPS_USER }} --password-stdin
 
             # Pull the latest image
-            docker compose --env-file .env.production pull
+            docker compose -f docker-compose.prod.yaml --env-file .env.production pull
 
             # Restart with new image
-            docker compose --env-file .env.production up -d
+            docker compose -f docker-compose.prod.yaml --env-file .env.production up -d
 
             # Run pending migrations
-            docker compose exec -T app npx prisma migrate deploy
+            docker compose -f docker-compose.prod.yaml exec -T app npx prisma migrate deploy
 
             # Clean up old images
             docker image prune -f
