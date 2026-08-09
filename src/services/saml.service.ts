@@ -284,6 +284,7 @@ const createSamlClient = async (): Promise<SAML> => {
     wantAuthnResponseSigned: true,
     validateInResponseTo: ValidateInResponseTo.always,
     cacheProvider: new PrismaSamlRequestCache(),
+    acceptedClockSkewMs: 30000,
   });
 };
 
