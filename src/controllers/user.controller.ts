@@ -5,6 +5,7 @@ import {
   RemoveRoleSchema,
   ListUsersQuerySchema,
   UpdateSupplyRoleSchema,
+  CreateUserSchema,
 } from '../schemas/user.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
 
@@ -26,6 +27,20 @@ export const getById = async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const user = await UserService.getById(id);
   res.status(200).json(user);
+};
+
+export const createUser = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const validatedData = CreateUserSchema.parse(req.body);
+  const data = await UserService.createUser(
+    req.user!,
+    validatedData
+  );
+  res.status(201).json(data);
 };
 
 export const updateSupplyRole = async (

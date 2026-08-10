@@ -1,7 +1,16 @@
-import { AuditEventType, Prisma, UserRole } from '@prisma/client';
+import {
+  AuditEventType,
+  AuditLogType,
+  AuditTargetType,
+  Prisma,
+  UserRole,
+  RegisterType,
+} from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
-import { BadRequestError, NotFoundError } from '../lib/errors';
+import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
+import { assertDepartmentUnitScope, assertManageableRoleScope } from '../lib/roles';
 import {
   addRoleInternal,
   assertNoDuplicatesOrOverlap,
@@ -10,6 +19,7 @@ import {
 } from '../lib/user-role';
 import {
   AddRoleDto,
+  CreateUserDto,
   RemoveRoleDto,
   UpdateSupplyRoleDto,
 } from '../schemas/user.schema';
@@ -20,7 +30,41 @@ import {
   UserListResponse,
 } from '../types/user.type';
 import { AuthPayload } from '../types/auth.type';
-import { recordUserManagementAuditEvent } from './audit-log.service';
+import { recordAuditEvent, recordUserManagementAuditEvent } from './audit-log.service';
+
+const safeUserSelect = {
+  id: true,
+  username: true,
+  email: true,
+  full_name: true,
+  register_type: true,
+  created_at: true,
+  role_updated_at: true,
+  roles: {
+    select: {
+      role: true,
+      dept_id: true,
+      unit_id: true,
+      department: { select: { id: true, name: true } },
+      unit: { select: { id: true, name: true } },
+    },
+  },
+};
+
+const assertNoExistingUser = async (
+  tx: Prisma.TransactionClient,
+  username: string,
+  email: string
+) => {
+  const existingUser = await tx.user.findFirst({
+    where: { OR: [{ username }, { email }] },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new AppError('Username or email already exists', 409);
+  }
+};
 
 type RoleAssignment = {
   id: string;
@@ -170,6 +214,7 @@ export const listUsers = async (
         select: {
           id: true,
           full_name: true,
+          register_type: true,
           roles: {
             where: roleWhere,
             select: {
@@ -194,6 +239,7 @@ export const listUsers = async (
         return {
           id: u.id,
           full_name: u.full_name,
+          register_type: u.register_type,
           roles: u.roles.map((r) => r.role),
         };
       }),
@@ -214,6 +260,7 @@ export const listUsers = async (
         select: {
           id: true,
           full_name: true,
+          register_type: true,
           roles: {
             where: roleWhere,
             select: {
@@ -237,6 +284,7 @@ export const listUsers = async (
         return {
           id: u.id,
           full_name: u.full_name,
+          register_type: u.register_type,
           roles: u.roles.map((r) => r.role),
         };
       }),
@@ -248,6 +296,7 @@ export const listUsers = async (
         select: {
           id: true,
           full_name: true,
+          register_type: true,
           roles: {
             where: role ? roleWhere : undefined,
             select: {
@@ -267,6 +316,7 @@ export const listUsers = async (
         return {
           id: u.id,
           full_name: u.full_name,
+          register_type: u.register_type,
           roles: u.roles.map((r) => r.role),
         };
       }),
@@ -279,7 +329,14 @@ export const listUsers = async (
 export const getById = async (id: string): Promise<UserDetailResponse> => {
   const user = await prisma.user.findUnique({
     where: { id },
-    include: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      full_name: true,
+      register_type: true,
+      created_at: true,
+      role_updated_at: true,
       roles: {
         select: {
           role: true,
@@ -303,6 +360,65 @@ export const getById = async (id: string): Promise<UserDetailResponse> => {
     throw new NotFoundError('User not found');
   }
   return user;
+};
+
+export const createUser = async (
+  actor: AuthPayload,
+  data: CreateUserDto
+) => {
+  return await prisma.$transaction(async (tx) => {
+    await assertDepartmentUnitScope(tx, {
+      deptId: data.dept_id,
+      unitId: data.unit_id,
+    });
+    await assertNoExistingUser(tx, data.username, data.email);
+
+    const password = await bcrypt.hash(data.password, 10);
+    const user = await tx.user.create({
+      data: {
+        username: data.username,
+        email: data.email,
+        full_name: data.full_name,
+        password,
+        register_type: data.register_type,
+        roles: {
+          create: {
+            role: data.role,
+            dept_id: data.dept_id,
+            unit_id: data.unit_id,
+          },
+        },
+      },
+      select: safeUserSelect,
+    });
+
+    await recordAuditEvent(tx, {
+      kind: AuditLogType.USER_MANAGEMENT,
+      eventType: AuditEventType.USER_CREATED,
+      targetType: AuditTargetType.USER,
+      targetId: user.id,
+      actor,
+      targetSnapshot: {
+        id: user.id,
+        type: AuditTargetType.USER,
+        name: user.full_name,
+        refNo: user.username,
+        email: user.email,
+        registerType: user.register_type,
+        role: data.role,
+      },
+      diff: [
+        { field: 'register_type', oldValue: null, newValue: data.register_type },
+        { field: 'role', oldValue: null, newValue: data.role },
+      ],
+      metadata: { departmentId: data.dept_id, unitId: data.unit_id },
+      sourceTable: 'users',
+      sourceId: user.id,
+      occurredAt: user.created_at,
+    });
+
+    return user;
+  });
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
@@ -415,6 +531,11 @@ export const addRole = async (
 ): Promise<UpdateUserRoleResponse> => {
   return await prisma.$transaction(async (tx) => {
     await assertUsersExist(tx, [data.user_id]);
+    await assertManageableRoleScope(tx, {
+      role: data.role,
+      deptId: data.dept_id,
+      unitId: data.unit_id ?? null,
+    });
 
     return await addRoleWithAudit(
       tx,
@@ -436,6 +557,11 @@ export const removeRole = async (
 ): Promise<void> => {
   return await prisma.$transaction(async (tx) => {
     await assertUsersExist(tx, [data.user_id]);
+    await assertManageableRoleScope(tx, {
+      role: data.role,
+      deptId: data.dept_id,
+      unitId: data.unit_id ?? null,
+    });
 
     await removeRoleWithAudit(
       tx,

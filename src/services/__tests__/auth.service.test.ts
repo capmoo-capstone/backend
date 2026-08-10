@@ -1,16 +1,15 @@
-import { UserRole } from '@prisma/client';
+import { UserRole, RegisterType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearUserAuthCache } from '../../lib/auth-cache';
 import { OPS_DEPT_ID } from '../../lib/constant';
-import { prismaMock, txMock } from '../../test/prisma-mock';
+import { prismaMock } from '../../test/prisma-mock';
 import {
   clearSessionCache,
   exchangeSsoCode,
   login,
   loginWithSamlClaims,
-  register,
 } from '../auth.service';
 
 vi.mock('bcrypt', () => ({
@@ -47,11 +46,16 @@ describe('auth.service', () => {
 
   it('login returns a token and formatted roles when credentials are valid', async () => {
     prismaMock.user.findUnique
-      .mockResolvedValueOnce({ id: 'user-1', password: 'hashed-password' })
+      .mockResolvedValueOnce({
+        id: 'user-1',
+        password: 'hashed-password',
+        register_type: RegisterType.STANDARD,
+      })
       .mockResolvedValueOnce({
         id: 'user-1',
         username: 'staff',
         full_name: 'Staff User',
+        register_type: RegisterType.STANDARD,
         roles: [
           {
             role: UserRole.GENERAL_STAFF,
@@ -92,11 +96,16 @@ describe('auth.service', () => {
 
   it('login inherits only the role scope selected by an active delegation', async () => {
     prismaMock.user.findUnique
-      .mockResolvedValueOnce({ id: 'delegatee-1', password: 'hashed-password' })
+      .mockResolvedValueOnce({
+        id: 'delegatee-1',
+        password: 'hashed-password',
+        register_type: RegisterType.STANDARD,
+      })
       .mockResolvedValueOnce({
         id: 'delegatee-1',
         username: 'delegatee',
         full_name: 'Delegatee User',
+        register_type: RegisterType.STANDARD,
         roles: [
           {
             role: UserRole.GENERAL_STAFF,
@@ -166,11 +175,16 @@ describe('auth.service', () => {
 
   it('uses an existing user for SAML and returns an SSO exchange code', async () => {
     prismaMock.user.findUnique
-      .mockResolvedValueOnce({ id: 'user-1' })
+      .mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'staff@chula.ac.th',
+        register_type: RegisterType.SSO,
+      })
       .mockResolvedValueOnce({
         id: 'user-1',
         username: 'portal.staff',
         full_name: 'Portal Staff',
+        register_type: RegisterType.SSO,
         roles: [
           {
             role: UserRole.GENERAL_STAFF,
@@ -180,7 +194,6 @@ describe('auth.service', () => {
         ],
         delegations_received: [],
       });
-    prismaMock.user.findFirst.mockResolvedValue(null);
     prismaMock.samlRequestCache.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.samlRequestCache.upsert.mockResolvedValue({});
     mockedJwt.sign.mockReturnValue('saml-token' as any);
@@ -243,77 +256,52 @@ describe('auth.service', () => {
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
-  it('register creates a department-level role without a unit', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null);
-    txMock.department.findUnique.mockResolvedValue({
-      id: 'dept-1',
-      units: [{ id: 'unit-1' }],
-    });
-    mockedBcrypt.hash.mockResolvedValue('hashed-password' as never);
-    txMock.user.create.mockResolvedValue({
+  it('rejects a password login for an SSO account', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',
-      username: 'dept-head',
-      roles: [{ role: UserRole.HEAD_OF_DEPARTMENT }],
+      password: null,
+      register_type: RegisterType.SSO,
     });
 
-    const result = await register({
-      username: 'dept-head',
-      password: 'password',
-      full_name: 'Dept Head',
-      email: 'head@example.test',
-      role: UserRole.HEAD_OF_DEPARTMENT,
-      dept_id: 'dept-1',
-    } as any);
-
-    expect(result.id).toBe('user-1');
-    expect(txMock.user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          password: 'hashed-password',
-          roles: {
-            create: [
-              {
-                role: UserRole.HEAD_OF_DEPARTMENT,
-                dept_id: 'dept-1',
-                unit_id: null,
-              },
-            ],
-          },
-        }),
-      })
+    await expect(login('portal.staff', 'password')).rejects.toThrow(
+      'Cannot login with username and password, please login with CU Account'
     );
+
+    expect(mockedBcrypt.compareSync).not.toHaveBeenCalled();
   });
 
-  it('register creates a unit-level role when the unit belongs to the department', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null);
-    txMock.department.findUnique.mockResolvedValue({
-      id: 'dept-1',
-      units: [{ id: 'unit-1' }],
-    });
-    mockedBcrypt.hash.mockResolvedValue('hashed-password' as never);
-    txMock.user.create.mockResolvedValue({
-      id: 'user-2',
-      username: 'unit-head',
-      roles: [{ role: UserRole.HEAD_OF_UNIT }],
+  it('rejects an SSO claim whose email does not match the approved account', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'approved@chula.ac.th',
+      register_type: RegisterType.SSO,
     });
 
-    const result = await register({
-      username: 'unit-head',
-      password: 'password',
-      full_name: 'Unit Head',
-      email: 'unit-head@example.test',
-      role: UserRole.HEAD_OF_UNIT,
-      dept_id: 'dept-1',
-      unit_id: 'unit-1',
-    } as any);
+    await expect(
+      loginWithSamlClaims({
+        screenName: 'portal.staff',
+        emailAddress: 'different@chula.ac.th',
+        firstName: 'Portal',
+        lastName: 'Staff',
+      })
+    ).rejects.toThrow('No system account is assigned');
+  });
 
-    expect(result.id).toBe('user-2');
-    expect(
-      txMock.user.create.mock.calls[0][0].data.roles.create[0]
-    ).toMatchObject({
-      role: UserRole.HEAD_OF_UNIT,
-      unit_id: 'unit-1',
+  it('rejects SAML authentication for a standard account', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'staff@chula.ac.th',
+      register_type: RegisterType.STANDARD,
     });
+
+    await expect(
+      loginWithSamlClaims({
+        screenName: 'portal.staff',
+        emailAddress: 'staff@chula.ac.th',
+        firstName: 'Portal',
+        lastName: 'Staff',
+      })
+    ).rejects.toThrow('No system account is assigned');
   });
 
   it('clearSessionCache clears the auth cache for the current user', async () => {

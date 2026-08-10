@@ -108,7 +108,7 @@ describe('user.service', () => {
     expect(prismaMock.user.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'user-1' },
-        include: expect.objectContaining({ roles: expect.any(Object) }),
+        select: expect.objectContaining({ roles: expect.any(Object) }),
       })
     );
   });
@@ -153,6 +153,7 @@ describe('user.service', () => {
 
   it('addRole adds a new department-level role to an existing user', async () => {
     txMock.user.count.mockResolvedValue(1);
+    txMock.department.findUnique.mockResolvedValue({ id: 'dept-1' });
     txMock.userOrganizationRole.findFirst.mockResolvedValue(null);
     txMock.userOrganizationRole.findMany.mockResolvedValue([]);
     txMock.userOrganizationRole.create.mockResolvedValue({
@@ -195,6 +196,11 @@ describe('user.service', () => {
 
   it('removeRole removes the role and falls back to guest when no roles remain', async () => {
     txMock.user.count.mockResolvedValue(1);
+    txMock.department.findUnique.mockResolvedValue({ id: 'dept-1' });
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      dept_id: 'dept-1',
+    });
     txMock.userOrganizationRole.findFirst.mockResolvedValue({
       id: 'role-1',
       user_id: 'user-1',
@@ -236,5 +242,17 @@ describe('user.service', () => {
         }),
       })
     );
+  });
+
+  it('does not allow an ADMIN role API to assign SUPER_ADMIN', async () => {
+    txMock.user.count.mockResolvedValue(1);
+
+    await expect(
+      addRole(actor, {
+        user_id: 'user-1',
+        role: UserRole.SUPER_ADMIN,
+        dept_id: 'DEPT-SUP-OPS',
+      } as any)
+    ).rejects.toThrow('SUPER_ADMIN role cannot be managed here');
   });
 });

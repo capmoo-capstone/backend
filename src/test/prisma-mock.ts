@@ -21,6 +21,7 @@ const MODEL_METHODS = [
 ] as const;
 
 const MODEL_NAMES = [
+  'registrationRequest',
   'auditEvent',
   'auditLog',
   'budgetPlan',

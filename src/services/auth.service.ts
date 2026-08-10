@@ -1,20 +1,20 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { RegisterType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { clearUserAuthCache } from '../lib/auth-cache';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { nowUtc } from '../lib/date';
+import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import {
-  AppError,
-  BadRequestError,
-  NotFoundError,
-  UnauthorizedError,
-} from '../lib/errors';
-import { isDeptLevelRole, isUnitLevelRole } from '../lib/roles';
-import { RegisterUserDto } from '../schemas/user.schema';
-import { createSsoExchangeCode, exchangeSsoCode as exchangeSsoCodeCache } from '../lib/saml-cache';
+  createSsoExchangeCode,
+  exchangeSsoCode as exchangeSsoCodeCache,
+} from '../lib/saml-cache';
 import type { CuPortalClaims } from './saml.service';
-import { AuthPayload, FetchAndFormatUserDetailsResponse, RegisterResponse } from '../types/auth.type';
+import {
+  AuthPayload,
+  FetchAndFormatUserDetailsResponse,
+} from '../types/auth.type';
 
 export const fetchAndFormatUserDetails = async (
   whereClause: any
@@ -106,7 +106,13 @@ export const fetchAndFormatUserDetails = async (
   }));
 
   return {
-    user, // Raw user data (id, username, full_name, email, etc.)
+    user: {
+      id: user.id,
+      username: user.username,
+      full_name: user.full_name,
+      email: user.email,
+      register_type: user.register_type,
+    },
     authData: {
       // Formatted data for the cache/tokens
       roles: finalRoles,
@@ -122,17 +128,18 @@ export const login = async (
 ): Promise<AuthPayload> => {
   const userRecord = await prisma.user.findUnique({
     where: { username },
-    select: { id: true, password: true },
+    select: { id: true, password: true, register_type: true },
   });
 
-  if (!userRecord) {
+  if (userRecord?.register_type === RegisterType.SSO) {
+    throw new BadRequestError("Cannot login with username and password, please login with CU Account");
+  }
+
+  if (!userRecord || !userRecord.password) {
     throw new UnauthorizedError('Invalid username or password');
   }
 
-  const checkPassword = bcrypt.compareSync(
-    password,
-    userRecord?.password || ''
-  );
+  const checkPassword = bcrypt.compareSync(password, userRecord.password);
 
   if (!checkPassword) {
     throw new UnauthorizedError('Invalid username or password');
@@ -180,117 +187,23 @@ export const issueLoginForUserId = async (
 export const loginWithSamlClaims = async (
   claims: CuPortalClaims
 ): Promise<string> => {
-  let user = await prisma.user.findUnique({
-    where: { username: claims.screenName },
-    select: { id: true },
+  const username = claims.screenName.trim();
+  const email = claims.emailAddress.trim().toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { username },
+    select: { id: true, email: true, register_type: true},
   });
 
-  if (!user) {
-    user = await prisma.user.findFirst({
-      where: {
-        OR: [{ email: claims.emailAddress }, { username: claims.emailAddress }],
-      },
-      select: { id: true },
-    });
-  }
-
-  if (!user) {
+  if (!user || user.register_type !== RegisterType.SSO || user.email !== email) {
     throw new UnauthorizedError(
       'No system account is assigned to this SSO user'
     );
-  }
-
-  const emailOwner = await prisma.user.findFirst({
-    where: {
-      email: claims.emailAddress,
-      NOT: { id: user.id },
-    },
-    select: { id: true },
-  });
-
-  if (emailOwner) {
-    throw new UnauthorizedError('SSO email address belongs to another user');
   }
 
   const authPayload = await issueLoginForUserId(user.id);
   const code = await createSsoExchangeCode(authPayload);
   return code;
 };
-export const register = async (
-  data: RegisterUserDto
-): Promise<RegisterResponse> => {
-  const existingUser = await prisma.user.findUnique({
-    where: { username: data.username },
-  });
-
-  if (existingUser) {
-    throw new AppError('User already exists', 409);
-  }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const departmentRecord = await tx.department.findUnique({
-      where: { id: data.dept_id },
-      include: { units: true },
-    });
-
-    if (!departmentRecord) {
-      throw new NotFoundError('Department not found');
-    }
-
-    if (isUnitLevelRole(data.role) && !data.unit_id) {
-      throw new BadRequestError('Unit is required for unit-level roles');
-    }
-
-    if (isDeptLevelRole(data.role) && data.unit_id) {
-      throw new BadRequestError('Unit is not allowed for department roles');
-    }
-
-    if (
-      data.unit_id &&
-      !departmentRecord.units.find((u) => u.id === data.unit_id)
-    ) {
-      throw new NotFoundError('Unit not found in this department');
-    }
-
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    const newUser = await tx.user.create({
-      data: {
-        username: data.username,
-        password: hashedPassword,
-        full_name: data.full_name,
-        email: data.email,
-        roles: {
-          create: [
-            {
-              role: data.role,
-              dept_id: data.dept_id,
-              unit_id: data.unit_id || null,
-            },
-          ],
-        },
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        full_name: true,
-        roles: {
-          include: {
-            department: { select: { id: true, name: true } },
-            unit: { select: { id: true, name: true } },
-          },
-        },
-        created_at: true,
-      },
-    });
-
-    return newUser;
-  });
-
-  return result;
-};
-
 /**
  * Clears server-side cached authorization data for the current user.
  *

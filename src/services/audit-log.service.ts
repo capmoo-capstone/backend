@@ -118,6 +118,11 @@ const titleByEventType: Record<AuditEventType, string> = {
   [AuditEventType.USER_ROLE_REMOVED]: 'User role removed',
   [AuditEventType.UNIT_STAFF_ADDED]: 'Staff added to unit',
   [AuditEventType.UNIT_STAFF_REMOVED]: 'Staff removed from unit',
+  [AuditEventType.REGISTRATION_REQUESTED]:
+    'Account registration requested',
+  [AuditEventType.REGISTRATION_APPROVED]: 'Account registration approved',
+  [AuditEventType.REGISTRATION_REJECTED]: 'Account registration rejected',
+  [AuditEventType.USER_CREATED]: 'User account created',
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>

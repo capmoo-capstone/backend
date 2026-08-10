@@ -1,4 +1,4 @@
-import { User, UserRole } from '@prisma/client';
+import { UserRole, RegisterType } from '@prisma/client';
 
 export interface UserListFilters {
   unitId?: string;
@@ -9,6 +9,7 @@ export interface UserListFilters {
 export interface UserListItem {
   id: string;
   full_name: string;
+  register_type: RegisterType;
   roles: UserRole[];
 }
 
@@ -20,7 +21,14 @@ export interface UserListResponse {
   data: UserListItem[];
 }
 
-export interface UserDetailResponse extends User {
+export interface UserDetailResponse {
+  id: string;
+  username: string;
+  email: string | null;
+  full_name: string;
+  register_type: RegisterType;
+  created_at: Date;
+  role_updated_at: Date;
   roles: {
     role: UserRole;
     department: {
