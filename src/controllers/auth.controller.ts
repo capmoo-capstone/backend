@@ -21,11 +21,13 @@ export const login = async (req: Request, res: Response) => {
 
 export const register = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
-  const { username, password, full_name, role, dept_id, unit_id } = req.body;
+  const { username, password, full_name, email, role, dept_id, unit_id } =
+    req.body;
   const validatedData = RegisterUserSchema.parse({
     username,
     password,
     full_name,
+    email,
     role,
     dept_id,
     unit_id,
