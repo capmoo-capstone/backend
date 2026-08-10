@@ -150,6 +150,7 @@ export const listUnits = async (
         id: unit.id,
         name: unit.name,
         dept_id: unit.dept_id,
+        budget_code: unit.budget_code,
         type: unit.type,
       };
 

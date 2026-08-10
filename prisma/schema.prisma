@@ -184,10 +184,11 @@ model Department {
 }
 
 model Unit {
-  id      String                @id
-  dept_id String
-  name    String
-  type    UnitResponsibleType[]
+  id          String                @id
+  dept_id     String
+  name        String
+  budget_code String?
+  type        UnitResponsibleType[]
 
   organization_roles   UserOrganizationRole[]
   requesting_projects  Project[]              @relation("RequestingUnit")

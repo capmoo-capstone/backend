@@ -21,6 +21,8 @@ import {
 } from '../src/lib/constant';
 import { nowUtc, toBangkokParts } from '../src/lib/date';
 import { ProjectPhaseProgress } from '../src/types/project.type';
+import { departmentsAndUnitsData } from './seed-departments';
+import { seedHolidays } from './seed-holidays';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = nowUtc();
@@ -102,83 +104,24 @@ const cleanup = async () => {
 
 const seedOrganization = async () => {
   await prisma.department.createMany({
-    data: [
-      { id: 'DEPT-SUP-OPS', name: 'Supply Operation' },
-      { id: 'DEPT-FIN', name: 'สำนักงานบริหารการเงิน การบัญชี และการพัสดุ' },
-      { id: 'DEPT-REG', name: 'สำนักงานทะเบียน' },
-      { id: 'DEPT-LOC', name: 'สำนักงานบริหารระบบกายภาพ' },
-      { id: 'DEPT-STUAFF', name: 'สำนักงานบริหารกิจการนิสิต' },
-    ],
+    data: departmentsAndUnitsData.map((dept) => ({
+      id: dept.id,
+      name: dept.name,
+    })),
   });
 
+  const units = departmentsAndUnitsData.flatMap((dept) =>
+    (dept.units ?? []).map((unit) => ({
+      id: unit.id,
+      dept_id: dept.id,
+      name: unit.name,
+      budget_code: unit.budget_code ?? null,
+      type: unit.type ?? [],
+    }))
+  );
+
   await prisma.unit.createMany({
-    data: [
-      {
-        id: 'UNIT-PROC-1',
-        dept_id: 'DEPT-SUP-OPS',
-        name: 'กลุ่มงานจัดซื้อจัดจ้าง 1',
-        type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
-      },
-      {
-        id: 'UNIT-PROC-2',
-        dept_id: 'DEPT-SUP-OPS',
-        name: 'กลุ่มงานจัดซื้อจัดจ้าง 2',
-        type: [
-          UnitResponsibleType.MT500K,
-          UnitResponsibleType.SELECTION,
-          UnitResponsibleType.EBIDDING,
-          UnitResponsibleType.INTERNAL,
-        ],
-      },
-      {
-        id: 'UNIT-CONT',
-        dept_id: 'DEPT-SUP-OPS',
-        name: 'กลุ่มงานบริหารสัญญา',
-        type: [UnitResponsibleType.CONTRACT],
-      },
-      {
-        id: 'UNIT-FIN',
-        dept_id: 'DEPT-FIN',
-        name: 'ฝ่ายการเงิน',
-        type: [],
-      },
-      {
-        id: 'UNIT-ACC',
-        dept_id: 'DEPT-FIN',
-        name: 'ฝ่ายการบัญชี',
-        type: [],
-      },
-      {
-        id: 'UNIT-SUP',
-        dept_id: 'DEPT-FIN',
-        name: 'ฝ่ายการพัสดุ',
-        type: [],
-      },
-      {
-        id: 'UNIT-BUILD',
-        dept_id: 'DEPT-LOC',
-        name: 'ฝ่ายอาคารสถานที่',
-        type: [],
-      },
-      {
-        id: 'UNIT-MAINT',
-        dept_id: 'DEPT-LOC',
-        name: 'ฝ่ายซ่อมบำรุง',
-        type: [],
-      },
-      {
-        id: 'UNIT-EDU',
-        dept_id: 'DEPT-STUAFF',
-        name: 'ฝ่ายทุนการศึกษาและบริการนิสิต',
-        type: [],
-      },
-      {
-        id: 'UNIT-NET',
-        dept_id: 'DEPT-STUAFF',
-        name: 'ฝ่ายประสานงานและเครือข่ายกิจการนิสิต',
-        type: [],
-      },
-    ],
+    data: units,
   });
 };
 
@@ -374,13 +317,13 @@ const seedUsers = async () => {
         user_id: ids.users.facilitiesRep,
         role: UserRole.REPRESENTATIVE,
         dept_id: 'DEPT-LOC',
-        unit_id: 'UNIT-BUILD',
+        unit_id: 'UNIT-LOC-BUILD',
       },
       {
         user_id: ids.users.maintenanceRep,
         role: UserRole.REPRESENTATIVE,
         dept_id: 'DEPT-LOC',
-        unit_id: 'UNIT-MAINT',
+        unit_id: 'UNIT-LOC-MAINT',
       },
       {
         user_id: ids.users.itRep,
@@ -391,13 +334,13 @@ const seedUsers = async () => {
         user_id: ids.users.libraryStaff,
         role: UserRole.REPRESENTATIVE,
         dept_id: 'DEPT-STUAFF',
-        unit_id: 'UNIT-EDU',
+        unit_id: 'UNIT-STU-SCHOLAR',
       },
       {
         user_id: ids.users.libraryStaff,
         role: UserRole.REPRESENTATIVE,
         dept_id: 'DEPT-STUAFF',
-        unit_id: 'UNIT-NET',
+        unit_id: 'UNIT-STU-COORD',
       },
       {
         user_id: ids.users.delegatedStaff,
@@ -409,67 +352,67 @@ const seedUsers = async () => {
         user_id: ids.users.admin,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.supplyHead,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.procHeadLt,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.procHeadHigh,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.contractHead,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.procurementLt,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.procurementHigh,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.contractStaff,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.financeStaff,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.documentStaff,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.delegatedStaff,
         role: UserRole.GUEST,
         dept_id: 'DEPT-FIN',
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
       },
       {
         user_id: ids.users.guest,
@@ -692,7 +635,7 @@ const seedProjects = async () => {
     status: ProjectStatus.UNASSIGNED,
     procurementType: ProcurementType.LT100K,
     requestingDeptId: 'DEPT-STUAFF',
-    requestingUnitId: 'UNIT-EDU',
+    requestingUnitId: 'UNIT-STU-SCHOLAR',
     createdBy: ids.users.libraryStaff,
     expectedApprovalDays: 7,
   });
@@ -762,7 +705,7 @@ const seedProjects = async () => {
     status: ProjectStatus.IN_PROGRESS,
     procurementType: ProcurementType.MT500K,
     requestingDeptId: 'DEPT-FIN',
-    requestingUnitId: 'UNIT-ACC',
+    requestingUnitId: 'UNIT-FIN-ACC',
     createdBy: ids.users.financeStaff,
     procurementProgress: {
       GENERAL_STAFF: { status: ProjectPhaseStatus.WAITING_APPROVAL, step: 3 },
@@ -826,7 +769,7 @@ const seedProjects = async () => {
     procurementType: ProcurementType.SELECTION,
     workflowType: UnitResponsibleType.CONTRACT,
     requestingDeptId: 'DEPT-LOC',
-    requestingUnitId: 'UNIT-BUILD',
+    requestingUnitId: 'UNIT-LOC-BUILD',
     createdBy: ids.users.facilitiesRep,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: {
@@ -874,7 +817,7 @@ const seedProjects = async () => {
     procurementType: ProcurementType.SELECTION,
     workflowType: UnitResponsibleType.CONTRACT,
     requestingDeptId: 'DEPT-LOC',
-    requestingUnitId: 'UNIT-MAINT',
+    requestingUnitId: 'UNIT-LOC-MAINT',
     createdBy: ids.users.maintenanceRep,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: {
@@ -924,7 +867,7 @@ const seedProjects = async () => {
     procurementType: ProcurementType.LT500K,
     workflowType: UnitResponsibleType.CONTRACT,
     requestingDeptId: 'DEPT-STUAFF',
-    requestingUnitId: 'UNIT-EDU',
+    requestingUnitId: 'UNIT-STU-SCHOLAR',
     createdBy: ids.users.libraryStaff,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: COMPLETED_PHASE,
@@ -957,7 +900,7 @@ const seedProjects = async () => {
     status: ProjectStatus.WAITING_CANCEL,
     procurementType: ProcurementType.LT100K,
     requestingDeptId: 'DEPT-LOC',
-    requestingUnitId: 'UNIT-BUILD',
+    requestingUnitId: 'UNIT-LOC-BUILD',
     createdBy: ids.users.facilitiesRep,
     urgent: UrgentType.VERY_URGENT,
     procurementProgress: {
@@ -978,7 +921,7 @@ const seedProjects = async () => {
     status: ProjectStatus.CANCELLED,
     procurementType: ProcurementType.LT100K,
     requestingDeptId: 'DEPT-LOC',
-    requestingUnitId: 'UNIT-MAINT',
+    requestingUnitId: 'UNIT-LOC-MAINT',
     createdBy: ids.users.maintenanceRep,
     procurementAssigneeIds: [ids.users.procurementLt],
   });
@@ -994,7 +937,7 @@ const seedProjects = async () => {
     procurementType: ProcurementType.LT500K,
     workflowType: UnitResponsibleType.CONTRACT,
     requestingDeptId: 'DEPT-STUAFF',
-    requestingUnitId: 'UNIT-NET',
+    requestingUnitId: 'UNIT-STU-COORD',
     createdBy: ids.users.libraryStaff,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: COMPLETED_PHASE,
@@ -1112,7 +1055,7 @@ const seedBudgetPlans = async () => {
     data: [
       {
         budget_year: fiscalYear(),
-        unit_id: 'UNIT-EDU',
+        unit_id: 'UNIT-STU-SCHOLAR',
         activity_type: 101,
         activity_type_name: 'Student service improvement',
         description: 'Furniture and device purchases for student services.',
@@ -1123,7 +1066,7 @@ const seedBudgetPlans = async () => {
       },
       {
         budget_year: fiscalYear(),
-        unit_id: 'UNIT-SUP',
+        unit_id: 'UNIT-FIN-SUP',
         activity_type: 202,
         activity_type_name: 'Supply operation reserve',
         description: 'Shared procurement user-testing budget.',
@@ -1134,7 +1077,7 @@ const seedBudgetPlans = async () => {
       },
       {
         budget_year: fiscalYear(),
-        unit_id: 'UNIT-BUILD',
+        unit_id: 'UNIT-LOC-BUILD',
         activity_type: 303,
         activity_type_name: 'Facility operations',
         description: 'Building operation and outsourced services.',
@@ -1199,6 +1142,7 @@ async function main() {
   await seedCancellationsAndHistory();
   await seedBudgetPlans();
   await seedFinanceExports();
+  await seedHolidays();
 
   console.log('--- User Testing Seed Completed ---');
 }

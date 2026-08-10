@@ -78,10 +78,11 @@ export const listDepartments = async (
       };
 
       if (options.withUnit) {
-        const unitRows = (departmentWithUnits.units ?? []) as {
+        const unitRows = (departmentWithUnits.units ?? []) as unknown as {
           id: string;
           dept_id: string;
           name: string;
+          budget_code: string | null;
           type: Unit['type'];
           organization_roles: {
             user: {
@@ -96,6 +97,7 @@ export const listDepartments = async (
             id: unit.id,
             dept_id: unit.dept_id,
             name: unit.name,
+            budget_code: unit.budget_code,
             type: unit.type,
             rep: rep
               ? {
