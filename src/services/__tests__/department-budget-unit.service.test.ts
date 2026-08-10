@@ -24,7 +24,7 @@ import {
   updateUnitUsers,
 } from '../unit.service';
 
-const user = { id: 'user-1', roles: [] } as any;
+const user = { id: 'user-1', roles: [{ dept_id: OPS_DEPT_ID }] } as any;
 
 describe('department.service', () => {
   it('listDepartments returns all departments with units included', async () => {
@@ -110,14 +110,10 @@ describe('budget-plan.service', () => {
     ]);
     prismaMock.budgetPlan.count.mockResolvedValue(1);
 
-    const result = await listBudgetPlans(
-      user,
-      1,
-      10,
-      undefined,
-      'unit-1',
-      true
-    );
+    const result = await listBudgetPlans(user, 1, 10, {
+      units: ['unit-1'],
+      available: true,
+    });
 
     expect(result).toMatchObject({
       total: 1,
@@ -125,8 +121,76 @@ describe('budget-plan.service', () => {
       data: [{ id: 'budget-1', unit_name: 'Unit One', dept_name: 'Dept One' }],
     });
     expect(prismaMock.budgetPlan.findMany.mock.calls[0][0].where).toEqual({
-      unit_id: 'unit-1',
-      project_id: null,
+      AND: [{ unit_id: { in: ['unit-1'] } }, { project_id: null }],
+    });
+  });
+
+  it('listBudgetPlans enforces department protection for non-supply user', async () => {
+    const nonSupplyUser = {
+      id: 'user-2',
+      roles: [{ dept_id: 'dept-user-1' }],
+    } as any;
+
+    prismaMock.budgetPlan.findMany.mockResolvedValue([
+      {
+        id: 'budget-2',
+        budget_name: 'Budget Two',
+        unit: { name: 'Unit Two', department: { name: 'Dept User 1' } },
+      },
+    ]);
+    prismaMock.budgetPlan.count.mockResolvedValue(1);
+
+    const result = await listBudgetPlans(nonSupplyUser, 1, 10, {
+      search: 'test',
+      available: true,
+    });
+
+    expect(result.total).toBe(1);
+    expect(prismaMock.budgetPlan.findMany.mock.calls[0][0].where).toEqual({
+      AND: [
+        { unit: { dept_id: { in: ['dept-user-1'] } } },
+        { project_id: null },
+        {
+          OR: [
+            {
+              activity_type_name: {
+                contains: 'test',
+                mode: 'insensitive',
+              },
+            },
+            {
+              description: {
+                contains: 'test',
+                mode: 'insensitive',
+              },
+            },
+            {
+              budget_name: {
+                contains: 'test',
+                mode: 'insensitive',
+              },
+            },
+            {
+              unit: {
+                name: {
+                  contains: 'test',
+                  mode: 'insensitive',
+                },
+              },
+            },
+            {
+              unit: {
+                department: {
+                  name: {
+                    contains: 'test',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
     });
   });
 
