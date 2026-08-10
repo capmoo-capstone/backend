@@ -4,7 +4,7 @@ import { nowUtc } from './date';
 
 type CachedAuthData = Omit<
   AuthPayload,
-  'token' | 'id' | 'username' | 'full_name'
+  'token' | 'id' | 'username' | 'email' | 'full_name'
 > & {
   cached_at: Date;
 };

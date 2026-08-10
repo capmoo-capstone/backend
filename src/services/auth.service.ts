@@ -155,6 +155,7 @@ export const issueLoginForUserId = async (
   const tokenPayload = {
     id: user.id,
     username: user.username,
+    email: user.email,
     full_name: user.full_name,
   };
 

@@ -11,6 +11,7 @@ import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
 interface JwtPayload {
   id: string;
   username: string;
+  email: string | null;
   full_name: string;
 }
 
@@ -70,6 +71,7 @@ export const protect = async (
       token,
       id: user.id,
       username: user.username,
+      email: user.email,
       full_name: user.full_name,
       ...authData,
     };

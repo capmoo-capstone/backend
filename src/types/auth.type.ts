@@ -59,7 +59,7 @@ export interface AuthPayload {
   id: string;
   username: string;
   full_name: string;
-  email?: string;
+  email?: string | null;
   roles: AuthRoleDetail[];
   is_delegated: boolean;
   delegated_by: DelegatedByUser[];
