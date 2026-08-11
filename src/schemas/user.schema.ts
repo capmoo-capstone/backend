@@ -42,9 +42,21 @@ export const CreateUserSchema = z.object({
 })
 
 export const ListUsersQuerySchema = z.object({
-  unitId: z.string().optional(),
-  deptId: z.string().optional(),
-  role: z.enum(UserRole).optional(),
+  unitId: z.union([z.string(), z.array(z.string())]).optional(),
+  deptId: z.union([z.string(), z.array(z.string())]).optional(),
+  role: z.union([z.enum(UserRole), z.array(z.enum(UserRole))]).optional(),
+}).transform((data) => {
+  const unitId =
+    typeof data.unitId === 'string' ? [data.unitId] : data.unitId ?? [];
+  const deptId =
+    typeof data.deptId === 'string' ? [data.deptId] : data.deptId ?? [];
+  const role =
+    typeof data.role === 'string' ? [data.role] : data.role ?? [];
+  return {
+    role,
+    deptId,
+    unitId,
+  };
 });
 
 const supplyDeptRoles = [
@@ -91,7 +103,7 @@ export const RemoveRoleSchema = z.object({
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;
-export type ListUsersQueryDto = z.infer<typeof ListUsersQuerySchema>;
+export type ListUsersQuery = z.infer<typeof ListUsersQuerySchema>;
 export type UpdateSupplyRoleDto = z.infer<typeof UpdateSupplyRoleSchema>;
 export type AddRoleDto = z.infer<typeof AddRoleSchema>;
 export type RemoveRoleDto = z.infer<typeof RemoveRoleSchema>;

@@ -22,6 +22,6 @@ export const ListRegistrationRequestsQuerySchema = z.object({
 export type CreateRegistrationRequestDto = z.infer<
   typeof CreateRegistrationRequestSchema
 >;
-export type ListRegistrationRequestsQueryDto = z.infer<
+export type ListRegistrationRequestsQuery = z.infer<
   typeof ListRegistrationRequestsQuerySchema
 >;

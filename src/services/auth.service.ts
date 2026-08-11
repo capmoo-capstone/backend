@@ -151,6 +151,11 @@ export const login = async (
 export const issueLoginForUserId = async (
   userId: string
 ): Promise<AuthPayload> => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { last_login_at: nowUtc() },
+  });
+
   const result = await fetchAndFormatUserDetails({ id: userId });
 
   if (!result) {

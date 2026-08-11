@@ -28,6 +28,7 @@ const safeUserSelect = {
   register_type: true,
   created_at: true,
   role_updated_at: true,
+  last_login_at: true,
   roles: {
     select: {
       role: true,

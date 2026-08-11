@@ -4,7 +4,6 @@ import {
   AuditTargetType,
   Prisma,
   UserRole,
-  RegisterType,
 } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
@@ -20,17 +19,17 @@ import {
 import {
   AddRoleDto,
   CreateUserDto,
+  ListUsersQuery,
   RemoveRoleDto,
   UpdateSupplyRoleDto,
 } from '../schemas/user.schema';
 import {
   UpdateUserRoleResponse,
   UserDetailResponse,
-  UserListFilters,
-  UserListResponse,
 } from '../types/user.type';
 import { AuthPayload } from '../types/auth.type';
 import { recordAuditEvent, recordUserManagementAuditEvent } from './audit-log.service';
+import { PaginatedResponse } from '../types/common.type';
 
 const safeUserSelect = {
   id: true,
@@ -40,11 +39,10 @@ const safeUserSelect = {
   register_type: true,
   created_at: true,
   role_updated_at: true,
+  last_login_at: true,
   roles: {
     select: {
       role: true,
-      dept_id: true,
-      unit_id: true,
       department: { select: { id: true, name: true } },
       unit: { select: { id: true, name: true } },
     },
@@ -186,175 +184,41 @@ const removeRoleWithAudit = async (
 };
 
 export const listUsers = async (
-  filters: UserListFilters
-): Promise<UserListResponse> => {
-  const { unitId, deptId, role } = filters;
+  page: number = 1,
+  limit: number = 10,
+  filters: ListUsersQuery = { unitId: [], deptId: [], role: [] }
+): Promise<PaginatedResponse<UserDetailResponse>> => {
   const roleWhere = {
-    ...(unitId ? { unit_id: unitId } : {}),
-    ...(deptId ? { dept_id: deptId } : {}),
-    ...(role ? { role } : {}),
+    ...(filters.unitId.length > 0 ? { unit_id: { in: filters.unitId } } : {}),
+    ...(filters.deptId.length > 0 ? { dept_id: { in: filters.deptId } } : {}),
+    ...(filters.role.length > 0 ? { role: { in: filters.role } } : {}),
   };
-  const userWhere = { roles: { some: roleWhere } };
+  const userWhere =
+    Object.keys(roleWhere).length > 0 ? { roles: { some: roleWhere } } : {};
 
-  let data: UserListResponse;
+  const [users, count] = await Promise.all([
+    prisma.user.findMany({
+      where: userWhere,
+      skip: (page - 1) * limit,
+      take: limit,
+      select: safeUserSelect,
+    }),
+    prisma.user.count({ where: userWhere }),
+  ]);
 
-  if (unitId) {
-    const unit = await prisma.unit.findUnique({
-      where: { id: unitId },
-      select: { id: true, name: true },
-    });
-    if (!unit) {
-      throw new NotFoundError('Unit not found');
-    }
-    const [users, count] = await Promise.all([
-      prisma.user.findMany({
-        where: {
-          roles: { some: roleWhere },
-        },
-        select: {
-          id: true,
-          full_name: true,
-          register_type: true,
-          roles: {
-            where: roleWhere,
-            select: {
-              role: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({
-        where: {
-          roles: { some: roleWhere },
-        },
-      }),
-    ]);
-
-    data = {
-      id: unit.id,
-      entity_type: 'unit',
-      name: unit.name,
-      total: count,
-      data: users.map((u) => {
-        return {
-          id: u.id,
-          full_name: u.full_name,
-          register_type: u.register_type,
-          roles: u.roles.map((r) => r.role),
-        };
-      }),
-    };
-  } else if (deptId) {
-    const department = await prisma.department.findUnique({
-      where: { id: deptId },
-      select: { id: true, name: true },
-    });
-    if (!department) {
-      throw new NotFoundError('Department not found');
-    }
-    const [users, count] = await Promise.all([
-      prisma.user.findMany({
-        where: {
-          roles: { some: roleWhere },
-        },
-        select: {
-          id: true,
-          full_name: true,
-          register_type: true,
-          roles: {
-            where: roleWhere,
-            select: {
-              role: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({
-        where: {
-          roles: { some: roleWhere },
-        },
-      }),
-    ]);
-    data = {
-      id: department.id,
-      entity_type: 'department',
-      name: department.name,
-      total: count,
-      data: users.map((u) => {
-        return {
-          id: u.id,
-          full_name: u.full_name,
-          register_type: u.register_type,
-          roles: u.roles.map((r) => r.role),
-        };
-      }),
-    };
-  } else {
-    const [users, count] = await Promise.all([
-      prisma.user.findMany({
-        where: role ? userWhere : {},
-        select: {
-          id: true,
-          full_name: true,
-          register_type: true,
-          roles: {
-            where: role ? roleWhere : undefined,
-            select: {
-              role: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({ where: role ? userWhere : {} }),
-    ]);
-    data = {
-      id: 'all',
-      entity_type: 'all',
-      name: 'All Users',
-      total: count,
-      data: users.map((u) => {
-        return {
-          id: u.id,
-          full_name: u.full_name,
-          register_type: u.register_type,
-          roles: u.roles.map((r) => r.role),
-        };
-      }),
-    };
-  }
-
-  return data;
+  return {
+    total: count,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(count / limit),
+    data: users,
+  };
 };
 
 export const getById = async (id: string): Promise<UserDetailResponse> => {
   const user = await prisma.user.findUnique({
     where: { id },
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      full_name: true,
-      register_type: true,
-      created_at: true,
-      role_updated_at: true,
-      roles: {
-        select: {
-          role: true,
-          department: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          unit: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-    },
+    select: safeUserSelect,
   });
   if (!user) {
     throw new NotFoundError('User not found');

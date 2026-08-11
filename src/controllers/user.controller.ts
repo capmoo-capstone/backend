@@ -12,12 +12,13 @@ import { AuthenticatedRequest } from '../types/auth.type';
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { unitId, deptId, role } = ListUsersQuerySchema.parse(req.query);
-  const data = await UserService.listUsers({
-    unitId,
-    deptId,
-    role,
-  });
+  const { page, limit } = req.query;
+  const filter = ListUsersQuerySchema.parse(req.query);
+  const data = await UserService.listUsers(
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    filter
+  );
   res.status(200).json(data);
 };
 

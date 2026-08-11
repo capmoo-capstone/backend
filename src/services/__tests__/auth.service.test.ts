@@ -83,6 +83,10 @@ describe('auth.service', () => {
         },
       ],
     });
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { last_login_at: expect.any(Date) },
+    });
     expect(mockedJwt.sign).toHaveBeenCalledWith(
       {
         id: 'user-1',
@@ -207,6 +211,10 @@ describe('auth.service', () => {
 
     expect(typeof result).toBe('string');
     expect(result).toHaveLength(32);
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { last_login_at: expect.any(Date) },
+    });
   });
 
   it('exchanges SSO code for user authorization details and JWT token', async () => {

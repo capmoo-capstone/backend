@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { UserRole, RegisterType } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
@@ -25,23 +25,27 @@ describe('user.service', () => {
       {
         id: 'user-1',
         full_name: 'Staff One',
+        register_type: RegisterType.STANDARD,
+        last_login_at: null,
         roles: [{ role: UserRole.GENERAL_STAFF }],
       },
-    ]);
+    ] as any);
     prismaMock.user.count.mockResolvedValue(1);
 
-    const result = await listUsers({});
+    const result = await listUsers(1, 10, { unitId: [], deptId: [], role: [] });
 
     expect(result).toEqual({
-      id: 'all',
-      entity_type: 'all',
-      name: 'All Users',
       total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
       data: [
         {
           id: 'user-1',
           full_name: 'Staff One',
-          roles: [UserRole.GENERAL_STAFF],
+          register_type: RegisterType.STANDARD,
+          last_login_at: null,
+          roles: [{ role: UserRole.GENERAL_STAFF }],
         },
       ],
     });
@@ -50,48 +54,44 @@ describe('user.service', () => {
     );
   });
 
-  it('listUsers filters by unitId and returns the unit entity', async () => {
-    prismaMock.unit.findUnique.mockResolvedValue({
-      id: 'unit-1',
-      name: 'Unit One',
-    });
+  it('listUsers filters by unitId', async () => {
     prismaMock.user.findMany.mockResolvedValue([
       {
         id: 'user-1',
         full_name: 'Staff One',
         roles: [{ role: UserRole.GENERAL_STAFF }],
       },
-    ]);
+    ] as any);
     prismaMock.user.count.mockResolvedValue(1);
 
-    const result = await listUsers({ unitId: 'unit-1' });
+    const result = await listUsers(1, 10, { unitId: ['unit-1'], deptId: [], role: [] });
 
     expect(result).toMatchObject({
-      id: 'unit-1',
-      entity_type: 'unit',
-      name: 'Unit One',
       total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
     });
     expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({
-      roles: { some: { unit_id: 'unit-1' } },
+      roles: { some: { unit_id: { in: ['unit-1'] } } },
     });
   });
 
-  it('listUsers filters by deptId and returns the department entity', async () => {
-    prismaMock.department.findUnique.mockResolvedValue({
-      id: 'dept-1',
-      name: 'Dept One',
-    });
+  it('listUsers filters by deptId', async () => {
     prismaMock.user.findMany.mockResolvedValue([]);
     prismaMock.user.count.mockResolvedValue(0);
 
-    const result = await listUsers({ deptId: 'dept-1' });
+    const result = await listUsers(1, 10, { deptId: ['dept-1'], unitId: [], role: [] });
 
     expect(result).toMatchObject({
-      id: 'dept-1',
-      entity_type: 'department',
-      name: 'Dept One',
       total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 0,
+      data: [],
+    });
+    expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({
+      roles: { some: { dept_id: { in: ['dept-1'] } } },
     });
   });
 

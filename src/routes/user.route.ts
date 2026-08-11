@@ -13,11 +13,7 @@ router.patch(
   requireSupplyRoles([ADMIN]),
   controller.updateSupplyRole
 );
-router.post(
-  '/new',
-  requireSupplyRoles([UserRole.ADMIN]),
-  controller.createUser
-);
+router.post('/new', requireSupplyRoles([ADMIN]), controller.createUser);
 router.get('/:id', controller.getById);
 router.post('/:id/role', requireSupplyRoles([ADMIN]), controller.addRole);
 router.patch(
