@@ -42,6 +42,7 @@ const safeUserSelect = {
   last_login_at: true,
   roles: {
     select: {
+      id: true,
       role: true,
       department: { select: { id: true, name: true } },
       unit: { select: { id: true, name: true } },

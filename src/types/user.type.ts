@@ -10,6 +10,7 @@ export interface UserDetailResponse {
   role_updated_at: Date;
   last_login_at: Date | null;
   roles: {
+    id: string;
     role: UserRole;
     department: {
       id: string;
