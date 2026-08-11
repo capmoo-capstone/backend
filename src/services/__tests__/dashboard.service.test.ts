@@ -1,6 +1,7 @@
 import { ProcurementType, ProjectStatus, UnitResponsibleType, UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
+import { IndividualTodoQuerySchema } from '../../schemas/dashboard.schema';
 import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
 import * as DashboardService from '../dashboard/dashboard.service';
@@ -660,6 +661,86 @@ describe('dashboard.service', () => {
     });
 
     describe('getIndividualStaffDashboard', () => {
+      it('accepts an individual todo query without unitId', () => {
+        expect(
+          IndividualTodoQuerySchema.parse({ targetUserId: 'staff-1' })
+        ).toEqual({
+          targetUserId: 'staff-1',
+          tab: 'all',
+          page: 1,
+          limit: 10,
+        });
+      });
+
+      it('returns the selected user\'s project-own todo list', async () => {
+        prismaMock.user.findUnique.mockResolvedValue({
+          id: 'staff-1',
+          username: 'staff',
+          email: 'staff@example.com',
+          full_name: 'Staff User',
+          register_type: 'STANDARD',
+          roles: [
+            {
+              role: UserRole.GENERAL_STAFF,
+              department: { id: OPS_DEPT_ID, name: 'Supply' },
+              unit: { id: 'unit-proc', name: 'Procurement' },
+            },
+          ],
+          delegations_received: [],
+        } as any);
+        prismaMock.unit.findMany.mockResolvedValue([
+          {
+            id: 'unit-proc',
+            type: [UnitResponsibleType.LT100K],
+          },
+        ] as any);
+        prismaMock.project.findMany.mockResolvedValue([
+          { id: 'project-1', title: 'Target todo' },
+        ] as any);
+        prismaMock.project.count.mockResolvedValue(1);
+
+        const result = await DashboardService.getIndividualStaffTodos({
+          targetUserId: 'staff-1',
+          tab: 'waiting_accept',
+          page: 2,
+          limit: 20,
+        });
+
+        expect(result).toMatchObject({
+          total: 1,
+          page: 2,
+          pageSize: 20,
+          totalPages: 1,
+          data: [{ id: 'project-1', title: 'Target todo' }],
+        });
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            skip: 20,
+            take: 20,
+            orderBy: [{ receive_no: 'desc' }],
+          })
+        );
+        expect(prismaMock.project.count).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.any(Object),
+          })
+        );
+      });
+
+      it('throws NotFoundError when the todo target user does not exist', async () => {
+        prismaMock.user.findUnique.mockResolvedValue(null);
+
+        await expect(
+          DashboardService.getIndividualStaffTodos({
+            targetUserId: 'missing-user',
+            tab: 'all',
+            page: 1,
+            limit: 10,
+          })
+        ).rejects.toThrowError('User not found');
+        expect(prismaMock.project.findMany).not.toHaveBeenCalled();
+      });
+
       it('throws NotFoundError when staff user is not in the unit', async () => {
         prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc' } as any);
         prismaMock.user.findFirst.mockResolvedValue(null);

@@ -5,6 +5,7 @@ import {
   bangkokDayStartUtc,
   parseBangkokDateTime,
 } from '../lib/date';
+import { OwnProjectTabSchema } from './project.schema';
 
 export const DashboardModeEnum = z.enum([
   'today',
@@ -160,6 +161,13 @@ export const IndividualDashboardQuerySchema = z.object({
   targetUserId: z.string(),
 });
 
+export const IndividualTodoQuerySchema = z.object({
+  targetUserId: z.string(),
+  tab: OwnProjectTabSchema,
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
+
 export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<
   typeof ProcurementOverviewQuerySchema
@@ -175,4 +183,5 @@ export type UnitGroupStaffPerformanceQuery = z.infer<
 export type IndividualDashboardQuery = z.infer<
   typeof IndividualDashboardQuerySchema
 >;
+export type IndividualTodoQuery = z.infer<typeof IndividualTodoQuerySchema>;
 

@@ -5,6 +5,7 @@ import {
   UnitGroupStaffPerformanceQuery,
   UnitGroupTopDelayedQuery,
   IndividualDashboardQuery,
+  IndividualTodoQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
@@ -21,6 +22,7 @@ import {
   IndividualDashboardResponse,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
+import { PaginatedProjects } from '../../types/project.type';
 import * as overviewHelper from './overview-dashboard.helper';
 import * as kpiHelper from './kpi-dashboard.helper';
 import * as individualHelper from './individual-dashboard.helper';
@@ -92,5 +94,10 @@ export const getIndividualStaffDashboard = (
   query: IndividualDashboardQuery
 ): Promise<IndividualDashboardResponse> =>
   individualHelper.getIndividualStaffDashboard(user, query);
+
+export const getIndividualStaffTodos = (
+  query: IndividualTodoQuery
+): Promise<PaginatedProjects> =>
+  individualHelper.getIndividualStaffTodos(query);
 
 

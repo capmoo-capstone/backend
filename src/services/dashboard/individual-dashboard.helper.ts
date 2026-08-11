@@ -6,15 +6,45 @@ import {
   countBangkokWorkingDays,
   createBangkokWorkingDayHolidayIndex,
 } from '../../lib/working-days';
-import { IndividualDashboardQuery } from '../../schemas/dashboard.schema';
+import {
+  IndividualDashboardQuery,
+  IndividualTodoQuery,
+} from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
+import { PaginatedProjects } from '../../types/project.type';
 import {
   DurationComparisonItem,
   IndividualDashboardResponse,
 } from '../../types/dashboard.type';
 import { getHolidayDates } from '../holiday.service';
+import { fetchAndFormatUserDetails } from '../auth.service';
+import { getOwnProjects } from '../project-query.service';
 import { resolveTargetUnitId } from './dashboard.helper';
 import { getUnitProcurementTypes } from './kpi-dashboard.helper';
+
+export const getIndividualStaffTodos = async (
+  query: IndividualTodoQuery
+): Promise<PaginatedProjects> => {
+  const target = await fetchAndFormatUserDetails({
+    id: query.targetUserId,
+  });
+
+  if (!target) {
+    throw new NotFoundError('User not found');
+  }
+
+  const targetUser: AuthPayload = {
+    token: '',
+    id: target.user.id,
+    username: target.user.username,
+    full_name: target.user.full_name,
+    email: target.user.email,
+    user_type: target.user.register_type,
+    ...target.authData,
+  };
+
+  return getOwnProjects(targetUser, query.page, query.limit, query.tab);
+};
 
 export const getIndividualStaffDashboard = async (
   user: AuthPayload,
