@@ -4,6 +4,8 @@ import {
   UnitGroupQuery,
   UnitGroupStaffPerformanceQuery,
   UnitGroupTopDelayedQuery,
+  IndividualDashboardQuery,
+  IndividualTodoQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
@@ -16,10 +18,14 @@ import {
   UnitGroupProcurementMetricsResponse,
   UnitGroupStaffPerformanceResponse,
   UnitGroupTopDelayedProjectsResponse,
+  ContractUnitSummaryResponse,
+  IndividualDashboardResponse,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
+import { PaginatedProjects } from '../../types/project.type';
 import * as overviewHelper from './overview-dashboard.helper';
 import * as kpiHelper from './kpi-dashboard.helper';
+import * as individualHelper from './individual-dashboard.helper';
 
 export const getPeriodicSummary = (
   user: AuthPayload,
@@ -76,3 +82,22 @@ export const getUnitGroupStaffPerformance = (
   query: UnitGroupStaffPerformanceQuery
 ): Promise<UnitGroupStaffPerformanceResponse> =>
   kpiHelper.getUnitGroupStaffPerformance(user, query);
+
+export const getContractUnitSummary = (
+  user: AuthPayload,
+  query: UnitGroupQuery
+): Promise<ContractUnitSummaryResponse> =>
+  kpiHelper.getContractUnitSummary(user, query);
+
+export const getIndividualStaffDashboard = (
+  user: AuthPayload,
+  query: IndividualDashboardQuery
+): Promise<IndividualDashboardResponse> =>
+  individualHelper.getIndividualStaffDashboard(user, query);
+
+export const getIndividualStaffTodos = (
+  query: IndividualTodoQuery
+): Promise<PaginatedProjects> =>
+  individualHelper.getIndividualStaffTodos(query);
+
+

@@ -234,6 +234,7 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 | GET    | `/unit-group/procurement-details`  | Get unit group procurement details       |
 | GET    | `/unit-group/top-delayed`          | Get unit group top delayed projects      |
 | GET    | `/unit-group/staff-performance`    | Get unit group staff performance         |
+| GET    | `/individual-todos`                | Get a selected user's project-own queue  |
 
 ### Units — `/units`
 

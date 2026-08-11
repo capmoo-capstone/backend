@@ -2,6 +2,7 @@ import {
   Prisma,
   ProcurementType,
   ProjectStatus,
+  UnitResponsibleType,
   UserRole,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
@@ -13,7 +14,7 @@ import {
   nowUtc,
   toBangkokParts,
 } from '../../lib/date';
-import { NotFoundError } from '../../lib/errors';
+import { BadRequestError, NotFoundError } from '../../lib/errors';
 import {
   countBangkokWorkingDays,
   createBangkokWorkingDayHolidayIndex,
@@ -25,6 +26,7 @@ import {
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
+  ContractUnitSummaryResponse,
   ProcurementMethodDetailItem,
   TopDelayedProjectItem,
   UnitGroupExecutiveSummaryResponse,
@@ -386,7 +388,7 @@ export const getUnitGroupExecutiveSummary = async (
   };
 };
 
-const getUnitProcurementTypes = async (
+export const getUnitProcurementTypes = async (
   unitId: string
 ): Promise<ProcurementType[]> => {
   const unit = await prisma.unit.findUnique({
@@ -428,6 +430,9 @@ export const getUnitGroupProcurementMetrics = async (
   };
 
   const types = await getUnitProcurementTypes(unitId);
+  if (types.length === 0) {
+    throw new BadRequestError('Unit is not a procurement unit');
+  }
 
   const [byTotalType, byDelayedType] = await Promise.all([
     getProcurementTypeDonut(unitWhere, range, types),
@@ -483,6 +488,9 @@ export const getUnitGroupProcurementDetails = async (
     }),
     getUnitProcurementTypes(unitId),
   ]);
+  if (types.length === 0) {
+    throw new BadRequestError('Unit is not a procurement unit');
+  }
 
   const methods: ProcurementMethodDetailItem[] = [];
 
@@ -628,5 +636,111 @@ export const getUnitGroupTopDelayedProjects = async (
     unitId,
     procurementTypeFilter: query.procurementType ?? null,
     projects: topProjects,
+  };
+};
+
+export const getContractUnitSummary = async (
+  user: AuthPayload,
+  query: UnitGroupQuery
+): Promise<ContractUnitSummaryResponse> => {
+  const unitId = resolveTargetUnitId(user, query.unitId);
+  const range = { from: query.dateFrom, to: query.dateTo };
+
+  const unit = await prisma.unit.findUnique({
+    where: { id: unitId },
+    select: { id: true, type: true },
+  });
+
+  if (!unit) {
+    throw new NotFoundError('Unit not found');
+  }
+
+  if (!unit.type.includes(UnitResponsibleType.CONTRACT)) {
+    throw new BadRequestError('Unit is not a contract unit');
+  }
+
+  const statusCounts = await prisma.project.groupBy({
+    by: ['status'],
+    where: {
+      responsible_unit_id: unitId,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      created_at: { lte: range.to },
+    },
+    _count: {
+      _all: true,
+    },
+  });
+
+  const countMap = new Map<ProjectStatus, number>(
+    statusCounts.map((sc) => [sc.status, sc._count._all])
+  );
+
+  const unassigned = countMap.get(ProjectStatus.UNASSIGNED) ?? 0;
+  const waitingAccept = countMap.get(ProjectStatus.WAITING_ACCEPT) ?? 0;
+  const inProgress =
+    (countMap.get(ProjectStatus.IN_PROGRESS) ?? 0) +
+    (countMap.get(ProjectStatus.WAITING_CANCEL) ?? 0) +
+    (countMap.get(ProjectStatus.WAITING_CLOSE) ?? 0);
+  const completed = countMap.get(ProjectStatus.CLOSED) ?? 0;
+  const cancelled = countMap.get(ProjectStatus.CANCELLED) ?? 0;
+
+
+  const completedContractProjects = await prisma.project.findMany({
+    where: {
+      responsible_unit_id: unitId,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      contract_started_at: { not: null },
+      contract_completed_at: { gte: range.from, lte: range.to },
+    },
+    select: {
+      contract_started_at: true,
+      contract_completed_at: true,
+    },
+  });
+
+  let avgContractDurationDays = 0;
+  if (completedContractProjects.length > 0) {
+    const earliestStart = completedContractProjects.reduce(
+      (earliest, p) =>
+        p.contract_started_at! < earliest ? p.contract_started_at! : earliest,
+      completedContractProjects[0].contract_started_at!
+    );
+    const latestEnd = completedContractProjects.reduce(
+      (latest, p) =>
+        p.contract_completed_at! > latest ? p.contract_completed_at! : latest,
+      completedContractProjects[0].contract_completed_at!
+    );
+
+    const holidayDates = await getHolidayDates(
+      bangkokDayStartUtc(earliestStart),
+      bangkokDayEndUtc(latestEnd)
+    );
+    const holidayIndex = createBangkokWorkingDayHolidayIndex(holidayDates);
+
+    let totalDurationDays = 0;
+    for (const project of completedContractProjects) {
+      totalDurationDays += countBangkokWorkingDays(
+        project.contract_started_at!,
+        project.contract_completed_at!,
+        holidayIndex
+      );
+    }
+    avgContractDurationDays = Number(
+      (totalDurationDays / completedContractProjects.length).toFixed(1)
+    );
+  }
+
+  return {
+    unitId,
+    mode: query.mode,
+    range,
+    statusBreakdown: {
+      unassigned,
+      waitingAccept,
+      inProgress,
+      completed,
+      cancelled,
+    },
+    avgContractDurationDays,
   };
 };

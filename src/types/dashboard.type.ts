@@ -1,4 +1,8 @@
-import { ProcurementType, ProjectStatus } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/client';
 import { PaginatedResponse } from './common.type';
 import { DashboardMode } from '../schemas/dashboard.schema';
@@ -189,4 +193,43 @@ export interface UnitGroupStaffPerformanceResponse extends PaginatedResponse<Uni
     from: Date;
     to: Date;
   };
+}
+
+export interface UnitContractStatusBreakdown {
+  unassigned: number;
+  waitingAccept: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+}
+
+export interface ContractUnitSummaryResponse {
+  unitId: string;
+  mode: DashboardMode;
+  range: {
+    from: Date;
+    to: Date;
+  };
+  statusBreakdown: UnitContractStatusBreakdown;
+  avgContractDurationDays: number;
+}
+
+export interface DurationComparisonItem {
+  workflowType: UnitResponsibleType;
+  staffAvgDurationDays: number;
+  unitAvgDurationDays: number;
+  comparison: 'better' | 'worse' | 'same';
+}
+
+export interface IndividualDashboardResponse {
+  unitId: string;
+  user: {
+    id: string;
+    fullName: string;
+  };
+  durationComparison: DurationComparisonItem[];
+  procurementMethodMetrics: {
+    total: number;
+    byProcurementType: Array<{ type: ProcurementType; count: number }>;
+  } | null;
 }
