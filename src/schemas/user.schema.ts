@@ -13,12 +13,6 @@ export const manageableUserRoles = [
   UserRole.GUEST,
 ] as const;
 
-const RoleAssignmentSchema = z.object({
-  role: z.enum(manageableUserRoles),
-  dept_id: z.string().trim().min(1),
-  unit_id: z.string().trim().min(1).optional(),
-});
-
 export const CreateUserSchema = z.object({
   username: z.string().trim().min(1).optional(),
   full_name: z.string().trim().min(1),
@@ -92,12 +86,22 @@ export const UpdateSupplyRoleSchema = z
 
 export const AddRoleSchema = z.object({
   user_id: z.uuid(),
-  ...RoleAssignmentSchema.shape,
+  role: z.enum(manageableUserRoles),
+  dept_id: z.string().trim().min(1),
+  unit_id: z.string().trim().optional(),
 });
 
 export const RemoveRoleSchema = z.object({
-  user_id: z.uuid(),
-  ...RoleAssignmentSchema.shape,
+  user_id: z.uuid().optional(),
+  role: z.enum(manageableUserRoles).optional(),
+  dept_id: z.string().trim().optional(),
+  unit_id: z.string().trim().optional(),
+  role_id: z.uuid().optional(),
+}).refine((data) => {
+  if (!(data.user_id && data.dept_id && data.role) && !data.role_id) {
+    throw new BadRequestError('Missing required parameters');
+  }
+  return true;
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────

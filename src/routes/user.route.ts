@@ -8,12 +8,22 @@ const { ADMIN } = UserRole;
 const router = Router();
 
 router.get('/', controller.getAll);
+router.post('/new', requireSupplyRoles([ADMIN]), controller.createUser);
 router.patch(
   '/roles/supply',
   requireSupplyRoles([ADMIN]),
   controller.updateSupplyRole
 );
-router.post('/new', requireSupplyRoles([ADMIN]), controller.createUser);
+router.post(
+  '/roles/add',
+  requireSupplyRoles([ADMIN]),
+  controller.addRole
+);
+router.delete(
+  '/roles/:role_id',
+  requireSupplyRoles([ADMIN]),
+  controller.removeRole
+);
 router.get('/:id', controller.getById);
 router.post('/:id/role', requireSupplyRoles([ADMIN]), controller.addRole);
 router.patch(
