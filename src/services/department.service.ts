@@ -4,19 +4,17 @@ import { NotFoundError } from '../lib/errors';
 import {
   CreateDepartmentDto,
   UpdateDepartmentDto,
+  ListDepartmentsQuery,
 } from '../schemas/department.schema';
-import { AuthPayload } from '../types/auth.type';
 import {
   DepartmentListItem,
-  DepartmentsListOptions,
   DepartmentsListResponse,
 } from '../types/department.type';
 
 export const listDepartments = async (
-  _user: AuthPayload,
-  options: DepartmentsListOptions = {}
+  options?: ListDepartmentsQuery
 ): Promise<DepartmentsListResponse> => {
-  const where: Prisma.DepartmentWhereInput = options.excludeDeptIds?.length
+  const where: Prisma.DepartmentWhereInput = options?.excludeDeptIds?.length
     ? { id: { notIn: options.excludeDeptIds } }
     : {};
   const include: Prisma.DepartmentInclude = options.withUnit

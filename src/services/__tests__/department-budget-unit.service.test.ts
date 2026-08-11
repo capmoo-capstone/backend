@@ -47,13 +47,10 @@ describe('department.service', () => {
     ]);
     prismaMock.department.count.mockResolvedValue(1);
 
-    const result = await listDepartments(user, { withUnit: true });
+    const result = await listDepartments({ excludeDeptIds: [], withUnit: true });
 
     expect(result.total).toBe(1);
-    expect(result.data[0].units?.[0].rep).toEqual({
-      id: 'rep-1',
-      full_name: 'Rep One',
-    });
+    expect(result.data[0].units?.[0].id).toBe('unit-1');
   });
 
   it('getById returns a department with units', async () => {

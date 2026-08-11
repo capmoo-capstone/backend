@@ -14,7 +14,7 @@ import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
 import { assertDepartmentUnitScope } from '../lib/roles';
 import {
   CreateRegistrationRequestDto,
-  ListRegistrationRequestsQueryDto,
+  ListRegistrationRequestsQuery,
 } from '../schemas/registration.schema';
 import { AuthPayload } from '../types/auth.type';
 import { recordAuditEvent } from './audit-log.service';
@@ -156,7 +156,7 @@ export const createRegistrationRequest = async (
 export const listRegistrationRequests = async (
   page: number,
   limit: number,
-  query: ListRegistrationRequestsQueryDto
+  query: ListRegistrationRequestsQuery
 ): Promise<PaginatedRegistrationRequest> => {
   const where: Prisma.RegistrationRequestWhereInput = query.status
     ? { status: query.status }

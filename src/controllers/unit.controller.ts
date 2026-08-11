@@ -11,7 +11,6 @@ import { AuthenticatedRequest } from '../types/auth.type';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['Unit']
-  // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit, dept_id, withUsers, withHead, withDelegations } =
     req.query;
   const data = await UnitService.listUnits(
