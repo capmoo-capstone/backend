@@ -18,7 +18,8 @@ import { BadRequestError, NotFoundError } from '../../lib/errors';
 import {
   countBangkokWorkingDays,
   createBangkokWorkingDayHolidayIndex,
-} from '../../lib/working-days';
+  getHolidayDates,
+} from '../holiday.service';
 import {
   UnitGroupQuery,
   UnitGroupStaffPerformanceQuery,
@@ -36,7 +37,6 @@ import {
   UnitGroupTopDelayedProjectsResponse,
   WorkloadVsDurationPoint,
 } from '../../types/dashboard.type';
-import { getHolidayDates } from '../holiday.service';
 import {
   daysBetweenBangkokDates,
   getPreviousRange,

@@ -5,7 +5,8 @@ import { NotFoundError } from '../../lib/errors';
 import {
   countBangkokWorkingDays,
   createBangkokWorkingDayHolidayIndex,
-} from '../../lib/working-days';
+  getHolidayDates,
+} from '../holiday.service';
 import {
   IndividualDashboardQuery,
   IndividualTodoQuery,
@@ -17,7 +18,6 @@ import {
   DurationComparisonItem,
   IndividualDashboardResponse,
 } from '../../types/dashboard.type';
-import { getHolidayDates } from '../holiday.service';
 import { fetchAndFormatUserDetails } from '../auth.service';
 import { getOwnProjects, getOwnProjectsTotal } from '../project-query.service';
 import { resolveTargetUnitId } from './dashboard.helper';
