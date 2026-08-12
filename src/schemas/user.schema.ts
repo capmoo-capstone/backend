@@ -39,6 +39,13 @@ export const ListUsersQuerySchema = z.object({
   unitId: z.union([z.string(), z.array(z.string())]).optional(),
   deptId: z.union([z.string(), z.array(z.string())]).optional(),
   role: z.union([z.enum(UserRole), z.array(z.enum(UserRole))]).optional(),
+  isActive: z
+    .preprocess((val) => {
+      if (val === 'true' || val === true) return true;
+      if (val === 'false' || val === false) return false;
+      return undefined;
+    }, z.boolean().optional())
+    .optional(),
 }).transform((data) => {
   const unitId =
     typeof data.unitId === 'string' ? [data.unitId] : data.unitId ?? [];
@@ -50,6 +57,7 @@ export const ListUsersQuerySchema = z.object({
     role,
     deptId,
     unitId,
+    ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
   };
 });
 
@@ -107,7 +115,6 @@ export const RemoveRoleSchema = z.object({
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;
-export type ListUsersQuery = z.infer<typeof ListUsersQuerySchema>;
 export type UpdateSupplyRoleDto = z.infer<typeof UpdateSupplyRoleSchema>;
 export type AddRoleDto = z.infer<typeof AddRoleSchema>;
 export type RemoveRoleDto = z.infer<typeof RemoveRoleSchema>;

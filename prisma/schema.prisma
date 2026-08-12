@@ -225,6 +225,7 @@ model User {
   password        String?
   register_type   RegisterType @default(STANDARD)
   full_name       String
+  is_active       Boolean  @default(true)
   created_at      DateTime @default(now())
   role_updated_at DateTime @default(now())
   last_login_at   DateTime?

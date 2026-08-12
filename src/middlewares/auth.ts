@@ -43,11 +43,15 @@ export const protect = async (
 
     const userMeta = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { role_updated_at: true },
+      select: { role_updated_at: true, is_active: true },
     });
 
     if (!userMeta) {
       throw new UnauthorizedError('User not found');
+    }
+
+    if (!userMeta.is_active) {
+      throw new UnauthorizedError('Account is inactive');
     }
 
     const cachedData = getUserAuthCache(decoded.id);

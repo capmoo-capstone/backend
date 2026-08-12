@@ -8,6 +8,7 @@ import {
   CreateUserSchema,
 } from '../schemas/user.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
+import { toBool } from '../lib/helper';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']
@@ -42,6 +43,22 @@ export const createUser = async (
     validatedData
   );
   res.status(201).json(data);
+};
+
+export const updateUserStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const id = req.params.id as string;
+  const isActive = toBool(req.query.active);
+  const result = await UserService.updateUserStatus(
+    req.user!,
+    id,
+    isActive
+  );
+  res.status(200).json(result);
 };
 
 export const updateSupplyRole = async (

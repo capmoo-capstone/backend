@@ -31,6 +31,11 @@ router.patch(
   requireSupplyRoles([ADMIN]),
   controller.removeRole
 );
+router.patch(
+  '/:id/status',
+  requireSupplyRoles([ADMIN]),
+  controller.updateUserStatus
+);
 router.delete('/:id', requireSuperAdmin, controller.removeUser);
 
 export default router;

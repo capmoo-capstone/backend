@@ -50,6 +50,7 @@ describe('auth.service', () => {
         id: 'user-1',
         password: 'hashed-password',
         register_type: RegisterType.STANDARD,
+        is_active: true,
       })
       .mockResolvedValueOnce({
         id: 'user-1',
@@ -104,6 +105,7 @@ describe('auth.service', () => {
         id: 'delegatee-1',
         password: 'hashed-password',
         register_type: RegisterType.STANDARD,
+        is_active: true,
       })
       .mockResolvedValueOnce({
         id: 'delegatee-1',
@@ -183,6 +185,7 @@ describe('auth.service', () => {
         id: 'user-1',
         email: 'staff@chula.ac.th',
         register_type: RegisterType.SSO,
+        is_active: true,
       })
       .mockResolvedValueOnce({
         id: 'user-1',
@@ -262,6 +265,17 @@ describe('auth.service', () => {
 
     expect(prismaMock.user.create).not.toHaveBeenCalled();
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects login for an inactive user account', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'user-1',
+      password: 'hashed-password',
+      register_type: RegisterType.STANDARD,
+      is_active: false,
+    });
+
+    await expect(login('staff', 'password')).rejects.toThrow('Account is inactive');
   });
 
   it('rejects a password login for an SSO account', async () => {

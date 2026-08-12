@@ -7,6 +7,7 @@ import {
   listUsers,
   removeRole,
   updateSupplyRole,
+  updateUserStatus,
 } from '../user.service';
 
 const actor = {
@@ -26,6 +27,7 @@ describe('user.service', () => {
         id: 'user-1',
         full_name: 'Staff One',
         register_type: RegisterType.STANDARD,
+        is_active: true,
         last_login_at: null,
         roles: [{ role: UserRole.GENERAL_STAFF }],
       },
@@ -44,6 +46,7 @@ describe('user.service', () => {
           id: 'user-1',
           full_name: 'Staff One',
           register_type: RegisterType.STANDARD,
+          is_active: true,
           last_login_at: null,
           roles: [{ role: UserRole.GENERAL_STAFF }],
         },
@@ -110,6 +113,45 @@ describe('user.service', () => {
         where: { id: 'user-1' },
         select: expect.objectContaining({ roles: expect.any(Object) }),
       })
+    );
+  });
+
+  it('updateUserStatus updates user active status and records audit log', async () => {
+    txMock.user.findUnique.mockResolvedValueOnce({
+      id: 'user-2',
+      is_active: true,
+      full_name: 'User Two',
+      username: 'user2',
+    });
+    txMock.user.update.mockResolvedValueOnce({
+      id: 'user-2',
+      full_name: 'User Two',
+      username: 'user2',
+      is_active: false,
+    });
+
+    const result = await updateUserStatus(actor, 'user-2', false);
+
+    expect(result.is_active).toBe(false);
+    expect(txMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-2' },
+        data: expect.objectContaining({ is_active: false }),
+      })
+    );
+    expect(txMock.auditEvent.create).toHaveBeenCalled();
+  });
+
+  it('updateUserStatus throws error when deactivating self', async () => {
+    await expect(updateUserStatus(actor, 'admin-1', false)).rejects.toThrow(
+      'Cannot update your own active status'
+    );
+  });
+
+  it('updateUserStatus throws error when user is not found', async () => {
+    txMock.user.findUnique.mockResolvedValueOnce(null);
+    await expect(updateUserStatus(actor, 'non-existent', false)).rejects.toThrow(
+      'User not found'
     );
   });
 

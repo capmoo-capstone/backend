@@ -128,7 +128,7 @@ export const login = async (
 ): Promise<AuthPayload> => {
   const userRecord = await prisma.user.findUnique({
     where: { username },
-    select: { id: true, password: true, register_type: true },
+    select: { id: true, password: true, register_type: true, is_active: true },
   });
 
   if (userRecord?.register_type === RegisterType.SSO) {
@@ -137,6 +137,10 @@ export const login = async (
 
   if (!userRecord || !userRecord.password) {
     throw new UnauthorizedError('Invalid username or password');
+  }
+
+  if (!userRecord.is_active) {
+    throw new UnauthorizedError('Account is inactive');
   }
 
   const checkPassword = bcrypt.compareSync(password, userRecord.password);
@@ -196,13 +200,17 @@ export const loginWithSamlClaims = async (
   const email = claims.emailAddress.trim().toLowerCase();
   const user = await prisma.user.findUnique({
     where: { username },
-    select: { id: true, email: true, register_type: true},
+    select: { id: true, email: true, register_type: true, is_active: true },
   });
 
   if (!user || user.register_type !== RegisterType.SSO || user.email !== email) {
     throw new UnauthorizedError(
       'No system account is assigned to this SSO user'
     );
+  }
+
+  if (!user.is_active) {
+    throw new UnauthorizedError('Account is inactive');
   }
 
   const authPayload = await issueLoginForUserId(user.id);

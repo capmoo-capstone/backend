@@ -19,11 +19,11 @@ import {
 import {
   AddRoleDto,
   CreateUserDto,
-  ListUsersQuery,
   RemoveRoleDto,
   UpdateSupplyRoleDto,
 } from '../schemas/user.schema';
 import {
+  ListUsersQuery,
   UpdateUserRoleResponse,
   UserDetailResponse,
 } from '../types/user.type';
@@ -37,6 +37,7 @@ const safeUserSelect = {
   email: true,
   full_name: true,
   register_type: true,
+  is_active: true,
   created_at: true,
   role_updated_at: true,
   last_login_at: true,
@@ -187,15 +188,17 @@ const removeRoleWithAudit = async (
 export const listUsers = async (
   page: number = 1,
   limit: number = 10,
-  filters: ListUsersQuery = { unitId: [], deptId: [], role: [] }
+  filters: ListUsersQuery
 ): Promise<PaginatedResponse<UserDetailResponse>> => {
   const roleWhere = {
     ...(filters.unitId.length > 0 ? { unit_id: { in: filters.unitId } } : {}),
     ...(filters.deptId.length > 0 ? { dept_id: { in: filters.deptId } } : {}),
     ...(filters.role.length > 0 ? { role: { in: filters.role } } : {}),
   };
-  const userWhere =
-    Object.keys(roleWhere).length > 0 ? { roles: { some: roleWhere } } : {};
+  const userWhere = {
+    ...(Object.keys(roleWhere).length > 0 ? { roles: { some: roleWhere } } : {}),
+    ...(filters.isActive !== undefined ? { is_active: filters.isActive } : {}),
+  };
 
   const [users, count] = await Promise.all([
     prisma.user.findMany({
@@ -290,6 +293,70 @@ export const deleteUser = async (id: string): Promise<void> => {
   await getById(id);
   await prisma.user.delete({
     where: { id },
+  });
+};
+
+export const updateUserStatus = async (
+  user: AuthPayload,
+  targetUserId: string,
+  isActive: boolean
+): Promise<UserDetailResponse> => {
+  if (user.id === targetUserId) {
+    throw new BadRequestError('Cannot update your own active status');
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const existingUser = await tx.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, is_active: true, full_name: true, username: true },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (existingUser.is_active === isActive) {
+      const user = await tx.user.findUnique({
+        where: { id: targetUserId },
+        select: safeUserSelect,
+      });
+      return user!;
+    }
+
+    const updatedUser = await tx.user.update({
+      where: { id: targetUserId },
+      data: {
+        is_active: isActive,
+        role_updated_at: new Date(),
+      },
+      select: safeUserSelect,
+    });
+
+    await recordAuditEvent(tx, {
+      kind: AuditLogType.USER_MANAGEMENT,
+      eventType: AuditEventType.USER_ROLE_ASSIGNED,
+      targetType: AuditTargetType.USER,
+      targetId: updatedUser.id,
+      actor: user,
+      targetSnapshot: {
+        id: updatedUser.id,
+        type: AuditTargetType.USER,
+        name: updatedUser.full_name,
+        username: updatedUser.username,
+        is_active: updatedUser.is_active,
+      },
+      diff: [
+        {
+          field: 'is_active',
+          oldValue: existingUser.is_active,
+          newValue: isActive,
+        },
+      ],
+      sourceTable: 'users',
+      sourceId: updatedUser.id,
+    });
+
+    return updatedUser;
   });
 };
 
