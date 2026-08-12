@@ -49,7 +49,9 @@ export const CreateVendorSubmissionSchema = z.object({
 
 export const VendorSubmissionFilterQuerySchema = z
   .object({
-    search: z.string().optional(),
+    receiveNo: z.string().optional(),
+    poNo: z.string().optional(),
+    vendorName: z.string().optional(),
     dateFrom: BangkokDateTimeSchema.optional(),
     dateTo: BangkokDateTimeSchema.optional(),
   })

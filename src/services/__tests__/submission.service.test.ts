@@ -156,6 +156,33 @@ describe('submission.service', () => {
     );
   });
 
+  it('getVendorSubmissions filters by receiveNo, poNo, and vendorName', async () => {
+    prismaMock.projectSubmission.findMany.mockResolvedValue([]);
+    prismaMock.projectSubmission.count.mockResolvedValue(0);
+
+    await getVendorSubmissions(user, 1, 10, {
+      receiveNo: '2569/00001',
+      poNo: '1234567890',
+      vendorName: 'Acme',
+    });
+
+    const findManyCall = prismaMock.projectSubmission.findMany.mock.calls.at(-1)?.[0];
+    expect(findManyCall?.where).toEqual({
+      AND: [
+        { submission_type: 'VENDOR' },
+        { workflow_type: 'CONTRACT' },
+        { project: { receive_no: { contains: '2569/00001', mode: 'insensitive' } } },
+        {
+          OR: [
+            { po_no: { contains: '1234567890', mode: 'insensitive' } },
+            { project: { po_no: { contains: '1234567890', mode: 'insensitive' } } },
+          ],
+        },
+        { project: { vendor_name: { contains: 'Acme', mode: 'insensitive' } } },
+      ],
+    });
+  });
+
   it('createStaffSubmissionsProject creates a waiting-approval submission under an advisory lock and syncs phases', async () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
