@@ -1,14 +1,24 @@
 import { UserRole, RegisterType } from '@prisma/client';
-import { describe, expect, it } from 'vitest';
+import bcrypt from 'bcrypt';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CreateUserSchema } from '../../schemas/user.schema';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   addRole,
+  createUser,
   getById,
   listUsers,
   removeRole,
   updateSupplyRole,
   updateUserStatus,
 } from '../user.service';
+
+vi.mock('bcrypt', () => ({
+  default: { hash: vi.fn() },
+  hash: vi.fn(),
+}));
+
+const mockedBcrypt = vi.mocked(bcrypt);
 
 const actor = {
   id: 'admin-1',
@@ -21,12 +31,73 @@ const actor = {
 };
 
 describe('user.service', () => {
+  beforeEach(() => {
+    mockedBcrypt.hash.mockReset();
+  });
+
+  it('creates an admin-managed dual-login user', async () => {
+    txMock.department.findUnique.mockResolvedValue({ id: 'dept-1' });
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      dept_id: 'dept-1',
+    });
+    txMock.user.create.mockResolvedValue({
+      id: 'user-dual-1',
+      username: 'dual.user',
+      email: 'dual@chula.ac.th',
+      full_name: 'Dual User',
+      register_type: [RegisterType.SSO, RegisterType.STANDARD],
+      created_at: new Date('2026-08-12T00:00:00.000Z'),
+      roles: [],
+    });
+    mockedBcrypt.hash.mockResolvedValue('hashed-password' as never);
+
+    const result = await createUser(
+      actor as any,
+      CreateUserSchema.parse({
+        username: 'dual.user',
+        email: 'dual@chula.ac.th',
+        full_name: 'Dual User',
+        password: 'secret-password',
+        register_type: [RegisterType.SSO, RegisterType.STANDARD],
+        dept_id: 'dept-1',
+        unit_id: 'unit-1',
+      })
+    );
+
+    expect(result.register_type).toEqual([
+      RegisterType.SSO,
+      RegisterType.STANDARD,
+    ]);
+    expect(mockedBcrypt.hash).toHaveBeenCalledWith('secret-password', 10);
+    expect(txMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          password: 'hashed-password',
+          register_type: [RegisterType.SSO, RegisterType.STANDARD],
+        }),
+      })
+    );
+  });
+
+  it('normalizes a legacy scalar login method to an array', () => {
+    const data = CreateUserSchema.parse({
+      username: 'standard.user',
+      full_name: 'Standard User',
+      password: 'secret-password',
+      register_type: RegisterType.STANDARD,
+      dept_id: 'dept-1',
+    });
+
+    expect(data.register_type).toEqual([RegisterType.STANDARD]);
+  });
+
   it('listUsers returns all users when no filter is given', async () => {
     prismaMock.user.findMany.mockResolvedValue([
       {
         id: 'user-1',
         full_name: 'Staff One',
-        register_type: RegisterType.STANDARD,
+        register_type: [RegisterType.STANDARD],
         is_active: true,
         last_login_at: null,
         roles: [{ role: UserRole.GENERAL_STAFF }],
@@ -45,7 +116,7 @@ describe('user.service', () => {
         {
           id: 'user-1',
           full_name: 'Staff One',
-          register_type: RegisterType.STANDARD,
+          register_type: [RegisterType.STANDARD],
           is_active: true,
           last_login_at: null,
           roles: [{ role: UserRole.GENERAL_STAFF }],
@@ -67,7 +138,11 @@ describe('user.service', () => {
     ] as any);
     prismaMock.user.count.mockResolvedValue(1);
 
-    const result = await listUsers(1, 10, { unitId: ['unit-1'], deptId: [], role: [] });
+    const result = await listUsers(1, 10, {
+      unitId: ['unit-1'],
+      deptId: [],
+      role: [],
+    });
 
     expect(result).toMatchObject({
       total: 1,
@@ -84,7 +159,11 @@ describe('user.service', () => {
     prismaMock.user.findMany.mockResolvedValue([]);
     prismaMock.user.count.mockResolvedValue(0);
 
-    const result = await listUsers(1, 10, { deptId: ['dept-1'], unitId: [], role: [] });
+    const result = await listUsers(1, 10, {
+      deptId: ['dept-1'],
+      unitId: [],
+      role: [],
+    });
 
     expect(result).toMatchObject({
       total: 0,
@@ -176,9 +255,9 @@ describe('user.service', () => {
 
   it('updateUserStatus throws error when user is not found', async () => {
     txMock.user.findUnique.mockResolvedValueOnce(null);
-    await expect(updateUserStatus(actor, 'non-existent', false)).rejects.toThrow(
-      'User not found'
-    );
+    await expect(
+      updateUserStatus(actor, 'non-existent', false)
+    ).rejects.toThrow('User not found');
   });
 
   it('updateSupplyRole adds users and updates role_updated_at', async () => {

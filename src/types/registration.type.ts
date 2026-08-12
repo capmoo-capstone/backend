@@ -1,9 +1,10 @@
-import { PaginatedResponse } from "./common.type";
-import { RegistrationRequest } from "@prisma/client";
+import { RegistrationRequest } from '@prisma/client';
+import { PaginatedResponse } from './common.type';
 
-type RegistrationRequestItem = RegistrationRequest & {
-    department: { id: string; name: string };
-    unit: { id: string; name: string } | null;
+export type RegistrationRequestItem = RegistrationRequest & {
+  department: { id: string; name: string };
+  units: Array<{ id: string; name: string }>;
 };
 
-export type PaginatedRegistrationRequest = PaginatedResponse<RegistrationRequestItem>;
+export type PaginatedRegistrationRequest =
+  PaginatedResponse<RegistrationRequestItem>;

@@ -1,6 +1,7 @@
 import { RegistrationStatus, UserRole, RegisterType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CreateRegistrationRequestSchema } from '../../schemas/registration.schema';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   approveRegistrationRequest,
@@ -29,12 +30,17 @@ const requestData = {
   email: 'staff@chula.ac.th',
   full_name: 'Portal Staff',
   dept_id: 'dept-1',
-  unit_id: 'unit-1',
+  unit_id: ['unit-1', 'unit-2'],
 };
 
 const mockDepartmentAndUnit = () => {
   txMock.department.findUnique.mockResolvedValue({ id: 'dept-1' });
-  txMock.unit.findUnique.mockResolvedValue({ id: 'unit-1', dept_id: 'dept-1' });
+  txMock.unit.findUnique.mockImplementation(
+    ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      dept_id: 'dept-1',
+    })
+  );
 };
 
 describe('account-registration.service', () => {
@@ -42,12 +48,24 @@ describe('account-registration.service', () => {
     vi.mocked(bcrypt.hash).mockReset();
   });
 
-  it('creates a pending SSO request without creating a user', async () => {
+  it('requires one or more distinct unit IDs', () => {
+    expect(() =>
+      CreateRegistrationRequestSchema.parse({ ...requestData, unit_id: [] })
+    ).toThrow('At least one unit is required');
+    expect(() =>
+      CreateRegistrationRequestSchema.parse({
+        ...requestData,
+        unit_id: ['unit-1', 'unit-1'],
+      })
+    ).toThrow('Unit IDs must be unique');
+  });
+
+  it('creates a pending SSO request for multiple units without creating a user', async () => {
     mockDepartmentAndUnit();
     txMock.registrationRequest.create.mockResolvedValue({
       id: 'request-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       status: RegistrationStatus.PENDING,
       created_at: new Date('2026-08-10T00:00:00.000Z'),
     });
@@ -56,7 +74,10 @@ describe('account-registration.service', () => {
 
     expect(result.status).toBe(RegistrationStatus.PENDING);
     expect(txMock.registrationRequest.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ register_type: RegisterType.SSO }),
+      data: expect.objectContaining({
+        unit_id: ['unit-1', 'unit-2'],
+        register_type: [RegisterType.SSO],
+      }),
     });
     expect(txMock.user.create).not.toHaveBeenCalled();
     expect(txMock.auditEvent.create).toHaveBeenCalled();
@@ -89,18 +110,18 @@ describe('account-registration.service', () => {
     expect(txMock.registrationRequest.create).not.toHaveBeenCalled();
   });
 
-  it('approves a pending request as an SSO user with a guest role', async () => {
+  it('approves a pending request with a guest role for every requested unit', async () => {
     mockDepartmentAndUnit();
     txMock.registrationRequest.findUnique.mockResolvedValue({
       id: 'request-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       status: RegistrationStatus.PENDING,
     });
     txMock.user.create.mockResolvedValue({
       id: 'user-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       created_at: new Date('2026-08-10T00:00:00.000Z'),
       role_updated_at: new Date('2026-08-10T00:00:00.000Z'),
       roles: [],
@@ -108,28 +129,32 @@ describe('account-registration.service', () => {
     txMock.registrationRequest.update.mockResolvedValue({
       id: 'request-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       status: RegistrationStatus.APPROVED,
       reviewed_at: new Date('2026-08-10T00:00:00.000Z'),
     });
 
-    const result = await approveRegistrationRequest(
-      actor as any,
-      'request-1'
-    );
+    const result = await approveRegistrationRequest(actor as any, 'request-1');
 
-    expect(result.register_type).toBe(RegisterType.SSO);
+    expect(result.register_type).toEqual([RegisterType.SSO]);
     expect(txMock.user.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           password: null,
-          register_type: RegisterType.SSO,
+          register_type: [RegisterType.SSO],
           roles: {
-            create: {
-              role: UserRole.GUEST,
-              dept_id: 'dept-1',
-              unit_id: 'unit-1',
-            },
+            create: [
+              {
+                role: UserRole.GUEST,
+                dept_id: 'dept-1',
+                unit_id: 'unit-1',
+              },
+              {
+                role: UserRole.GUEST,
+                dept_id: 'dept-1',
+                unit_id: 'unit-2',
+              },
+            ],
           },
         }),
       })
@@ -148,21 +173,18 @@ describe('account-registration.service', () => {
     txMock.registrationRequest.findUnique.mockResolvedValue({
       id: 'request-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       status: RegistrationStatus.PENDING,
     });
     txMock.registrationRequest.update.mockResolvedValue({
       id: 'request-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       status: RegistrationStatus.REJECTED,
       reviewed_at: new Date('2026-08-10T00:00:00.000Z'),
     });
 
-    const result = await rejectRegistrationRequest(
-      actor as any,
-      'request-1'
-    );
+    const result = await rejectRegistrationRequest(actor as any, 'request-1');
 
     expect(result.status).toBe(RegistrationStatus.REJECTED);
     expect(txMock.user.create).not.toHaveBeenCalled();
@@ -173,7 +195,7 @@ describe('account-registration.service', () => {
     txMock.registrationRequest.findUnique.mockResolvedValue({
       id: 'request-1',
       ...requestData,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
       status: RegistrationStatus.APPROVED,
     });
 
@@ -189,34 +211,50 @@ describe('account-registration.service', () => {
       {
         id: 'request-1',
         ...requestData,
-        register_type: RegisterType.SSO,
+        department: { id: 'dept-1', name: 'Department 1' },
+        register_type: [RegisterType.SSO],
         status: RegistrationStatus.PENDING,
       },
     ];
     prismaMock.$transaction.mockResolvedValue([mockList, 1]);
+    prismaMock.unit.findMany.mockResolvedValue([
+      { id: 'unit-1', name: 'Unit 1' },
+      { id: 'unit-2', name: 'Unit 2' },
+    ]);
 
-    const result = await listRegistrationRequests(
-      1,
-      10,
-      {
-        status: RegistrationStatus.PENDING,
-      }
-    );
+    const result = await listRegistrationRequests(1, 10, {
+      status: RegistrationStatus.PENDING,
+    });
 
     expect(result).toEqual({
       total: 1,
       page: 1,
       pageSize: 10,
       totalPages: 1,
-      data: mockList,
+      data: [
+        {
+          ...mockList[0],
+          units: [
+            { id: 'unit-1', name: 'Unit 1' },
+            { id: 'unit-2', name: 'Unit 2' },
+          ],
+        },
+      ],
     });
     expect(prismaMock.registrationRequest.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { status: RegistrationStatus.PENDING },
         skip: 0,
         take: 10,
+        include: {
+          department: { select: { id: true, name: true } },
+        },
       })
     );
+    expect(prismaMock.unit.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['unit-1', 'unit-2'] } },
+      select: { id: true, name: true },
+    });
     expect(prismaMock.registrationRequest.count).toHaveBeenCalledWith({
       where: { status: RegistrationStatus.PENDING },
     });

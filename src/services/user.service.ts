@@ -3,13 +3,17 @@ import {
   AuditLogType,
   AuditTargetType,
   Prisma,
+  RegisterType,
   UserRole,
 } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
-import { assertDepartmentUnitScope, assertManageableRoleScope } from '../lib/roles';
+import {
+  assertDepartmentUnitScope,
+  assertManageableRoleScope,
+} from '../lib/roles';
 import {
   addRoleInternal,
   assertNoDuplicatesOrOverlap,
@@ -28,7 +32,10 @@ import {
   UserDetailResponse,
 } from '../types/user.type';
 import { AuthPayload } from '../types/auth.type';
-import { recordAuditEvent, recordUserManagementAuditEvent } from './audit-log.service';
+import {
+  recordAuditEvent,
+  recordUserManagementAuditEvent,
+} from './audit-log.service';
 import { PaginatedResponse } from '../types/common.type';
 
 const safeUserSelect = {
@@ -191,9 +198,15 @@ export const listUsers = async (
   filters: ListUsersQuery
 ): Promise<PaginatedResponse<UserDetailResponse>> => {
   const roleWhere = {
-    ...(filters.unitId && filters.unitId.length > 0 ? { unit_id: { in: filters.unitId } } : {}),
-    ...(filters.deptId && filters.deptId.length > 0 ? { dept_id: { in: filters.deptId } } : {}),
-    ...(filters.role && filters.role.length > 0 ? { role: { in: filters.role } } : {}),
+    ...(filters.unitId && filters.unitId.length > 0
+      ? { unit_id: { in: filters.unitId } }
+      : {}),
+    ...(filters.deptId && filters.deptId.length > 0
+      ? { dept_id: { in: filters.deptId } }
+      : {}),
+    ...(filters.role && filters.role.length > 0
+      ? { role: { in: filters.role } }
+      : {}),
   };
 
   const andConditions: Prisma.UserWhereInput[] = [];
@@ -251,10 +264,7 @@ export const getById = async (id: string): Promise<UserDetailResponse> => {
   return user;
 };
 
-export const createUser = async (
-  actor: AuthPayload,
-  data: CreateUserDto
-) => {
+export const createUser = async (actor: AuthPayload, data: CreateUserDto) => {
   return await prisma.$transaction(async (tx) => {
     await assertDepartmentUnitScope(tx, {
       deptId: data.dept_id,
@@ -262,7 +272,9 @@ export const createUser = async (
     });
     await assertNoExistingUser(tx, data.username, data.email);
 
-    const password = await bcrypt.hash(data.password, 10);
+    const password = data.register_type.includes(RegisterType.STANDARD)
+      ? await bcrypt.hash(data.password!, 10)
+      : null;
     const user = await tx.user.create({
       data: {
         username: data.username,
@@ -297,8 +309,7 @@ export const createUser = async (
         role: data.role,
       },
       diff: [
-        { field: 'register_type', oldValue: null, newValue: data.register_type },
-        { field: 'role', oldValue: null, newValue: data.role },
+        { field: 'user', oldValue: null, newValue: user },
       ],
       metadata: { departmentId: data.dept_id, unitId: data.unit_id },
       sourceTable: 'users',

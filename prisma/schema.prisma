@@ -207,10 +207,9 @@ model Unit {
   budget_code String?
   type        UnitResponsibleType[]
 
-  organization_roles    UserOrganizationRole[]
-  registration_requests RegistrationRequest[]
-  requesting_projects   Project[]              @relation("RequestingUnit")
-  responsible_projects  Project[]              @relation("ResponsibleUnit")
+  organization_roles   UserOrganizationRole[]
+  requesting_projects  Project[]              @relation("RequestingUnit")
+  responsible_projects Project[]              @relation("ResponsibleUnit")
 
   department  Department   @relation(fields: [dept_id], references: [id])
   budgetPlans BudgetPlan[]
@@ -219,15 +218,15 @@ model Unit {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  username        String   @unique
-  email           String?  @unique
+  id              String         @id @default(uuid())
+  username        String         @unique
+  email           String?        @unique
   password        String?
-  register_type   RegisterType @default(STANDARD)
+  register_type   RegisterType[] @default([STANDARD])
   full_name       String
-  is_active       Boolean  @default(true)
-  created_at      DateTime @default(now())
-  role_updated_at DateTime @default(now())
+  is_active       Boolean        @default(true)
+  created_at      DateTime       @default(now())
+  role_updated_at DateTime       @default(now())
   last_login_at   DateTime?
 
   roles UserOrganizationRole[]
@@ -261,8 +260,8 @@ model RegistrationRequest {
   email           String
   full_name       String
   dept_id         String
-  unit_id         String
-  register_type   RegisterType           @default(SSO)
+  unit_id         String[]           @default([])
+  register_type   RegisterType[]     @default([SSO])
   status          RegistrationStatus @default(PENDING)
   reviewed_by     String?
   reviewed_at     DateTime?
@@ -271,7 +270,6 @@ model RegistrationRequest {
   updated_at      DateTime           @updatedAt
 
   department Department @relation(fields: [dept_id], references: [id])
-  unit       Unit       @relation(fields: [unit_id], references: [id])
 
   @@index([status, created_at(sort: Desc)])
   @@index([username])

@@ -25,7 +25,7 @@ export interface FetchAndFormatUserDetailsResponse {
     username: string;
     full_name: string;
     email: string | null;
-    register_type: RegisterType;
+    register_type: RegisterType[];
   };
   authData: {
     roles: AuthRoleDetail[];
@@ -40,7 +40,7 @@ export interface AuthPayload {
   username: string;
   full_name: string;
   email?: string | null;
-  user_type?: RegisterType;
+  user_type?: RegisterType[];
   roles: AuthRoleDetail[];
   is_delegated: boolean;
   delegated_by: DelegatedByUser[];

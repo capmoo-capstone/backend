@@ -131,8 +131,10 @@ export const login = async (
     select: { id: true, password: true, register_type: true, is_active: true },
   });
 
-  if (userRecord?.register_type === RegisterType.SSO) {
-    throw new BadRequestError("Cannot login with username and password, please login with CU Account");
+  if (userRecord && !userRecord.register_type.includes(RegisterType.STANDARD)) {
+    throw new BadRequestError(
+      'Cannot login with username and password, please login with CU Account'
+    );
   }
 
   if (!userRecord || !userRecord.password) {
@@ -203,7 +205,11 @@ export const loginWithSamlClaims = async (
     select: { id: true, email: true, register_type: true, is_active: true },
   });
 
-  if (!user || user.register_type !== RegisterType.SSO || user.email !== email) {
+  if (
+    !user ||
+    !user.register_type.includes(RegisterType.SSO) ||
+    user.email !== email
+  ) {
     throw new UnauthorizedError(
       'No system account is assigned to this SSO user'
     );

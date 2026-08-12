@@ -13,7 +13,7 @@ export interface UserDetailResponse {
   username: string;
   email: string | null;
   full_name: string;
-  register_type: RegisterType;
+  register_type: RegisterType[];
   is_active: boolean;
   created_at: Date;
   role_updated_at: Date;

@@ -44,19 +44,19 @@ describe('auth.service', () => {
     mockedClearUserAuthCache.mockReset();
   });
 
-  it('login returns a token and formatted roles when credentials are valid', async () => {
+  it('allows password login for a dual-login account', async () => {
     prismaMock.user.findUnique
       .mockResolvedValueOnce({
         id: 'user-1',
         password: 'hashed-password',
-        register_type: RegisterType.STANDARD,
+        register_type: [RegisterType.SSO, RegisterType.STANDARD],
         is_active: true,
       })
       .mockResolvedValueOnce({
         id: 'user-1',
         username: 'staff',
         full_name: 'Staff User',
-        register_type: RegisterType.STANDARD,
+        register_type: [RegisterType.SSO, RegisterType.STANDARD],
         roles: [
           {
             role: UserRole.GENERAL_STAFF,
@@ -104,14 +104,14 @@ describe('auth.service', () => {
       .mockResolvedValueOnce({
         id: 'delegatee-1',
         password: 'hashed-password',
-        register_type: RegisterType.STANDARD,
+        register_type: [RegisterType.STANDARD],
         is_active: true,
       })
       .mockResolvedValueOnce({
         id: 'delegatee-1',
         username: 'delegatee',
         full_name: 'Delegatee User',
-        register_type: RegisterType.STANDARD,
+        register_type: [RegisterType.STANDARD],
         roles: [
           {
             role: UserRole.GENERAL_STAFF,
@@ -179,19 +179,19 @@ describe('auth.service', () => {
     ]);
   });
 
-  it('uses an existing user for SAML and returns an SSO exchange code', async () => {
+  it('allows SAML login for a dual-login account', async () => {
     prismaMock.user.findUnique
       .mockResolvedValueOnce({
         id: 'user-1',
         email: 'staff@chula.ac.th',
-        register_type: RegisterType.SSO,
+        register_type: [RegisterType.SSO, RegisterType.STANDARD],
         is_active: true,
       })
       .mockResolvedValueOnce({
         id: 'user-1',
         username: 'portal.staff',
         full_name: 'Portal Staff',
-        register_type: RegisterType.SSO,
+        register_type: [RegisterType.SSO, RegisterType.STANDARD],
         roles: [
           {
             role: UserRole.GENERAL_STAFF,
@@ -271,18 +271,20 @@ describe('auth.service', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: 'user-1',
       password: 'hashed-password',
-      register_type: RegisterType.STANDARD,
+      register_type: [RegisterType.STANDARD],
       is_active: false,
     });
 
-    await expect(login('staff', 'password')).rejects.toThrow('Account is inactive');
+    await expect(login('staff', 'password')).rejects.toThrow(
+      'Account is inactive'
+    );
   });
 
   it('rejects a password login for an SSO account', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',
       password: null,
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
     });
 
     await expect(login('portal.staff', 'password')).rejects.toThrow(
@@ -296,7 +298,7 @@ describe('auth.service', () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',
       email: 'approved@chula.ac.th',
-      register_type: RegisterType.SSO,
+      register_type: [RegisterType.SSO],
     });
 
     await expect(
@@ -313,7 +315,7 @@ describe('auth.service', () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'user-1',
       email: 'staff@chula.ac.th',
-      register_type: RegisterType.STANDARD,
+      register_type: [RegisterType.STANDARD],
     });
 
     await expect(

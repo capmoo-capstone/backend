@@ -18,7 +18,10 @@ import {
 } from '../schemas/registration.schema';
 import { AuthPayload } from '../types/auth.type';
 import { recordAuditEvent } from './audit-log.service';
-import { PaginatedRegistrationRequest } from '../types/registration.type';
+import {
+  PaginatedRegistrationRequest,
+  RegistrationRequestItem,
+} from '../types/registration.type';
 
 const safeUserSelect = {
   id: true,
@@ -69,36 +72,45 @@ const lockRegistrationIdentity = async (
   }
 };
 
-const requestTargetSnapshot = (request: {
-  id: string;
-  username: string;
-  full_name: string;
-  email: string;
-  dept_id: string;
-  unit_id: string;
-  register_type: RegisterType;
-  status: RegistrationStatus;
-}) => ({
+const requestTargetSnapshot = (
+  request: {
+    id: string;
+    username: string;
+    full_name: string;
+    email: string;
+    dept_id: string;
+    register_type: RegisterType[];
+    status: RegistrationStatus;
+  },
+  unitIds: string[]
+) => ({
   id: request.id,
   type: AuditTargetType.REGISTRATION_REQUEST,
   name: request.full_name,
   refNo: request.username,
   email: request.email,
   departmentId: request.dept_id,
-  unitId: request.unit_id,
-  userType: request.register_type,
+  unitIds,
+  registerTypes: request.register_type,
   status: request.status,
 });
+
+const assertRegistrationUnitScopes = async (
+  tx: Prisma.TransactionClient,
+  deptId: string,
+  unitIds: string[]
+): Promise<void> => {
+  for (const unitId of unitIds) {
+    await assertDepartmentUnitScope(tx, { deptId, unitId });
+  }
+};
 
 export const createRegistrationRequest = async (
   data: CreateRegistrationRequestDto
 ): Promise<RegistrationRequest> => {
   return await prisma.$transaction(async (tx) => {
     await lockRegistrationIdentity(tx, data.username, data.email);
-    await assertDepartmentUnitScope(tx, {
-      deptId: data.dept_id,
-      unitId: data.unit_id,
-    });
+    await assertRegistrationUnitScopes(tx, data.dept_id, data.unit_id);
     await assertNoExistingUser(tx, data.username, data.email);
 
     const pendingRequest = await tx.registrationRequest.findFirst({
@@ -122,7 +134,7 @@ export const createRegistrationRequest = async (
         full_name: data.full_name,
         dept_id: data.dept_id,
         unit_id: data.unit_id,
-        register_type: RegisterType.SSO,
+        register_type: [RegisterType.SSO],
       },
     });
 
@@ -131,7 +143,7 @@ export const createRegistrationRequest = async (
       eventType: AuditEventType.REGISTRATION_REQUESTED,
       targetType: AuditTargetType.REGISTRATION_REQUEST,
       targetId: request.id,
-      targetSnapshot: requestTargetSnapshot(request),
+      targetSnapshot: requestTargetSnapshot(request, data.unit_id),
       diff: [
         {
           field: 'status',
@@ -142,7 +154,7 @@ export const createRegistrationRequest = async (
       metadata: {
         username: request.username,
         email: request.email,
-        userType: request.register_type,
+        registerTypes: request.register_type,
       },
       sourceTable: 'registration_requests',
       sourceId: request.id,
@@ -169,19 +181,37 @@ export const listRegistrationRequests = async (
       where,
       include: {
         department: { select: { id: true, name: true } },
-        unit: { select: { id: true, name: true } },
       },
       orderBy: { created_at: 'desc' },
     }),
     prisma.registrationRequest.count({ where }),
   ]);
 
+  const requestedUnitIds = [
+    ...new Set(data.flatMap((request) => request.unit_id)),
+  ];
+  const units =
+    requestedUnitIds.length === 0
+      ? []
+      : await prisma.unit.findMany({
+          where: { id: { in: requestedUnitIds } },
+          select: { id: true, name: true },
+        });
+  const unitsById = new Map(units.map((unit) => [unit.id, unit]));
+  const items: RegistrationRequestItem[] = data.map((request) => ({
+    ...request,
+    units: request.unit_id.flatMap((unitId) => {
+      const unit = unitsById.get(unitId);
+      return unit ? [unit] : [];
+    }),
+  }));
+
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: data as RegistrationRequest[],
+    data: items,
   };
 };
 
@@ -200,10 +230,16 @@ export const approveRegistrationRequest = async (
       );
     }
 
-    await assertDepartmentUnitScope(tx, {
-      deptId: request.dept_id,
-      unitId: request.unit_id,
-    });
+    if (
+      request.register_type.length !== 1 ||
+      request.register_type[0] !== RegisterType.SSO
+    ) {
+      throw new BadRequestError('Public registration requests must use SSO');
+    }
+    if (request.unit_id.length === 0) {
+      throw new BadRequestError('Registration request must include a unit');
+    }
+    await assertRegistrationUnitScopes(tx, request.dept_id, request.unit_id);
     await assertNoExistingUser(tx, request.username, request.email);
 
     const user = await tx.user.create({
@@ -212,13 +248,13 @@ export const approveRegistrationRequest = async (
         email: request.email,
         full_name: request.full_name,
         password: null,
-        register_type: RegisterType.SSO,
+        register_type: request.register_type,
         roles: {
-          create: {
+          create: request.unit_id.map((unitId) => ({
             role: UserRole.GUEST,
             dept_id: request.dept_id,
-            unit_id: request.unit_id,
-          },
+            unit_id: unitId,
+          })),
         },
       },
       select: safeUserSelect,
@@ -240,7 +276,7 @@ export const approveRegistrationRequest = async (
       targetType: AuditTargetType.REGISTRATION_REQUEST,
       targetId: approved.id,
       actor,
-      targetSnapshot: requestTargetSnapshot(approved),
+      targetSnapshot: requestTargetSnapshot(approved, request.unit_id),
       diff: [
         {
           field: 'status',
@@ -249,19 +285,22 @@ export const approveRegistrationRequest = async (
         },
         { field: 'created_user_id', oldValue: null, newValue: user.id },
       ],
-      metadata: { createdUserId: user.id, userType: RegisterType.SSO },
+      metadata: {
+        createdUserId: user.id,
+        registerTypes: request.register_type,
+      },
       sourceTable: 'registration_requests',
       sourceId: approved.id,
       occurredAt: approved.reviewed_at ?? nowUtc(),
     });
 
-    return user
+    return user;
   });
 };
 
 export const rejectRegistrationRequest = async (
   user: AuthPayload,
-  requestId: string,
+  requestId: string
 ): Promise<RegistrationRequest> => {
   return await prisma.$transaction(async (tx) => {
     const request = await tx.registrationRequest.findUnique({
@@ -289,7 +328,7 @@ export const rejectRegistrationRequest = async (
       targetType: AuditTargetType.REGISTRATION_REQUEST,
       targetId: rejected.id,
       actor: user,
-      targetSnapshot: requestTargetSnapshot(rejected),
+      targetSnapshot: requestTargetSnapshot(rejected, request.unit_id),
       diff: [
         {
           field: 'status',

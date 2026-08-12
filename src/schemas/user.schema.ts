@@ -13,27 +13,49 @@ export const manageableUserRoles = [
   UserRole.GUEST,
 ] as const;
 
-export const CreateUserSchema = z.object({
-  username: z.string().trim().min(1).optional(),
-  full_name: z.string().trim().min(1),
-  email: z.email().optional(),
-  password: z.string().optional(),
-  register_type: z.enum(RegisterType).default(RegisterType.STANDARD),
-  role: z.enum(manageableUserRoles).optional().default(UserRole.GUEST),
-  dept_id: z.string(),
-  unit_id: z.string().optional(),
-}).refine((data) => {
-  if (data.register_type === RegisterType.STANDARD && !data.password) {
-    throw new BadRequestError('password is required when register_type is STANDARD');
-  }
-  if (data.register_type === RegisterType.SSO && data.password) {
-    throw new BadRequestError('password is not required when register_type is SSO');
-  }
-  if (data.register_type === RegisterType.SSO && !data.email) {
-    throw new BadRequestError('email is required when register_type is SSO');
-  }
-  return true;
-})
+const RegisterTypes = z
+  .union([
+    z.enum(RegisterType),
+    z
+      .array(z.enum(RegisterType))
+      .min(1, 'At least one login method is required'),
+  ])
+  .default([RegisterType.STANDARD])
+  .transform((types) => (Array.isArray(types) ? types : [types]))
+  .refine((types) => new Set(types).size === types.length, {
+    message: 'Login methods must be unique',
+  });
+
+export const CreateUserSchema = z
+  .object({
+    username: z.string().trim().min(1).optional(),
+    full_name: z.string().trim().min(1),
+    email: z.email().optional(),
+    password: z.string().optional(),
+    register_type: RegisterTypes,
+    role: z.enum(manageableUserRoles).optional().default(UserRole.GUEST),
+    dept_id: z.string(),
+    unit_id: z.string().optional(),
+  })
+  .refine((data) => {
+    const supportsStandard = data.register_type.includes(RegisterType.STANDARD);
+    const supportsSso = data.register_type.includes(RegisterType.SSO);
+
+    if (supportsStandard && !data.password) {
+      throw new BadRequestError(
+        'password is required when register_type is STANDARD'
+      );
+    }
+    if (!supportsStandard && data.password) {
+      throw new BadRequestError(
+        'password is only allowed when register_type includes STANDARD'
+      );
+    }
+    if (supportsSso && !data.email) {
+      throw new BadRequestError('email is required when register_type is SSO');
+    }
+    return true;
+  });
 
 export const ListUsersQuerySchema = z
   .object({
@@ -115,18 +137,20 @@ export const AddRoleSchema = z.object({
   unit_id: z.string().trim().optional(),
 });
 
-export const RemoveRoleSchema = z.object({
-  user_id: z.uuid().optional(),
-  role: z.enum(manageableUserRoles).optional(),
-  dept_id: z.string().trim().optional(),
-  unit_id: z.string().trim().optional(),
-  role_id: z.uuid().optional(),
-}).refine((data) => {
-  if (!(data.user_id && data.dept_id && data.role) && !data.role_id) {
-    throw new BadRequestError('Missing required parameters');
-  }
-  return true;
-});
+export const RemoveRoleSchema = z
+  .object({
+    user_id: z.uuid().optional(),
+    role: z.enum(manageableUserRoles).optional(),
+    dept_id: z.string().trim().optional(),
+    unit_id: z.string().trim().optional(),
+    role_id: z.uuid().optional(),
+  })
+  .refine((data) => {
+    if (!(data.user_id && data.dept_id && data.role) && !data.role_id) {
+      throw new BadRequestError('Missing required parameters');
+    }
+    return true;
+  });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

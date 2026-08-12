@@ -143,7 +143,7 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 | GET    | `/requests`             | List paginated account registration requests (`?status=`, `?page=`, `?limit=`) (Supply ADMIN) |
 | PATCH  | `/requests/:id/approve` | Approve registration request and create user account (Supply ADMIN)                           |
 | PATCH  | `/requests/:id/reject`  | Reject registration request (Supply ADMIN)                                                    |
-| POST   | `/login`                | Login with a `STANDARD` account (returns JWT)                                                 |
+| POST   | `/login`                | Password login for an account with `STANDARD` access (returns JWT)                            |
 | GET    | `/me`                   | Get current user profile                                                                      |
 | PATCH  | `/logout`               | Invalidate current session cache                                                              |
 
@@ -397,18 +397,19 @@ When a user's last real role in a department is removed, they automatically fall
 
 ### Account Registration & Role Management
 
-User accounts can have a registration type (`RegisterType`) of either `SSO` or `STANDARD`.
+User accounts can support one or both registration types (`RegisterType`): `SSO` and `STANDARD`.
 
 Account creation and role management workflows:
 
 1. **Account Registration Request Flow (`SSO`)**:
    - Requesters submit an account request via `POST /auth/create-request`.
    - The request enters `PENDING` state in the `RegistrationRequest` table.
+   - The request body contains a `dept_id` and non-empty `unit_id` array. Every unit must belong to that department.
    - Supply `ADMIN` lists pending requests via `GET /auth/requests?status=PENDING`.
-   - Supply `ADMIN` approves (`PATCH /auth/requests/:id/approve`) or rejects (`PATCH /auth/requests/:id/reject`) the request. Upon approval, the user profile is created with `register_type: SSO` and assigned the specified role and department/unit scope.
+   - Supply `ADMIN` approves (`PATCH /auth/requests/:id/approve`) or rejects (`PATCH /auth/requests/:id/reject`) the request. Approval creates an SSO user and a `GUEST` organization role for every requested department/unit scope.
 
 2. **Direct User Creation (`POST /users/new`)**:
-   - Supply `ADMIN` creates a user account directly, specifying `register_type` (`STANDARD` or `SSO`), credentials, initial role, and organization scope.
+   - Supply `ADMIN` creates a user account directly, specifying one or both `register_type` values (`STANDARD`, `SSO`), credentials, initial role, and organization scope. `STANDARD` requires a password; `SSO` requires an email.
 
 3. **Role Management Endpoints**:
    - **`PATCH /users/roles/supply`** — bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) for `DEPT-SUP-OPS`. Enforces the one-head-per-dept constraint.
@@ -515,7 +516,8 @@ The frontend starts SSO at `GET /api/v1/auth/saml/login`. CU Portal returns to
 `POST /api/v1/auth/saml/acs`; successful sign-in sets a host-only, HttpOnly
 cookie and redirects to `SAML_FRONTEND_SUCCESS_URL`. The API accepts that
 cookie or the existing Bearer JWT. Only a pre-existing user whose `username`
-matches CU Portal's `screenName` can sign in; SSO never creates a user or role.
+matches CU Portal's `screenName` and whose login methods include `SSO` can
+sign in; SSO never creates a user or role.
 
 ---
 

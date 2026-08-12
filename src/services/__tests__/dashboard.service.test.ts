@@ -793,7 +793,7 @@ describe('dashboard.service', () => {
           username: 'staff',
           email: 'staff@example.com',
           full_name: 'Staff User',
-          register_type: 'STANDARD',
+          register_type: ['STANDARD'],
           roles: [
             {
               role: UserRole.GENERAL_STAFF,
@@ -862,7 +862,7 @@ describe('dashboard.service', () => {
           username: 'staff',
           email: 'staff@example.com',
           full_name: 'Staff User',
-          register_type: 'STANDARD',
+          register_type: ['STANDARD'],
           roles: [
             {
               role: UserRole.GENERAL_STAFF,
