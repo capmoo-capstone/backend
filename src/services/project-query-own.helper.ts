@@ -327,6 +327,17 @@ const roleTabWhere = (
             ]),
             { project_installments: { none: {} } }
           ),
+          andWhere(
+            { current_workflow_type: UnitResponsibleType.CONTRACT },
+            progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+            progressStatusWhere(UserRole.HEAD_OF_UNIT, [
+              ProjectPhaseStatus.COMPLETED,
+            ]),
+            progressStatusWhere(UserRole.DOCUMENT_STAFF, [
+              ProjectPhaseStatus.COMPLETED,
+            ]),
+            { contract_completed_at: null },
+          ),
         ])
       );
     }

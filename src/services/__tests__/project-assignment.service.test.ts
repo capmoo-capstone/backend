@@ -154,6 +154,73 @@ describe('project-assignment.service', () => {
     );
   });
 
+  it('assignProjectsToUser sets contract_started_at for contract phase projects', async () => {
+    txMock.project.findMany.mockResolvedValue([
+      {
+        id: 'project-2',
+        status: ProjectStatus.UNASSIGNED,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+        procurement_started_at: new Date(),
+        contract_started_at: null,
+        assignee_procurement: [],
+        assignee_contract: [],
+      },
+    ]);
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-2',
+      title: 'Project 2',
+      responsible_unit_id: 'unit-contract',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.user.findMany.mockResolvedValue([
+      { id: 'staff-2', full_name: 'Staff Two' },
+    ]);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-2',
+      status: ProjectStatus.WAITING_ACCEPT,
+      assignee_contract: [{ id: 'staff-2' }],
+    });
+
+    await assignProjectsToUser(user, [
+      { id: 'project-2', userId: 'staff-2' },
+    ] as any);
+
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          contract_started_at: expect.any(Date),
+        }),
+      })
+    );
+  });
+
+  it('claimProject sets contract_started_at for contract phase projects', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      status: ProjectStatus.UNASSIGNED,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      procurement_started_at: new Date(),
+      contract_started_at: null,
+    });
+    txMock.project.update.mockResolvedValue({
+      id: 'project-2',
+      status: ProjectStatus.IN_PROGRESS,
+      assignee_contract: [{ id: user.id }],
+    });
+
+    await claimProject(user, 'project-2');
+
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          contract_started_at: expect.any(Date),
+        }),
+      })
+    );
+  });
+
   it('acceptProjects moves waiting-accept projects to in progress and syncs each phase', async () => {
     txMock.project.findMany.mockResolvedValue([
       {

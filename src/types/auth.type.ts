@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { UserRole, RegisterType } from '@prisma/client';
 import { Request } from 'express';
 
 export interface AuthRoleDetail {
@@ -19,33 +19,13 @@ export interface DelegatedByUser {
   end_date: Date | null;
 }
 
-export interface RegisterResponse {
-  id: string;
-  username: string;
-  email: string | null;
-  full_name: string;
-  roles: Array<{
-    role: UserRole;
-    dept_id: string;
-    unit_id: string | null;
-    department: {
-      id: string;
-      name: string;
-    };
-    unit: {
-      id: string;
-      name: string;
-    } | null;
-  }>;
-  created_at: Date;
-}
-
 export interface FetchAndFormatUserDetailsResponse {
   user: {
     id: string;
     username: string;
     full_name: string;
     email: string | null;
+    register_type: RegisterType[];
   };
   authData: {
     roles: AuthRoleDetail[];
@@ -59,7 +39,8 @@ export interface AuthPayload {
   id: string;
   username: string;
   full_name: string;
-  email?: string;
+  email?: string | null;
+  user_type?: RegisterType[];
   roles: AuthRoleDetail[];
   is_delegated: boolean;
   delegated_by: DelegatedByUser[];

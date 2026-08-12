@@ -49,5 +49,29 @@ router.get(
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getUnitGroupStaffPerformance
 );
+router.get(
+  '/unit-group/contract-summary',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getContractUnitSummary
+);
+router.get(
+  '/individual-summary',
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getIndividualStaffDashboard
+);
+
+router.get(
+  '/individual-todo',
+  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getIndividualStaffTodo
+);
+
+router.get(
+  '/individual-todo/total',
+  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getIndividualStaffTodoTotal
+);
 
 export default router;
+
+

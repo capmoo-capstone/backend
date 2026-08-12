@@ -1,7 +1,19 @@
-import { AuditEventType, Prisma, UserRole } from '@prisma/client';
+import {
+  AuditEventType,
+  AuditLogType,
+  AuditTargetType,
+  Prisma,
+  RegisterType,
+  UserRole,
+} from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
-import { BadRequestError, NotFoundError } from '../lib/errors';
+import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
+import {
+  assertDepartmentUnitScope,
+  assertManageableRoleScope,
+} from '../lib/roles';
 import {
   addRoleInternal,
   assertNoDuplicatesOrOverlap,
@@ -10,17 +22,56 @@ import {
 } from '../lib/user-role';
 import {
   AddRoleDto,
+  CreateUserDto,
   RemoveRoleDto,
   UpdateSupplyRoleDto,
 } from '../schemas/user.schema';
 import {
+  ListUsersQuery,
   UpdateUserRoleResponse,
   UserDetailResponse,
-  UserListFilters,
-  UserListResponse,
 } from '../types/user.type';
 import { AuthPayload } from '../types/auth.type';
-import { recordUserManagementAuditEvent } from './audit-log.service';
+import {
+  recordAuditEvent,
+  recordUserManagementAuditEvent,
+} from './audit-log.service';
+import { PaginatedResponse } from '../types/common.type';
+
+const safeUserSelect = {
+  id: true,
+  username: true,
+  email: true,
+  full_name: true,
+  register_type: true,
+  is_active: true,
+  created_at: true,
+  role_updated_at: true,
+  last_login_at: true,
+  roles: {
+    select: {
+      id: true,
+      role: true,
+      department: { select: { id: true, name: true } },
+      unit: { select: { id: true, name: true } },
+    },
+  },
+};
+
+const assertNoExistingUser = async (
+  tx: Prisma.TransactionClient,
+  username: string,
+  email: string
+) => {
+  const existingUser = await tx.user.findFirst({
+    where: { OR: [{ username }, { email }] },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new AppError('Username or email already exists', 409);
+  }
+};
 
 type RoleAssignment = {
   id: string;
@@ -35,6 +86,7 @@ type RoleMutationParams = {
   role: UserRole;
   deptId: string;
   unitId: string | null;
+  roleId?: string;
 };
 
 const roleAssignmentSelect = {
@@ -48,8 +100,14 @@ const roleAssignmentSelect = {
 const findRoleAssignment = async (
   tx: Prisma.TransactionClient,
   params: RoleMutationParams
-): Promise<RoleAssignment | null> =>
-  await tx.userOrganizationRole.findFirst({
+): Promise<RoleAssignment | null> => {
+  if (params.roleId) {
+    return await tx.userOrganizationRole.findUnique({
+      where: { id: params.roleId },
+      select: roleAssignmentSelect,
+    });
+  }
+  return await tx.userOrganizationRole.findFirst({
     where: {
       user_id: params.userId,
       role: params.role,
@@ -58,6 +116,7 @@ const findRoleAssignment = async (
     },
     select: roleAssignmentSelect,
   });
+};
 
 const findReplacedRoleAssignment = async (
   tx: Prisma.TransactionClient,
@@ -142,162 +201,70 @@ const removeRoleWithAudit = async (
 };
 
 export const listUsers = async (
-  filters: UserListFilters
-): Promise<UserListResponse> => {
-  const { unitId, deptId, role } = filters;
+  page: number = 1,
+  limit: number = 10,
+  filters: ListUsersQuery
+): Promise<PaginatedResponse<UserDetailResponse>> => {
   const roleWhere = {
-    ...(unitId ? { unit_id: unitId } : {}),
-    ...(deptId ? { dept_id: deptId } : {}),
-    ...(role ? { role } : {}),
+    ...(filters.unitId && filters.unitId.length > 0
+      ? { unit_id: { in: filters.unitId } }
+      : {}),
+    ...(filters.deptId && filters.deptId.length > 0
+      ? { dept_id: { in: filters.deptId } }
+      : {}),
+    ...(filters.role && filters.role.length > 0
+      ? { role: { in: filters.role } }
+      : {}),
   };
-  const userWhere = { roles: { some: roleWhere } };
 
-  let data: UserListResponse;
+  const andConditions: Prisma.UserWhereInput[] = [];
 
-  if (unitId) {
-    const unit = await prisma.unit.findUnique({
-      where: { id: unitId },
-      select: { id: true, name: true },
-    });
-    if (!unit) {
-      throw new NotFoundError('Unit not found');
-    }
-    const [users, count] = await Promise.all([
-      prisma.user.findMany({
-        where: {
-          roles: { some: roleWhere },
-        },
-        select: {
-          id: true,
-          full_name: true,
-          roles: {
-            where: roleWhere,
-            select: {
-              role: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({
-        where: {
-          roles: { some: roleWhere },
-        },
-      }),
-    ]);
-
-    data = {
-      id: unit.id,
-      entity_type: 'unit',
-      name: unit.name,
-      total: count,
-      data: users.map((u) => {
-        return {
-          id: u.id,
-          full_name: u.full_name,
-          roles: u.roles.map((r) => r.role),
-        };
-      }),
-    };
-  } else if (deptId) {
-    const department = await prisma.department.findUnique({
-      where: { id: deptId },
-      select: { id: true, name: true },
-    });
-    if (!department) {
-      throw new NotFoundError('Department not found');
-    }
-    const [users, count] = await Promise.all([
-      prisma.user.findMany({
-        where: {
-          roles: { some: roleWhere },
-        },
-        select: {
-          id: true,
-          full_name: true,
-          roles: {
-            where: roleWhere,
-            select: {
-              role: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({
-        where: {
-          roles: { some: roleWhere },
-        },
-      }),
-    ]);
-    data = {
-      id: department.id,
-      entity_type: 'department',
-      name: department.name,
-      total: count,
-      data: users.map((u) => {
-        return {
-          id: u.id,
-          full_name: u.full_name,
-          roles: u.roles.map((r) => r.role),
-        };
-      }),
-    };
-  } else {
-    const [users, count] = await Promise.all([
-      prisma.user.findMany({
-        where: role ? userWhere : {},
-        select: {
-          id: true,
-          full_name: true,
-          roles: {
-            where: role ? roleWhere : undefined,
-            select: {
-              role: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({ where: role ? userWhere : {} }),
-    ]);
-    data = {
-      id: 'all',
-      entity_type: 'all',
-      name: 'All Users',
-      total: count,
-      data: users.map((u) => {
-        return {
-          id: u.id,
-          full_name: u.full_name,
-          roles: u.roles.map((r) => r.role),
-        };
-      }),
-    };
+  if (Object.keys(roleWhere).length > 0) {
+    andConditions.push({ roles: { some: roleWhere } });
   }
 
-  return data;
+  if (filters.isActive !== undefined) {
+    andConditions.push({ is_active: filters.isActive });
+  }
+
+  if (filters.search?.trim()) {
+    const searchTerm = filters.search.trim();
+    andConditions.push({
+      OR: [
+        { full_name: { contains: searchTerm, mode: 'insensitive' } },
+        { username: { contains: searchTerm, mode: 'insensitive' } },
+        { email: { contains: searchTerm, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  const userWhere: Prisma.UserWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {};
+
+  const [users, count] = await Promise.all([
+    prisma.user.findMany({
+      where: userWhere,
+      skip: (page - 1) * limit,
+      take: limit,
+      select: safeUserSelect,
+      orderBy: { full_name: 'asc' },
+    }),
+    prisma.user.count({ where: userWhere }),
+  ]);
+
+  return {
+    total: count,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(count / limit),
+    data: users,
+  };
 };
 
 export const getById = async (id: string): Promise<UserDetailResponse> => {
   const user = await prisma.user.findUnique({
     where: { id },
-    include: {
-      roles: {
-        select: {
-          role: true,
-          department: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          unit: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-    },
+    select: safeUserSelect,
   });
   if (!user) {
     throw new NotFoundError('User not found');
@@ -305,10 +272,129 @@ export const getById = async (id: string): Promise<UserDetailResponse> => {
   return user;
 };
 
+export const createUser = async (actor: AuthPayload, data: CreateUserDto) => {
+  return await prisma.$transaction(async (tx) => {
+    await assertDepartmentUnitScope(tx, {
+      deptId: data.dept_id,
+      unitId: data.unit_id,
+    });
+    await assertNoExistingUser(tx, data.username, data.email);
+
+    const password = data.register_type.includes(RegisterType.STANDARD)
+      ? await bcrypt.hash(data.password!, 10)
+      : null;
+    const user = await tx.user.create({
+      data: {
+        username: data.username,
+        email: data.email,
+        full_name: data.full_name,
+        password,
+        register_type: data.register_type,
+        roles: {
+          create: {
+            role: data.role,
+            dept_id: data.dept_id,
+            unit_id: data.unit_id,
+          },
+        },
+      },
+      select: safeUserSelect,
+    });
+
+    await recordAuditEvent(tx, {
+      kind: AuditLogType.USER_MANAGEMENT,
+      eventType: AuditEventType.USER_CREATED,
+      targetType: AuditTargetType.USER,
+      targetId: user.id,
+      actor,
+      targetSnapshot: {
+        id: user.id,
+        type: AuditTargetType.USER,
+        name: user.full_name,
+        refNo: user.username,
+        email: user.email,
+        registerType: user.register_type,
+        role: data.role,
+      },
+      diff: [
+        { field: 'user', oldValue: null, newValue: user },
+      ],
+      metadata: { departmentId: data.dept_id, unitId: data.unit_id },
+      sourceTable: 'users',
+      sourceId: user.id,
+      occurredAt: user.created_at,
+    });
+
+    return user;
+  });
+};
+
 export const deleteUser = async (id: string): Promise<void> => {
   await getById(id);
   await prisma.user.delete({
     where: { id },
+  });
+};
+
+export const updateUserStatus = async (
+  user: AuthPayload,
+  targetUserId: string,
+  isActive: boolean
+): Promise<UserDetailResponse> => {
+  if (user.id === targetUserId) {
+    throw new BadRequestError('Cannot update your own active status');
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const existingUser = await tx.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, is_active: true, full_name: true, username: true },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (existingUser.is_active === isActive) {
+      const user = await tx.user.findUnique({
+        where: { id: targetUserId },
+        select: safeUserSelect,
+      });
+      return user!;
+    }
+
+    const updatedUser = await tx.user.update({
+      where: { id: targetUserId },
+      data: {
+        is_active: isActive,
+        role_updated_at: new Date(),
+      },
+      select: safeUserSelect,
+    });
+
+    await recordAuditEvent(tx, {
+      kind: AuditLogType.USER_MANAGEMENT,
+      eventType: AuditEventType.USER_STATUS_UPDATED,
+      targetType: AuditTargetType.USER,
+      targetId: updatedUser.id,
+      actor: user,
+      targetSnapshot: {
+        id: updatedUser.id,
+        type: AuditTargetType.USER,
+        name: updatedUser.full_name,
+        username: updatedUser.username,
+        is_active: updatedUser.is_active,
+      },
+      diff: [
+        {
+          field: 'is_active',
+          oldValue: existingUser.is_active,
+          newValue: isActive,
+        },
+      ],
+    });
+
+    return updatedUser;
   });
 };
 
@@ -415,6 +501,11 @@ export const addRole = async (
 ): Promise<UpdateUserRoleResponse> => {
   return await prisma.$transaction(async (tx) => {
     await assertUsersExist(tx, [data.user_id]);
+    await assertManageableRoleScope(tx, {
+      role: data.role,
+      deptId: data.dept_id,
+      unitId: data.unit_id ?? null,
+    });
 
     return await addRoleWithAudit(
       tx,
@@ -435,16 +526,51 @@ export const removeRole = async (
   data: RemoveRoleDto
 ): Promise<void> => {
   return await prisma.$transaction(async (tx) => {
-    await assertUsersExist(tx, [data.user_id]);
+    let userId = data.user_id;
+    let role = data.role;
+    let deptId = data.dept_id;
+    let unitId = data.unit_id ?? null;
+    const roleId = data.role_id;
 
+    if (roleId) {
+      const roleAssignment = await tx.userOrganizationRole.findUnique({
+        where: { id: roleId },
+      });
+      if (!roleAssignment) {
+        throw new NotFoundError('Role assignment not found');
+      }
+      userId = roleAssignment.user_id;
+      role = roleAssignment.role as any;
+      deptId = roleAssignment.dept_id;
+      unitId = roleAssignment.unit_id;
+
+      return await removeRoleWithAudit(
+        tx,
+        actor,
+        {
+          userId,
+          role,
+          deptId,
+          unitId,
+          roleId,
+        },
+        AuditEventType.USER_ROLE_REMOVED
+      );
+    }
+
+    if (!userId || !role || !deptId) {
+      throw new BadRequestError('Missing required parameters for role removal');
+    }
+
+    await assertUsersExist(tx, [userId]);
     await removeRoleWithAudit(
       tx,
       actor,
       {
-        userId: data.user_id,
-        role: data.role,
-        deptId: data.dept_id,
-        unitId: data.unit_id ?? null,
+        userId,
+        role,
+        deptId,
+        unitId,
       },
       AuditEventType.USER_ROLE_REMOVED
     );

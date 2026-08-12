@@ -134,13 +134,16 @@ export const removeRoleInternal = async (
     role: UserRole;
     deptId: string;
     unitId: string | null;
+    roleId?: string;
   }
 ): Promise<void> => {
-  const { userId, role, deptId, unitId } = params;
+  const { userId, role, deptId, unitId, roleId } = params;
 
-  const target = await tx.userOrganizationRole.findFirst({
-    where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
-  });
+  const target = roleId
+    ? await tx.userOrganizationRole.findUnique({ where: { id: roleId } })
+    : await tx.userOrganizationRole.findFirst({
+        where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
+      });
 
   if (!target) {
     throw new NotFoundError(
@@ -182,12 +185,16 @@ export const removeRoleInternal = async (
  */
 export const assertUsersExist = async (
   tx: Prisma.TransactionClient,
-  userIds: string[]
+  userIds: (string | undefined)[]
 ): Promise<void> => {
-  if (userIds.length === 0) return;
+  const validIds = userIds.filter((id): id is string => Boolean(id));
+  if (validIds.length !== userIds.length || validIds.length === 0) {
+    if (userIds.length === 0) return;
+    throw new NotFoundError('One or more users not found');
+  }
 
-  const found = await tx.user.count({ where: { id: { in: userIds } } });
-  if (found !== userIds.length) {
+  const found = await tx.user.count({ where: { id: { in: validIds } } });
+  if (found !== validIds.length) {
     throw new NotFoundError('One or more users not found');
   }
 };

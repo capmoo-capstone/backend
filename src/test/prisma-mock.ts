@@ -21,6 +21,7 @@ const MODEL_METHODS = [
 ] as const;
 
 const MODEL_NAMES = [
+  'registrationRequest',
   'auditEvent',
   'auditLog',
   'budgetPlan',
@@ -46,15 +47,29 @@ const MODEL_NAMES = [
 type MockModel = Record<
   (typeof MODEL_METHODS)[number],
   ReturnType<typeof vi.fn>
->;
+> & {
+  fields: Record<string, unknown>;
+};
 
-const createModelMock = (): MockModel =>
-  Object.fromEntries(
-    MODEL_METHODS.map((method) => [method, vi.fn()])
-  ) as MockModel;
+const createModelMock = (model?: (typeof MODEL_NAMES)[number]): MockModel =>
+  ({
+    ...Object.fromEntries(MODEL_METHODS.map((method) => [method, vi.fn()])),
+    // Field references are passed through query objects by Prisma. Tests do not
+    // execute SQL, so a stable marker is sufficient to emulate this API.
+    fields:
+      model === 'project'
+        ? {
+            procurement_completed_at: {
+              name: 'procurement_completed_at',
+            },
+          }
+        : {},
+  }) as MockModel;
 
 const createClientMock = () =>
-  Object.fromEntries(MODEL_NAMES.map((model) => [model, createModelMock()]));
+  Object.fromEntries(
+    MODEL_NAMES.map((model) => [model, createModelMock(model)])
+  );
 
 export const txMock = {
   ...createClientMock(),

@@ -9,7 +9,7 @@ A RESTful API backend for managing procurement projects, workflows, staff assign
 - **Runtime**: Node.js (TypeScript)
 - **Framework**: Express 5
 - **ORM**: Prisma 7 (PostgreSQL)
-- **Auth**: JWT (`jsonwebtoken`) + LRU in-memory cache
+- **Auth**: JWT (`jsonwebtoken`) + SAML 2.0 (`@node-saml/node-saml`) + LRU in-memory cache
 - **Validation**: Zod 4
 - **Database**: PostgreSQL (via `pg` pool + `@prisma/adapter-pg`)
 - **Dev Tools**: `tsx`, ESLint, Prettier, Swagger (`swagger-autogen`), Vitest
@@ -30,30 +30,48 @@ A RESTful API backend for managing procurement projects, workflows, staff assign
 │   │   └── prisma.ts         # Prisma client with pg adapter
 │   ├── controllers/          # Request handlers (thin layer)
 │   ├── services/             # Business logic
+│   │   ├── audit-log.service.ts
 │   │   ├── auth.service.ts
-│   │   ├── project-query.service.ts
+│   │   ├── budget-plan.service.ts
+│   │   ├── dashboard/
+│   │   ├── delegation.service.ts
+│   │   ├── department.service.ts
+│   │   ├── holiday.service.ts
+│   │   ├── notification/
 │   │   ├── project-assignment.service.ts
 │   │   ├── project-data.service.ts
+│   │   ├── project-installment.service.ts
 │   │   ├── project-lifecycle.service.ts
+│   │   ├── project-query-own.helper.ts
+│   │   ├── project-query.service.ts
+│   │   ├── registration.service.ts
+│   │   ├── saml.service.ts
+│   │   ├── settings.service.ts
+│   │   ├── storage.service.ts
 │   │   ├── submission.service.ts
 │   │   ├── unit.service.ts
-│   │   ├── user.service.ts
-│   │   ├── department.service.ts
-│   │   ├── delegation.service.ts
-│   │   └── budget-plan.service.ts
-│   ├── routes/               # Express routers (protected routes registered via loop)
+│   │   └── user.service.ts
+│   ├── routes/               # Express routers (protected routes registered via index)
 │   ├── middlewares/
 │   │   ├── auth.ts           # JWT protect + authorize middleware
+│   │   ├── cron-auth.ts      # Cron authentication middleware
 │   │   └── error.ts          # Global error handler
 │   ├── schemas/              # Zod validation schemas + inferred DTOs
 │   ├── types/                # TypeScript interfaces
 │   └── lib/
+│       ├── auth-cache.ts     # User auth LRU cache
 │       ├── constant.ts       # OPS_DEPT_ID, unit IDs, workflow step orders
+│       ├── date.ts           # Date & fiscal year helpers
 │       ├── errors.ts         # AppError, NotFoundError, ForbiddenError, etc.
+│       ├── helper.ts         # General helper utilities
 │       ├── permissions.ts    # haveSupplyPermission, isSuperAdmin helpers
+│       ├── phase-status.ts   # Procurement/contract phase sync logic
+│       ├── project-installment.ts # Project installment status helpers
 │       ├── roles.ts          # Role category helpers (dept-level vs unit-level)
+│       ├── saml-cache.ts     # SAML SSO code exchange cache
+│       ├── unit-type.ts      # Unit type validation helpers
 │       ├── user-role.ts      # addRoleInternal, removeRoleInternal, role helpers
-│       └── phase-status.ts   # Procurement/contract phase sync logic
+│       └── working-days.ts   # Working day & holiday calculations
 ├── filegen.ts                # Module scaffold generator
 ├── swagger.ts                # Swagger doc generator
 └── prisma.config.ts          # Prisma config (env-aware DB URL)
@@ -104,77 +122,126 @@ Swagger UI: `http://localhost:3000/api-docs`.
 | `npm run migrate:reset`  | Reset and re-run all migrations                                  |
 | `npm run studio`         | Open Prisma Studio                                               |
 | `npm run generate`       | Regenerate Prisma client                                         |
+| `npm run test`           | Run unit & integration test suite with Vitest                    |
 | `npm run filegen -- <n>` | Scaffold a new module (controller, service, route, schema, type) |
 
 ---
 
 ## API Routes
 
-All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth/register` and `/auth/login`).
+All routes are prefixed with `/api/v1` and require a Bearer token, except public registration request, SAML SSO, and login endpoints.
 
 ### Auth — `/auth`
 
-| Method | Path        | Description              |
-| ------ | ----------- | ------------------------ |
-| POST   | `/register` | Register a new user      |
-| POST   | `/login`    | Login (returns JWT)      |
-| GET    | `/me`       | Get current user profile |
-
-### Projects — `/projects`
-
-| Method | Path                        | Description                                                 |
-| ------ | --------------------------- | ----------------------------------------------------------- |
-| POST   | `/`                         | List projects with filters (role-scoped)                    |
-| POST   | `/create`                   | Create a new project                                        |
-| POST   | `/import`                   | Bulk import projects                                        |
-| GET    | `/unassigned`               | List unassigned projects (filtered by `?unitId=`)           |
-| GET    | `/assigned`                 | List assigned projects (optionally filtered by `?date=`)    |
-| GET    | `/waiting-cancel`           | List projects pending cancellation (filtered by `?unitId=`) |
-| GET    | `/own`                      | List projects assigned to the current user                  |
-| GET    | `/workload`                 | Get staff workload stats (scoped by role, `?unitId=`)       |
-| GET    | `/summary`                  | Get project summary cards (scoped by role)                  |
-| PATCH  | `/assign`                   | Assign projects to a staff member                           |
-| PATCH  | `/accept`                   | Accept assigned projects                                    |
-| GET    | `/:id`                      | Get project detail                                          |
-| PATCH  | `/:id/claim`                | Self-assign an unassigned project                           |
-| PATCH  | `/:id/change-assignee`      | Replace the current assignee                                |
-| PATCH  | `/:id/add-assignee`         | Add an additional assignee                                  |
-| PATCH  | `/:id/return`               | Return a project to unassigned                              |
-| PATCH  | `/:id/cancel`               | Request cancellation                                        |
-| PATCH  | `/:id/approve-cancel`       | Approve a cancellation request                              |
-| PATCH  | `/:id/reject-cancel`        | Reject a cancellation request                               |
-| PATCH  | `/:id/complete-procurement` | Advance to contract workflow                                |
-| PATCH  | `/:id/complete-contract`    | Mark contract phase as complete (NOT_EXPORTED)              |
-| PATCH  | `/:id/close`                | Close a completed project                                   |
-| PATCH  | `/:id/request-edit`         | Reopen a closed project for editing (requires `reason`)     |
-| PATCH  | `/:id/update`               | Update project information                                  |
-| DELETE | `/:id`                      | Delete a project                                            |
-
-### Submissions — `/submissions`
-
-| Method | Path           | Description                                                       |
-| ------ | -------------- | ----------------------------------------------------------------- |
-| GET    | `/:projectId`  | Get all submissions for a project                                 |
-| POST   | `/`            | Create a new submission (STAFF type)                              |
-| PATCH  | `/:id/:action` | Handle submission action (`approve`, `propose`, `sign`, `reject`) |
+| Method | Path                    | Description                                                                                   |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------- |
+| GET    | `/saml/metadata`        | Public SAML 2.0 Service Provider Metadata XML                                                 |
+| GET    | `/saml/login`           | Initiate SAML SSO authentication flow                                                         |
+| POST   | `/saml/acs`             | SAML Assertion Consumer Service callback endpoint                                             |
+| POST   | `/saml/exchange`        | Exchange SAML single-use authorization code for JWT token                                     |
+| POST   | `/create-request`       | Public account registration request (creates `PENDING` request)                               |
+| GET    | `/requests`             | List paginated account registration requests (`?status=`, `?page=`, `?limit=`) (Supply ADMIN) |
+| PATCH  | `/requests/:id/approve` | Approve registration request and create user account (Supply ADMIN)                           |
+| PATCH  | `/requests/:id/reject`  | Reject registration request (Supply ADMIN)                                                    |
+| POST   | `/login`                | Password login for an account with `STANDARD` access (returns JWT)                            |
+| GET    | `/me`                   | Get current user profile                                                                      |
+| PATCH  | `/logout`               | Invalidate current session cache                                                              |
 
 ### Users — `/users`
 
 | Method | Path               | Description                                                                                                |
 | ------ | ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| GET    | `/`                | List users (optionally filter by `?unitId=` or `?deptId=`)                                                 |
-| GET    | `/:id`             | Get user by ID                                                                                             |
+| GET    | `/`                | List users (optionally filter by `?unitId=`, `?deptId=`, or `?role=`)                                      |
+| POST   | `/new`             | Create a new user account directly (Supply ADMIN)                                                          |
+| GET    | `/:id`             | Get user details by ID                                                                                     |
 | PATCH  | `/roles/supply`    | Bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) |
-| POST   | `/:id/role`        | Add a role to a user (admin)                                                                               |
-| PATCH  | `/:id/role/remove` | Remove a role from a user (admin)                                                                          |
-| DELETE | `/:id`             | Delete a user                                                                                              |
+| POST   | `/:id/role`        | Add a role to a user (Supply ADMIN)                                                                        |
+| PATCH  | `/:id/role/remove` | Remove a role from a user (Supply ADMIN)                                                                   |
+| DELETE | `/:id`             | Delete a user (SUPER_ADMIN)                                                                                |
+
+### Projects — `/projects`
+
+| Method | Path                                       | Description                                                 |
+| ------ | ------------------------------------------ | ----------------------------------------------------------- |
+| POST   | `/`                                        | List projects with filters (role-scoped)                    |
+| GET    | `/summary`                                 | Get project summary cards (scoped by role)                  |
+| GET    | `/unassigned`                              | List unassigned projects (filtered by `?unitId=`)           |
+| GET    | `/assigned`                                | List assigned projects (optionally filtered by `?date=`)    |
+| GET    | `/waiting-cancel`                          | List projects pending cancellation (filtered by `?unitId=`) |
+| GET    | `/own/total`                               | Get total count of projects assigned to current user        |
+| GET    | `/own`                                     | List projects assigned to current user                      |
+| GET    | `/workload`                                | Get staff workload stats (scoped by role, `?unitId=`)       |
+| POST   | `/create`                                  | Create a new project                                        |
+| POST   | `/import`                                  | Bulk import projects                                        |
+| PATCH  | `/assign`                                  | Assign projects to a staff member (HEAD_OF_UNIT)            |
+| PATCH  | `/accept`                                  | Accept assigned projects (GENERAL_STAFF)                    |
+| POST   | `/contract/new`                            | Generate new contract number                                |
+| PATCH  | `/contract/:contractId/cancel`             | Cancel contract number                                      |
+| GET    | `/:id/history`                             | Get audit history for a project                             |
+| GET    | `/:id/document-summary`                    | Get document summary for a project                          |
+| GET    | `/:id`                                     | Get project detail                                          |
+| PATCH  | `/:id/claim`                               | Self-assign an unassigned project                           |
+| PATCH  | `/:id/change-assignee`                     | Replace current assignee                                    |
+| PATCH  | `/:id/add-assignee`                        | Add additional assignee                                     |
+| PATCH  | `/:id/return`                              | Return project to unassigned                                |
+| PATCH  | `/:id/cancel`                              | Request cancellation                                        |
+| PATCH  | `/:id/approve-cancel`                      | Approve cancellation request                                |
+| PATCH  | `/:id/reject-cancel`                       | Reject cancellation request                                 |
+| PATCH  | `/:id/complete-procurement`                | Advance to contract workflow                                |
+| POST   | `/:id/complete-installment/:installmentNo` | Complete project installment step                           |
+| PATCH  | `/:id/close`                               | Close a completed project (FINANCE_STAFF)                   |
+| PATCH  | `/:id/update`                              | Update project information                                  |
+| DELETE | `/:id`                                     | Delete a project (SUPER_ADMIN)                              |
+
+### Submissions — `/submissions`
+
+| Method | Path           | Description                                   |
+| ------ | -------------- | --------------------------------------------- |
+| GET    | `/:projectId`  | Get all submissions for a project             |
+| POST   | `/`            | Create a new submission (GENERAL_STAFF)       |
+| PATCH  | `/:id/approve` | Approve submission (HEAD_OF_UNIT)             |
+| PATCH  | `/:id/propose` | Propose submission (DOCUMENT_STAFF)           |
+| PATCH  | `/:id/sign`    | Sign and complete submission (DOCUMENT_STAFF) |
+| PATCH  | `/:id/reject`  | Reject submission (HEAD_OF_UNIT)              |
+
+### Installments — `/installments`
+
+| Method | Path                | Description                                    |
+| ------ | ------------------- | ---------------------------------------------- |
+| GET    | `/`                 | List project installments                      |
+| PATCH  | `/export`           | Export installments (FINANCE_STAFF)            |
+| PATCH  | `/:id/request-edit` | Request editing an installment (FINANCE_STAFF) |
+
+### Admin & Settings — `/admin`
+
+| Method | Path                        | Description                                |
+| ------ | --------------------------- | ------------------------------------------ |
+| GET    | `/audit-logs`               | Get audit logs (HEAD_OF_DEPARTMENT, ADMIN) |
+| GET    | `/settings/ops-units`       | Get ops units settings (ADMIN)             |
+| GET    | `/settings/representatives` | Get representatives settings (ADMIN)       |
+| GET    | `/settings/ops-staff`       | Get ops staff settings (ADMIN)             |
+
+### Dashboard — `/dashboard`
+
+| Method | Path                              | Description                              |
+| ------ | --------------------------------- | ---------------------------------------- |
+| GET    | `/periodic-summary`               | Get periodic project statistics summary  |
+| GET    | `/procurement-overview`           | Get overall procurement status summary   |
+| GET    | `/deadlines/overdue`              | Get list of overdue project deadlines    |
+| GET    | `/deadlines/due-soon`             | Get list of project deadlines due soon   |
+| GET    | `/unit-group/executive-summary`   | Get unit group executive summary metrics |
+| GET    | `/unit-group/procurement-metrics` | Get unit group procurement metrics       |
+| GET    | `/unit-group/procurement-details` | Get unit group procurement details       |
+| GET    | `/unit-group/top-delayed`         | Get unit group top delayed projects      |
+| GET    | `/unit-group/staff-performance`   | Get unit group staff performance         |
+| GET    | `/individual-todos`               | Get a selected user's project-own queue  |
 
 ### Units — `/units`
 
 | Method | Path          | Description                                 |
 | ------ | ------------- | ------------------------------------------- |
 | GET    | `/`           | Paginated list of units                     |
-| POST   | `/create`     | Create a unit                               |
+| POST   | `/create`     | Create a unit (SUPER_ADMIN)                 |
 | GET    | `/:id`        | Get unit by ID                              |
 | GET    | `/:id/rep`    | Get the representative for a unit           |
 | PATCH  | `/:id/users`  | Add/remove `GENERAL_STAFF` in a supply unit |
@@ -187,10 +254,10 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 | Method | Path          | Description                       |
 | ------ | ------------- | --------------------------------- |
 | GET    | `/`           | List all departments (with units) |
-| POST   | `/create`     | Create a department               |
+| POST   | `/create`     | Create a department (SUPER_ADMIN) |
 | GET    | `/:id`        | Get department by ID              |
-| PATCH  | `/:id/update` | Update a department               |
-| DELETE | `/:id`        | Delete a department               |
+| PATCH  | `/:id/update` | Update a department (SUPER_ADMIN) |
+| DELETE | `/:id`        | Delete a department (SUPER_ADMIN) |
 
 ### Delegations — `/delegations`
 
@@ -210,6 +277,30 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 | PATCH  | `/:id/projects/:projectId` | Link a budget plan to a project                       |
 | DELETE | `/:id`                     | Delete a budget plan                                  |
 
+### Storage — `/storage`
+
+| Method | Path                | Description                        |
+| ------ | ------------------- | ---------------------------------- |
+| POST   | `/presign-upload`   | Request presigned S3 upload URL    |
+| POST   | `/presign-download` | Request presigned S3 download URL  |
+| DELETE | `/delete`           | Delete a stored file (SUPER_ADMIN) |
+
+### Vendors — `/vendors`
+
+| Method | Path              | Description                                                |
+| ------ | ----------------- | ---------------------------------------------------------- |
+| POST   | `/presign-upload` | Request public presigned upload URL for vendor attachments |
+| POST   | `/`               | Submit vendor document package                             |
+| GET    | `/`               | List vendor submissions (Supply access)                    |
+
+### Notifications — `/notifications`
+
+| Method | Path        | Description                         |
+| ------ | ----------- | ----------------------------------- |
+| GET    | `/`         | List notifications for current user |
+| PATCH  | `/read-all` | Mark all notifications as read      |
+| PATCH  | `/:id/read` | Mark specific notification as read  |
+
 ### Holidays — `/holidays`
 
 | Method | Path                  | Description                                                                         |
@@ -219,6 +310,12 @@ All routes are prefixed with `/api/v1` and require a Bearer token (except `/auth
 | PUT    | `/:id`                | Update a holiday (ADMIN / SUPER_ADMIN only)                                         |
 | DELETE | `/:id`                | Delete a holiday (ADMIN / SUPER_ADMIN only)                                         |
 | POST   | `/calculate-timeline` | Calculate delivery date, remaining working days, and urgency level (all auth users) |
+
+### Cron — `/cron`
+
+| Method | Path                 | Description                                                              |
+| ------ | -------------------- | ------------------------------------------------------------------------ |
+| GET    | `/process-deadlines` | Process deadline notifications (Protected by `CRON_SECRET` bearer token) |
 
 ---
 
@@ -231,7 +328,25 @@ Working days exclude:
 - **Weekends** (Saturday and Sunday)
 - **Public holidays** recorded in the `Holiday` table
 
-All working-day arithmetic (adding days, counting remaining days) is performed by the helpers in `holiday.service.ts`.
+All working-day arithmetic (adding days and counting remaining days) is performed by `holiday.service.ts`.
+
+### Dashboard Working-Day Metrics
+
+The dashboard uses the same `holiday.service.ts` functions as the delivery-date timeline. `countBangkokWorkingDays(from, to, holidayIndex)` normalizes both dates to Bangkok calendar days, excludes the start date, includes the end date, returns `0` for an invalid or same-day range, and excludes Saturdays, Sundays, and recorded public holidays.
+
+`getBangkokWorkingDayHolidayIndex()` loads the relevant holiday window once per dashboard response. The index is shared for efficiency, while every individual count still excludes only holidays that fall within that item's own date range.
+
+| Dashboard metric     | Counting logic                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Staff performance    | Counts each staff member's in-progress and completed phase work separately for their selected unit; `projectCount` is their total. Average duration in working days uses completed phase work only.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Individual summary   | Compares the selected staff member's average completed phase duration with the unit average, in working days.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Contract summary     | Average completed contract-phase duration in working days.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Executive summary    | Longest procurement method, average duration, and workload-duration timeline use project working-day durations. A closed project's endpoint is its `STATUS_UPDATE` history record that changed status to `CLOSED`, rather than its mutable `updated_at`; legacy records without that history fall back to `updated_at`. The completion timestamp is used only while the current project status is still `CLOSED`.                                                                                                                                                                                                                        |
+| Procurement details  | Average completed procurement and contract phase durations use working days; the delayed-rate trend compares the current range with the prior range. No completed phase returns `0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Top delayed projects | `totalDays` is elapsed working time. The non-overlapping chart stages are assignment, procurement, contract, approval, and finance. Finance starts when the contract is completed and ends when the project closes (or today for an active project). Procurement and contract days exclude their approval intervals, so `assignmentDays + procurementDays + contractDays + approvalDays + financeDays` equals `totalDays`. Approval time runs from submission to completion; rejected submissions end at the rejection decision, unresolved submissions run through today, and direct completions with no approval event contribute `0`. |
+| Deadline lists       | `daysLate`, `daysRemaining`, and the urgent/watch priority use working days. The due-soon window covers the next seven working days.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+Calendar-day arithmetic remains only where a calendar range is required, such as building daily/monthly chart buckets and comparing completion timestamps to a deadline.
 
 ### Default Delivery Date
 
@@ -280,14 +395,27 @@ Supply operations users belong to `DEPT-SUP-OPS` (`OPS_DEPT_ID`). The `haveSuppl
 
 When a user's last real role in a department is removed, they automatically fall back to `GUEST` rather than being fully removed from that department.
 
-### Role Management Endpoints
+### Account Registration & Role Management
 
-Role mutations are split across two surfaces depending on context:
+User accounts can support one or both registration types (`RegisterType`): `SSO` and `STANDARD`.
 
-- **`PATCH /users/roles/supply`** — bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) for `DEPT-SUP-OPS`. Enforces the one-head-per-dept constraint.
-- **`POST /users/:id/role`** / **`PATCH /users/:id/role/remove`** — general-purpose add/remove for any role in any department (admin use).
-- **`PATCH /units/:id/users`** — add/remove `GENERAL_STAFF` within a supply unit.
-- **`PATCH /units/:id/rep`** — add/remove the `REPRESENTATIVE` for a non-supply unit (max one per unit).
+Account creation and role management workflows:
+
+1. **Account Registration Request Flow (`SSO`)**:
+   - Requesters submit an account request via `POST /auth/create-request`.
+   - The request enters `PENDING` state in the `RegistrationRequest` table.
+   - The request body contains a `dept_id` and non-empty `unit_id` array. Every unit must belong to that department.
+   - Supply `ADMIN` lists pending requests via `GET /auth/requests?status=PENDING`.
+   - Supply `ADMIN` approves (`PATCH /auth/requests/:id/approve`) or rejects (`PATCH /auth/requests/:id/reject`) the request. Approval creates an SSO user and a `GUEST` organization role for every requested department/unit scope.
+
+2. **Direct User Creation (`POST /users/new`)**:
+   - Supply `ADMIN` creates a user account directly, specifying one or both `register_type` values (`STANDARD`, `SSO`), credentials, initial role, and organization scope. `STANDARD` requires a password; `SSO` requires an email.
+
+3. **Role Management Endpoints**:
+   - **`PATCH /users/roles/supply`** — bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) for `DEPT-SUP-OPS`. Enforces the one-head-per-dept constraint.
+   - **`POST /users/:id/role`** / **`PATCH /users/:id/role/remove`** — add or remove a specific role for a user in any department. `SUPER_ADMIN` cannot be managed through these endpoints.
+   - **`PATCH /units/:id/users`** — add/remove `GENERAL_STAFF` within a supply unit.
+   - **`PATCH /units/:id/rep`** — add/remove the `REPRESENTATIVE` for a non-supply unit (max one per unit).
 
 All role mutations touch `role_updated_at`, invalidating the auth cache.
 
@@ -296,9 +424,9 @@ All role mutations touch `role_updated_at`, invalidating the auth cache.
 ```
 UNASSIGNED → WAITING_ACCEPT → IN_PROGRESS → (procurement complete) → UNASSIGNED (CONTRACT) → IN_PROGRESS → NOT_EXPORTED → CLOSED
                                      ↓
-                               WAITING_CANCEL → CANCELLED
+                                WAITING_CANCEL → CANCELLED
                                      ↓
-                               REQUEST_EDIT (from CLOSED)
+                                REQUEST_EDIT (from CLOSED)
 ```
 
 Projects have two workflow phases: **procurement** and **contract**, each tracked via `procurement_status` / `contract_status` (`ProjectPhaseStatus`).
@@ -388,7 +516,8 @@ The frontend starts SSO at `GET /api/v1/auth/saml/login`. CU Portal returns to
 `POST /api/v1/auth/saml/acs`; successful sign-in sets a host-only, HttpOnly
 cookie and redirects to `SAML_FRONTEND_SUCCESS_URL`. The API accepts that
 cookie or the existing Bearer JWT. Only a pre-existing user whose `username`
-matches CU Portal's `screenName` can sign in; SSO never creates a user or role.
+matches CU Portal's `screenName` and whose login methods include `SSO` can
+sign in; SSO never creates a user or role.
 
 ---
 

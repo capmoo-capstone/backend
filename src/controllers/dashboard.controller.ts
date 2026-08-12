@@ -5,6 +5,9 @@ import {
   UnitGroupQuerySchema,
   UnitGroupStaffPerformanceQuerySchema,
   UnitGroupTopDelayedQuerySchema,
+  IndividualDashboardQuerySchema,
+  IndividualTodoQuerySchema,
+  IndividualTodoTotalQuerySchema,
 } from '../schemas/dashboard.schema';
 import * as DashboardService from '../services/dashboard/dashboard.service';
 import { AuthenticatedRequest } from '../types/auth.type';
@@ -139,3 +142,57 @@ export const getUnitGroupStaffPerformance = async (
   );
   res.status(200).json(data);
 };
+
+export const getContractUnitSummary = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = UnitGroupQuerySchema.parse(req.query);
+  const data = await DashboardService.getContractUnitSummary(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
+export const getIndividualStaffDashboard = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const payload = req.user!;
+  const query = IndividualDashboardQuerySchema.parse(req.query);
+  const data = await DashboardService.getIndividualStaffDashboard(
+    payload,
+    query
+  );
+  res.status(200).json(data);
+};
+
+export const getIndividualStaffTodo = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const query = IndividualTodoQuerySchema.parse(req.query);
+  const data = await DashboardService.getIndividualStaffTodo(query);
+  res.status(200).json(data);
+};
+
+export const getIndividualStaffTodoTotal = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Dashboard']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const query = IndividualTodoTotalQuerySchema.parse(req.query);
+  const data = await DashboardService.getIndividualStaffTodoTotal(query);
+  res.status(200).json(data);
+};
+
+

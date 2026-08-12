@@ -95,6 +95,7 @@ const cleanup = async () => {
   await prisma.project.deleteMany();
   await prisma.projectContractNumber.deleteMany();
   await prisma.holiday.deleteMany();
+  await prisma.registrationRequest.deleteMany();
   await prisma.userDelegation.deleteMany();
   await prisma.userOrganizationRole.deleteMany();
   await prisma.user.deleteMany();
@@ -712,7 +713,7 @@ const seedProjects = async () => {
       HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.WAITING_PROPOSAL, step: 3 },
     },
-    prNo: `${fy}-PR-UT-4`,
+    prNo: '1000000004',
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
   await seedCompletedSteps(
@@ -747,7 +748,7 @@ const seedProjects = async () => {
     createdBy: ids.users.itRep,
     expectedCompletionDays: 20,
     procurementProgress: COMPLETED_PHASE,
-    prNo: `${fy}-PR-UT-5`,
+    prNo: '1000000005',
     procurementAssigneeIds: [ids.users.procurementHigh],
   });
   await seedCompletedSteps(
@@ -789,8 +790,8 @@ const seedProjects = async () => {
         installment_no: null,
       },
     },
-    prNo: `${fy}-PR-UT-6`,
-    poNo: `${fy}-PO-UT-6`,
+    prNo: '1000000006',
+    poNo: '2000000006',
     lessNo: `${fy}-LESS-UT-6`,
     vendorName: 'SecureWorks User Testing Co., Ltd.',
     vendorEmail: 'vendor.security@example.test',
@@ -825,8 +826,8 @@ const seedProjects = async () => {
       HEAD_OF_UNIT: { status: ProjectPhaseStatus.COMPLETED, step: null },
       DOCUMENT_STAFF: { status: ProjectPhaseStatus.COMPLETED, step: null },
     },
-    prNo: `${fy}-PR-UT-7`,
-    poNo: `${fy}-PO-UT-7`,
+    prNo: '1000000007',
+    poNo: '2000000007',
     lessNo: `${fy}-LESS-UT-7`,
     contractNo: { type: 'CU', value: `1/${fy}` },
     vendorName: 'Maintain Plus User Testing Ltd.',
@@ -851,7 +852,7 @@ const seedProjects = async () => {
     completedBy: ids.users.contractStaff,
     submissionType: SubmissionType.VENDOR,
     installmentNo: 1,
-    poNo: `${fy}-PO-UT-7`,
+    poNo: '2000000007',
     fieldKey: 'vendor_invoice',
     fileName: 'vendor_invoice_7.pdf',
   });
@@ -871,8 +872,8 @@ const seedProjects = async () => {
     createdBy: ids.users.libraryStaff,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: COMPLETED_PHASE,
-    prNo: `${fy}-PR-UT-8`,
-    poNo: `${fy}-PO-UT-8`,
+    prNo: '1000000008',
+    poNo: '2000000008',
     contractNo: { type: 'SP', value: `1/${fy}` },
     migo103No: `${fy}-MIGO-UT-8`,
     migo105No: `${fy}-MIGO-UT-8`,
@@ -941,8 +942,8 @@ const seedProjects = async () => {
     createdBy: ids.users.libraryStaff,
     procurementProgress: COMPLETED_PHASE,
     contractProgress: COMPLETED_PHASE,
-    prNo: `${fy}-PR-UT-11`,
-    poNo: `${fy}-PO-UT-11`,
+    prNo: '1000000011',
+    poNo: '2000000011',
     installmentRounds: 2,
     contractNo: { type: 'PSY', value: `1/${fy}` },
     procurementAssigneeIds: [ids.users.procurementLt],

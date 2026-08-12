@@ -11,6 +11,7 @@ import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
 interface JwtPayload {
   id: string;
   username: string;
+  email: string | null;
   full_name: string;
 }
 
@@ -42,11 +43,15 @@ export const protect = async (
 
     const userMeta = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { role_updated_at: true },
+      select: { role_updated_at: true, is_active: true },
     });
 
     if (!userMeta) {
       throw new UnauthorizedError('User not found');
+    }
+
+    if (!userMeta.is_active) {
+      throw new UnauthorizedError('Account is inactive');
     }
 
     const cachedData = getUserAuthCache(decoded.id);
@@ -70,6 +75,7 @@ export const protect = async (
       token,
       id: user.id,
       username: user.username,
+      email: user.email,
       full_name: user.full_name,
       ...authData,
     };

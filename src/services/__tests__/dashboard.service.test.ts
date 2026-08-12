@@ -1,6 +1,12 @@
-import { ProcurementType, ProjectStatus, UserRole } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectStatus,
+  UnitResponsibleType,
+  UserRole,
+} from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
+import { IndividualTodoQuerySchema } from '../../schemas/dashboard.schema';
 import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
 import * as DashboardService from '../dashboard/dashboard.service';
@@ -276,6 +282,7 @@ describe('dashboard.service', () => {
 
   it('returns sorted deadline pages with computed priority levels', async () => {
     vi.setSystemTime(new Date('2026-07-12T05:00:00.000Z'));
+    prismaMock.holiday.findMany.mockResolvedValue([]);
     prismaMock.project.findMany
       .mockResolvedValueOnce([
         {
@@ -311,13 +318,13 @@ describe('dashboard.service', () => {
     const overdue = await getOverdueDeadlines(staffUser, 1, 10);
     const dueSoon = await getDueSoonDeadlines(staffUser, 1, 10);
 
-    expect(overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
+    expect(overdue.data.map((row) => row.daysLate)).toEqual([7, 0]);
     expect(dueSoon.data.map((row) => row.priority)).toEqual([
       'URGENT',
       'WATCH',
-      'NORMAL',
+      'WATCH',
     ]);
-    expect(dueSoon.data.map((row) => row.daysRemaining)).toEqual([3, 5, 7]);
+    expect(dueSoon.data.map((row) => row.daysRemaining)).toEqual([3, 5, 5]);
     expect(prismaMock.project.findMany.mock.calls[0][0]).toMatchObject({
       where: expect.objectContaining({
         AND: expect.arrayContaining([
@@ -348,26 +355,35 @@ describe('dashboard.service', () => {
   });
 
   describe('Unit Group KPI Dashboard', () => {
-    it('returns executive summary metrics for unit staff', async () => {
+    it('uses completed phase timestamps for executive metrics', async () => {
+      prismaMock.unit.findUnique.mockResolvedValue({
+        id: 'unit-proc',
+        type: [UnitResponsibleType.LT100K],
+      });
+      prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany
         .mockResolvedValueOnce([
           {
             id: 'p1',
             procurement_type: ProcurementType.LT100K,
-            status: ProjectStatus.CLOSED,
+            status: ProjectStatus.IN_PROGRESS,
             created_at: new Date('2026-07-01T00:00:00.000Z'),
-            updated_at: new Date('2026-07-10T00:00:00.000Z'),
-            expected_completion_procurement_date: new Date(
-              '2026-07-15T00:00:00.000Z'
-            ),
+            expected_approval_date: new Date('2026-07-07T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+            procurement_completed_at: new Date('2026-07-08T00:00:00.000Z'),
+            contract_started_at: null,
+            contract_completed_at: null,
           },
           {
             id: 'p2',
             procurement_type: ProcurementType.LT500K,
-            status: ProjectStatus.IN_PROGRESS,
+            status: ProjectStatus.CLOSED,
             created_at: new Date('2026-07-05T00:00:00.000Z'),
-            updated_at: null,
-            expected_completion_procurement_date: null,
+            expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-07-05T00:00:00.000Z'),
+            procurement_completed_at: null,
+            contract_started_at: null,
+            contract_completed_at: null,
           },
         ])
         .mockResolvedValueOnce([]);
@@ -384,8 +400,14 @@ describe('dashboard.service', () => {
 
       expect(result.unitId).toBe('unit-proc');
       expect(result.longestProcurementMethod).toBe(ProcurementType.LT100K);
-      expect(result.onTimeCompletionPercentage.current).toBe(100);
+      expect(result.avgDurationDays.current).toBe(5);
+      expect(result.onTimeCompletionPercentage.current).toBe(0);
       expect(result.workloadVsDurationTimeline.length).toBeGreaterThan(0);
+      expect(
+        result.workloadVsDurationTimeline.find(
+          (point) => point.label === '2026-07'
+        )
+      ).toMatchObject({ workloadCount: 1, avgDurationDays: 5 });
     });
 
     it('returns procurement metrics donut distributions', async () => {
@@ -416,16 +438,125 @@ describe('dashboard.service', () => {
       expect(result.unitId).toBe('unit-proc');
       expect(result.totalProjects.total).toBe(1);
       expect(result.delayedProjects.total).toBe(1);
+      expect(prismaMock.project.count.mock.calls[6][0].where).toMatchObject({
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            status: { not: ProjectStatus.CANCELLED },
+            expected_approval_date: { not: null },
+            OR: [
+              {
+                procurement_completed_at: { not: null },
+                expected_approval_date: {
+                  lt: prismaMock.project.fields.procurement_completed_at,
+                },
+              },
+              {
+                procurement_completed_at: null,
+                expected_approval_date: { lt: expect.any(Date) },
+              },
+            ],
+          }),
+        ]),
+      });
+    });
+
+    it('averages completed phases from projects created in range', async () => {
+      prismaMock.unit.findUnique.mockResolvedValue({
+        id: 'unit-proc',
+        type: [UnitResponsibleType.LT100K],
+      });
+      prismaMock.holiday.findMany.mockResolvedValue([
+        { date: new Date('2026-07-03T00:00:00.000Z') },
+      ]);
+      prismaMock.project.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'p-1',
+            procurement_type: ProcurementType.LT100K,
+            status: ProjectStatus.IN_PROGRESS,
+            expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+            created_at: new Date('2026-07-01T00:00:00.000Z'),
+            updated_at: new Date('2026-07-10T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-07-29T00:00:00.000Z'),
+            procurement_completed_at: new Date('2026-08-04T00:00:00.000Z'),
+            contract_started_at: new Date('2026-07-29T00:00:00.000Z'),
+            contract_completed_at: new Date('2026-08-04T00:00:00.000Z'),
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            procurement_type: ProcurementType.LT100K,
+            status: ProjectStatus.CLOSED,
+            expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-06-30T17:00:00.000Z'),
+            procurement_completed_at: new Date('2026-07-05T17:00:00.000Z'),
+          },
+        ]);
+
+      const result = await DashboardService.getUnitGroupProcurementDetails(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          mode: 'month',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        }
+      );
+
+      expect(result.methods[0].avgPhaseDurationDays).toEqual({
+        procurementPhaseDays: 4,
+        contractPhaseDays: 4,
+      });
+      expect(result.methods[0].comparisonTrend).toBe('same');
     });
 
     it('returns top delayed projects stage breakdown', async () => {
+      prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany.mockResolvedValueOnce([
         {
           id: 'p-delayed-1',
           title: 'Delayed Project 1',
           procurement_type: ProcurementType.LT100K,
+          status: ProjectStatus.WAITING_CLOSE,
           created_at: new Date('2026-06-01T00:00:00.000Z'),
-          expected_approval_date: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: null,
+          procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_completed_at: new Date('2026-07-03T00:00:00.000Z'),
+          contract_started_at: new Date('2026-07-06T00:00:00.000Z'),
+          contract_completed_at: new Date('2026-07-08T00:00:00.000Z'),
+          project_histories: [
+            { changed_at: new Date('2026-07-09T00:00:00.000Z') },
+          ],
+          submissions: [
+            {
+              workflow_type: UnitResponsibleType.LT100K,
+              status: 'COMPLETED',
+              submitted_at: new Date('2026-07-01T00:00:00.000Z'),
+              approved_at: new Date('2026-07-02T00:00:00.000Z'),
+              completed_at: new Date('2026-07-03T00:00:00.000Z'),
+            },
+            {
+              workflow_type: UnitResponsibleType.LT100K,
+              status: 'COMPLETED',
+              submitted_at: new Date('2026-07-02T00:00:00.000Z'),
+              approved_at: new Date('2026-07-03T00:00:00.000Z'),
+              completed_at: new Date('2026-07-04T00:00:00.000Z'),
+            },
+            {
+              workflow_type: UnitResponsibleType.LT100K,
+              status: 'COMPLETED',
+              submitted_at: new Date('2026-07-04T00:00:00.000Z'),
+              approved_at: null,
+              completed_at: null,
+            },
+            {
+              workflow_type: UnitResponsibleType.CONTRACT,
+              status: 'REJECTED',
+              submitted_at: new Date('2026-07-06T00:00:00.000Z'),
+              approved_at: new Date('2026-07-08T00:00:00.000Z'),
+              completed_at: null,
+            },
+          ],
         },
       ]);
 
@@ -442,12 +573,63 @@ describe('dashboard.service', () => {
 
       expect(result.projects).toHaveLength(1);
       expect(result.projects[0].projectId).toBe('p-delayed-1');
-      expect(result.projects[0].stageBreakdownDays).toHaveProperty(
-        'taskAssignmentDays'
+      expect(result.projects[0]).toMatchObject({
+        totalDays: 24,
+        stageBreakdownDays: {
+          assignmentDays: 22,
+          procurementDays: 0,
+          contractDays: 0,
+          approvalDays: 2,
+          financeDays: 0,
+        },
+      });
+      const project = result.projects[0];
+      expect(
+        project.stageBreakdownDays.assignmentDays +
+          project.stageBreakdownDays.procurementDays +
+          project.stageBreakdownDays.contractDays +
+          project.stageBreakdownDays.approvalDays +
+          project.stageBreakdownDays.financeDays
+      ).toBe(project.totalDays);
+    });
+
+    it('ends the procurement stage at procurement_completed_at', async () => {
+      prismaMock.holiday.findMany.mockResolvedValue([]);
+      prismaMock.project.findMany.mockResolvedValueOnce([
+        {
+          id: 'p-proc-complete',
+          title: 'Waiting for contract',
+          procurement_type: ProcurementType.LT100K,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: new Date('2026-07-02T00:00:00.000Z'),
+          procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
+          contract_started_at: null,
+          contract_completed_at: null,
+          submissions: [],
+        },
+      ]);
+
+      const result = await DashboardService.getUnitGroupTopDelayedProjects(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          procurementType: ProcurementType.LT100K,
+          mode: 'month',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        }
       );
-      expect(result.projects[0].stageBreakdownDays).toHaveProperty(
-        'procurementPhaseDays'
-      );
+
+      expect(result.projects[0]).toMatchObject({
+        totalDays: 3,
+        stageBreakdownDays: {
+          assignmentDays: 1,
+          procurementDays: 2,
+          contractDays: 0,
+          approvalDays: 0,
+          financeDays: 0,
+        },
+      });
     });
 
     it('aggregates completed phase durations for all current unit staff', async () => {
@@ -509,13 +691,17 @@ describe('dashboard.service', () => {
           {
             userId: 'staff-1',
             fullName: 'Ava',
-            projectCount: 2,
+            projectCount: 3,
+            inProgressProjectCount: 1,
+            completedProjectCount: 2,
             avgWorkingDurationDays: 2,
           },
           {
             userId: 'staff-2',
             fullName: 'Ben',
             projectCount: 1,
+            inProgressProjectCount: 0,
+            completedProjectCount: 1,
             avgWorkingDurationDays: 2,
           },
         ],
@@ -537,23 +723,24 @@ describe('dashboard.service', () => {
           userId: 'staff-3',
           fullName: 'Chai',
           projectCount: 0,
+          inProgressProjectCount: 0,
+          completedProjectCount: 0,
           avgWorkingDurationDays: null,
         },
       ]);
       expect(prismaMock.project.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
+            status: { not: ProjectStatus.CANCELLED },
             OR: [
               expect.objectContaining({
-                procurement_started_at: { not: null },
-                procurement_completed_at: expect.any(Object),
+                procurement_started_at: { lte: expect.any(Date) },
                 assignee_procurement: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },
               }),
               expect.objectContaining({
-                contract_started_at: { not: null },
-                contract_completed_at: expect.any(Object),
+                contract_started_at: { lte: expect.any(Date) },
                 assignee_contract: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },
@@ -594,6 +781,279 @@ describe('dashboard.service', () => {
         })
       ).rejects.toThrowError('You do not have access to this unit');
       expect(prismaMock.unit.findUnique).not.toHaveBeenCalled();
+    });
+
+    describe('getContractUnitSummary', () => {
+      it('throws BadRequestError when the unit is not a contract unit', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+          dept_id: OPS_DEPT_ID,
+          name: 'Procurement Unit',
+          type: [UnitResponsibleType.LT100K],
+        } as any);
+
+        await expect(
+          DashboardService.getContractUnitSummary(supplyUser, {
+            unitId: 'unit-proc',
+            mode: 'month',
+            dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+            dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          })
+        ).rejects.toThrowError('Unit is not a contract unit');
+      });
+
+      it('returns status breakdown and average contract duration for contract unit', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-contract',
+          dept_id: OPS_DEPT_ID,
+          name: 'Contract Unit',
+          type: [UnitResponsibleType.CONTRACT],
+        } as any);
+        prismaMock.holiday.findMany.mockResolvedValue([]);
+
+        prismaMock.project.groupBy.mockResolvedValueOnce([
+          { status: ProjectStatus.UNASSIGNED, _count: { _all: 1 } },
+          { status: ProjectStatus.WAITING_ACCEPT, _count: { _all: 1 } },
+          { status: ProjectStatus.IN_PROGRESS, _count: { _all: 1 } },
+          { status: ProjectStatus.WAITING_CLOSE, _count: { _all: 1 } },
+          { status: ProjectStatus.CLOSED, _count: { _all: 2 } },
+          { status: ProjectStatus.CANCELLED, _count: { _all: 1 } },
+        ] as any);
+
+        prismaMock.project.findMany.mockResolvedValueOnce([
+          {
+            contract_started_at: new Date('2026-07-01T00:00:00.000Z'),
+            contract_completed_at: new Date('2026-07-06T00:00:00.000Z'),
+          },
+          {
+            contract_started_at: new Date('2026-07-07T00:00:00.000Z'),
+            contract_completed_at: null,
+          },
+        ] as any);
+
+        const result = await DashboardService.getContractUnitSummary(
+          supplyUser,
+          {
+            unitId: 'unit-contract',
+            mode: 'month',
+            dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+            dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          }
+        );
+
+        expect(result.unitId).toBe('unit-contract');
+        expect(result.statusBreakdown).toEqual({
+          unassigned: 1,
+          waitingAccept: 1,
+          inProgress: 2,
+          completed: 2,
+          cancelled: 1,
+        });
+        expect(result.phaseWorkload).toEqual({ inProgress: 1, completed: 1 });
+        expect(result.avgContractDurationDays).toBeGreaterThanOrEqual(0);
+        expect(prismaMock.project.groupBy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              created_at: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+          })
+        );
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              created_at: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+          })
+        );
+      });
+    });
+
+    describe('getIndividualStaffDashboard', () => {
+      it('accepts an individual todo query without unitId', () => {
+        expect(
+          IndividualTodoQuerySchema.parse({ targetUserId: 'staff-1' })
+        ).toEqual({
+          targetUserId: 'staff-1',
+          tab: 'all',
+          page: 1,
+          limit: 10,
+        });
+      });
+
+      it("returns the selected user's project-own todo list", async () => {
+        prismaMock.user.findUnique.mockResolvedValue({
+          id: 'staff-1',
+          username: 'staff',
+          email: 'staff@example.com',
+          full_name: 'Staff User',
+          register_type: ['STANDARD'],
+          roles: [
+            {
+              role: UserRole.GENERAL_STAFF,
+              department: { id: OPS_DEPT_ID, name: 'Supply' },
+              unit: { id: 'unit-proc', name: 'Procurement' },
+            },
+          ],
+          delegations_received: [],
+        } as any);
+        prismaMock.unit.findMany.mockResolvedValue([
+          {
+            id: 'unit-proc',
+            type: [UnitResponsibleType.LT100K],
+          },
+        ] as any);
+        prismaMock.project.findMany.mockResolvedValue([
+          { id: 'project-1', title: 'Target todo' },
+        ] as any);
+        prismaMock.project.count.mockResolvedValue(1);
+
+        const result = await DashboardService.getIndividualStaffTodo({
+          targetUserId: 'staff-1',
+          tab: 'waiting_accept',
+          page: 2,
+          limit: 20,
+        });
+
+        expect(result).toMatchObject({
+          total: 1,
+          page: 2,
+          pageSize: 20,
+          totalPages: 1,
+          data: [{ id: 'project-1', title: 'Target todo' }],
+        });
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            skip: 20,
+            take: 20,
+            orderBy: [{ receive_no: 'desc' }],
+          })
+        );
+        expect(prismaMock.project.count).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.any(Object),
+          })
+        );
+      });
+
+      it('throws NotFoundError when the todo target user does not exist', async () => {
+        prismaMock.user.findUnique.mockResolvedValue(null);
+
+        await expect(
+          DashboardService.getIndividualStaffTodo({
+            targetUserId: 'missing-user',
+            tab: 'all',
+            page: 1,
+            limit: 10,
+          })
+        ).rejects.toThrowError('User not found');
+        expect(prismaMock.project.findMany).not.toHaveBeenCalled();
+      });
+
+      it('returns total counts by tab for individual staff todos', async () => {
+        prismaMock.user.findUnique.mockResolvedValue({
+          id: 'staff-1',
+          username: 'staff',
+          email: 'staff@example.com',
+          full_name: 'Staff User',
+          register_type: ['STANDARD'],
+          roles: [
+            {
+              role: UserRole.GENERAL_STAFF,
+              department: { id: OPS_DEPT_ID, name: 'Supply' },
+              unit: { id: 'unit-proc', name: 'Procurement' },
+            },
+          ],
+          delegations_received: [],
+        } as any);
+        prismaMock.unit.findMany.mockResolvedValue([
+          {
+            id: 'unit-proc',
+            type: [UnitResponsibleType.LT100K],
+          },
+        ] as any);
+        prismaMock.project.count.mockResolvedValue(5);
+
+        const totals = await DashboardService.getIndividualStaffTodoTotal({
+          targetUserId: 'staff-1',
+        });
+
+        expect(totals).toBeDefined();
+        expect(totals.all).toBe(5);
+      });
+
+      it('throws NotFoundError when staff user is not in the unit', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+        } as any);
+        prismaMock.user.findFirst.mockResolvedValue(null);
+
+        await expect(
+          DashboardService.getIndividualStaffDashboard(supplyUser, {
+            unitId: 'unit-proc',
+            targetUserId: 'nonexistent-user',
+          })
+        ).rejects.toThrowError('Staff user not found in this unit');
+      });
+
+      it('returns individual staff dashboard with duration comparison and procurement method metrics', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+          type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
+        } as any);
+        prismaMock.user.findFirst.mockResolvedValue({
+          id: 'staff-1',
+          full_name: 'Somchai Jaidee',
+        } as any);
+        prismaMock.holiday.findMany.mockResolvedValue([]);
+
+        prismaMock.project.findMany
+          .mockResolvedValueOnce([
+            { procurement_type: ProcurementType.LT100K },
+            { procurement_type: ProcurementType.LT100K },
+            { procurement_type: ProcurementType.LT500K },
+          ] as any)
+          .mockResolvedValueOnce([
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-11T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-1' }],
+              assignee_contract: [],
+            },
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-08T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-2' }],
+              assignee_contract: [],
+            },
+          ] as any);
+
+        const result = await DashboardService.getIndividualStaffDashboard(
+          supplyUser,
+          {
+            unitId: 'unit-proc',
+            targetUserId: 'staff-1',
+          }
+        );
+
+        expect(result.unitId).toBe('unit-proc');
+        expect(result.user).toEqual({
+          id: 'staff-1',
+          fullName: 'Somchai Jaidee',
+        });
+        expect(result.procurementMethodMetrics?.total).toBe(3);
+        expect(result.procurementMethodMetrics?.byProcurementType).toEqual([
+          { type: ProcurementType.LT100K, count: 2 },
+          { type: ProcurementType.LT500K, count: 1 },
+        ]);
+        expect(result.durationComparison.length).toBeGreaterThan(0);
+        expect(result.durationComparison[0].workflowType).toBeDefined();
+      });
     });
   });
 });

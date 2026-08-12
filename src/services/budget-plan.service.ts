@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { ImportBudgetPlanDto } from '../schemas/budget-plan.schema';
+import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
+import { BudgetPlanFilterQuery, ImportBudgetPlanDto } from '../schemas/budget-plan.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
   ImportBudgetPlanResponse,
@@ -8,26 +10,88 @@ import {
 } from '../types/budget-plan.type';
 
 export const listBudgetPlans = async (
-  _user: AuthPayload,
-  page: number,
-  limit: number,
-  deptId?: string,
-  unitId?: string,
-  available?: boolean
+  user: AuthPayload,
+  page: number = 1,
+  limit: number = 10,
+  filters: BudgetPlanFilterQuery = {}
 ): Promise<PaginatedBudgetPlans> => {
+  const andConditions: Prisma.BudgetPlanWhereInput[] = [];
+  const isSupply = haveSupplyPermission(user);
+  if (!isSupply) {
+    const allowedDeptIds = getDeptIdsForUser(user);
+    andConditions.push({ unit: { dept_id: { in: allowedDeptIds } } });
+  } else if (filters.departments && filters.departments.length > 0) {
+    andConditions.push({ unit: { dept_id: { in: filters.departments } } });
+  }
+
+  if (filters.units && filters.units.length > 0) {
+    andConditions.push({ unit_id: { in: filters.units } });
+  }
+
+  if (filters.fiscalYear) {
+    andConditions.push({ budget_year: filters.fiscalYear });
+  }
+
+  if (filters.available !== undefined) {
+    if (filters.available === true) {
+      andConditions.push({ project_id: null });
+    } else {
+      andConditions.push({ NOT: { project_id: null } });
+    }
+  }
+
+  if (filters.activityName?.trim()) {
+    const activityNameTerm = filters.activityName.trim();
+    andConditions.push({
+      activity_type_name: {
+        contains: activityNameTerm,
+        mode: Prisma.QueryMode.insensitive,
+      },
+    });
+  }
+
+  // General search
+  if (filters.search?.trim()) {
+    const searchTerm = filters.search.trim();
+    const searchOr: Prisma.BudgetPlanWhereInput[] = [
+      {
+        activity_type_name: {
+          contains: searchTerm,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+      {
+        description: {
+          contains: searchTerm,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+      {
+        budget_name: {
+          contains: searchTerm,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+      {
+        unit: {
+          name: { contains: searchTerm, mode: Prisma.QueryMode.insensitive },
+        },
+      },
+      {
+        unit: {
+          department: {
+            name: { contains: searchTerm, mode: Prisma.QueryMode.insensitive },
+          },
+        },
+      },
+    ];
+    andConditions.push({ OR: searchOr });
+  }
+
+  const where: Prisma.BudgetPlanWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {};
+
   const skip = (page - 1) * limit;
-  let where = {};
-  if (deptId) {
-    where = { unit: { dept_id: deptId } };
-  }
-  if (unitId) {
-    where = { ...where, unit_id: unitId };
-  }
-  if (available !== undefined) {
-    if (available === true) {
-      where = { ...where, project_id: null };
-    } else where = { ...where, NOT: { project_id: null } };
-  }
 
   const [budgetPlans, total] = await Promise.all([
     prisma.budgetPlan.findMany({

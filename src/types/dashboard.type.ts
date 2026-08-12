@@ -1,4 +1,8 @@
-import { ProcurementType, ProjectStatus } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/client';
 import { PaginatedResponse } from './common.type';
 import { DashboardMode } from '../schemas/dashboard.schema';
@@ -161,11 +165,11 @@ export interface TopDelayedProjectItem {
   procurementType: ProcurementType;
   totalDays: number;
   stageBreakdownDays: {
-    taskAssignmentDays: number;
-    procurementPhaseDays: number;
-    contractPhaseDays: number;
-    inspectionApprovalDays: number;
-    revisionDays: number;
+    assignmentDays: number;
+    procurementDays: number;
+    contractDays: number;
+    approvalDays: number;
+    financeDays: number;
   };
 }
 
@@ -179,6 +183,8 @@ export interface UnitGroupStaffPerformanceRow {
   userId: string;
   fullName: string;
   projectCount: number;
+  inProgressProjectCount: number;
+  completedProjectCount: number;
   avgWorkingDurationDays: number | null;
 }
 
@@ -189,4 +195,49 @@ export interface UnitGroupStaffPerformanceResponse extends PaginatedResponse<Uni
     from: Date;
     to: Date;
   };
+}
+
+export interface UnitContractStatusBreakdown {
+  unassigned: number;
+  waitingAccept: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+}
+
+export interface UnitContractPhaseWorkload {
+  inProgress: number;
+  completed: number;
+}
+
+export interface ContractUnitSummaryResponse {
+  unitId: string;
+  mode: DashboardMode;
+  range: {
+    from: Date;
+    to: Date;
+  };
+  statusBreakdown: UnitContractStatusBreakdown;
+  phaseWorkload: UnitContractPhaseWorkload;
+  avgContractDurationDays: number;
+}
+
+export interface DurationComparisonItem {
+  workflowType: UnitResponsibleType;
+  staffAvgDurationDays: number;
+  unitAvgDurationDays: number;
+  comparison: 'better' | 'worse' | 'same';
+}
+
+export interface IndividualDashboardResponse {
+  unitId: string;
+  user: {
+    id: string;
+    fullName: string;
+  };
+  durationComparison: DurationComparisonItem[];
+  procurementMethodMetrics: {
+    total: number;
+    byProcurementType: Array<{ type: ProcurementType; count: number }>;
+  } | null;
 }

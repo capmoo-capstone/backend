@@ -466,12 +466,17 @@ export const completeProcurementPhase = async (
     }
 
     const transitionAt = nowUtc();
+    const hasContractAssignee = Boolean(
+      data.continue_unit_proc || data.assignee_contract
+    );
     let dataToUpdate: any = {
       current_workflow_type: UnitResponsibleType.CONTRACT,
       ...(project.procurement_completed_at
         ? {}
         : { procurement_completed_at: transitionAt }),
-      ...(project.contract_started_at ? {} : { contract_started_at: transitionAt }),
+      ...(hasContractAssignee && !project.contract_started_at
+        ? { contract_started_at: transitionAt }
+        : {}),
     };
 
     if (data.continue_unit_proc) {

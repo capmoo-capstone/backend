@@ -33,13 +33,9 @@ export const getVendorSubmissions = async (
   // #swagger.tags = ['Submission']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const { page, limit, q, from, to } = req.query;
+  const { page, limit } = req.query;
 
-  const validatedFilters = VendorSubmissionFilterQuerySchema.parse({
-    search: q,
-    dateFrom: from,
-    dateTo: to,
-  });
+  const validatedFilters = VendorSubmissionFilterQuerySchema.parse(req.query);
   const submissions = await SubmissionService.getVendorSubmissions(
     payload,
     parseInt(page as string) || 1,

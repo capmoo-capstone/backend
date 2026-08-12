@@ -269,56 +269,56 @@ export const getVendorSubmissions = async (
   _user: AuthPayload,
   page: number,
   limit: number,
-  filter: VendorSubmissionFilterQuery
+  filter?: VendorSubmissionFilterQuery
 ): Promise<VendorSubmissionsResponse> => {
   const and: Prisma.ProjectSubmissionWhereInput[] = [
     { submission_type: SubmissionType.VENDOR },
     { workflow_type: UnitResponsibleType.CONTRACT },
   ];
 
-  if (filter?.search?.trim()) {
-    const term = filter.search.trim();
+  if (filter?.receiveNo?.trim()) {
+    const term = filter.receiveNo.trim();
+    and.push({
+      project: {
+        receive_no: {
+          contains: term,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+    });
+  }
+
+  if (filter?.poNo?.trim()) {
+    const term = filter.poNo.trim();
     and.push({
       OR: [
         {
+          po_no: {
+            contains: term,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
           project: {
-            OR: [
-              {
-                po_no: {
-                  contains: term,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                vendor_name: {
-                  contains: term,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                receive_no: {
-                  contains: term,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                title: {
-                  contains: term,
-                  mode: Prisma.QueryMode.insensitive,
-                },
-              },
-              {
-                requesting_dept: {
-                  name: {
-                    contains: term,
-                    mode: Prisma.QueryMode.insensitive,
-                  },
-                },
-              },
-            ],
+            po_no: {
+              contains: term,
+              mode: Prisma.QueryMode.insensitive,
+            },
           },
         },
       ],
+    });
+  }
+
+  if (filter?.vendorName?.trim()) {
+    const term = filter.vendorName.trim();
+    and.push({
+      project: {
+        vendor_name: {
+          contains: term,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
     });
   }
 
@@ -353,6 +353,7 @@ export const getVendorSubmissions = async (
             id: true,
             receive_no: true,
             title: true,
+            po_no: true,
             vendor_name: true,
             requesting_dept: { select: { id: true, name: true } },
           },
@@ -368,7 +369,8 @@ export const getVendorSubmissions = async (
       project_id: submission.project.id,
       title: submission.project.title,
       receive_no: submission.project.receive_no,
-      vendor_name: submission.project.vendor_name,
+      po_no: submission.po_no || submission.project.po_no || '',
+      vendor_name: submission.project.vendor_name || '',
       requester: {
         dept_id: submission.project.requesting_dept.id,
         dept_name: submission.project.requesting_dept.name,
