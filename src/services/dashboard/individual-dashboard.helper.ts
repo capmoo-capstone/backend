@@ -9,6 +9,7 @@ import {
 import {
   IndividualDashboardQuery,
   IndividualTodoQuery,
+  IndividualTodoTotalQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import { PaginatedProjects } from '../../types/project.type';
@@ -18,11 +19,11 @@ import {
 } from '../../types/dashboard.type';
 import { getHolidayDates } from '../holiday.service';
 import { fetchAndFormatUserDetails } from '../auth.service';
-import { getOwnProjects } from '../project-query.service';
+import { getOwnProjects, getOwnProjectsTotal } from '../project-query.service';
 import { resolveTargetUnitId } from './dashboard.helper';
 import { getUnitProcurementTypes } from './kpi-dashboard.helper';
 
-export const getIndividualStaffTodos = async (
+export const getIndividualStaffTodo = async (
   query: IndividualTodoQuery
 ): Promise<PaginatedProjects> => {
   const target = await fetchAndFormatUserDetails({
@@ -44,6 +45,30 @@ export const getIndividualStaffTodos = async (
   };
 
   return getOwnProjects(targetUser, query.page, query.limit, query.tab);
+};
+
+export const getIndividualStaffTodoTotal = async (
+  query: IndividualTodoTotalQuery
+): Promise<Record<string, number>> => {
+  const target = await fetchAndFormatUserDetails({
+    id: query.targetUserId,
+  });
+
+  if (!target) {
+    throw new NotFoundError('User not found');
+  }
+
+  const targetUser: AuthPayload = {
+    token: '',
+    id: target.user.id,
+    username: target.user.username,
+    full_name: target.user.full_name,
+    email: target.user.email,
+    user_type: target.user.register_type,
+    ...target.authData,
+  };
+
+  return getOwnProjectsTotal(targetUser);
 };
 
 export const getIndividualStaffDashboard = async (

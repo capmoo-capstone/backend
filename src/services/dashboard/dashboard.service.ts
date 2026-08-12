@@ -6,6 +6,7 @@ import {
   UnitGroupTopDelayedQuery,
   IndividualDashboardQuery,
   IndividualTodoQuery,
+  IndividualTodoTotalQuery,
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
@@ -95,9 +96,14 @@ export const getIndividualStaffDashboard = (
 ): Promise<IndividualDashboardResponse> =>
   individualHelper.getIndividualStaffDashboard(user, query);
 
-export const getIndividualStaffTodos = (
+export const getIndividualStaffTodo = (
   query: IndividualTodoQuery
 ): Promise<PaginatedProjects> =>
-  individualHelper.getIndividualStaffTodos(query);
+  individualHelper.getIndividualStaffTodo(query);
+
+export const getIndividualStaffTodoTotal = (
+  query: IndividualTodoTotalQuery
+): Promise<Record<string, number>> =>
+  individualHelper.getIndividualStaffTodoTotal(query);
 
 

@@ -59,10 +59,17 @@ router.get(
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getIndividualStaffDashboard
 );
+
 router.get(
-  '/individual-todos',
+  '/individual-todo',
   requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getIndividualStaffTodos
+  controller.getIndividualStaffTodo
+);
+
+router.get(
+  '/individual-todo/total',
+  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  controller.getIndividualStaffTodoTotal
 );
 
 export default router;

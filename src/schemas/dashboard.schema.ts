@@ -168,6 +168,10 @@ export const IndividualTodoQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+export const IndividualTodoTotalQuerySchema = z.object({
+  targetUserId: z.string(),
+});
+
 export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<
   typeof ProcurementOverviewQuerySchema
@@ -184,4 +188,7 @@ export type IndividualDashboardQuery = z.infer<
   typeof IndividualDashboardQuerySchema
 >;
 export type IndividualTodoQuery = z.infer<typeof IndividualTodoQuerySchema>;
+export type IndividualTodoTotalQuery = z.infer<
+  typeof IndividualTodoTotalQuerySchema
+>;
 

@@ -699,7 +699,7 @@ describe('dashboard.service', () => {
         ] as any);
         prismaMock.project.count.mockResolvedValue(1);
 
-        const result = await DashboardService.getIndividualStaffTodos({
+        const result = await DashboardService.getIndividualStaffTodo({
           targetUserId: 'staff-1',
           tab: 'waiting_accept',
           page: 2,
@@ -731,7 +731,7 @@ describe('dashboard.service', () => {
         prismaMock.user.findUnique.mockResolvedValue(null);
 
         await expect(
-          DashboardService.getIndividualStaffTodos({
+          DashboardService.getIndividualStaffTodo({
             targetUserId: 'missing-user',
             tab: 'all',
             page: 1,
@@ -739,6 +739,38 @@ describe('dashboard.service', () => {
           })
         ).rejects.toThrowError('User not found');
         expect(prismaMock.project.findMany).not.toHaveBeenCalled();
+      });
+
+      it('returns total counts by tab for individual staff todos', async () => {
+        prismaMock.user.findUnique.mockResolvedValue({
+          id: 'staff-1',
+          username: 'staff',
+          email: 'staff@example.com',
+          full_name: 'Staff User',
+          register_type: 'STANDARD',
+          roles: [
+            {
+              role: UserRole.GENERAL_STAFF,
+              department: { id: OPS_DEPT_ID, name: 'Supply' },
+              unit: { id: 'unit-proc', name: 'Procurement' },
+            },
+          ],
+          delegations_received: [],
+        } as any);
+        prismaMock.unit.findMany.mockResolvedValue([
+          {
+            id: 'unit-proc',
+            type: [UnitResponsibleType.LT100K],
+          },
+        ] as any);
+        prismaMock.project.count.mockResolvedValue(5);
+
+        const totals = await DashboardService.getIndividualStaffTodoTotal({
+          targetUserId: 'staff-1',
+        });
+
+        expect(totals).toBeDefined();
+        expect(totals.all).toBe(5);
       });
 
       it('throws NotFoundError when staff user is not in the unit', async () => {
