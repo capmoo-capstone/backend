@@ -1,12 +1,15 @@
 import {
   Prisma,
   ProcurementType,
+  ProjectActionType,
   ProjectStatus,
+  SubmissionStatus,
   UnitResponsibleType,
   UserRole,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import {
+  bangkokDayStartUtc,
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
@@ -237,6 +240,18 @@ export const getUnitGroupExecutiveSummary = async (
         created_at: true,
         updated_at: true,
         expected_approval_date: true,
+        project_histories: {
+          where: {
+            action: ProjectActionType.STATUS_UPDATE,
+            new_value: {
+              path: ['status'],
+              equals: ProjectStatus.CLOSED,
+            },
+          },
+          orderBy: { changed_at: 'desc' },
+          take: 1,
+          select: { changed_at: true },
+        },
       },
     }),
     prisma.project.findMany({
@@ -247,20 +262,38 @@ export const getUnitGroupExecutiveSummary = async (
         created_at: true,
         updated_at: true,
         expected_approval_date: true,
+        project_histories: {
+          where: {
+            action: ProjectActionType.STATUS_UPDATE,
+            new_value: {
+              path: ['status'],
+              equals: ProjectStatus.CLOSED,
+            },
+          },
+          orderBy: { changed_at: 'desc' },
+          take: 1,
+          select: { changed_at: true },
+        },
       },
     }),
   ]);
 
   const now = nowUtc();
-  const getDurationEnd = (project: {
+  const getCompletedAt = (project: {
     status: ProjectStatus;
-    updated_at: Date | null;
-  }): Date =>
-    project.status === ProjectStatus.CLOSED ? (project.updated_at ?? now) : now;
+    project_histories?: Array<{ changed_at: Date }>;
+  }): Date => {
+    if (project.status !== ProjectStatus.CLOSED) return now;
+
+    return (
+      project.project_histories?.[0]?.changed_at ?? now
+    );
+  };
+  
   const holidayIndex = await getBangkokWorkingDayHolidayIndex(
     [...currentProjects, ...previousProjects].map((project) => ({
       from: project.created_at,
-      to: getDurationEnd(project),
+      to: getCompletedAt(project),
     }))
   );
 
@@ -270,7 +303,7 @@ export const getUnitGroupExecutiveSummary = async (
   for (const p of currentProjects) {
     const durationDays = countBangkokWorkingDays(
       p.created_at,
-      getDurationEnd(p),
+      getCompletedAt(p),
       holidayIndex
     );
     const type = p.procurement_type;
@@ -297,13 +330,14 @@ export const getUnitGroupExecutiveSummary = async (
       created_at: Date;
       updated_at: Date | null;
       status: ProjectStatus;
+      project_histories?: Array<{ changed_at: Date }>;
     }>
   ) => {
     if (projects.length === 0) return 0;
     const total = projects.reduce((acc, p) => {
       return (
         acc +
-        countBangkokWorkingDays(p.created_at, getDurationEnd(p), holidayIndex)
+        countBangkokWorkingDays(p.created_at, getCompletedAt(p), holidayIndex)
       );
     }, 0);
     return Math.round(total / projects.length);
@@ -319,13 +353,14 @@ export const getUnitGroupExecutiveSummary = async (
       status: ProjectStatus;
       updated_at: Date | null;
       expected_approval_date: Date | null;
+      project_histories?: Array<{ changed_at: Date }>;
     }>
   ) => {
     const completed = projects.filter((p) => p.status === ProjectStatus.CLOSED);
     if (completed.length === 0) return 100;
     const onTime = completed.filter((p) => {
       if (!p.expected_approval_date) return true;
-      const closedAt = p.updated_at ?? nowUtc();
+      const closedAt = getCompletedAt(p);
       return closedAt <= p.expected_approval_date;
     });
     return Math.round((onTime.length / completed.length) * 100);
@@ -457,6 +492,7 @@ export const getUnitGroupProcurementDetails = async (
 ): Promise<UnitGroupProcurementDetailsResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
   const range = { from: query.dateFrom, to: query.dateTo };
+  const previousRange = getPreviousRange(range, query.mode);
   const now = nowUtc();
   const today = fromBangkokDate(
     toBangkokParts(now).year,
@@ -469,8 +505,9 @@ export const getUnitGroupProcurementDetails = async (
   };
 
   const baseWhere = projectRangeWhere(unitWhere, range);
+  const previousWhere = projectRangeWhere(unitWhere, previousRange);
 
-  const [projects, types] = await Promise.all([
+  const [projects, previousProjects, types] = await Promise.all([
     prisma.project.findMany({
       where: baseWhere,
       select: {
@@ -484,6 +521,14 @@ export const getUnitGroupProcurementDetails = async (
         procurement_completed_at: true,
         contract_started_at: true,
         contract_completed_at: true,
+      },
+    }),
+    prisma.project.findMany({
+      where: previousWhere,
+      select: {
+        procurement_type: true,
+        status: true,
+        expected_approval_date: true,
       },
     }),
     getUnitProcurementTypes(unitId),
@@ -529,24 +574,36 @@ export const getUnitGroupProcurementDetails = async (
 
   const methods: ProcurementMethodDetailItem[] = [];
 
+  const isDelayed = (project: {
+    status: ProjectStatus;
+    expected_approval_date: Date | null;
+  }): boolean =>
+    project.status !== ProjectStatus.CLOSED &&
+    project.status !== ProjectStatus.CANCELLED &&
+    project.expected_approval_date !== null &&
+    project.expected_approval_date < today;
+
+  const delayedPercentage = (
+    methodProjects: Array<{
+      status: ProjectStatus;
+      expected_approval_date: Date | null;
+    }>
+  ): number =>
+    methodProjects.length === 0
+      ? 0
+      : Math.round(
+          (methodProjects.filter(isDelayed).length / methodProjects.length) *
+            100
+        );
+
   for (const type of types) {
     const typeProjects = projects.filter((p) => p.procurement_type === type);
     const totalCount = typeProjects.length;
-
-    const delayedProjects = typeProjects.filter((p) => {
-      const isClosed =
-        p.status === ProjectStatus.CLOSED ||
-        p.status === ProjectStatus.CANCELLED;
-      return (
-        !isClosed &&
-        p.expected_approval_date &&
-        p.expected_approval_date < today
-      );
-    });
-
-    const delayedCount = delayedProjects.length;
-    const delayedPercentage =
-      totalCount > 0 ? Math.round((delayedCount / totalCount) * 100) : 0;
+    const delayedCount = typeProjects.filter(isDelayed).length;
+    const currentDelayedPercentage = delayedPercentage(typeProjects);
+    const previousDelayedPercentage = delayedPercentage(
+      previousProjects.filter((project) => project.procurement_type === type)
+    );
     const procurementPhases = typeProjects.flatMap((project) =>
       project.procurement_started_at && project.procurement_completed_at
         ? [
@@ -611,8 +668,11 @@ export const getUnitGroupProcurementDetails = async (
       procurementType: type,
       delayedCount,
       totalCount,
-      delayedPercentage,
-      comparisonTrend: 'same',
+      delayedPercentage: currentDelayedPercentage,
+      comparisonTrend: toComparison(
+        currentDelayedPercentage,
+        previousDelayedPercentage
+      ).trend,
       statusDistribution,
       avgPhaseDurationDays: {
         procurementPhaseDays: averagePhaseDuration(procurementPhases),
@@ -660,37 +720,185 @@ export const getUnitGroupTopDelayedProjects = async (
       id: true,
       title: true,
       procurement_type: true,
+      status: true,
       created_at: true,
-      expected_approval_date: true,
+      updated_at: true,
+      procurement_started_at: true,
+      contract_started_at: true,
+      contract_completed_at: true,
+      project_histories: {
+        where: {
+          action: ProjectActionType.STATUS_UPDATE,
+          new_value: {
+            path: ['status'],
+            equals: ProjectStatus.CLOSED,
+          },
+        },
+        orderBy: { changed_at: 'desc' },
+        take: 1,
+        select: { changed_at: true },
+      },
+      submissions: {
+        select: {
+          workflow_type: true,
+          status: true,
+          submitted_at: true,
+          approved_at: true,
+          completed_at: true,
+        },
+        orderBy: { submitted_at: 'asc' },
+      },
     },
   });
 
   const holidayIndex = await getBangkokWorkingDayHolidayIndex(
     projects.map((project) => ({
       from: project.created_at,
-      to: project.expected_approval_date ?? today,
+      to: today,
     }))
   );
 
-  const topProjects: TopDelayedProjectItem[] = projects.map((p) => {
-    const totalDays = countBangkokWorkingDays(
-      p.created_at,
-      p.expected_approval_date ?? today,
-      holidayIndex
+  type SubmissionApprovalInterval = { from: Date; to: Date };
+  const approvalEndDate = (submission: {
+    status: SubmissionStatus;
+    submitted_at: Date;
+    approved_at: Date | null;
+    completed_at: Date | null;
+  }): Date => {
+    if (submission.completed_at) return submission.completed_at;
+    if (submission.status === SubmissionStatus.COMPLETED) {
+      return submission.submitted_at;
+    }
+    if (submission.status === SubmissionStatus.REJECTED) {
+      return submission.approved_at ?? submission.submitted_at;
+    }
+    return today;
+  };
+
+  const countApprovalDays = (
+    submissions: Array<{
+      workflow_type: UnitResponsibleType;
+      status: SubmissionStatus;
+      submitted_at: Date;
+      approved_at: Date | null;
+      completed_at: Date | null;
+    }>,
+    workflowType: UnitResponsibleType | ProcurementType,
+    phaseRange?: SubmissionApprovalInterval
+  ): number => {
+    if (!phaseRange) return 0;
+
+    const intervals = submissions
+      .filter((submission) => submission.workflow_type === workflowType)
+      .map((submission) => ({
+        from:
+          bangkokDayStartUtc(submission.submitted_at) > phaseRange.from
+            ? bangkokDayStartUtc(submission.submitted_at)
+            : phaseRange.from,
+        to:
+          bangkokDayStartUtc(approvalEndDate(submission)) < phaseRange.to
+            ? bangkokDayStartUtc(approvalEndDate(submission))
+            : phaseRange.to,
+      }))
+      .filter((interval) => interval.from < interval.to)
+      .sort((left, right) => left.from.getTime() - right.from.getTime());
+
+    const merged: SubmissionApprovalInterval[] = [];
+    for (const interval of intervals) {
+      const current = merged.at(-1);
+      if (!current || interval.from > current.to) {
+        merged.push({ ...interval });
+      } else if (interval.to > current.to) {
+        current.to = interval.to;
+      }
+    }
+
+    return merged.reduce(
+      (total, interval) =>
+        total +
+        countBangkokWorkingDays(interval.from, interval.to, holidayIndex),
+      0
     );
-    const unitPortion = Math.max(1, Math.floor(totalDays / 5));
+  };
+
+  const topProjects: TopDelayedProjectItem[] = projects.map((p) => {
+    const completedAt =
+      p.status === ProjectStatus.CLOSED
+        ? (p.project_histories?.[0]?.changed_at ?? today)
+        : today;
+    const assignmentEnd =
+      p.procurement_started_at ??
+      p.contract_started_at ??
+      p.contract_completed_at ??
+      completedAt;
+    const procurementEnd =
+      p.contract_started_at ?? p.contract_completed_at ?? completedAt;
+    const contractEnd = p.contract_completed_at ?? completedAt;
+    const procurementRange = p.procurement_started_at
+      ? {
+          from: bangkokDayStartUtc(p.procurement_started_at),
+          to: bangkokDayStartUtc(procurementEnd),
+        }
+      : undefined;
+    const contractRange = p.contract_started_at
+      ? {
+          from: bangkokDayStartUtc(p.contract_started_at),
+          to: bangkokDayStartUtc(contractEnd),
+        }
+      : undefined;
+    const procurementApprovalDays = countApprovalDays(
+      p.submissions ?? [],
+      p.procurement_type,
+      procurementRange
+    );
+    const contractApprovalDays = countApprovalDays(
+      p.submissions ?? [],
+      UnitResponsibleType.CONTRACT,
+      contractRange
+    );
+    const procurementStageDays = procurementRange
+      ? countBangkokWorkingDays(
+          procurementRange.from,
+          procurementRange.to,
+          holidayIndex
+        )
+      : 0;
+    const contractStageDays = contractRange
+      ? countBangkokWorkingDays(
+          contractRange.from,
+          contractRange.to,
+          holidayIndex
+        )
+      : 0;
 
     return {
       projectId: p.id,
       title: p.title,
       procurementType: p.procurement_type,
-      totalDays: Math.abs(totalDays),
+      totalDays: countBangkokWorkingDays(
+        p.created_at,
+        completedAt,
+        holidayIndex
+      ),
       stageBreakdownDays: {
-        taskAssignmentDays: unitPortion,
-        procurementPhaseDays: unitPortion * 2,
-        contractPhaseDays: unitPortion,
-        inspectionApprovalDays: Math.max(1, unitPortion - 1),
-        revisionDays: 1,
+        assignmentDays: countBangkokWorkingDays(
+          p.created_at,
+          assignmentEnd,
+          holidayIndex
+        ),
+        procurementDays: Math.max(
+          0,
+          procurementStageDays - procurementApprovalDays
+        ),
+        contractDays: Math.max(0, contractStageDays - contractApprovalDays),
+        approvalDays: procurementApprovalDays + contractApprovalDays,
+        financeDays: p.contract_completed_at
+          ? countBangkokWorkingDays(
+              p.contract_completed_at,
+              completedAt,
+              holidayIndex
+            )
+          : 0,
       },
     };
   });

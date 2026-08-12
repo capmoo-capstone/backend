@@ -365,6 +365,9 @@ describe('dashboard.service', () => {
             status: ProjectStatus.CLOSED,
             created_at: new Date('2026-07-01T00:00:00.000Z'),
             updated_at: new Date('2026-07-10T00:00:00.000Z'),
+            project_histories: [
+              { changed_at: new Date('2026-07-08T00:00:00.000Z') },
+            ],
             expected_completion_procurement_date: new Date(
               '2026-07-15T00:00:00.000Z'
             ),
@@ -375,6 +378,9 @@ describe('dashboard.service', () => {
             status: ProjectStatus.IN_PROGRESS,
             created_at: new Date('2026-07-05T00:00:00.000Z'),
             updated_at: null,
+            project_histories: [
+              { changed_at: new Date('2026-07-06T00:00:00.000Z') },
+            ],
             expected_completion_procurement_date: null,
           },
         ])
@@ -392,6 +398,7 @@ describe('dashboard.service', () => {
 
       expect(result.unitId).toBe('unit-proc');
       expect(result.longestProcurementMethod).toBe(ProcurementType.LT100K);
+      expect(result.avgDurationDays.current).toBe(5);
       expect(result.onTimeCompletionPercentage.current).toBe(100);
       expect(result.workloadVsDurationTimeline.length).toBeGreaterThan(0);
     });
@@ -434,20 +441,28 @@ describe('dashboard.service', () => {
       prismaMock.holiday.findMany.mockResolvedValue([
         { date: new Date('2026-07-03T00:00:00.000Z') },
       ]);
-      prismaMock.project.findMany.mockResolvedValue([
-        {
-          id: 'p-1',
-          procurement_type: ProcurementType.LT100K,
-          status: ProjectStatus.CLOSED,
-          expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
-          created_at: new Date('2026-07-01T00:00:00.000Z'),
-          updated_at: new Date('2026-07-10T00:00:00.000Z'),
-          procurement_started_at: new Date('2026-06-30T17:00:00.000Z'),
-          procurement_completed_at: new Date('2026-07-05T17:00:00.000Z'),
-          contract_started_at: new Date('2026-07-06T17:00:00.000Z'),
-          contract_completed_at: new Date('2026-07-08T17:00:00.000Z'),
-        },
-      ]);
+      prismaMock.project.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'p-1',
+            procurement_type: ProcurementType.LT100K,
+            status: ProjectStatus.IN_PROGRESS,
+            expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+            created_at: new Date('2026-07-01T00:00:00.000Z'),
+            updated_at: new Date('2026-07-10T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-06-30T17:00:00.000Z'),
+            procurement_completed_at: new Date('2026-07-05T17:00:00.000Z'),
+            contract_started_at: new Date('2026-07-06T17:00:00.000Z'),
+            contract_completed_at: new Date('2026-07-08T17:00:00.000Z'),
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            procurement_type: ProcurementType.LT100K,
+            status: ProjectStatus.CLOSED,
+            expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+          },
+        ]);
 
       const result = await DashboardService.getUnitGroupProcurementDetails(
         staffUser,
@@ -463,6 +478,7 @@ describe('dashboard.service', () => {
         procurementPhaseDays: 2,
         contractPhaseDays: 2,
       });
+      expect(result.methods[0].comparisonTrend).toBe('increase');
     });
 
     it('returns top delayed projects stage breakdown', async () => {
@@ -472,8 +488,45 @@ describe('dashboard.service', () => {
           id: 'p-delayed-1',
           title: 'Delayed Project 1',
           procurement_type: ProcurementType.LT100K,
+          status: ProjectStatus.WAITING_CLOSE,
           created_at: new Date('2026-06-01T00:00:00.000Z'),
-          expected_approval_date: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: null,
+          procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+          contract_started_at: new Date('2026-07-05T00:00:00.000Z'),
+          contract_completed_at: new Date('2026-07-08T00:00:00.000Z'),
+          project_histories: [
+            { changed_at: new Date('2026-07-09T00:00:00.000Z') },
+          ],
+          submissions: [
+            {
+              workflow_type: UnitResponsibleType.LT100K,
+              status: 'COMPLETED',
+              submitted_at: new Date('2026-07-01T00:00:00.000Z'),
+              approved_at: new Date('2026-07-02T00:00:00.000Z'),
+              completed_at: new Date('2026-07-03T00:00:00.000Z'),
+            },
+            {
+              workflow_type: UnitResponsibleType.LT100K,
+              status: 'COMPLETED',
+              submitted_at: new Date('2026-07-02T00:00:00.000Z'),
+              approved_at: new Date('2026-07-03T00:00:00.000Z'),
+              completed_at: new Date('2026-07-04T00:00:00.000Z'),
+            },
+            {
+              workflow_type: UnitResponsibleType.LT100K,
+              status: 'COMPLETED',
+              submitted_at: new Date('2026-07-04T00:00:00.000Z'),
+              approved_at: null,
+              completed_at: null,
+            },
+            {
+              workflow_type: UnitResponsibleType.CONTRACT,
+              status: 'REJECTED',
+              submitted_at: new Date('2026-07-06T00:00:00.000Z'),
+              approved_at: new Date('2026-07-08T00:00:00.000Z'),
+              completed_at: null,
+            },
+          ],
         },
       ]);
 
@@ -490,12 +543,24 @@ describe('dashboard.service', () => {
 
       expect(result.projects).toHaveLength(1);
       expect(result.projects[0].projectId).toBe('p-delayed-1');
-      expect(result.projects[0].stageBreakdownDays).toHaveProperty(
-        'taskAssignmentDays'
-      );
-      expect(result.projects[0].stageBreakdownDays).toHaveProperty(
-        'procurementPhaseDays'
-      );
+      expect(result.projects[0]).toMatchObject({
+        totalDays: 29,
+        stageBreakdownDays: {
+          assignmentDays: 22,
+          procurementDays: 0,
+          contractDays: 1,
+          approvalDays: 4,
+          financeDays: 2,
+        },
+      });
+      const project = result.projects[0];
+      expect(
+        project.stageBreakdownDays.assignmentDays +
+          project.stageBreakdownDays.procurementDays +
+          project.stageBreakdownDays.contractDays +
+          project.stageBreakdownDays.approvalDays +
+          project.stageBreakdownDays.financeDays
+      ).toBe(project.totalDays);
     });
 
     it('aggregates completed phase durations for all current unit staff', async () => {

@@ -165,11 +165,11 @@ export interface TopDelayedProjectItem {
   procurementType: ProcurementType;
   totalDays: number;
   stageBreakdownDays: {
-    taskAssignmentDays: number;
-    procurementPhaseDays: number;
-    contractPhaseDays: number;
-    inspectionApprovalDays: number;
-    revisionDays: number;
+    assignmentDays: number;
+    procurementDays: number;
+    contractDays: number;
+    approvalDays: number;
+    financeDays: number;
   };
 }
 
