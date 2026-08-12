@@ -205,6 +205,11 @@ export interface UnitContractStatusBreakdown {
   cancelled: number;
 }
 
+export interface UnitContractPhaseWorkload {
+  inProgress: number;
+  completed: number;
+}
+
 export interface ContractUnitSummaryResponse {
   unitId: string;
   mode: DashboardMode;
@@ -213,6 +218,7 @@ export interface ContractUnitSummaryResponse {
     to: Date;
   };
   statusBreakdown: UnitContractStatusBreakdown;
+  phaseWorkload: UnitContractPhaseWorkload;
   avgContractDurationDays: number;
 }
 

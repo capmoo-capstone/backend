@@ -355,33 +355,35 @@ describe('dashboard.service', () => {
   });
 
   describe('Unit Group KPI Dashboard', () => {
-    it('returns executive summary metrics for unit staff', async () => {
+    it('uses completed phase timestamps for executive metrics', async () => {
+      prismaMock.unit.findUnique.mockResolvedValue({
+        id: 'unit-proc',
+        type: [UnitResponsibleType.LT100K],
+      });
       prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany
         .mockResolvedValueOnce([
           {
             id: 'p1',
             procurement_type: ProcurementType.LT100K,
-            status: ProjectStatus.CLOSED,
+            status: ProjectStatus.IN_PROGRESS,
             created_at: new Date('2026-07-01T00:00:00.000Z'),
-            updated_at: new Date('2026-07-10T00:00:00.000Z'),
-            project_histories: [
-              { changed_at: new Date('2026-07-08T00:00:00.000Z') },
-            ],
-            expected_completion_procurement_date: new Date(
-              '2026-07-15T00:00:00.000Z'
-            ),
+            expected_approval_date: new Date('2026-07-07T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+            procurement_completed_at: new Date('2026-07-08T00:00:00.000Z'),
+            contract_started_at: null,
+            contract_completed_at: null,
           },
           {
             id: 'p2',
             procurement_type: ProcurementType.LT500K,
-            status: ProjectStatus.IN_PROGRESS,
+            status: ProjectStatus.CLOSED,
             created_at: new Date('2026-07-05T00:00:00.000Z'),
-            updated_at: null,
-            project_histories: [
-              { changed_at: new Date('2026-07-06T00:00:00.000Z') },
-            ],
-            expected_completion_procurement_date: null,
+            expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-07-05T00:00:00.000Z'),
+            procurement_completed_at: null,
+            contract_started_at: null,
+            contract_completed_at: null,
           },
         ])
         .mockResolvedValueOnce([]);
@@ -399,8 +401,13 @@ describe('dashboard.service', () => {
       expect(result.unitId).toBe('unit-proc');
       expect(result.longestProcurementMethod).toBe(ProcurementType.LT100K);
       expect(result.avgDurationDays.current).toBe(5);
-      expect(result.onTimeCompletionPercentage.current).toBe(100);
+      expect(result.onTimeCompletionPercentage.current).toBe(0);
       expect(result.workloadVsDurationTimeline.length).toBeGreaterThan(0);
+      expect(
+        result.workloadVsDurationTimeline.find(
+          (point) => point.label === '2026-07'
+        )
+      ).toMatchObject({ workloadCount: 1, avgDurationDays: 5 });
     });
 
     it('returns procurement metrics donut distributions', async () => {
@@ -431,9 +438,29 @@ describe('dashboard.service', () => {
       expect(result.unitId).toBe('unit-proc');
       expect(result.totalProjects.total).toBe(1);
       expect(result.delayedProjects.total).toBe(1);
+      expect(prismaMock.project.count.mock.calls[6][0].where).toMatchObject({
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            status: { not: ProjectStatus.CANCELLED },
+            expected_approval_date: { not: null },
+            OR: [
+              {
+                procurement_completed_at: { not: null },
+                expected_approval_date: {
+                  lt: prismaMock.project.fields.procurement_completed_at,
+                },
+              },
+              {
+                procurement_completed_at: null,
+                expected_approval_date: { lt: expect.any(Date) },
+              },
+            ],
+          }),
+        ]),
+      });
     });
 
-    it('calculates completed phase averages as working days', async () => {
+    it('averages completed phases from projects created in range', async () => {
       prismaMock.unit.findUnique.mockResolvedValue({
         id: 'unit-proc',
         type: [UnitResponsibleType.LT100K],
@@ -450,10 +477,10 @@ describe('dashboard.service', () => {
             expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
             created_at: new Date('2026-07-01T00:00:00.000Z'),
             updated_at: new Date('2026-07-10T00:00:00.000Z'),
-            procurement_started_at: new Date('2026-06-30T17:00:00.000Z'),
-            procurement_completed_at: new Date('2026-07-05T17:00:00.000Z'),
-            contract_started_at: new Date('2026-07-06T17:00:00.000Z'),
-            contract_completed_at: new Date('2026-07-08T17:00:00.000Z'),
+            procurement_started_at: new Date('2026-07-29T00:00:00.000Z'),
+            procurement_completed_at: new Date('2026-08-04T00:00:00.000Z'),
+            contract_started_at: new Date('2026-07-29T00:00:00.000Z'),
+            contract_completed_at: new Date('2026-08-04T00:00:00.000Z'),
           },
         ])
         .mockResolvedValueOnce([
@@ -461,6 +488,8 @@ describe('dashboard.service', () => {
             procurement_type: ProcurementType.LT100K,
             status: ProjectStatus.CLOSED,
             expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+            procurement_started_at: new Date('2026-06-30T17:00:00.000Z'),
+            procurement_completed_at: new Date('2026-07-05T17:00:00.000Z'),
           },
         ]);
 
@@ -475,10 +504,10 @@ describe('dashboard.service', () => {
       );
 
       expect(result.methods[0].avgPhaseDurationDays).toEqual({
-        procurementPhaseDays: 2,
-        contractPhaseDays: 2,
+        procurementPhaseDays: 4,
+        contractPhaseDays: 4,
       });
-      expect(result.methods[0].comparisonTrend).toBe('increase');
+      expect(result.methods[0].comparisonTrend).toBe('same');
     });
 
     it('returns top delayed projects stage breakdown', async () => {
@@ -492,7 +521,8 @@ describe('dashboard.service', () => {
           created_at: new Date('2026-06-01T00:00:00.000Z'),
           updated_at: null,
           procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
-          contract_started_at: new Date('2026-07-05T00:00:00.000Z'),
+          procurement_completed_at: new Date('2026-07-03T00:00:00.000Z'),
+          contract_started_at: new Date('2026-07-06T00:00:00.000Z'),
           contract_completed_at: new Date('2026-07-08T00:00:00.000Z'),
           project_histories: [
             { changed_at: new Date('2026-07-09T00:00:00.000Z') },
@@ -544,13 +574,13 @@ describe('dashboard.service', () => {
       expect(result.projects).toHaveLength(1);
       expect(result.projects[0].projectId).toBe('p-delayed-1');
       expect(result.projects[0]).toMatchObject({
-        totalDays: 29,
+        totalDays: 24,
         stageBreakdownDays: {
           assignmentDays: 22,
           procurementDays: 0,
-          contractDays: 1,
-          approvalDays: 4,
-          financeDays: 2,
+          contractDays: 0,
+          approvalDays: 2,
+          financeDays: 0,
         },
       });
       const project = result.projects[0];
@@ -561,6 +591,45 @@ describe('dashboard.service', () => {
           project.stageBreakdownDays.approvalDays +
           project.stageBreakdownDays.financeDays
       ).toBe(project.totalDays);
+    });
+
+    it('ends the procurement stage at procurement_completed_at', async () => {
+      prismaMock.holiday.findMany.mockResolvedValue([]);
+      prismaMock.project.findMany.mockResolvedValueOnce([
+        {
+          id: 'p-proc-complete',
+          title: 'Waiting for contract',
+          procurement_type: ProcurementType.LT100K,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: new Date('2026-07-02T00:00:00.000Z'),
+          procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
+          contract_started_at: null,
+          contract_completed_at: null,
+          submissions: [],
+        },
+      ]);
+
+      const result = await DashboardService.getUnitGroupTopDelayedProjects(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          procurementType: ProcurementType.LT100K,
+          mode: 'month',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        }
+      );
+
+      expect(result.projects[0]).toMatchObject({
+        totalDays: 3,
+        stageBreakdownDays: {
+          assignmentDays: 1,
+          procurementDays: 2,
+          contractDays: 0,
+          approvalDays: 0,
+          financeDays: 0,
+        },
+      });
     });
 
     it('aggregates completed phase durations for all current unit staff', async () => {
@@ -756,6 +825,10 @@ describe('dashboard.service', () => {
             contract_started_at: new Date('2026-07-01T00:00:00.000Z'),
             contract_completed_at: new Date('2026-07-06T00:00:00.000Z'),
           },
+          {
+            contract_started_at: new Date('2026-07-07T00:00:00.000Z'),
+            contract_completed_at: null,
+          },
         ] as any);
 
         const result = await DashboardService.getContractUnitSummary(
@@ -776,7 +849,22 @@ describe('dashboard.service', () => {
           completed: 2,
           cancelled: 1,
         });
+        expect(result.phaseWorkload).toEqual({ inProgress: 1, completed: 1 });
         expect(result.avgContractDurationDays).toBeGreaterThanOrEqual(0);
+        expect(prismaMock.project.groupBy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              created_at: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+          })
+        );
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              created_at: { gte: expect.any(Date), lte: expect.any(Date) },
+            }),
+          })
+        );
       });
     });
 

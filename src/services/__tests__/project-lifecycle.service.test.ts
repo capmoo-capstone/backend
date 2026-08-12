@@ -214,6 +214,40 @@ describe('project-lifecycle.service', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           procurement_completed_at: expect.any(Date),
+        }),
+      })
+    );
+    const updateCall = txMock.project.update.mock.calls[0][0];
+    expect(updateCall.data.contract_started_at).toBeUndefined();
+  });
+
+  it('completeProcurementPhase sets contract_started_at when assignee_contract is attached', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      procurement_progress: {},
+      responsible_unit_id: 'unit-proc',
+      procurement_completed_at: null,
+      contract_started_at: null,
+      assignee_procurement: [{ id: 'staff-1' }],
+    });
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      responsible_unit_id: 'unit-proc',
+      assignee_contract: [{ id: 'staff-1' }],
+    });
+
+    const result = await completeProcurementPhase(headUser, {
+      id: 'project-1',
+      continue_unit_proc: true,
+    } as any);
+
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          procurement_completed_at: expect.any(Date),
           contract_started_at: expect.any(Date),
         }),
       })

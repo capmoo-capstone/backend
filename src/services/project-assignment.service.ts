@@ -46,6 +46,7 @@ export const assignProjectsToUser = async (
         status: true,
         current_workflow_type: true,
         procurement_started_at: true,
+        contract_started_at: true,
         assignee_contract: true,
         assignee_procurement: true,
       },
@@ -84,6 +85,10 @@ export const assignProjectsToUser = async (
         project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
         !project.procurement_started_at;
 
+      const shouldStartContract =
+        project.current_workflow_type === UnitResponsibleType.CONTRACT &&
+        !project.contract_started_at;
+
       updatePromises.push(
         tx.project.update({
           where: {
@@ -96,6 +101,9 @@ export const assignProjectsToUser = async (
             [assigneeField]: { connect: { id: assigneeId } },
             ...(shouldStartProcurement
               ? { procurement_started_at: nowUtc() }
+              : {}),
+            ...(shouldStartContract
+              ? { contract_started_at: nowUtc() }
               : {}),
           },
           select: { id: true, status: true, [assigneeField]: true },
@@ -209,6 +217,7 @@ export const claimProject = async (
         status: true,
         current_workflow_type: true,
         procurement_started_at: true,
+        contract_started_at: true,
       },
     });
 
@@ -221,6 +230,14 @@ export const claimProject = async (
       throw new BadRequestError('This project cannot be claimed');
     }
 
+    const shouldStartProcurement =
+      project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
+      !project.procurement_started_at;
+
+    const shouldStartContract =
+      project.current_workflow_type === UnitResponsibleType.CONTRACT &&
+      !project.contract_started_at;
+
     const updated = await tx.project.update({
       where: {
         id: projectId,
@@ -230,9 +247,11 @@ export const claimProject = async (
       data: {
         status: ProjectStatus.IN_PROGRESS,
         [assigneeField]: { connect: { id: user.id } },
-        ...(project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
-        !project.procurement_started_at
+        ...(shouldStartProcurement
           ? { procurement_started_at: nowUtc() }
+          : {}),
+        ...(shouldStartContract
+          ? { contract_started_at: nowUtc() }
           : {}),
       },
       select: { id: true, status: true, [assigneeField]: true },
