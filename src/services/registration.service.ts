@@ -170,9 +170,31 @@ export const listRegistrationRequests = async (
   limit: number,
   query: ListRegistrationRequestsQuery
 ): Promise<PaginatedRegistrationRequest> => {
-  const where: Prisma.RegistrationRequestWhereInput = query.status
-    ? { status: query.status }
-    : {};
+  const andConditions: Prisma.RegistrationRequestWhereInput[] = [];
+
+  if (query.deptId && query.deptId.length > 0) {
+    andConditions.push({ dept_id: { in: query.deptId } });
+  }
+
+  if (query.unitId && query.unitId.length > 0) {
+    andConditions.push({ unit_id: { hasSome: query.unitId } });
+  }
+
+  if (query.search?.trim()) {
+    const searchTerm = query.search.trim();
+    andConditions.push({
+      OR: [
+        { full_name: { contains: searchTerm, mode: 'insensitive' } },
+        { username: { contains: searchTerm, mode: 'insensitive' } },
+        { email: { contains: searchTerm, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  andConditions.push({ status: RegistrationStatus.PENDING });
+
+  const where: Prisma.RegistrationRequestWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {};
 
   const [data, total] = await prisma.$transaction([
     prisma.registrationRequest.findMany({

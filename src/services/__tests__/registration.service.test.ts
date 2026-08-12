@@ -1,7 +1,10 @@
 import { RegistrationStatus, UserRole, RegisterType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CreateRegistrationRequestSchema } from '../../schemas/registration.schema';
+import {
+  CreateRegistrationRequestSchema,
+  ListRegistrationRequestsQuerySchema,
+} from '../../schemas/registration.schema';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   approveRegistrationRequest,
@@ -206,7 +209,7 @@ describe('account-registration.service', () => {
     expect(txMock.user.create).not.toHaveBeenCalled();
   });
 
-  it('lists registration requests with pagination', async () => {
+  it('lists registration requests with pagination and filters for search, deptId, unitId', async () => {
     const mockList = [
       {
         id: 'request-1',
@@ -222,9 +225,13 @@ describe('account-registration.service', () => {
       { id: 'unit-2', name: 'Unit 2' },
     ]);
 
-    const result = await listRegistrationRequests(1, 10, {
-      status: RegistrationStatus.PENDING,
+    const query = ListRegistrationRequestsQuerySchema.parse({
+      deptId: 'dept-1',
+      unitId: 'unit-1,unit-2',
+      search: 'portal',
     });
+
+    const result = await listRegistrationRequests(1, 10, query);
 
     expect(result).toEqual({
       total: 1,
@@ -243,7 +250,20 @@ describe('account-registration.service', () => {
     });
     expect(prismaMock.registrationRequest.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { status: RegistrationStatus.PENDING },
+        where: {
+          AND: [
+            { dept_id: { in: ['dept-1'] } },
+            { unit_id: { hasSome: ['unit-1', 'unit-2'] } },
+            {
+              OR: [
+                { full_name: { contains: 'portal', mode: 'insensitive' } },
+                { username: { contains: 'portal', mode: 'insensitive' } },
+                { email: { contains: 'portal', mode: 'insensitive' } },
+              ],
+            },
+            { status: RegistrationStatus.PENDING },
+          ],
+        },
         skip: 0,
         take: 10,
         include: {
@@ -256,7 +276,20 @@ describe('account-registration.service', () => {
       select: { id: true, name: true },
     });
     expect(prismaMock.registrationRequest.count).toHaveBeenCalledWith({
-      where: { status: RegistrationStatus.PENDING },
+      where: {
+        AND: [
+          { dept_id: { in: ['dept-1'] } },
+          { unit_id: { hasSome: ['unit-1', 'unit-2'] } },
+          {
+            OR: [
+              { full_name: { contains: 'portal', mode: 'insensitive' } },
+              { username: { contains: 'portal', mode: 'insensitive' } },
+              { email: { contains: 'portal', mode: 'insensitive' } },
+            ],
+          },
+          { status: RegistrationStatus.PENDING },
+        ],
+      },
     });
   });
 });
