@@ -391,6 +391,41 @@ describe('user.service', () => {
     );
   });
 
+  it('removeRole removes role when role_id is provided', async () => {
+    txMock.userOrganizationRole.findUnique.mockResolvedValue({
+      id: 'role-123',
+      user_id: 'user-1',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: 'dept-1',
+      unit_id: 'unit-1',
+    });
+    txMock.user.count.mockResolvedValue(1);
+    txMock.department.findUnique.mockResolvedValue({ id: 'dept-1' });
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      dept_id: 'dept-1',
+    });
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({
+      id: 'role-123',
+      user_id: 'user-1',
+      role: UserRole.GENERAL_STAFF,
+      dept_id: 'dept-1',
+      unit_id: 'unit-1',
+    });
+    txMock.userOrganizationRole.count.mockResolvedValue(0);
+
+    await removeRole(actor, {
+      role_id: 'role-123',
+    } as any);
+
+    expect(txMock.userOrganizationRole.findUnique).toHaveBeenCalledWith({
+      where: { id: 'role-123' },
+    });
+    expect(txMock.userOrganizationRole.delete).toHaveBeenCalledWith({
+      where: { id: 'role-123' },
+    });
+  });
+
   it('does not allow an ADMIN role API to assign SUPER_ADMIN', async () => {
     txMock.user.count.mockResolvedValue(1);
 

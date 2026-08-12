@@ -86,6 +86,7 @@ type RoleMutationParams = {
   role: UserRole;
   deptId: string;
   unitId: string | null;
+  roleId?: string;
 };
 
 const roleAssignmentSelect = {
@@ -99,8 +100,14 @@ const roleAssignmentSelect = {
 const findRoleAssignment = async (
   tx: Prisma.TransactionClient,
   params: RoleMutationParams
-): Promise<RoleAssignment | null> =>
-  await tx.userOrganizationRole.findFirst({
+): Promise<RoleAssignment | null> => {
+  if (params.roleId) {
+    return await tx.userOrganizationRole.findUnique({
+      where: { id: params.roleId },
+      select: roleAssignmentSelect,
+    });
+  }
+  return await tx.userOrganizationRole.findFirst({
     where: {
       user_id: params.userId,
       role: params.role,
@@ -109,6 +116,7 @@ const findRoleAssignment = async (
     },
     select: roleAssignmentSelect,
   });
+};
 
 const findReplacedRoleAssignment = async (
   tx: Prisma.TransactionClient,
@@ -518,21 +526,51 @@ export const removeRole = async (
   data: RemoveRoleDto
 ): Promise<void> => {
   return await prisma.$transaction(async (tx) => {
-    await assertUsersExist(tx, [data.user_id]);
-    await assertManageableRoleScope(tx, {
-      role: data.role,
-      deptId: data.dept_id,
-      unitId: data.unit_id ?? null,
-    });
+    let userId = data.user_id;
+    let role = data.role;
+    let deptId = data.dept_id;
+    let unitId = data.unit_id ?? null;
+    const roleId = data.role_id;
 
+    if (roleId) {
+      const roleAssignment = await tx.userOrganizationRole.findUnique({
+        where: { id: roleId },
+      });
+      if (!roleAssignment) {
+        throw new NotFoundError('Role assignment not found');
+      }
+      userId = roleAssignment.user_id;
+      role = roleAssignment.role as any;
+      deptId = roleAssignment.dept_id;
+      unitId = roleAssignment.unit_id;
+
+      return await removeRoleWithAudit(
+        tx,
+        actor,
+        {
+          userId,
+          role,
+          deptId,
+          unitId,
+          roleId,
+        },
+        AuditEventType.USER_ROLE_REMOVED
+      );
+    }
+
+    if (!userId || !role || !deptId) {
+      throw new BadRequestError('Missing required parameters for role removal');
+    }
+
+    await assertUsersExist(tx, [userId]);
     await removeRoleWithAudit(
       tx,
       actor,
       {
-        userId: data.user_id,
-        role: data.role,
-        deptId: data.dept_id,
-        unitId: data.unit_id ?? null,
+        userId,
+        role,
+        deptId,
+        unitId,
       },
       AuditEventType.USER_ROLE_REMOVED
     );
