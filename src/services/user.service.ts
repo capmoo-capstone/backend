@@ -366,7 +366,7 @@ export const updateUserStatus = async (
 
     await recordAuditEvent(tx, {
       kind: AuditLogType.USER_MANAGEMENT,
-      eventType: AuditEventType.USER_ROLE_ASSIGNED,
+      eventType: AuditEventType.USER_STATUS_UPDATED,
       targetType: AuditTargetType.USER,
       targetId: updatedUser.id,
       actor: user,
@@ -384,8 +384,6 @@ export const updateUserStatus = async (
           newValue: isActive,
         },
       ],
-      sourceTable: 'users',
-      sourceId: updatedUser.id,
     });
 
     return updatedUser;

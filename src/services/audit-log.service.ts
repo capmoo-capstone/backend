@@ -123,6 +123,7 @@ const titleByEventType: Record<AuditEventType, string> = {
   [AuditEventType.REGISTRATION_APPROVED]: 'Account registration approved',
   [AuditEventType.REGISTRATION_REJECTED]: 'Account registration rejected',
   [AuditEventType.USER_CREATED]: 'User account created',
+  [AuditEventType.USER_STATUS_UPDATED]: 'User status updated',
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
