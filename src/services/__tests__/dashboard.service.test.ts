@@ -622,13 +622,17 @@ describe('dashboard.service', () => {
           {
             userId: 'staff-1',
             fullName: 'Ava',
-            projectCount: 2,
+            projectCount: 3,
+            inProgressProjectCount: 1,
+            completedProjectCount: 2,
             avgWorkingDurationDays: 2,
           },
           {
             userId: 'staff-2',
             fullName: 'Ben',
             projectCount: 1,
+            inProgressProjectCount: 0,
+            completedProjectCount: 1,
             avgWorkingDurationDays: 2,
           },
         ],
@@ -650,23 +654,24 @@ describe('dashboard.service', () => {
           userId: 'staff-3',
           fullName: 'Chai',
           projectCount: 0,
+          inProgressProjectCount: 0,
+          completedProjectCount: 0,
           avgWorkingDurationDays: null,
         },
       ]);
       expect(prismaMock.project.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
+            status: { not: ProjectStatus.CANCELLED },
             OR: [
               expect.objectContaining({
-                procurement_started_at: { not: null },
-                procurement_completed_at: expect.any(Object),
+                procurement_started_at: { lte: expect.any(Date) },
                 assignee_procurement: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },
               }),
               expect.objectContaining({
-                contract_started_at: { not: null },
-                contract_completed_at: expect.any(Object),
+                contract_started_at: { lte: expect.any(Date) },
                 assignee_contract: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },

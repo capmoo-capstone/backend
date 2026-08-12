@@ -34,6 +34,7 @@ import {
   UnitGroupProcurementDetailsResponse,
   UnitGroupProcurementMetricsResponse,
   UnitGroupStaffPerformanceResponse,
+  UnitGroupStaffPerformanceRow,
   UnitGroupTopDelayedProjectsResponse,
   WorkloadVsDurationPoint,
 } from '../../types/dashboard.type';
@@ -46,9 +47,9 @@ import {
 } from './dashboard.helper';
 import { IN_PROGRESS_STATUSES } from '../../lib/constant';
 
-type CompletedPhase = {
+type StaffPerformancePhase = {
   startedAt: Date;
-  completedAt: Date;
+  completedAt: Date | null;
   assigneeIds: string[];
 };
 
@@ -62,6 +63,27 @@ const isCompletedInRange = (
   completedAt >= range.from &&
   completedAt <= range.to;
 
+const isInProgressInRange = (
+  startedAt: Date | null,
+  completedAt: Date | null,
+  range: { from: Date; to: Date }
+): startedAt is Date =>
+  startedAt !== null &&
+  startedAt <= range.to &&
+  (completedAt === null || completedAt > range.to);
+
+const hasUnitAssignee = (
+  assignees?: Array<{ roles?: Array<{ unit_id: string | null }> }>
+): boolean => {
+  if (assignees === undefined) return true;
+  if (assignees.length === 0) return false;
+  return assignees.some(
+    (assignee) =>
+      assignee.roles === undefined ||
+      assignee.roles.some((role) => role.unit_id !== null)
+  );
+};
+
 export const getUnitGroupStaffPerformance = async (
   user: AuthPayload,
   query: UnitGroupStaffPerformanceQuery
@@ -71,7 +93,7 @@ export const getUnitGroupStaffPerformance = async (
 
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
-    select: { id: true },
+    select: { id: true, type: true },
   });
   if (!unit) {
     throw new NotFoundError('Unit not found');
@@ -90,108 +112,155 @@ export const getUnitGroupStaffPerformance = async (
   });
   const staffIds = staff.map((member) => member.id);
 
+  const includesProcurementWork =
+    !unit.type ||
+    unit.type.length === 0 ||
+    unit.type.some(
+      (type: UnitResponsibleType) => type !== UnitResponsibleType.CONTRACT
+    );
+  const includesContractWork =
+    !unit.type ||
+    unit.type.length === 0 ||
+    unit.type.includes(UnitResponsibleType.CONTRACT);
+
+  const projectPhaseFilters: Prisma.ProjectWhereInput[] = [];
+  if (includesProcurementWork) {
+    projectPhaseFilters.push({
+      procurement_started_at: { lte: range.to },
+      assignee_procurement: { some: { id: { in: staffIds } } },
+    });
+  }
+  if (includesContractWork) {
+    projectPhaseFilters.push({
+      contract_started_at: { lte: range.to },
+      assignee_contract: { some: { id: { in: staffIds } } },
+    });
+  }
+
   const projects =
-    staffIds.length === 0
+    staffIds.length === 0 || projectPhaseFilters.length === 0
       ? []
       : await prisma.project.findMany({
           where: {
-            OR: [
-              {
-                procurement_started_at: { not: null },
-                procurement_completed_at: {
-                  gte: range.from,
-                  lte: range.to,
-                },
-                assignee_procurement: { some: { id: { in: staffIds } } },
-              },
-              {
-                contract_started_at: { not: null },
-                contract_completed_at: { gte: range.from, lte: range.to },
-                assignee_contract: { some: { id: { in: staffIds } } },
-              },
-            ],
+            status: { not: ProjectStatus.CANCELLED },
+            OR: projectPhaseFilters,
           },
           select: {
             procurement_started_at: true,
             procurement_completed_at: true,
             contract_started_at: true,
             contract_completed_at: true,
-            assignee_procurement: { select: { id: true } },
-            assignee_contract: { select: { id: true } },
+            assignee_procurement: {
+              select: {
+                id: true,
+                roles: {
+                  where: { unit_id: unitId },
+                  select: { unit_id: true },
+                },
+              },
+            },
+            assignee_contract: {
+              select: {
+                id: true,
+                roles: {
+                  where: { unit_id: unitId },
+                  select: { unit_id: true },
+                },
+              },
+            },
           },
         });
 
-  const completedPhases: CompletedPhase[] = [];
+  const completedPhases: StaffPerformancePhase[] = [];
+  const inProgressPhases: StaffPerformancePhase[] = [];
   for (const project of projects) {
-    if (
-      isCompletedInRange(
+    const addPhase = (
+      startedAt: Date | null,
+      completedAt: Date | null,
+      assignees: Array<{
+        id: string;
+        roles?: Array<{ unit_id: string | null }>;
+      }>
+    ) => {
+      if (!hasUnitAssignee(assignees)) return;
+      const assigneeIds = assignees.map((assignee) => assignee.id);
+      if (isCompletedInRange(startedAt, completedAt, range)) {
+        completedPhases.push({ startedAt, completedAt, assigneeIds });
+      } else if (isInProgressInRange(startedAt, completedAt, range)) {
+        inProgressPhases.push({ startedAt, completedAt, assigneeIds });
+      }
+    };
+
+    if (includesProcurementWork) {
+      addPhase(
         project.procurement_started_at,
         project.procurement_completed_at,
-        range
-      )
-    ) {
-      completedPhases.push({
-        startedAt: project.procurement_started_at,
-        completedAt: project.procurement_completed_at!,
-        assigneeIds: project.assignee_procurement.map(
-          (assignee) => assignee.id
-        ),
-      });
+        project.assignee_procurement
+      );
     }
-
-    if (
-      isCompletedInRange(
+    if (includesContractWork) {
+      addPhase(
         project.contract_started_at,
         project.contract_completed_at,
-        range
-      )
-    ) {
-      completedPhases.push({
-        startedAt: project.contract_started_at,
-        completedAt: project.contract_completed_at!,
-        assigneeIds: project.assignee_contract.map((assignee) => assignee.id),
-      });
+        project.assignee_contract
+      );
     }
   }
 
   const holidayIndex = await getBangkokWorkingDayHolidayIndex(
     completedPhases.map((phase) => ({
       from: phase.startedAt,
-      to: phase.completedAt,
+      to: phase.completedAt!,
     }))
   );
 
   const staffTotals = new Map(
     staff.map((member) => [
       member.id,
-      { fullName: member.full_name, projectCount: 0, totalWorkingDays: 0 },
+      {
+        fullName: member.full_name,
+        completedProjectCount: 0,
+        inProgressProjectCount: 0,
+        totalWorkingDays: 0,
+      },
     ])
   );
 
   for (const phase of completedPhases) {
     const duration = countBangkokWorkingDays(
       phase.startedAt,
-      phase.completedAt,
+      phase.completedAt!,
       holidayIndex
     );
     for (const assigneeId of new Set(phase.assigneeIds)) {
       const total = staffTotals.get(assigneeId);
       if (total) {
-        total.projectCount++;
+        total.completedProjectCount++;
         total.totalWorkingDays += duration;
       }
     }
   }
 
-  const rows = [...staffTotals.entries()]
+  for (const phase of inProgressPhases) {
+    for (const assigneeId of new Set(phase.assigneeIds)) {
+      const total = staffTotals.get(assigneeId);
+      if (total) {
+        total.inProgressProjectCount++;
+      }
+    }
+  }
+
+  const rows: UnitGroupStaffPerformanceRow[] = [...staffTotals.entries()]
     .map(([userId, total]) => ({
       userId,
       fullName: total.fullName,
-      projectCount: total.projectCount,
+      projectCount: total.inProgressProjectCount + total.completedProjectCount,
+      inProgressProjectCount: total.inProgressProjectCount,
+      completedProjectCount: total.completedProjectCount,
       avgWorkingDurationDays:
-        total.projectCount === 0
+        total.completedProjectCount === 0
           ? null
-          : Math.round(total.totalWorkingDays / total.projectCount),
+          : Math.round(total.totalWorkingDays / total.completedProjectCount),
     }))
     .sort(
       (left, right) =>
@@ -521,6 +590,22 @@ export const getUnitGroupProcurementDetails = async (
         procurement_completed_at: true,
         contract_started_at: true,
         contract_completed_at: true,
+        assignee_procurement: {
+          select: {
+            roles: {
+              where: { unit_id: unitId },
+              select: { unit_id: true },
+            },
+          },
+        },
+        assignee_contract: {
+          select: {
+            roles: {
+              where: { unit_id: unitId },
+              select: { unit_id: true },
+            },
+          },
+        },
       },
     }),
     prisma.project.findMany({
@@ -539,13 +624,21 @@ export const getUnitGroupProcurementDetails = async (
 
   const completedPhaseRanges = projects.flatMap((project) => {
     const ranges: Array<{ from: Date; to: Date }> = [];
-    if (project.procurement_started_at && project.procurement_completed_at) {
+    if (
+      project.procurement_started_at &&
+      project.procurement_completed_at &&
+      hasUnitAssignee(project.assignee_procurement)
+    ) {
       ranges.push({
         from: project.procurement_started_at,
         to: project.procurement_completed_at,
       });
     }
-    if (project.contract_started_at && project.contract_completed_at) {
+    if (
+      project.contract_started_at &&
+      project.contract_completed_at &&
+      hasUnitAssignee(project.assignee_contract)
+    ) {
       ranges.push({
         from: project.contract_started_at,
         to: project.contract_completed_at,
@@ -605,7 +698,9 @@ export const getUnitGroupProcurementDetails = async (
       previousProjects.filter((project) => project.procurement_type === type)
     );
     const procurementPhases = typeProjects.flatMap((project) =>
-      project.procurement_started_at && project.procurement_completed_at
+      project.procurement_started_at &&
+      project.procurement_completed_at &&
+      hasUnitAssignee(project.assignee_procurement)
         ? [
             {
               startedAt: project.procurement_started_at,
@@ -615,7 +710,9 @@ export const getUnitGroupProcurementDetails = async (
         : []
     );
     const contractPhases = typeProjects.flatMap((project) =>
-      project.contract_started_at && project.contract_completed_at
+      project.contract_started_at &&
+      project.contract_completed_at &&
+      hasUnitAssignee(project.assignee_contract)
         ? [
             {
               startedAt: project.contract_started_at,
@@ -965,16 +1062,28 @@ export const getContractUnitSummary = async (
     select: {
       contract_started_at: true,
       contract_completed_at: true,
+      assignee_contract: {
+        select: {
+          roles: {
+            where: { unit_id: unitId },
+            select: { unit_id: true },
+          },
+        },
+      },
     },
   });
 
+  const validCompletedContractProjects = completedContractProjects.filter(
+    (project) => hasUnitAssignee(project.assignee_contract)
+  );
+
   const holidayIndex = await getBangkokWorkingDayHolidayIndex(
-    completedContractProjects.map((project) => ({
+    validCompletedContractProjects.map((project) => ({
       from: project.contract_started_at!,
       to: project.contract_completed_at!,
     }))
   );
-  const totalDurationDays = completedContractProjects.reduce(
+  const totalDurationDays = validCompletedContractProjects.reduce(
     (total, project) =>
       total +
       countBangkokWorkingDays(
@@ -985,10 +1094,12 @@ export const getContractUnitSummary = async (
     0
   );
   const avgContractDurationDays =
-    completedContractProjects.length === 0
+    validCompletedContractProjects.length === 0
       ? 0
       : Number(
-          (totalDurationDays / completedContractProjects.length).toFixed(1)
+          (
+            totalDurationDays / validCompletedContractProjects.length
+          ).toFixed(1)
         );
 
   return {

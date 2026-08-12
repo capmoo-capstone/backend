@@ -183,6 +183,8 @@ export interface UnitGroupStaffPerformanceRow {
   userId: string;
   fullName: string;
   projectCount: number;
+  inProgressProjectCount: number;
+  completedProjectCount: number;
   avgWorkingDurationDays: number | null;
 }
 

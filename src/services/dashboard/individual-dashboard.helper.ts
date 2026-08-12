@@ -162,8 +162,24 @@ export const getIndividualStaffDashboard = async (
       procurement_completed_at: true,
       contract_started_at: true,
       contract_completed_at: true,
-      assignee_procurement: { select: { id: true } },
-      assignee_contract: { select: { id: true } },
+      assignee_procurement: {
+        select: {
+          id: true,
+          roles: {
+            where: { unit_id: unitId },
+            select: { unit_id: true },
+          },
+        },
+      },
+      assignee_contract: {
+        select: {
+          id: true,
+          roles: {
+            where: { unit_id: unitId },
+            select: { unit_id: true },
+          },
+        },
+      },
     },
   });
 
@@ -174,9 +190,25 @@ export const getIndividualStaffDashboard = async (
     assigneeIds: string[];
   };
 
+  const hasUnitAssignee = (
+    assignees?: Array<{ roles?: Array<{ unit_id: string | null }> }>
+  ): boolean => {
+    if (assignees === undefined) return true;
+    if (assignees.length === 0) return false;
+    return assignees.some(
+      (assignee) =>
+        assignee.roles === undefined ||
+        assignee.roles.some((role) => role.unit_id !== null)
+    );
+  };
+
   const completedPhases: CompletedPhase[] = [];
   for (const project of completedProjects) {
-    if (project.procurement_started_at && project.procurement_completed_at) {
+    if (
+      project.procurement_started_at &&
+      project.procurement_completed_at &&
+      hasUnitAssignee(project.assignee_procurement)
+    ) {
       completedPhases.push({
         workflowType: project.procurement_type,
         startedAt: project.procurement_started_at,
@@ -185,7 +217,11 @@ export const getIndividualStaffDashboard = async (
       });
     }
 
-    if (project.contract_started_at && project.contract_completed_at) {
+    if (
+      project.contract_started_at &&
+      project.contract_completed_at &&
+      hasUnitAssignee(project.assignee_contract)
+    ) {
       completedPhases.push({
         workflowType: UnitResponsibleType.CONTRACT,
         startedAt: project.contract_started_at,
