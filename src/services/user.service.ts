@@ -191,14 +191,34 @@ export const listUsers = async (
   filters: ListUsersQuery
 ): Promise<PaginatedResponse<UserDetailResponse>> => {
   const roleWhere = {
-    ...(filters.unitId.length > 0 ? { unit_id: { in: filters.unitId } } : {}),
-    ...(filters.deptId.length > 0 ? { dept_id: { in: filters.deptId } } : {}),
-    ...(filters.role.length > 0 ? { role: { in: filters.role } } : {}),
+    ...(filters.unitId && filters.unitId.length > 0 ? { unit_id: { in: filters.unitId } } : {}),
+    ...(filters.deptId && filters.deptId.length > 0 ? { dept_id: { in: filters.deptId } } : {}),
+    ...(filters.role && filters.role.length > 0 ? { role: { in: filters.role } } : {}),
   };
-  const userWhere = {
-    ...(Object.keys(roleWhere).length > 0 ? { roles: { some: roleWhere } } : {}),
-    ...(filters.isActive !== undefined ? { is_active: filters.isActive } : {}),
-  };
+
+  const andConditions: Prisma.UserWhereInput[] = [];
+
+  if (Object.keys(roleWhere).length > 0) {
+    andConditions.push({ roles: { some: roleWhere } });
+  }
+
+  if (filters.isActive !== undefined) {
+    andConditions.push({ is_active: filters.isActive });
+  }
+
+  if (filters.search?.trim()) {
+    const searchTerm = filters.search.trim();
+    andConditions.push({
+      OR: [
+        { full_name: { contains: searchTerm, mode: 'insensitive' } },
+        { username: { contains: searchTerm, mode: 'insensitive' } },
+        { email: { contains: searchTerm, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  const userWhere: Prisma.UserWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {};
 
   const [users, count] = await Promise.all([
     prisma.user.findMany({
@@ -206,6 +226,7 @@ export const listUsers = async (
       skip: (page - 1) * limit,
       take: limit,
       select: safeUserSelect,
+      orderBy: { full_name: 'asc' },
     }),
     prisma.user.count({ where: userWhere }),
   ]);

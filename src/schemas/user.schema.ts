@@ -35,31 +35,47 @@ export const CreateUserSchema = z.object({
   return true;
 })
 
-export const ListUsersQuerySchema = z.object({
-  unitId: z.union([z.string(), z.array(z.string())]).optional(),
-  deptId: z.union([z.string(), z.array(z.string())]).optional(),
-  role: z.union([z.enum(UserRole), z.array(z.enum(UserRole))]).optional(),
-  isActive: z
-    .preprocess((val) => {
-      if (val === 'true' || val === true) return true;
-      if (val === 'false' || val === false) return false;
-      return undefined;
-    }, z.boolean().optional())
-    .optional(),
-}).transform((data) => {
-  const unitId =
-    typeof data.unitId === 'string' ? [data.unitId] : data.unitId ?? [];
-  const deptId =
-    typeof data.deptId === 'string' ? [data.deptId] : data.deptId ?? [];
-  const role =
-    typeof data.role === 'string' ? [data.role] : data.role ?? [];
-  return {
-    role,
-    deptId,
-    unitId,
-    ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
-  };
-});
+export const ListUsersQuerySchema = z
+  .object({
+    search: z.string().trim().optional(),
+    unitId: z.union([z.string(), z.array(z.string())]).optional(),
+    deptId: z.union([z.string(), z.array(z.string())]).optional(),
+    role: z.union([z.string(), z.array(z.string())]).optional(),
+    isActive: z
+      .preprocess((val) => {
+        if (val === 'true' || val === true) return true;
+        if (val === 'false' || val === false) return false;
+        return undefined;
+      }, z.boolean().optional())
+      .optional(),
+  })
+  .transform((data) => {
+    const parseList = (val: string | string[] | undefined): string[] => {
+      if (!val) return [];
+      if (typeof val === 'string') {
+        return val
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return val.map((s) => s.trim()).filter(Boolean);
+    };
+
+    const unitId = parseList(data.unitId);
+    const deptId = parseList(data.deptId);
+    const roleInput = parseList(data.role);
+
+    const validRoles = Object.values(UserRole) as string[];
+    const role = roleInput.filter((r): r is UserRole => validRoles.includes(r));
+
+    return {
+      role,
+      deptId,
+      unitId,
+      isActive: data.isActive,
+      search: data.search,
+    };
+  });
 
 const supplyDeptRoles = [
   UserRole.HEAD_OF_UNIT,

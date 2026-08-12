@@ -5,6 +5,7 @@ export interface ListUsersQuery {
   deptId: string[];
   unitId: string[];
   isActive?: boolean;
+  search?: string;
 }
 
 export interface UserDetailResponse {

@@ -76,7 +76,7 @@ describe('user.service', () => {
       totalPages: 1,
     });
     expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({
-      roles: { some: { unit_id: { in: ['unit-1'] } } },
+      AND: [{ roles: { some: { unit_id: { in: ['unit-1'] } } } }],
     });
   });
 
@@ -94,7 +94,33 @@ describe('user.service', () => {
       data: [],
     });
     expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({
-      roles: { some: { dept_id: { in: ['dept-1'] } } },
+      AND: [{ roles: { some: { dept_id: { in: ['dept-1'] } } } }],
+    });
+  });
+
+  it('listUsers filters by search keyword and isActive', async () => {
+    prismaMock.user.findMany.mockResolvedValue([]);
+    prismaMock.user.count.mockResolvedValue(0);
+
+    await listUsers(1, 10, {
+      unitId: [],
+      deptId: [],
+      role: [],
+      isActive: true,
+      search: 'somchai',
+    });
+
+    expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual({
+      AND: [
+        { is_active: true },
+        {
+          OR: [
+            { full_name: { contains: 'somchai', mode: 'insensitive' } },
+            { username: { contains: 'somchai', mode: 'insensitive' } },
+            { email: { contains: 'somchai', mode: 'insensitive' } },
+          ],
+        },
+      ],
     });
   });
 
