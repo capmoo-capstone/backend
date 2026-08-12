@@ -133,26 +133,26 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 
 ### Auth — `/auth`
 
-| Method | Path                        | Description                                                         |
-| ------ | --------------------------- | ------------------------------------------------------------------- |
-| GET    | `/saml/metadata`            | Public SAML 2.0 Service Provider Metadata XML                       |
-| GET    | `/saml/login`               | Initiate SAML SSO authentication flow                               |
-| POST   | `/saml/acs`                 | SAML Assertion Consumer Service callback endpoint                   |
-| POST   | `/saml/exchange`            | Exchange SAML single-use authorization code for JWT token           |
-| POST   | `/create-request`           | Public account registration request (creates `PENDING` request)    |
-| GET    | `/requests`                 | List paginated account registration requests (`?status=`, `?page=`, `?limit=`) (Supply ADMIN) |
-| PATCH  | `/requests/:id/approve`     | Approve registration request and create user account (Supply ADMIN) |
-| PATCH  | `/requests/:id/reject`      | Reject registration request (Supply ADMIN)                          |
-| POST   | `/login`                    | Login with a `STANDARD` account (returns JWT)                       |
-| GET    | `/me`                       | Get current user profile                                            |
-| PATCH  | `/logout`                   | Invalidate current session cache                                    |
+| Method | Path                    | Description                                                                                   |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------- |
+| GET    | `/saml/metadata`        | Public SAML 2.0 Service Provider Metadata XML                                                 |
+| GET    | `/saml/login`           | Initiate SAML SSO authentication flow                                                         |
+| POST   | `/saml/acs`             | SAML Assertion Consumer Service callback endpoint                                             |
+| POST   | `/saml/exchange`        | Exchange SAML single-use authorization code for JWT token                                     |
+| POST   | `/create-request`       | Public account registration request (creates `PENDING` request)                               |
+| GET    | `/requests`             | List paginated account registration requests (`?status=`, `?page=`, `?limit=`) (Supply ADMIN) |
+| PATCH  | `/requests/:id/approve` | Approve registration request and create user account (Supply ADMIN)                           |
+| PATCH  | `/requests/:id/reject`  | Reject registration request (Supply ADMIN)                                                    |
+| POST   | `/login`                | Login with a `STANDARD` account (returns JWT)                                                 |
+| GET    | `/me`                   | Get current user profile                                                                      |
+| PATCH  | `/logout`               | Invalidate current session cache                                                              |
 
 ### Users — `/users`
 
 | Method | Path               | Description                                                                                                |
 | ------ | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | GET    | `/`                | List users (optionally filter by `?unitId=`, `?deptId=`, or `?role=`)                                      |
-| POST   | `/new`             | Create a new user account directly (Supply ADMIN)                                                         |
+| POST   | `/new`             | Create a new user account directly (Supply ADMIN)                                                          |
 | GET    | `/:id`             | Get user details by ID                                                                                     |
 | PATCH  | `/roles/supply`    | Bulk add/remove dept-level supply roles (`HEAD_OF_DEPARTMENT`, `ADMIN`, `FINANCE_STAFF`, `DOCUMENT_STAFF`) |
 | POST   | `/:id/role`        | Add a role to a user (Supply ADMIN)                                                                        |
@@ -176,7 +176,7 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 | PATCH  | `/assign`                                  | Assign projects to a staff member (HEAD_OF_UNIT)            |
 | PATCH  | `/accept`                                  | Accept assigned projects (GENERAL_STAFF)                    |
 | POST   | `/contract/new`                            | Generate new contract number                                |
-| PATCH  | `/contract/:contractId/cancel`            | Cancel contract number                                      |
+| PATCH  | `/contract/:contractId/cancel`             | Cancel contract number                                      |
 | GET    | `/:id/history`                             | Get audit history for a project                             |
 | GET    | `/:id/document-summary`                    | Get document summary for a project                          |
 | GET    | `/:id`                                     | Get project detail                                          |
@@ -214,27 +214,27 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 
 ### Admin & Settings — `/admin`
 
-| Method | Path                        | Description                                 |
-| ------ | --------------------------- | ------------------------------------------- |
-| GET    | `/audit-logs`               | Get audit logs (HEAD_OF_DEPARTMENT, ADMIN)  |
-| GET    | `/settings/ops-units`       | Get ops units settings (ADMIN)              |
-| GET    | `/settings/representatives` | Get representatives settings (ADMIN)        |
-| GET    | `/settings/ops-staff`       | Get ops staff settings (ADMIN)              |
+| Method | Path                        | Description                                |
+| ------ | --------------------------- | ------------------------------------------ |
+| GET    | `/audit-logs`               | Get audit logs (HEAD_OF_DEPARTMENT, ADMIN) |
+| GET    | `/settings/ops-units`       | Get ops units settings (ADMIN)             |
+| GET    | `/settings/representatives` | Get representatives settings (ADMIN)       |
+| GET    | `/settings/ops-staff`       | Get ops staff settings (ADMIN)             |
 
 ### Dashboard — `/dashboard`
 
-| Method | Path                               | Description                              |
-| ------ | ---------------------------------- | ---------------------------------------- |
-| GET    | `/periodic-summary`                | Get periodic project statistics summary  |
-| GET    | `/procurement-overview`            | Get overall procurement status summary   |
-| GET    | `/deadlines/overdue`               | Get list of overdue project deadlines    |
-| GET    | `/deadlines/due-soon`              | Get list of project deadlines due soon   |
-| GET    | `/unit-group/executive-summary`    | Get unit group executive summary metrics |
-| GET    | `/unit-group/procurement-metrics`  | Get unit group procurement metrics       |
-| GET    | `/unit-group/procurement-details`  | Get unit group procurement details       |
-| GET    | `/unit-group/top-delayed`          | Get unit group top delayed projects      |
-| GET    | `/unit-group/staff-performance`    | Get unit group staff performance         |
-| GET    | `/individual-todos`                | Get a selected user's project-own queue  |
+| Method | Path                              | Description                              |
+| ------ | --------------------------------- | ---------------------------------------- |
+| GET    | `/periodic-summary`               | Get periodic project statistics summary  |
+| GET    | `/procurement-overview`           | Get overall procurement status summary   |
+| GET    | `/deadlines/overdue`              | Get list of overdue project deadlines    |
+| GET    | `/deadlines/due-soon`             | Get list of project deadlines due soon   |
+| GET    | `/unit-group/executive-summary`   | Get unit group executive summary metrics |
+| GET    | `/unit-group/procurement-metrics` | Get unit group procurement metrics       |
+| GET    | `/unit-group/procurement-details` | Get unit group procurement details       |
+| GET    | `/unit-group/top-delayed`         | Get unit group top delayed projects      |
+| GET    | `/unit-group/staff-performance`   | Get unit group staff performance         |
+| GET    | `/individual-todos`               | Get a selected user's project-own queue  |
 
 ### Units — `/units`
 
@@ -279,11 +279,11 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 
 ### Storage — `/storage`
 
-| Method | Path                | Description                         |
-| ------ | ------------------- | ----------------------------------- |
-| POST   | `/presign-upload`   | Request presigned S3 upload URL     |
-| POST   | `/presign-download` | Request presigned S3 download URL   |
-| DELETE | `/delete`           | Delete a stored file (SUPER_ADMIN)  |
+| Method | Path                | Description                        |
+| ------ | ------------------- | ---------------------------------- |
+| POST   | `/presign-upload`   | Request presigned S3 upload URL    |
+| POST   | `/presign-download` | Request presigned S3 download URL  |
+| DELETE | `/delete`           | Delete a stored file (SUPER_ADMIN) |
 
 ### Vendors — `/vendors`
 
@@ -313,9 +313,9 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 
 ### Cron — `/cron`
 
-| Method | Path                 | Description                                                             |
-| ------ | -------------------- | ----------------------------------------------------------------------- |
-| GET    | `/process-deadlines` | Process deadline notifications (Protected by `CRON_SECRET` bearer token)|
+| Method | Path                 | Description                                                              |
+| ------ | -------------------- | ------------------------------------------------------------------------ |
+| GET    | `/process-deadlines` | Process deadline notifications (Protected by `CRON_SECRET` bearer token) |
 
 ---
 
@@ -328,7 +328,25 @@ Working days exclude:
 - **Weekends** (Saturday and Sunday)
 - **Public holidays** recorded in the `Holiday` table
 
-All working-day arithmetic (adding days, counting remaining days) is performed by the helpers in `holiday.service.ts` and `working-days.ts`.
+All working-day arithmetic (adding days and counting remaining days) is performed by `holiday.service.ts`.
+
+### Dashboard Working-Day Metrics
+
+The dashboard uses the same `holiday.service.ts` functions as the delivery-date timeline. `countBangkokWorkingDays(from, to, holidayIndex)` normalizes both dates to Bangkok calendar days, excludes the start date, includes the end date, returns `0` for an invalid or same-day range, and excludes Saturdays, Sundays, and recorded public holidays.
+
+`getBangkokWorkingDayHolidayIndex()` loads the relevant holiday window once per dashboard response. The index is shared for efficiency, while every individual count still excludes only holidays that fall within that item's own date range.
+
+| Dashboard metric     | Counting logic                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Staff performance    | Average completed procurement/contract phase duration in working days for each assignee.                                             |
+| Individual summary   | Compares the selected staff member's average completed phase duration with the unit average, in working days.                        |
+| Contract summary     | Average completed contract-phase duration in working days.                                                                           |
+| Executive summary    | Longest procurement method, average duration, and workload-duration timeline use project working-day durations.                      |
+| Procurement details  | Average completed procurement and contract phase durations use working days; no completed phase returns `0`.                         |
+| Top delayed projects | `totalDays` and its illustrative stage split are based on the project's working-day schedule from creation to its approval date.     |
+| Deadline lists       | `daysLate`, `daysRemaining`, and the urgent/watch priority use working days. The due-soon window covers the next seven working days. |
+
+Calendar-day arithmetic remains only where a calendar range is required, such as building daily/monthly chart buckets and comparing completion timestamps to a deadline.
 
 ### Default Delivery Date
 
@@ -518,4 +536,3 @@ matches CU Portal's `screenName` can sign in; SSO never creates a user or role.
 - **`unit.service.ts` self-exclusion bug**: `checkValidateType` does not exclude the unit currently being updated, so updating a unit's type incorrectly conflicts with itself.
 - **`getReceiveNumber` hardcoded year**: The `budget_year` parameter is unconditionally overwritten with a hardcoded value (`2569`) inside the function body.
 - **`resolveAssigneeField` duplication**: An inline ternary still exists in `getAssignedProjects` within `project-query.service.ts` rather than using the shared `resolveAssigneeField` helper from `project-assignment.service.ts`.
-

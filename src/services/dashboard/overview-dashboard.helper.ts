@@ -1,6 +1,5 @@
 import {
   Prisma,
-  ProcurementType,
   ProjectActionType,
   ProjectStatus,
   UserRole,
@@ -18,6 +17,7 @@ import {
 } from '../../lib/permissions';
 import {
   addBangkokDays,
+  bangkokDayEndUtc,
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
@@ -38,6 +38,11 @@ import {
   ProcurementPlanSummary,
 } from '../../types/dashboard.type';
 import { PaginatedResponse } from '../../types/common.type';
+import {
+  addBangkokWorkingDays,
+  countBangkokWorkingDays,
+  getBangkokWorkingDayHolidayIndex,
+} from '../holiday.service';
 import {
   DateRange,
   daysBetweenBangkokDates,
@@ -519,11 +524,22 @@ export const getOverdueDeadlines = async (
     prisma.project.count({ where: overdueWhere }),
   ]);
 
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
+    projects.map((project) => ({
+      from: project.expected_approval_date!,
+      to: today,
+    }))
+  );
+
   const rows: OverdueProjectRow[] = projects.map((project) => ({
     projectId: project.id,
     title: project.title,
     dueDate: project.expected_approval_date!,
-    daysLate: daysBetweenBangkokDates(project.expected_approval_date!, today),
+    daysLate: countBangkokWorkingDays(
+      project.expected_approval_date!,
+      today,
+      holidayIndex
+    ),
   }));
 
   return {
@@ -549,7 +565,13 @@ export const getDueSoonDeadlines = async (
     const parts = toBangkokParts(now);
     return fromBangkokDate(parts.year, parts.month, parts.day);
   })();
-  const dueSoonEnd = addBangkokDays(today, 7, true);
+  const workingDaySearchEnd = addBangkokDays(today, 31, true);
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex([
+    { from: today, to: workingDaySearchEnd },
+  ]);
+  const dueSoonEnd = bangkokDayEndUtc(
+    addBangkokWorkingDays(today, 7, holidayIndex)
+  );
   const skip = (page - 1) * limit;
   const visibilityWhere = buildVisibilityWhere(user);
   const activeWhere: Prisma.ProjectWhereInput = {
@@ -580,7 +602,7 @@ export const getDueSoonDeadlines = async (
 
   const rows: DueSoonProjectRow[] = projects.map((project) => {
     const dueDate = project.expected_approval_date!;
-    const daysRemaining = daysBetweenBangkokDates(today, dueDate);
+    const daysRemaining = countBangkokWorkingDays(today, dueDate, holidayIndex);
     return {
       projectId: project.id,
       title: project.title,

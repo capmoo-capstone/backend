@@ -7,8 +7,6 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import {
-  bangkokDayEndUtc,
-  bangkokDayStartUtc,
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
@@ -17,8 +15,7 @@ import {
 import { BadRequestError, NotFoundError } from '../../lib/errors';
 import {
   countBangkokWorkingDays,
-  createBangkokWorkingDayHolidayIndex,
-  getHolidayDates,
+  getBangkokWorkingDayHolidayIndex,
 } from '../holiday.service';
 import {
   UnitGroupQuery,
@@ -38,7 +35,6 @@ import {
   WorkloadVsDurationPoint,
 } from '../../types/dashboard.type';
 import {
-  daysBetweenBangkokDates,
   getPreviousRange,
   getProcurementTypeDonut,
   projectRangeWhere,
@@ -155,26 +151,12 @@ export const getUnitGroupStaffPerformance = async (
     }
   }
 
-  const holidayDates =
-    completedPhases.length === 0
-      ? new Set<string>()
-      : await getHolidayDates(
-          bangkokDayStartUtc(
-            completedPhases.reduce(
-              (earliest, phase) =>
-                phase.startedAt < earliest ? phase.startedAt : earliest,
-              completedPhases[0].startedAt
-            )
-          ),
-          bangkokDayEndUtc(
-            completedPhases.reduce(
-              (latest, phase) =>
-                phase.completedAt > latest ? phase.completedAt : latest,
-              completedPhases[0].completedAt
-            )
-          )
-        );
-  const holidayIndex = createBangkokWorkingDayHolidayIndex(holidayDates);
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
+    completedPhases.map((phase) => ({
+      from: phase.startedAt,
+      to: phase.completedAt,
+    }))
+  );
 
   const staffTotals = new Map(
     staff.map((member) => [
@@ -269,13 +251,28 @@ export const getUnitGroupExecutiveSummary = async (
     }),
   ]);
 
+  const now = nowUtc();
+  const getDurationEnd = (project: {
+    status: ProjectStatus;
+    updated_at: Date | null;
+  }): Date =>
+    project.status === ProjectStatus.CLOSED ? (project.updated_at ?? now) : now;
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
+    [...currentProjects, ...previousProjects].map((project) => ({
+      from: project.created_at,
+      to: getDurationEnd(project),
+    }))
+  );
+
   // Longest procurement method
   const methodDurations: Record<string, { totalDays: number; count: number }> =
     {};
   for (const p of currentProjects) {
-    const end =
-      p.status === ProjectStatus.CLOSED ? (p.updated_at ?? nowUtc()) : nowUtc();
-    const durationDays = daysBetweenBangkokDates(p.created_at, end);
+    const durationDays = countBangkokWorkingDays(
+      p.created_at,
+      getDurationEnd(p),
+      holidayIndex
+    );
     const type = p.procurement_type;
     if (!methodDurations[type]) {
       methodDurations[type] = { totalDays: 0, count: 0 };
@@ -304,11 +301,10 @@ export const getUnitGroupExecutiveSummary = async (
   ) => {
     if (projects.length === 0) return 0;
     const total = projects.reduce((acc, p) => {
-      const end =
-        p.status === ProjectStatus.CLOSED
-          ? (p.updated_at ?? nowUtc())
-          : nowUtc();
-      return acc + daysBetweenBangkokDates(p.created_at, end);
+      return (
+        acc +
+        countBangkokWorkingDays(p.created_at, getDurationEnd(p), holidayIndex)
+      );
     }, 0);
     return Math.round(total / projects.length);
   };
@@ -484,6 +480,10 @@ export const getUnitGroupProcurementDetails = async (
         expected_approval_date: true,
         created_at: true,
         updated_at: true,
+        procurement_started_at: true,
+        procurement_completed_at: true,
+        contract_started_at: true,
+        contract_completed_at: true,
       },
     }),
     getUnitProcurementTypes(unitId),
@@ -491,6 +491,41 @@ export const getUnitGroupProcurementDetails = async (
   if (types.length === 0) {
     throw new BadRequestError('Unit is not a procurement unit');
   }
+
+  const completedPhaseRanges = projects.flatMap((project) => {
+    const ranges: Array<{ from: Date; to: Date }> = [];
+    if (project.procurement_started_at && project.procurement_completed_at) {
+      ranges.push({
+        from: project.procurement_started_at,
+        to: project.procurement_completed_at,
+      });
+    }
+    if (project.contract_started_at && project.contract_completed_at) {
+      ranges.push({
+        from: project.contract_started_at,
+        to: project.contract_completed_at,
+      });
+    }
+    return ranges;
+  });
+  const holidayIndex =
+    await getBangkokWorkingDayHolidayIndex(completedPhaseRanges);
+  const averagePhaseDuration = (
+    phases: Array<{ startedAt: Date; completedAt: Date }>
+  ): number => {
+    if (phases.length === 0) return 0;
+    const total = phases.reduce(
+      (sum, phase) =>
+        sum +
+        countBangkokWorkingDays(
+          phase.startedAt,
+          phase.completedAt,
+          holidayIndex
+        ),
+      0
+    );
+    return Number((total / phases.length).toFixed(1));
+  };
 
   const methods: ProcurementMethodDetailItem[] = [];
 
@@ -512,6 +547,26 @@ export const getUnitGroupProcurementDetails = async (
     const delayedCount = delayedProjects.length;
     const delayedPercentage =
       totalCount > 0 ? Math.round((delayedCount / totalCount) * 100) : 0;
+    const procurementPhases = typeProjects.flatMap((project) =>
+      project.procurement_started_at && project.procurement_completed_at
+        ? [
+            {
+              startedAt: project.procurement_started_at,
+              completedAt: project.procurement_completed_at,
+            },
+          ]
+        : []
+    );
+    const contractPhases = typeProjects.flatMap((project) =>
+      project.contract_started_at && project.contract_completed_at
+        ? [
+            {
+              startedAt: project.contract_started_at,
+              completedAt: project.contract_completed_at,
+            },
+          ]
+        : []
+    );
 
     // Status counts
     const statusCounts: Record<string, number> = {
@@ -560,8 +615,8 @@ export const getUnitGroupProcurementDetails = async (
       comparisonTrend: 'same',
       statusDistribution,
       avgPhaseDurationDays: {
-        procurementPhaseDays: 14,
-        contractPhaseDays: 12,
+        procurementPhaseDays: averagePhaseDuration(procurementPhases),
+        contractPhaseDays: averagePhaseDuration(contractPhases),
       },
     });
   }
@@ -610,10 +665,18 @@ export const getUnitGroupTopDelayedProjects = async (
     },
   });
 
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
+    projects.map((project) => ({
+      from: project.created_at,
+      to: project.expected_approval_date ?? today,
+    }))
+  );
+
   const topProjects: TopDelayedProjectItem[] = projects.map((p) => {
-    const totalDays = daysBetweenBangkokDates(
+    const totalDays = countBangkokWorkingDays(
       p.created_at,
-      p.expected_approval_date ?? today
+      p.expected_approval_date ?? today,
+      holidayIndex
     );
     const unitPortion = Math.max(1, Math.floor(totalDays / 5));
 
@@ -684,7 +747,6 @@ export const getContractUnitSummary = async (
   const completed = countMap.get(ProjectStatus.CLOSED) ?? 0;
   const cancelled = countMap.get(ProjectStatus.CANCELLED) ?? 0;
 
-
   const completedContractProjects = await prisma.project.findMany({
     where: {
       responsible_unit_id: unitId,
@@ -698,37 +760,28 @@ export const getContractUnitSummary = async (
     },
   });
 
-  let avgContractDurationDays = 0;
-  if (completedContractProjects.length > 0) {
-    const earliestStart = completedContractProjects.reduce(
-      (earliest, p) =>
-        p.contract_started_at! < earliest ? p.contract_started_at! : earliest,
-      completedContractProjects[0].contract_started_at!
-    );
-    const latestEnd = completedContractProjects.reduce(
-      (latest, p) =>
-        p.contract_completed_at! > latest ? p.contract_completed_at! : latest,
-      completedContractProjects[0].contract_completed_at!
-    );
-
-    const holidayDates = await getHolidayDates(
-      bangkokDayStartUtc(earliestStart),
-      bangkokDayEndUtc(latestEnd)
-    );
-    const holidayIndex = createBangkokWorkingDayHolidayIndex(holidayDates);
-
-    let totalDurationDays = 0;
-    for (const project of completedContractProjects) {
-      totalDurationDays += countBangkokWorkingDays(
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
+    completedContractProjects.map((project) => ({
+      from: project.contract_started_at!,
+      to: project.contract_completed_at!,
+    }))
+  );
+  const totalDurationDays = completedContractProjects.reduce(
+    (total, project) =>
+      total +
+      countBangkokWorkingDays(
         project.contract_started_at!,
         project.contract_completed_at!,
         holidayIndex
-      );
-    }
-    avgContractDurationDays = Number(
-      (totalDurationDays / completedContractProjects.length).toFixed(1)
-    );
-  }
+      ),
+    0
+  );
+  const avgContractDurationDays =
+    completedContractProjects.length === 0
+      ? 0
+      : Number(
+          (totalDurationDays / completedContractProjects.length).toFixed(1)
+        );
 
   return {
     unitId,

@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma';
 import { DAY_MS } from '../lib/constant';
 import {
   addBangkokDays,
+  bangkokDayEndUtc,
   bangkokDayStartUtc,
   bangkokTodayStartUtc,
   bangkokWeekday,
@@ -19,6 +20,11 @@ import { TimelineResult } from '../types/holiday.type';
 
 export type BangkokWorkingDayHolidayIndex = {
   weekdayHolidayDates: string[];
+};
+
+export type BangkokWorkingDayRange = {
+  from: Date;
+  to: Date;
 };
 
 export const isBangkokWeekend = (date: Date): boolean => {
@@ -69,6 +75,22 @@ export const countBangkokWeekendDays = (
   return weekends;
 };
 
+const upperBoundDate = (dates: string[], value: string): number => {
+  let low = 0;
+  let high = dates.length;
+
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (dates[mid] <= value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  return low;
+};
+
 export const countBangkokWorkingDays = (
   from: Date,
   to: Date,
@@ -85,7 +107,11 @@ export const countBangkokWorkingDays = (
   const weekends = countBangkokWeekendDays(startWeekday, calendarDays);
 
   const index = createBangkokWorkingDayHolidayIndex(holidayDates);
-  const weekdayHolidays = index.weekdayHolidayDates.length;
+  const startDate = formatBangkokDate(start);
+  const endDate = formatBangkokDate(end);
+  const weekdayHolidays =
+    upperBoundDate(index.weekdayHolidayDates, endDate) -
+    upperBoundDate(index.weekdayHolidayDates, startDate);
 
   return Math.max(0, calendarDays - weekends - weekdayHolidays);
 };
@@ -148,6 +174,40 @@ export const getHolidayDates = async (
     select: { date: true },
   });
   return new Set(holidays.map((h) => formatBangkokDate(h.date)));
+};
+
+/**
+ * Loads one reusable holiday index for several dashboard calculations. Each
+ * count still considers only holidays inside its own start/end range.
+ */
+export const getBangkokWorkingDayHolidayIndex = async (
+  ranges: BangkokWorkingDayRange[]
+): Promise<BangkokWorkingDayHolidayIndex> => {
+  const normalizedRanges = ranges
+    .map(({ from, to }) => ({
+      from: bangkokDayStartUtc(from),
+      to: bangkokDayStartUtc(to),
+    }))
+    .filter((range) => range.from < range.to);
+
+  if (normalizedRanges.length === 0) {
+    return createBangkokWorkingDayHolidayIndex(new Set<string>());
+  }
+
+  const earliestStart = normalizedRanges.reduce(
+    (earliest, range) => (range.from < earliest ? range.from : earliest),
+    normalizedRanges[0].from
+  );
+  const latestEnd = normalizedRanges.reduce(
+    (latest, range) => (range.to > latest ? range.to : latest),
+    normalizedRanges[0].to
+  );
+  const holidayDates = await getHolidayDates(
+    earliestStart,
+    bangkokDayEndUtc(latestEnd)
+  );
+
+  return createBangkokWorkingDayHolidayIndex(holidayDates);
 };
 
 const resolveUrgencyLevel = (

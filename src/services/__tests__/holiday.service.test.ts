@@ -393,6 +393,20 @@ describe('holiday.service – countBangkokWorkingDays & addBangkokWorkingDays', 
     ).toBe(259);
   });
 
+  it('counts only indexed holidays that fall within each requested range', () => {
+    const holidayIndex = createBangkokWorkingDayHolidayIndex(
+      new Set(['2026-07-03', '2026-07-10'])
+    );
+
+    expect(
+      countBangkokWorkingDays(
+        new Date('2026-07-05T17:00:00.000Z'),
+        new Date('2026-07-07T17:00:00.000Z'),
+        holidayIndex
+      )
+    ).toBe(2);
+  });
+
   it('finds an added working-day deadline without advancing one day at a time', () => {
     expect(
       addBangkokWorkingDays(

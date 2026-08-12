@@ -1,11 +1,9 @@
 import { ProcurementType, UnitResponsibleType } from '@prisma/client';
 import { prisma } from '../../config/prisma';
-import { bangkokDayEndUtc, bangkokDayStartUtc } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
 import {
   countBangkokWorkingDays,
-  createBangkokWorkingDayHolidayIndex,
-  getHolidayDates,
+  getBangkokWorkingDayHolidayIndex,
 } from '../holiday.service';
 import {
   IndividualDashboardQuery,
@@ -197,25 +195,12 @@ export const getIndividualStaffDashboard = async (
     }
   }
 
-  let holidayIndex = createBangkokWorkingDayHolidayIndex(new Set<string>());
-  if (completedPhases.length > 0) {
-    const earliestStart = completedPhases.reduce(
-      (earliest, phase) =>
-        phase.startedAt < earliest ? phase.startedAt : earliest,
-      completedPhases[0].startedAt
-    );
-    const latestEnd = completedPhases.reduce(
-      (latest, phase) =>
-        phase.completedAt > latest ? phase.completedAt : latest,
-      completedPhases[0].completedAt
-    );
-
-    const holidayDates = await getHolidayDates(
-      bangkokDayStartUtc(earliestStart),
-      bangkokDayEndUtc(latestEnd)
-    );
-    holidayIndex = createBangkokWorkingDayHolidayIndex(holidayDates);
-  }
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
+    completedPhases.map((phase) => ({
+      from: phase.startedAt,
+      to: phase.completedAt,
+    }))
+  );
 
   const durationComparison: DurationComparisonItem[] = unit.type.map((type) => {
     const typePhases = completedPhases.filter(
@@ -276,4 +261,3 @@ export const getIndividualStaffDashboard = async (
     procurementMethodMetrics,
   };
 };
-

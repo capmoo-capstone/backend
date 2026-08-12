@@ -1,4 +1,9 @@
-import { ProcurementType, ProjectStatus, UnitResponsibleType, UserRole } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectStatus,
+  UnitResponsibleType,
+  UserRole,
+} from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { IndividualTodoQuerySchema } from '../../schemas/dashboard.schema';
@@ -277,6 +282,7 @@ describe('dashboard.service', () => {
 
   it('returns sorted deadline pages with computed priority levels', async () => {
     vi.setSystemTime(new Date('2026-07-12T05:00:00.000Z'));
+    prismaMock.holiday.findMany.mockResolvedValue([]);
     prismaMock.project.findMany
       .mockResolvedValueOnce([
         {
@@ -312,13 +318,13 @@ describe('dashboard.service', () => {
     const overdue = await getOverdueDeadlines(staffUser, 1, 10);
     const dueSoon = await getDueSoonDeadlines(staffUser, 1, 10);
 
-    expect(overdue.data.map((row) => row.daysLate)).toEqual([11, 2]);
+    expect(overdue.data.map((row) => row.daysLate)).toEqual([7, 0]);
     expect(dueSoon.data.map((row) => row.priority)).toEqual([
       'URGENT',
       'WATCH',
-      'NORMAL',
+      'WATCH',
     ]);
-    expect(dueSoon.data.map((row) => row.daysRemaining)).toEqual([3, 5, 7]);
+    expect(dueSoon.data.map((row) => row.daysRemaining)).toEqual([3, 5, 5]);
     expect(prismaMock.project.findMany.mock.calls[0][0]).toMatchObject({
       where: expect.objectContaining({
         AND: expect.arrayContaining([
@@ -350,6 +356,7 @@ describe('dashboard.service', () => {
 
   describe('Unit Group KPI Dashboard', () => {
     it('returns executive summary metrics for unit staff', async () => {
+      prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany
         .mockResolvedValueOnce([
           {
@@ -419,7 +426,47 @@ describe('dashboard.service', () => {
       expect(result.delayedProjects.total).toBe(1);
     });
 
+    it('calculates completed phase averages as working days', async () => {
+      prismaMock.unit.findUnique.mockResolvedValue({
+        id: 'unit-proc',
+        type: [UnitResponsibleType.LT100K],
+      });
+      prismaMock.holiday.findMany.mockResolvedValue([
+        { date: new Date('2026-07-03T00:00:00.000Z') },
+      ]);
+      prismaMock.project.findMany.mockResolvedValue([
+        {
+          id: 'p-1',
+          procurement_type: ProcurementType.LT100K,
+          status: ProjectStatus.CLOSED,
+          expected_approval_date: new Date('2026-07-10T00:00:00.000Z'),
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: new Date('2026-07-10T00:00:00.000Z'),
+          procurement_started_at: new Date('2026-06-30T17:00:00.000Z'),
+          procurement_completed_at: new Date('2026-07-05T17:00:00.000Z'),
+          contract_started_at: new Date('2026-07-06T17:00:00.000Z'),
+          contract_completed_at: new Date('2026-07-08T17:00:00.000Z'),
+        },
+      ]);
+
+      const result = await DashboardService.getUnitGroupProcurementDetails(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          mode: 'month',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        }
+      );
+
+      expect(result.methods[0].avgPhaseDurationDays).toEqual({
+        procurementPhaseDays: 2,
+        contractPhaseDays: 2,
+      });
+    });
+
     it('returns top delayed projects stage breakdown', async () => {
+      prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany.mockResolvedValueOnce([
         {
           id: 'p-delayed-1',
@@ -641,12 +688,15 @@ describe('dashboard.service', () => {
           },
         ] as any);
 
-        const result = await DashboardService.getContractUnitSummary(supplyUser, {
-          unitId: 'unit-contract',
-          mode: 'month',
-          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
-          dateTo: new Date('2026-07-31T16:59:59.999Z'),
-        });
+        const result = await DashboardService.getContractUnitSummary(
+          supplyUser,
+          {
+            unitId: 'unit-contract',
+            mode: 'month',
+            dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+            dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          }
+        );
 
         expect(result.unitId).toBe('unit-contract');
         expect(result.statusBreakdown).toEqual({
@@ -672,7 +722,7 @@ describe('dashboard.service', () => {
         });
       });
 
-      it('returns the selected user\'s project-own todo list', async () => {
+      it("returns the selected user's project-own todo list", async () => {
         prismaMock.user.findUnique.mockResolvedValue({
           id: 'staff-1',
           username: 'staff',
@@ -774,7 +824,9 @@ describe('dashboard.service', () => {
       });
 
       it('throws NotFoundError when staff user is not in the unit', async () => {
-        prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc' } as any);
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+        } as any);
         prismaMock.user.findFirst.mockResolvedValue(null);
 
         await expect(
@@ -786,7 +838,10 @@ describe('dashboard.service', () => {
       });
 
       it('returns individual staff dashboard with duration comparison and procurement method metrics', async () => {
-        prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc', type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K] } as any);
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+          type: [UnitResponsibleType.LT100K, UnitResponsibleType.LT500K],
+        } as any);
         prismaMock.user.findFirst.mockResolvedValue({
           id: 'staff-1',
           full_name: 'Somchai Jaidee',
@@ -820,10 +875,13 @@ describe('dashboard.service', () => {
             },
           ] as any);
 
-        const result = await DashboardService.getIndividualStaffDashboard(supplyUser, {
-          unitId: 'unit-proc',
-          targetUserId: 'staff-1',
-        });
+        const result = await DashboardService.getIndividualStaffDashboard(
+          supplyUser,
+          {
+            unitId: 'unit-proc',
+            targetUserId: 'staff-1',
+          }
+        );
 
         expect(result.unitId).toBe('unit-proc');
         expect(result.user).toEqual({
@@ -841,5 +899,3 @@ describe('dashboard.service', () => {
     });
   });
 });
-
-
