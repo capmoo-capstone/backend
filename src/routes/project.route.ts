@@ -23,6 +23,7 @@ const {
 // ── List / Summary ────────────────────────────────────────────────────────────
 router.post('/', controller.getAll);
 router.get('/summary', controller.getSummary);
+router.get('/approval-dates', requireSupplyAccess, controller.getExpectedApprovalDates);
 
 // ── Supply-only views ─────────────────────────────────────────────────────────
 router.get(

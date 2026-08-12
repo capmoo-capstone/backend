@@ -16,6 +16,7 @@ import {
   getAssignedProjects,
   getById,
   getDocumentSummary,
+  getExpectedApprovalDates,
   getOwnProjects,
   getOwnProjectsTotal,
   getSummaryCards,
@@ -873,6 +874,56 @@ describe('project-query.service', () => {
         step_order: 2,
         step_status: SubmissionStatus.COMPLETED,
       });
+    });
+  });
+
+  describe('getExpectedApprovalDates', () => {
+    it('returns projects ordered by expected_approval_date asc', async () => {
+      prismaMock.project.findMany.mockResolvedValue([
+          {
+            id: 'proj-1',
+            title: 'Project A',
+            expected_approval_date: new Date('2026-09-01T00:00:00.000Z'),
+          },
+          {
+            id: 'proj-2',
+            title: 'Project B',
+            expected_approval_date: new Date('2026-09-15T00:00:00.000Z'),
+          },
+      ] as any);
+
+      const result = await getExpectedApprovalDates(supplyUser);
+
+      expect(result.total).toBe(2);
+      expect(result.data[0].id).toBe('proj-1');
+      expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              { status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } },
+            ]),
+          }),
+          orderBy: [
+            { expected_approval_date: 'asc' },
+          ],
+        })
+      );
+    });
+
+    it('filters by requesting department for external users', async () => {
+      prismaMock.project.findMany.mockResolvedValue([]);
+
+      await getExpectedApprovalDates(externalUser);
+
+      expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: expect.arrayContaining([
+              { requesting_dept_id: { in: ['dept-1'] } },
+            ]),
+          },
+        })
+      );
     });
   });
 });

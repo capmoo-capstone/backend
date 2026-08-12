@@ -1128,3 +1128,40 @@ export const getDocumentSummary = async (
     ),
   };
 };
+
+export const getExpectedApprovalDates = async (
+  user: AuthPayload,
+) => {
+  const and: Prisma.ProjectWhereInput[] = [];
+  
+  if (!haveSupplyPermission(user)) {
+    and.push({ requesting_dept_id: { in: getDeptIdsForUser(user) } });
+  } else if (!isHeadOfSupplyUnit(user) && !isSuperAdmin(user)) {
+    and.push({ 
+      OR: [
+        { assignee_procurement: { some: { id: user.id } } },
+        { assignee_contract: { some: { id: user.id } } },
+      ],
+    });
+  }
+  and.push({ status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } });
+  
+  const where: Prisma.ProjectWhereInput = and.length > 0 ? { AND: and } : {};
+
+  const projects = await prisma.project.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      expected_approval_date: true,
+    },
+    orderBy: [
+      { expected_approval_date: 'asc' },
+    ],
+  });
+
+  return {
+    total: projects.length,
+    data: projects
+  };
+};
