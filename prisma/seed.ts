@@ -95,6 +95,7 @@ const cleanup = async () => {
   await prisma.project.deleteMany();
   await prisma.projectContractNumber.deleteMany();
   await prisma.holiday.deleteMany();
+  await prisma.registrationRequest.deleteMany();
   await prisma.userDelegation.deleteMany();
   await prisma.userOrganizationRole.deleteMany();
   await prisma.user.deleteMany();
