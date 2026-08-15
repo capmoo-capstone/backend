@@ -904,7 +904,7 @@ export const getSummaryCards = async (
       prisma.project.count({
         where: {
           status: {
-            in: [ProjectStatus.IN_PROGRESS, ProjectStatus.WAITING_CANCEL],
+            in: IN_PROGRESS_STATUSES,
           },
         },
       }),
