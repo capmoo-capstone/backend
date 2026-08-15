@@ -28,6 +28,8 @@ import {
 } from '../schemas/user.schema';
 import {
   ListUsersQuery,
+  RoleAssignment,
+  RoleMutationParams,
   UpdateUserRoleResponse,
   UserDetailResponse,
 } from '../types/user.type';
@@ -73,49 +75,12 @@ const assertNoExistingUser = async (
   }
 };
 
-type RoleAssignment = {
-  id: string;
-  user_id: string;
-  role: UserRole;
-  dept_id: string;
-  unit_id: string | null;
-};
-
-type RoleMutationParams = {
-  userId: string;
-  role: UserRole;
-  deptId: string;
-  unitId: string | null;
-  roleId?: string;
-};
-
 const roleAssignmentSelect = {
   id: true,
   user_id: true,
   role: true,
   dept_id: true,
   unit_id: true,
-};
-
-const findRoleAssignment = async (
-  tx: Prisma.TransactionClient,
-  params: RoleMutationParams
-): Promise<RoleAssignment | null> => {
-  if (params.roleId) {
-    return await tx.userOrganizationRole.findUnique({
-      where: { id: params.roleId },
-      select: roleAssignmentSelect,
-    });
-  }
-  return await tx.userOrganizationRole.findFirst({
-    where: {
-      user_id: params.userId,
-      role: params.role,
-      dept_id: params.deptId,
-      unit_id: params.unitId,
-    },
-    select: roleAssignmentSelect,
-  });
 };
 
 const findReplacedRoleAssignment = async (
@@ -181,23 +146,63 @@ const addRoleWithAudit = async (
 const removeRoleWithAudit = async (
   tx: Prisma.TransactionClient,
   actor: AuthPayload,
-  params: RoleMutationParams,
-  eventType: 'USER_ROLE_REMOVED' | 'UNIT_STAFF_REMOVED'
+  data: RoleMutationParams,
+  type: 'REMOVE' | 'REVOKE'
 ): Promise<void> => {
-  const assignment = await findRoleAssignment(tx, params);
-  await removeRoleInternal(tx, params);
+  let assignment
+  if (type === 'REVOKE') {
+    assignment = await tx.userOrganizationRole.findFirst({
+      where: {
+        user_id: data.userId,
+        dept_id: data.deptId,
+        unit_id: data.unitId,
+        role: data.role,
+      },
+      select: roleAssignmentSelect,
+    });
+    if (!assignment) throw new NotFoundError("Role not found");
 
-  if (!assignment) return;
+    await removeRoleInternal(tx, {
+      userId: assignment.user_id,
+      role: assignment.role,
+      deptId: assignment.dept_id,
+      unitId: assignment.unit_id,
+    });
 
-  await recordUserManagementAuditEvent(tx, {
-    eventType,
-    actor,
-    assignment,
-    diff: [
-      { field: 'role', oldValue: assignment.role, newValue: null },
-      { field: 'unit_id', oldValue: assignment.unit_id, newValue: null },
-    ],
-  });
+    await recordUserManagementAuditEvent(tx, {
+      eventType: 'USER_ROLE_REMOVED',
+      actor,
+      assignment,
+      diff: [
+        { field: 'role', oldValue: assignment.role, newValue: null },
+        { field: 'unit_id', oldValue: assignment.unit_id, newValue: null },
+      ],
+    });
+  };
+
+  if (type === 'REMOVE') {
+    assignment = await tx.userOrganizationRole.findFirst({
+      where: { id: data.roleId },
+      select: roleAssignmentSelect,
+    });
+
+    if (!assignment) throw new NotFoundError("Role not found");
+
+    await tx.userOrganizationRole.delete({
+      where: { id: data.roleId },
+    });
+
+    await recordUserManagementAuditEvent(tx, {
+      eventType: 'USER_ROLE_REMOVED',
+      actor,
+      assignment,
+      diff: [
+        { field: 'role', oldValue: assignment.role, newValue: null },
+        { field: 'dept_id', oldValue: assignment.dept_id, newValue: null },
+        { field: 'unit_id', oldValue: assignment.unit_id, newValue: null },
+      ],
+    });
+  };
 };
 
 export const listUsers = async (
@@ -472,7 +477,7 @@ export const updateSupplyRole = async (
           deptId: OPS_DEPT_ID,
           unitId,
         },
-        AuditEventType.USER_ROLE_REMOVED
+        'REVOKE'
       );
     }
 
@@ -522,57 +527,20 @@ export const addRole = async (
 };
 
 export const removeRole = async (
-  actor: AuthPayload,
+  user: AuthPayload,
   data: RemoveRoleDto
 ): Promise<void> => {
   return await prisma.$transaction(async (tx) => {
-    let userId = data.user_id;
-    let role = data.role;
-    let deptId = data.dept_id;
-    let unitId = data.unit_id ?? null;
-    const roleId = data.role_id;
+    await removeRoleWithAudit(tx, user, data, 'REVOKE');
+  })
+};
 
-    if (roleId) {
-      const roleAssignment = await tx.userOrganizationRole.findUnique({
-        where: { id: roleId },
-      });
-      if (!roleAssignment) {
-        throw new NotFoundError('Role assignment not found');
-      }
-      userId = roleAssignment.user_id;
-      role = roleAssignment.role as any;
-      deptId = roleAssignment.dept_id;
-      unitId = roleAssignment.unit_id;
-
-      return await removeRoleWithAudit(
-        tx,
-        actor,
-        {
-          userId,
-          role,
-          deptId,
-          unitId,
-          roleId,
-        },
-        AuditEventType.USER_ROLE_REMOVED
-      );
-    }
-
-    if (!userId || !role || !deptId) {
-      throw new BadRequestError('Missing required parameters for role removal');
-    }
-
-    await assertUsersExist(tx, [userId]);
-    await removeRoleWithAudit(
-      tx,
-      actor,
-      {
-        userId,
-        role,
-        deptId,
-        unitId,
-      },
-      AuditEventType.USER_ROLE_REMOVED
-    );
+export const removeRoleById = async (
+  user: AuthPayload,
+  roleId: string
+): Promise<void> => {
+  return await prisma.$transaction(async (tx) => {
+    await removeRoleWithAudit(tx, user, { roleId }, 'REMOVE');
   });
 };
+

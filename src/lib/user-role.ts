@@ -1,6 +1,6 @@
 import { Prisma, UserRole } from '@prisma/client';
 import { BadRequestError, NotFoundError } from './errors';
-import { UpdateUserRoleResponse } from '../types/user.type';
+import { RoleMutationParams, UpdateUserRoleResponse } from '../types/user.type';
 import { OPS_DEPT_ID } from './constant';
 import { nowUtc } from './date';
 
@@ -52,16 +52,11 @@ const touchActiveDelegatees = async (
  */
 export const addRoleInternal = async (
   tx: Prisma.TransactionClient,
-  params: {
-    userId: string;
-    role: UserRole;
-    deptId: string;
-    unitId: string | null;
-  }
+  params: RoleMutationParams
 ): Promise<UpdateUserRoleResponse> => {
   const { userId, role, deptId, unitId } = params;
 
-  //Handle creating the same role in same unit and same dept
+  // Handle creating the same role in same unit and same dept
   const existingSameRecord = await tx.userOrganizationRole.findFirst({
     where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
   });
@@ -129,19 +124,11 @@ export const addRoleInternal = async (
  */
 export const removeRoleInternal = async (
   tx: Prisma.TransactionClient,
-  params: {
-    userId: string;
-    role: UserRole;
-    deptId: string;
-    unitId: string | null;
-    roleId?: string;
-  }
+  params: RoleMutationParams
 ): Promise<void> => {
-  const { userId, role, deptId, unitId, roleId } = params;
+  const { userId, role, deptId, unitId } = params;
 
-  const target = roleId
-    ? await tx.userOrganizationRole.findUnique({ where: { id: roleId } })
-    : await tx.userOrganizationRole.findFirst({
+  const target = await tx.userOrganizationRole.findFirst({
         where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
       });
 

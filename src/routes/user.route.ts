@@ -22,7 +22,7 @@ router.post(
 router.delete(
   '/roles/:role_id',
   requireSupplyRoles([ADMIN]),
-  controller.removeRole
+  controller.removeRoleById
 );
 router.get('/:id', controller.getById);
 router.post('/:id/role', requireSupplyRoles([ADMIN]), controller.addRole);

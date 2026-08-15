@@ -38,3 +38,19 @@ export interface UpdateUserRoleResponse {
   dept_id: string;
   unit_id: string | null;
 }
+
+export interface RoleAssignment {
+  id: string;
+  user_id: string;
+  role: UserRole;
+  dept_id: string;
+  unit_id: string | null;
+}
+
+export interface RoleMutationParams {
+  userId?: string;
+  role?: UserRole;
+  deptId?: string;
+  unitId?: string | null;
+  roleId?: string
+};
