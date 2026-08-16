@@ -283,6 +283,12 @@ describe('submission.service', () => {
       assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
       creator: { id: 'user-1', full_name: 'User One', email: null },
     });
+    txMock.userOrganizationRole.findMany.mockResolvedValue([
+      {
+        user: { id: 'finance-1', full_name: 'Finance One', email: null },
+      },
+    ]);
+    txMock.userDelegation.findMany.mockResolvedValue([]);
     txMock.user.findMany.mockImplementation(async (args: any) => {
       const ids = args?.where?.id?.in ?? [];
       return ids.map((id: string) => ({ id }));
@@ -363,13 +369,26 @@ describe('submission.service', () => {
         data: expect.objectContaining({
           user_id: 'contract-1',
           category: 'VENDOR_SUBMISSIONS',
+          dedupe_key: 'vendor-submission:submission-1',
           metadata: expect.objectContaining({
             notification_kind: 'ASSIGNED_DOCUMENT',
           }),
         }),
       })
     );
-    expect(txMock.notification.create).toHaveBeenCalledTimes(1);
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'finance-1',
+          category: 'FINANCE_HANDOFFS',
+          dedupe_key: 'finance-handoff:submission-1',
+          metadata: expect.objectContaining({
+            notification_kind: 'FINANCE_SUBMIT',
+          }),
+        }),
+      })
+    );
+    expect(txMock.notification.create).toHaveBeenCalledTimes(2);
   });
 
   it('createStaffSubmissionsProject requires installment number for contract workflow', async () => {

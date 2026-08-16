@@ -37,7 +37,15 @@ describe('project-lifecycle.service', () => {
 
   it('cancelProject creates a waiting-cancel request for non-head users', async () => {
     txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
       status: ProjectStatus.IN_PROGRESS,
+      title: 'Project 1',
+      receive_no: '2569/00001',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
     });
     txMock.projectCancellation.findFirst.mockResolvedValue(null);
     txMock.project.update.mockResolvedValue({
@@ -53,6 +61,36 @@ describe('project-lifecycle.service', () => {
       decision_by: null,
       decision_at: null,
     });
+    txMock.userOrganizationRole.findMany.mockResolvedValue([
+      {
+        user: { id: 'head-unit-1', full_name: 'Head Unit', email: null },
+      },
+    ]);
+    txMock.userDelegation.findMany.mockResolvedValue([]);
+    txMock.user.findMany.mockImplementation(async (args: any) => {
+      const ids = args?.where?.id?.in ?? [];
+      return ids.map((id: string) => ({ id }));
+    });
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'head-unit-1',
+      project_id: 'project-1',
+      category: 'CANCELLATIONS',
+      priority: 'HIGH',
+      title: 'cancel request',
+      body: 'cancel request',
+      target_path: '/app/projects/project-1',
+      action_label: 'review',
+      requires_action: true,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'CANCEL_REQUESTED' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'head-unit-1', _count: { _all: 1 } },
+    ]);
 
     const result = await cancelProject(staffUser, {
       id: 'project-1',
@@ -65,6 +103,15 @@ describe('project-lifecycle.service', () => {
       data: { status: ProjectStatus.WAITING_CANCEL },
       select: { id: true, status: true },
     });
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'head-unit-1',
+          category: 'CANCELLATIONS',
+          dedupe_key: 'cancel-request:project-1',
+        }),
+      })
+    );
   });
 
   it('cancelProject directly cancels projects for head-of-supply users', async () => {
@@ -222,15 +269,54 @@ describe('project-lifecycle.service', () => {
   });
 
   it('completeProcurementPhase sets contract_started_at when assignee_contract is attached', async () => {
-    txMock.project.findUnique.mockResolvedValue({
-      status: ProjectStatus.IN_PROGRESS,
-      current_workflow_type: UnitResponsibleType.LT100K,
-      procurement_progress: {},
-      responsible_unit_id: 'unit-proc',
-      procurement_completed_at: null,
-      contract_started_at: null,
-      assignee_procurement: [{ id: 'staff-1' }],
+    txMock.project.findUnique
+      .mockResolvedValueOnce({
+        status: ProjectStatus.IN_PROGRESS,
+        current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_progress: {},
+        responsible_unit_id: 'unit-proc',
+        procurement_completed_at: null,
+        contract_started_at: null,
+        assignee_procurement: [{ id: 'staff-1' }],
+      })
+      .mockResolvedValueOnce({
+        id: 'project-1',
+        title: 'Project 1',
+        receive_no: '2569/00001',
+      })
+      .mockResolvedValueOnce({
+        id: 'project-1',
+        title: 'Project 1',
+        responsible_unit_id: 'unit-proc',
+        created_by: 'user-1',
+        assignee_procurement: [{ id: 'staff-1', full_name: 'Staff One', email: null }],
+        assignee_contract: [{ id: 'staff-1', full_name: 'Staff One', email: null }],
+        creator: { id: 'user-1', full_name: 'User One', email: null },
+      });
+    txMock.user.findMany.mockImplementation(async (args: any) => {
+      const ids = args?.where?.id?.in ?? [];
+      return ids.map((id: string) => ({ id }));
     });
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'staff-1',
+      project_id: 'project-1',
+      category: 'ASSIGNMENTS',
+      priority: 'HIGH',
+      title: 'assigned',
+      body: 'assigned',
+      target_path: '/app/projects/project-1',
+      action_label: 'open',
+      requires_action: true,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'ASSIGNED_PROJECTS' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'staff-1', _count: { _all: 1 } },
+    ]);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
       status: ProjectStatus.IN_PROGRESS,
@@ -249,6 +335,90 @@ describe('project-lifecycle.service', () => {
         data: expect.objectContaining({
           procurement_completed_at: expect.any(Date),
           contract_started_at: expect.any(Date),
+        }),
+      })
+    );
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'staff-1',
+          category: 'ASSIGNMENTS',
+          dedupe_key: 'assignment:project-1:staff-1',
+        }),
+      })
+    );
+    expect(result.assignee_contract).toEqual([{ id: 'staff-1' }]);
+  });
+
+  it('completeProcurementPhase notifies directly assigned contract staff', async () => {
+    txMock.project.findUnique
+      .mockResolvedValueOnce({
+        status: ProjectStatus.IN_PROGRESS,
+        current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_progress: {},
+        responsible_unit_id: 'unit-proc',
+        procurement_completed_at: null,
+        contract_started_at: null,
+        assignee_procurement: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'project-1',
+        title: 'Project 1',
+        receive_no: '2569/00001',
+      })
+      .mockResolvedValueOnce({
+        id: 'project-1',
+        title: 'Project 1',
+        responsible_unit_id: CONTRACT_UNIT_ID,
+        created_by: 'user-1',
+        assignee_procurement: [],
+        assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+        creator: { id: 'user-1', full_name: 'User One', email: null },
+      });
+    txMock.user.findMany.mockImplementation(async (args: any) => {
+      const ids = args?.where?.id?.in ?? [];
+      return ids.map((id: string) => ({ id }));
+    });
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'contract-1',
+      project_id: 'project-1',
+      category: 'ASSIGNMENTS',
+      priority: 'HIGH',
+      title: 'assigned',
+      body: 'assigned',
+      target_path: '/app/projects/project-1',
+      action_label: 'open',
+      requires_action: true,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'ASSIGNED_PROJECTS' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'contract-1', _count: { _all: 1 } },
+    ]);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.WAITING_ACCEPT,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      responsible_unit_id: CONTRACT_UNIT_ID,
+      assignee_contract: [{ id: 'contract-1' }],
+    });
+
+    await completeProcurementPhase(headUser, {
+      id: 'project-1',
+      assignee_contract: 'contract-1',
+      continue_unit_proc: false,
+    } as any);
+
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'contract-1',
+          category: 'ASSIGNMENTS',
+          dedupe_key: 'assignment:project-1:contract-1',
         }),
       })
     );
