@@ -10,7 +10,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { OPS_DEPT_ID } from '../../lib/constant';
-import { toBangkokParts } from '../../lib/date';
+import { nowUtc, toBangkokParts } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
 import type {
   NotificationKind,
@@ -116,6 +116,7 @@ const queueNotificationOutboxEvent = async (
   const eventType: NotificationRealtimeEventType =
     item.action === 'created' ? 'notification.created' : 'notification.updated';
 
+  const now = nowUtc();
   await db.$executeRaw(Prisma.sql`
     INSERT INTO "notification_outbox" (
       "id",
@@ -123,7 +124,9 @@ const queueNotificationOutboxEvent = async (
       "user_id",
       "event_type",
       "payload",
-      "unread_count"
+      "unread_count",
+      "created_at",
+      "updated_at"
     )
     VALUES (
       ${randomUUID()},
@@ -131,7 +134,9 @@ const queueNotificationOutboxEvent = async (
       ${item.userId},
       ${eventType},
       ${mapNotificationRecord(item.notification)}::jsonb,
-      ${item.unreadCount}
+      ${item.unreadCount},
+      ${now},
+      ${now}
     )
   `);
 };
