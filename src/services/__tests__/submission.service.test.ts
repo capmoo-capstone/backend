@@ -205,6 +205,7 @@ describe('submission.service', () => {
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.LT100K,
       installment_rounds: 1,
+      budget: 1000,
     });
     txMock.projectSubmission.findFirst.mockResolvedValue(null);
     txMock.projectSubmission.create.mockResolvedValue({
@@ -244,6 +245,7 @@ describe('submission.service', () => {
       id: 'project-1',
       current_workflow_type: UnitResponsibleType.LT100K,
       installment_rounds: 1,
+      budget: 1000,
     });
     txMock.projectSubmission.findFirst.mockResolvedValue({
       submission_round: 2,
@@ -259,13 +261,21 @@ describe('submission.service', () => {
 
     const result = await createStaffSubmissionsProject(
       user,
-      staffSubmissionDto({ required_approval: false })
+      staffSubmissionDto({
+        required_approval: false,
+        required_updating: true,
+        meta_data: [{ field_key: 'budget', value: 1250.5 }],
+      })
     );
 
     expect(result.status).toBe(SubmissionStatus.COMPLETED);
     expect(txMock.projectSubmission.create.mock.calls[0][0].data.status).toBe(
       SubmissionStatus.COMPLETED
     );
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: { budget: 1250.5 },
+    });
   });
 
   it('createStaffSubmissionsProject rejects workflow mismatches before creating a submission', async () => {
@@ -579,7 +589,10 @@ describe('submission.service', () => {
     txMock.projectSubmission.findUnique.mockResolvedValue({
       status: SubmissionStatus.WAITING_SIGNATURE,
       submitted_by: 'submitter-1',
-      meta_data: [{ field_key: 'po_no', value: 'PO-2' }],
+      meta_data: [
+        { field_key: 'po_no', value: 'PO-2' },
+        { field_key: 'budget', value: 1250.5 },
+      ],
     });
     txMock.projectSubmission.update.mockResolvedValue({
       id: 'submission-1',
@@ -591,6 +604,7 @@ describe('submission.service', () => {
     });
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
+      budget: 1000,
       po_no: 'PO-1',
       pr_no: null,
       less_no: null,
@@ -611,13 +625,13 @@ describe('submission.service', () => {
     expect(result.status).toBe(SubmissionStatus.COMPLETED);
     expect(txMock.project.update).toHaveBeenCalledWith({
       where: { id: 'project-1' },
-      data: { po_no: 'PO-2' },
+      data: { po_no: 'PO-2', budget: 1250.5 },
     });
     expect(txMock.projectHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          old_value: { po_no: 'PO-1' },
-          new_value: { po_no: 'PO-2' },
+          old_value: { po_no: 'PO-1', budget: 1000 },
+          new_value: { po_no: 'PO-2', budget: 1250.5 },
         }),
       })
     );
