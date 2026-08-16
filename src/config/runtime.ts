@@ -39,6 +39,7 @@ export const runtimeConfig = {
     process.env.NOTIFICATIONS_OUTBOX_REPEAT_MS,
     30_000
   ),
+  notificationCleanupRepeatMs: 24 * 60 * 60_000,
 };
 
 export const isRedisConfigured = () => Boolean(runtimeConfig.redisUrl);

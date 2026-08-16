@@ -20,6 +20,7 @@ import {
   GetInstallmentsQuery,
 } from '../schemas/project.schema';
 import {
+  notifyFinanceExportReady,
   notifyFinanceRequestEdit,
   publishPersistedNotifications,
 } from './notification/notification.service';
@@ -62,7 +63,7 @@ export const createInstallment = async (
   user: AuthPayload,
   data: CompleteInstallmentDto
 ): Promise<ProjectInstallment> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     await acquireProjectInstallmentLock(tx, data.id);
 
     const installmentData = await tx.project.findUnique({
@@ -131,8 +132,18 @@ export const createInstallment = async (
       });
     }
 
-    return exportRequest;
+    const notificationResults = await notifyFinanceExportReady(tx, {
+      project_id: data.id,
+      actor_id: user.id,
+      installment_no: data.installment_no,
+    });
+
+    return { exportRequest, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.exportRequest;
 };
 
 export const getInstallments = async (

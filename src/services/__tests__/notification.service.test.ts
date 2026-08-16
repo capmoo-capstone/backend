@@ -6,9 +6,11 @@ import {
   wholeDayDiff,
 } from '../notification/notification-core.service';
 import {
+  deleteExpiredNotifications,
   listNotifications,
   markNotificationRead,
   processDeadlineDispatchJob,
+  processDeadlineQueueJob,
   syncDeadlineNotificationsForUser,
 } from '../notification/notification-query.service';
 import { notificationEmailTransport } from '../notification/notification-email.service';
@@ -55,13 +57,19 @@ describe('notification date handling', () => {
         assignee_contract: [],
       },
     ]);
-    prismaMock.$queryRaw.mockResolvedValue([{ id: 'reminder-1' }]);
+    prismaMock.notificationReminder.upsert.mockResolvedValue({
+      id: 'reminder-1',
+      sent_at: null,
+      notification_id: null,
+      error_message: null,
+    });
     txMock.user.findMany.mockResolvedValue([{ id: user.id }]);
     txMock.notification.findFirst.mockResolvedValue(null);
     txMock.notification.create.mockResolvedValue({ id: 'notification-1' });
     txMock.notification.groupBy.mockResolvedValue([
       { user_id: user.id, _count: { _all: 1 } },
     ]);
+    prismaMock.notificationOutbox.findMany.mockResolvedValue([]);
 
     await syncDeadlineNotificationsForUser(user);
 
@@ -88,13 +96,19 @@ describe('notification date handling', () => {
         assignee_contract: [],
       },
     ]);
-    prismaMock.$queryRaw.mockResolvedValue([{ id: 'reminder-24h' }]);
+    prismaMock.notificationReminder.upsert.mockResolvedValue({
+      id: 'reminder-24h',
+      sent_at: null,
+      notification_id: null,
+      error_message: null,
+    });
     txMock.user.findMany.mockResolvedValue([{ id: user.id }]);
     txMock.notification.findFirst.mockResolvedValue(null);
     txMock.notification.create.mockResolvedValue({ id: 'notification-24h' });
     txMock.notification.groupBy.mockResolvedValue([
       { user_id: user.id, _count: { _all: 1 } },
     ]);
+    prismaMock.notificationOutbox.findMany.mockResolvedValue([]);
 
     await syncDeadlineNotificationsForUser(user);
 
@@ -122,13 +136,19 @@ describe('notification date handling', () => {
         assignee_contract: [],
       },
     ]);
-    prismaMock.$queryRaw.mockResolvedValue([{ id: 'reminder-3d' }]);
+    prismaMock.notificationReminder.upsert.mockResolvedValue({
+      id: 'reminder-3d',
+      sent_at: null,
+      notification_id: null,
+      error_message: null,
+    });
     txMock.user.findMany.mockResolvedValue([{ id: user.id }]);
     txMock.notification.findFirst.mockResolvedValue(null);
     txMock.notification.create.mockResolvedValue({ id: 'notification-3d' });
     txMock.notification.groupBy.mockResolvedValue([
       { user_id: user.id, _count: { _all: 1 } },
     ]);
+    prismaMock.notificationOutbox.findMany.mockResolvedValue([]);
 
     await syncDeadlineNotificationsForUser(user);
 
@@ -159,7 +179,7 @@ describe('notification date handling', () => {
 
     await syncDeadlineNotificationsForUser(user);
 
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(prismaMock.notificationReminder.upsert).not.toHaveBeenCalled();
     expect(txMock.notification.create).not.toHaveBeenCalled();
   });
 
@@ -176,7 +196,12 @@ describe('notification date handling', () => {
         assignee_contract: [],
       },
     ]);
-    prismaMock.$queryRaw.mockResolvedValue([{ id: 'reminder-overdue-weekly' }]);
+    prismaMock.notificationReminder.upsert.mockResolvedValue({
+      id: 'reminder-overdue-weekly',
+      sent_at: null,
+      notification_id: null,
+      error_message: null,
+    });
     txMock.user.findMany.mockResolvedValue([{ id: user.id }]);
     txMock.notification.findFirst.mockResolvedValue(null);
     txMock.notification.create.mockResolvedValue({
@@ -185,6 +210,7 @@ describe('notification date handling', () => {
     txMock.notification.groupBy.mockResolvedValue([
       { user_id: user.id, _count: { _all: 1 } },
     ]);
+    prismaMock.notificationOutbox.findMany.mockResolvedValue([]);
 
     await syncDeadlineNotificationsForUser(user);
 
@@ -320,32 +346,32 @@ describe('notification date handling', () => {
     const publishSpy = vi
       .spyOn(NotificationRealtimeService, 'publishNotificationRealtimeEvent')
       .mockResolvedValue(undefined);
-    prismaMock.$queryRaw
-      .mockResolvedValueOnce([
-        {
-          id: 'outbox-1',
-          notification_id: 'notification-1',
-          user_id: user.id,
-          event_type: 'notification.created',
-          payload: {
-            id: 'notification-1',
-            kind: 'DUE_SOON',
-            category: 'DEADLINES',
-            priority: 'HIGH',
-            title: 'Deadline',
-            body: 'Due soon',
-            target_path: '/app/projects/project-1',
-            action_label: 'Open',
-            requires_action: true,
-            is_read: false,
-            read_at: null,
-            created_at: new Date('2026-07-12T00:00:00.000Z'),
-            metadata: { notification_kind: 'DUE_SOON' },
-          },
-          unread_count: 1,
+    prismaMock.notificationOutbox.findMany.mockResolvedValueOnce([
+      {
+        id: 'outbox-1',
+        notification_id: 'notification-1',
+        user_id: user.id,
+        event_type: 'notification.created',
+        payload: {
+          id: 'notification-1',
+          kind: 'DUE_SOON',
+          category: 'DEADLINES',
+          priority: 'HIGH',
+          title: 'Deadline',
+          body: 'Due soon',
+          target_path: '/app/projects/project-1',
+          action_label: 'Open',
+          requires_action: true,
+          is_read: false,
+          read_at: null,
+          created_at: new Date('2026-07-12T00:00:00.000Z'),
+          metadata: { notification_kind: 'DUE_SOON' },
         },
-      ])
-      .mockResolvedValueOnce([{ id: 'outbox-1' }]);
+        unread_count: 1,
+      },
+    ] as any);
+    prismaMock.notificationOutbox.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.notificationReminder.update.mockResolvedValueOnce(undefined);
     txMock.user.findMany.mockResolvedValue([{ id: user.id }]);
     txMock.notification.findFirst.mockResolvedValue(null);
     txMock.notification.create.mockResolvedValue({
@@ -389,7 +415,8 @@ describe('notification date handling', () => {
     });
 
     expect(publishSpy).toHaveBeenCalledOnce();
-    expect(prismaMock.$executeRaw).toHaveBeenCalled();
+    expect(txMock.notificationOutbox.create).toHaveBeenCalled();
+    expect(prismaMock.notificationOutbox.updateMany).toHaveBeenCalled();
   });
 
   it('publishes a realtime update when a notification is marked as read', async () => {
@@ -417,32 +444,31 @@ describe('notification date handling', () => {
       project_id: 'project-1',
     } as any);
     txMock.notification.count.mockResolvedValue(0);
-    prismaMock.$queryRaw
-      .mockResolvedValueOnce([
-        {
-          id: 'outbox-2',
-          notification_id: 'notification-1',
-          user_id: user.id,
-          event_type: 'notification.updated',
-          payload: {
-            id: 'notification-1',
-            kind: 'ASSIGNED_PROJECTS',
-            category: 'ASSIGNMENTS',
-            priority: 'HIGH',
-            title: 'Assigned',
-            body: 'Assigned body',
-            target_path: '/app/projects/project-1',
-            action_label: 'Open',
-            requires_action: true,
-            is_read: true,
-            read_at: new Date('2026-07-12T01:00:00.000Z'),
-            created_at: new Date('2026-07-12T00:00:00.000Z'),
-            metadata: { notification_kind: 'ASSIGNED_PROJECTS' },
-          },
-          unread_count: 0,
+    prismaMock.notificationOutbox.findMany.mockResolvedValueOnce([
+      {
+        id: 'outbox-2',
+        notification_id: 'notification-1',
+        user_id: user.id,
+        event_type: 'notification.updated',
+        payload: {
+          id: 'notification-1',
+          kind: 'ASSIGNED_PROJECTS',
+          category: 'ASSIGNMENTS',
+          priority: 'HIGH',
+          title: 'Assigned',
+          body: 'Assigned body',
+          target_path: '/app/projects/project-1',
+          action_label: 'Open',
+          requires_action: true,
+          is_read: true,
+          read_at: new Date('2026-07-12T01:00:00.000Z'),
+          created_at: new Date('2026-07-12T00:00:00.000Z'),
+          metadata: { notification_kind: 'ASSIGNED_PROJECTS' },
         },
-      ])
-      .mockResolvedValueOnce([{ id: 'outbox-2' }]);
+        unread_count: 0,
+      },
+    ] as any);
+    prismaMock.notificationOutbox.updateMany.mockResolvedValueOnce({ count: 1 });
 
     await markNotificationRead(user, 'notification-1');
 
@@ -453,6 +479,47 @@ describe('notification date handling', () => {
         unread_count: 0,
       })
     );
+  });
+
+  it('deletes notifications older than 30 days', async () => {
+    const now = new Date('2026-08-16T12:00:00.000Z');
+    prismaMock.notification.deleteMany.mockResolvedValueOnce({ count: 4 });
+
+    const result = await deleteExpiredNotifications(now);
+
+    expect(result).toEqual({ count: 4 });
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledWith({
+      where: {
+        created_at: {
+          lt: new Date('2026-07-17T12:00:00.000Z'),
+        },
+      },
+    });
+  });
+
+  it('does not delete notifications exactly at the 30-day cutoff', async () => {
+    const now = new Date('2026-08-16T12:00:00.000Z');
+    prismaMock.notification.deleteMany.mockResolvedValueOnce({ count: 0 });
+
+    await deleteExpiredNotifications(now);
+
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledWith({
+      where: {
+        created_at: {
+          lt: new Date('2026-07-17T12:00:00.000Z'),
+        },
+      },
+    });
+  });
+
+  it('routes cleanup worker jobs to notification retention deletion', async () => {
+    prismaMock.notification.deleteMany.mockResolvedValueOnce({ count: 2 });
+
+    await processDeadlineQueueJob({ kind: 'cleanup' });
+
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledOnce();
+    expect(prismaMock.project.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.notificationOutbox.findMany).not.toHaveBeenCalled();
   });
 
   it('uses stable created_at and id ordering for notification pagination', async () => {
