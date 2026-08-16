@@ -30,6 +30,11 @@ import {
   createProjectHistoryAndAuditEvent,
   recordAuditEvent,
 } from './audit-log.service';
+import {
+  notifyCancellationRequested,
+  notifyProjectAssigned,
+  publishPersistedNotifications,
+} from './notification/notification.service';
 
 const recordCancellationAuditEvent = async (
   tx: Prisma.TransactionClient,
@@ -216,7 +221,7 @@ export const cancelProject = async (
   data: CancelProjectDto
 ): Promise<ProjectCancellationResponse> => {
   assertCapability(user, Capability.PROJECT_CANCEL);
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const projectStatus = await findProjectStatusOrThrow(tx, data.id);
     const cancellation = await tx.projectCancellation.findFirst({
       where: {
@@ -307,8 +312,22 @@ export const cancelProject = async (
       });
     }
 
-    return toCancellationResponse(cancelled);
+    const notificationResults = !isHead
+      ? await notifyCancellationRequested(tx, {
+          project_id: data.id,
+          actor_id: user.id,
+        })
+      : [];
+
+    return {
+      response: toCancellationResponse(cancelled),
+      notificationResults,
+    };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.response;
 };
 
 export const approveCancellation = async (
@@ -446,7 +465,7 @@ export const completeProcurementPhase = async (
   data: CompleteProcurementPhaseDto
 ): Promise<CompleteProcurementPhaseResponse> => {
   assertCapability(user, Capability.PROJECT_COMPLETE_PROCUREMENT);
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
       select: {
@@ -531,8 +550,21 @@ export const completeProcurementPhase = async (
       newValue: dataToUpdate,
       changedBy: user,
     });
-    return updated;
+    const notificationResults =
+      updated.assignee_contract.length > 0
+        ? await notifyProjectAssigned(tx, {
+            project_id: data.id,
+            assignee_ids: updated.assignee_contract.map((assignee) => assignee.id),
+            actor_id: user.id,
+          })
+        : [];
+
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const closeProject = async (

@@ -626,6 +626,7 @@ export const createVendorSubmissionsProject = async (
     );
     const notificationResults = await notifyVendorSubmissionReceived(tx, {
       project_id: submission.project_id,
+      submission_id: submission.id,
     });
     return { submission, notificationResults };
   });

@@ -4,6 +4,7 @@ import {
   NotificationCategory,
   NotificationChannel,
   NotificationDeliveryStatus,
+  NotificationOutboxStatus,
   NotificationPriority,
   Prisma,
   UserRole,
@@ -15,6 +16,7 @@ import { NotFoundError } from '../../lib/errors';
 import { activeDelegationWhere, activeUserWhere } from '../../lib/active-state';
 import type {
   NotificationKind,
+  NotificationListItemResponse,
   PersistedNotificationResult,
 } from '../../types/notification.type';
 import {
@@ -25,15 +27,9 @@ import { mapNotificationRecord } from './notification-response.mapper';
 import { publishNotificationRealtimeEvent } from './notification-realtime.service';
 
 export type TxClient = Prisma.TransactionClient;
-type SqlClient = Pick<Prisma.TransactionClient, '$executeRaw' | '$queryRaw'>;
 type NotificationRealtimeEventType =
   | 'notification.created'
   | 'notification.updated';
-type NotificationOutboxStatus =
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'PUBLISHED'
-  | 'FAILED';
 type NotificationOutboxRow = {
   id: string;
   notification_id: string;
@@ -103,130 +99,129 @@ const toErrorMessage = (error: unknown) =>
     : 'Unknown notification publish failure';
 
 const claimableOutboxStatuses: NotificationOutboxStatus[] = [
-  'PENDING',
-  'FAILED',
+  NotificationOutboxStatus.PENDING,
+  NotificationOutboxStatus.FAILED,
 ];
-const outboxStatusSql = Prisma.join(
-  claimableOutboxStatuses.map(
-    (status) => Prisma.sql`${status}::"NotificationOutboxStatus"`
-  )
-);
+
+const toNotificationPayloadJson = (
+  value: NotificationListItemResponse
+): Prisma.InputJsonValue => value as unknown as Prisma.InputJsonValue;
 
 const queueNotificationOutboxEvent = async (
-  db: SqlClient,
+  db: Pick<Prisma.TransactionClient, 'notificationOutbox'>,
   item: PersistedNotificationResult
 ) => {
   const eventType: NotificationRealtimeEventType =
     item.action === 'created' ? 'notification.created' : 'notification.updated';
 
   const now = nowUtc();
-  await db.$executeRaw(Prisma.sql`
-    INSERT INTO "notification_outbox" (
-      "id",
-      "notification_id",
-      "user_id",
-      "event_type",
-      "payload",
-      "unread_count",
-      "created_at",
-      "updated_at"
-    )
-    VALUES (
-      ${randomUUID()},
-      ${item.notification.id},
-      ${item.userId},
-      ${eventType},
-      ${mapNotificationRecord(item.notification)}::jsonb,
-      ${item.unreadCount},
-      ${now},
-      ${now}
-    )
-  `);
+  await db.notificationOutbox.create({
+    data: {
+      id: randomUUID(),
+      notification_id: item.notification.id,
+      user_id: item.userId,
+      event_type: eventType,
+      payload: toNotificationPayloadJson(mapNotificationRecord(item.notification)),
+      unread_count: item.unreadCount,
+      created_at: now,
+      updated_at: now,
+    },
+  });
 };
 
 const loadNotificationOutboxRows = async (
-  db: SqlClient,
+  db: Pick<PrismaClientLike, 'notificationOutbox'>,
   options?: {
     notificationIds?: string[];
     limit?: number;
   }
 ) => {
   const limit = options?.limit ?? 100;
-  const filters = [
-    Prisma.sql`"status" IN (${Prisma.join(
-      claimableOutboxStatuses.map(
-        (status) => Prisma.sql`${status}::"NotificationOutboxStatus"`
-      )
-    )})`,
-  ];
+  const rows = await db.notificationOutbox.findMany({
+    where: {
+      status: { in: claimableOutboxStatuses },
+      ...(options?.notificationIds?.length
+        ? {
+            notification_id: {
+              in: options.notificationIds,
+            },
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      notification_id: true,
+      user_id: true,
+      event_type: true,
+      payload: true,
+      unread_count: true,
+    },
+    orderBy: {
+      created_at: 'asc',
+    },
+    take: limit,
+  });
 
-  if (options?.notificationIds?.length) {
-    filters.push(
-      Prisma.sql`"notification_id" IN (${Prisma.join(options.notificationIds)})`
-    );
-  }
-
-  const whereClause =
-    filters.length === 1
-      ? filters[0]
-      : Prisma.sql`${filters[0]} AND ${filters[1]}`;
-  return db.$queryRaw<NotificationOutboxRow[]>(Prisma.sql`
-    SELECT
-      "id",
-      "notification_id",
-      "user_id",
-      "event_type",
-      "payload",
-      "unread_count"
-    FROM "notification_outbox"
-    WHERE ${whereClause}
-    ORDER BY "created_at" ASC
-    LIMIT ${limit}
-  `);
+  return rows.map((row) => ({
+    ...row,
+    event_type: row.event_type as NotificationRealtimeEventType,
+    payload: row.payload as unknown as NotificationListItemResponse,
+  }));
 };
 
-const claimNotificationOutboxRow = async (db: SqlClient, id: string) => {
-  const claimed = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    UPDATE "notification_outbox"
-    SET
-      "status" = 'PROCESSING',
-      "attempts" = "attempts" + 1,
-      "last_attempted_at" = NOW(),
-      "updated_at" = NOW()
-    WHERE
-      "id" = ${id}
-      AND "status" IN (${outboxStatusSql})
-    RETURNING "id"
-  `);
+type PrismaClientLike = typeof prisma;
 
-  return claimed.length > 0;
+const claimNotificationOutboxRow = async (
+  db: Pick<PrismaClientLike, 'notificationOutbox'>,
+  id: string
+) => {
+  const now = nowUtc();
+  const claimed = await db.notificationOutbox.updateMany({
+    where: {
+      id,
+      status: {
+        in: claimableOutboxStatuses,
+      },
+    },
+    data: {
+      status: NotificationOutboxStatus.PROCESSING,
+      attempts: {
+        increment: 1,
+      },
+      last_attempted_at: now,
+      updated_at: now,
+    },
+  });
+
+  return claimed.count > 0;
 };
 
-const markNotificationOutboxPublished = async (db: SqlClient, id: string) => {
-  await db.$executeRaw(Prisma.sql`
-    UPDATE "notification_outbox"
-    SET
-      "status" = 'PUBLISHED',
-      "published_at" = NOW(),
-      "error_message" = NULL,
-      "updated_at" = NOW()
-    WHERE "id" = ${id}
-  `);
+const markNotificationOutboxPublished = async (
+  db: Pick<PrismaClientLike, 'notificationOutbox'>,
+  id: string
+) => {
+  await db.notificationOutbox.update({
+    where: { id },
+    data: {
+      status: NotificationOutboxStatus.PUBLISHED,
+      published_at: nowUtc(),
+      error_message: null,
+    },
+  });
 };
 
 const markNotificationOutboxFailed = async (
-  db: SqlClient,
+  db: Pick<PrismaClientLike, 'notificationOutbox'>,
   id: string,
   errorMessage: string
 ) => {
-  await db.$executeRaw(Prisma.sql`
-    UPDATE "notification_outbox"
-    SET
-      "status" = 'FAILED',
-      "error_message" = ${errorMessage},
-      "updated_at" = NOW()
-    WHERE "id" = ${id}
-  `);
+  await db.notificationOutbox.update({
+    where: { id },
+    data: {
+      status: NotificationOutboxStatus.FAILED,
+      error_message: errorMessage,
+    },
+  });
 };
 
 export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
@@ -546,7 +541,7 @@ export const publishPendingNotificationOutbox = async (options?: {
     try {
       await publishNotificationRealtimeEvent(row.user_id, {
         type: row.event_type,
-        notification: row.payload as ReturnType<typeof mapNotificationRecord>,
+        notification: row.payload as NotificationListItemResponse,
         unread_count: row.unread_count,
       });
       await markNotificationOutboxPublished(prisma, row.id);

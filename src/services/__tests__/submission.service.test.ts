@@ -293,9 +293,57 @@ describe('submission.service', () => {
       responsible_unit_id: 'unit-1',
       created_by: 'user-1',
       assignee_procurement: [],
-      assignee_contract: [],
+      assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
       creator: { id: 'user-1', full_name: 'User One', email: null },
     });
+    txMock.userOrganizationRole.findMany.mockResolvedValue([
+      {
+        user: { id: 'finance-1', full_name: 'Finance One', email: null },
+      },
+    ]);
+    txMock.userDelegation.findMany.mockResolvedValue([]);
+    txMock.user.findMany.mockImplementation(async (args: any) => {
+      const ids = args?.where?.id?.in ?? [];
+      return ids.map((id: string) => ({ id }));
+    });
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create
+      .mockResolvedValueOnce({
+        id: 'notification-contract-1',
+        user_id: 'contract-1',
+        project_id: 'project-1',
+        category: 'VENDOR_SUBMISSIONS',
+        priority: 'HIGH',
+        title: 'ผู้ค้าส่งเอกสารแล้ว',
+        body: 'ผู้ค้าได้ส่งเอกสารสำหรับโครงการ "Project 1" แล้ว',
+        target_path: '/app/vendor-response',
+        action_label: 'เปิดรายการ',
+        requires_action: true,
+        is_read: false,
+        read_at: null,
+        created_at: new Date('2026-06-01T00:00:00.000Z'),
+        metadata: { notification_kind: 'ASSIGNED_DOCUMENT' },
+      })
+      .mockResolvedValueOnce({
+        id: 'notification-finance-1',
+        user_id: 'finance-1',
+        project_id: 'project-1',
+        category: 'FINANCE_HANDOFFS',
+        priority: 'MEDIUM',
+        title: 'มีงานพร้อมส่งต่อการเงิน',
+        body: 'โครงการ "Project 1" มีเอกสารจากผู้ค้าพร้อมสำหรับขั้นตอนการเงิน',
+        target_path: '/app/projects/project-1',
+        action_label: 'เปิดโครงการ',
+        requires_action: false,
+        is_read: false,
+        read_at: null,
+        created_at: new Date('2026-06-01T00:00:00.000Z'),
+        metadata: { notification_kind: 'FINANCE_SUBMIT' },
+      });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'contract-1', _count: { _all: 1 } },
+      { user_id: 'finance-1', _count: { _all: 1 } },
+    ]);
     txMock.projectSubmission.findFirst.mockResolvedValue(null);
     txMock.projectSubmission.create.mockResolvedValue({
       id: 'submission-1',
@@ -329,6 +377,31 @@ describe('submission.service', () => {
       UnitResponsibleType.CONTRACT,
       'project-1'
     );
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'contract-1',
+          category: 'VENDOR_SUBMISSIONS',
+          dedupe_key: 'vendor-submission:submission-1',
+          metadata: expect.objectContaining({
+            notification_kind: 'ASSIGNED_DOCUMENT',
+          }),
+        }),
+      })
+    );
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'finance-1',
+          category: 'FINANCE_HANDOFFS',
+          dedupe_key: 'finance-handoff:submission-1',
+          metadata: expect.objectContaining({
+            notification_kind: 'FINANCE_SUBMIT',
+          }),
+        }),
+      })
+    );
+    expect(txMock.notification.create).toHaveBeenCalledTimes(2);
   });
 
   it('createStaffSubmissionsProject requires installment number for contract workflow', async () => {

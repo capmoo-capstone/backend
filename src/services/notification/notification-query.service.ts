@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import {
   NotificationCategory,
+  NotificationOutboxStatus,
   NotificationPriority,
   Prisma,
   ProjectStatus,
@@ -71,6 +72,7 @@ type ReminderReservation = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
+const NOTIFICATION_RETENTION_MS = 30 * DAY_MS;
 
 const REMINDER_WINDOWS: ReminderWindow[] = [
   {
@@ -248,70 +250,71 @@ const buildReminderCandidates = (input: {
 const reserveReminderCandidate = async (
   candidate: ReminderCandidate
 ): Promise<ReminderReservation | null> => {
-  const result = await prisma.$queryRaw<ReminderReservation[]>(Prisma.sql`
-    INSERT INTO "notification_reminders" (
-      "id",
-      "user_id",
-      "project_id",
-      "target_key",
-      "window_key",
-      "scheduled_for",
-      "metadata",
-      "updated_at"
-    )
-    VALUES (
-      ${randomUUID()},
-      ${candidate.userId},
-      ${candidate.projectId},
-      ${candidate.targetKey},
-      ${candidate.windowKey},
-      ${candidate.scheduledFor},
-      ${candidate.metadata}::jsonb,
-      NOW()
-    )
-    ON CONFLICT (
-      "user_id",
-      "project_id",
-      "target_key",
-      "window_key",
-      "scheduled_for"
-    ) DO UPDATE
-    SET
-      "error_message" = CASE
-        WHEN "notification_reminders"."sent_at" IS NULL
-        THEN NULL
-        ELSE "notification_reminders"."error_message"
-      END,
-      "updated_at" = NOW()
-    RETURNING "id", "sent_at", "notification_id"
-  `);
+  const reminder = await prisma.notificationReminder.upsert({
+    where: {
+      user_id_project_id_target_key_window_key_scheduled_for: {
+        user_id: candidate.userId,
+        project_id: candidate.projectId,
+        target_key: candidate.targetKey,
+        window_key: candidate.windowKey,
+        scheduled_for: candidate.scheduledFor,
+      },
+    },
+    create: {
+      id: randomUUID(),
+      user_id: candidate.userId,
+      project_id: candidate.projectId,
+      target_key: candidate.targetKey,
+      window_key: candidate.windowKey,
+      scheduled_for: candidate.scheduledFor,
+      metadata: candidate.metadata as any,
+    },
+    update: {},
+    select: {
+      id: true,
+      sent_at: true,
+      notification_id: true,
+      error_message: true,
+    },
+  });
 
-  return result[0] ?? null;
+  if (reminder.sent_at === null && reminder.error_message !== null) {
+    await prisma.notificationReminder.update({
+      where: { id: reminder.id },
+      data: {
+        error_message: null,
+      },
+    });
+  }
+
+  return {
+    id: reminder.id,
+    sent_at: reminder.sent_at,
+    notification_id: reminder.notification_id,
+  };
 };
 
 const markReminderSent = async (
   reminderId: string,
   notificationId?: string | null
 ) => {
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "notification_reminders"
-    SET
-      "notification_id" = ${notificationId ?? null},
-      "sent_at" = NOW(),
-      "updated_at" = NOW(),
-      "error_message" = NULL
-    WHERE "id" = ${reminderId}
-  `);
+  await prisma.notificationReminder.update({
+    where: { id: reminderId },
+    data: {
+      notification_id: notificationId ?? null,
+      sent_at: nowUtc(),
+      error_message: null,
+    },
+  });
 };
 
 const markReminderFailed = async (reminderId: string, errorMessage: string) => {
-  await prisma.$executeRaw(Prisma.sql`
-    UPDATE "notification_reminders"
-    SET
-      "error_message" = ${errorMessage},
-      "updated_at" = NOW()
-    WHERE "id" = ${reminderId}
-  `);
+  await prisma.notificationReminder.update({
+    where: { id: reminderId },
+    data: {
+      error_message: errorMessage,
+    },
+  });
 };
 
 const toDispatchJob = (
@@ -486,6 +489,18 @@ export const enqueueDeadlineReminderScan = async () => {
   }
 };
 
+export const deleteExpiredNotifications = async (now = nowUtc()) => {
+  const cutoff = new Date(now.getTime() - NOTIFICATION_RETENTION_MS);
+
+  return prisma.notification.deleteMany({
+    where: {
+      created_at: {
+        lt: cutoff,
+      },
+    },
+  });
+};
+
 export const processDeadlineQueueJob = async (job: NotificationDeadlineJob) => {
   if (job.kind === 'scan') {
     await processDeadlineReminderScan({ queueOnly: true });
@@ -494,6 +509,11 @@ export const processDeadlineQueueJob = async (job: NotificationDeadlineJob) => {
 
   if (job.kind === 'outbox-flush') {
     await publishPendingNotificationOutbox();
+    return;
+  }
+
+  if (job.kind === 'cleanup') {
+    await deleteExpiredNotifications();
     return;
   }
 
@@ -613,26 +633,18 @@ export const markNotificationRead = async (
       },
     });
 
-    await tx.$executeRaw(Prisma.sql`
-      INSERT INTO "notification_outbox" (
-        "id",
-        "notification_id",
-        "user_id",
-        "event_type",
-        "payload",
-        "unread_count",
-        "updated_at"
-      )
-      VALUES (
-        ${randomUUID()},
-        ${updated.id},
-        ${user.id},
-        'notification.updated',
-        ${mapNotificationRecord(updated)}::jsonb,
-        ${unreadCount},
-        ${nowUtc()}
-      )
-    `);
+    await tx.notificationOutbox.create({
+      data: {
+        id: randomUUID(),
+        notification_id: updated.id,
+        user_id: user.id,
+        event_type: 'notification.updated',
+        payload: mapNotificationRecord(updated) as any,
+        unread_count: unreadCount,
+        status: NotificationOutboxStatus.PENDING,
+        updated_at: nowUtc(),
+      },
+    });
 
     return updated;
   });
@@ -683,26 +695,18 @@ export const markAllNotificationsRead = async (user: AuthPayload) => {
     });
 
     for (const notification of updatedNotifications) {
-      await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "notification_outbox" (
-          "id",
-          "notification_id",
-          "user_id",
-          "event_type",
-          "payload",
-          "unread_count",
-          "updated_at"
-        )
-        VALUES (
-          ${randomUUID()},
-          ${notification.id},
-          ${user.id},
-          'notification.updated',
-          ${mapNotificationRecord(notification)}::jsonb,
-          0,
-          ${nowUtc()}
-        )
-      `);
+      await tx.notificationOutbox.create({
+        data: {
+          id: randomUUID(),
+          notification_id: notification.id,
+          user_id: user.id,
+          event_type: 'notification.updated',
+          payload: mapNotificationRecord(notification) as any,
+          unread_count: 0,
+          status: NotificationOutboxStatus.PENDING,
+          updated_at: nowUtc(),
+        },
+      });
     }
 
     return ids;

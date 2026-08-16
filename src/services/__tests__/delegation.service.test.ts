@@ -252,36 +252,36 @@ describe('delegation.service', () => {
         { user_id: 'delegatee-1', _count: { _all: 1 } },
       ];
     });
-    prismaMock.$queryRaw
-      .mockImplementationOnce(async () => {
-        callOrder.push('outbox:load');
-        return [
-          {
-            id: 'outbox-1',
-            notification_id: 'notification-1',
-            user_id: 'delegator-1',
-            event_type: 'notification.created',
-            payload: {
-              id: 'notification-1',
-              kind: 'DELEGATION_STARTED',
-            },
-            unread_count: 1,
+    prismaMock.notificationOutbox.findMany.mockImplementationOnce(async () => {
+      callOrder.push('outbox:load');
+      return [
+        {
+          id: 'outbox-1',
+          notification_id: 'notification-1',
+          user_id: 'delegator-1',
+          event_type: 'notification.created',
+          payload: {
+            id: 'notification-1',
+            kind: 'DELEGATION_STARTED',
           },
-          {
-            id: 'outbox-2',
-            notification_id: 'notification-1',
-            user_id: 'delegatee-1',
-            event_type: 'notification.created',
-            payload: {
-              id: 'notification-1',
-              kind: 'DELEGATION_STARTED',
-            },
-            unread_count: 1,
+          unread_count: 1,
+        },
+        {
+          id: 'outbox-2',
+          notification_id: 'notification-1',
+          user_id: 'delegatee-1',
+          event_type: 'notification.created',
+          payload: {
+            id: 'notification-1',
+            kind: 'DELEGATION_STARTED',
           },
-        ];
-      })
-      .mockImplementationOnce(async () => [{ id: 'outbox-1' }])
-      .mockImplementationOnce(async () => [{ id: 'outbox-2' }]);
+          unread_count: 1,
+        },
+      ] as any;
+    });
+    prismaMock.notificationOutbox.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 });
     publishSpy.mockImplementation(async () => {
       callOrder.push('publish');
     });

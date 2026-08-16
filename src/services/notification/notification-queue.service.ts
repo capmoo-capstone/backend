@@ -5,6 +5,7 @@ import { isRedisConfigured } from '../../config/runtime';
 export type NotificationDeadlineJob =
   | { kind: 'scan' }
   | { kind: 'outbox-flush' }
+  | { kind: 'cleanup' }
   | {
       kind: 'dispatch';
       reminderId: string;
@@ -111,14 +112,20 @@ export const enqueueNotificationOutboxFlush = async () => {
   const queue = getDeadlineQueue();
   if (!queue) return null;
 
-  return queue.add(
-    'outbox-flush',
-    { kind: 'outbox-flush' },
-    {
-      jobId: 'notification-outbox-flush',
-      removeOnComplete: 1000,
-    }
-  );
+  return queue.add('outbox-flush', { kind: 'outbox-flush' }, {
+    jobId: 'notification-outbox-flush',
+    removeOnComplete: 1000,
+  });
+};
+
+export const enqueueNotificationCleanup = async () => {
+  const queue = getDeadlineQueue();
+  if (!queue) return null;
+
+  return queue.add('cleanup', { kind: 'cleanup' }, {
+    jobId: 'notification-cleanup-once',
+    removeOnComplete: 1000,
+  });
 };
 
 export const enqueueDeadlineDispatch = async (
