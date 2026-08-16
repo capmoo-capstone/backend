@@ -69,7 +69,7 @@ export interface ProjectDetailResponse {
   migo_105_no: string | null;
   asset_code: boolean | null;
   expected_approval_date: Date | null;
-  procurement_completion_date: Date | null;
+  procurement_completed_date: Date | null;
   created_at: Date;
   updated_at: Date | null;
   vendor: {

@@ -403,7 +403,7 @@ export const getById = async (
       migo_105_no: projectData.migo_105_no,
       asset_code: projectData.asset_code,
       expected_approval_date: projectData.expected_approval_date,
-      procurement_completion_date:
+      procurement_completed_date:
         projectData.procurement_completed_at,
       created_at: projectData.created_at,
       updated_at: projectData.updated_at,
