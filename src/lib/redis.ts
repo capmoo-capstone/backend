@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { runtimeConfig } from '../config/runtime';
 
 type RedisClient = {
@@ -18,12 +19,23 @@ const loadRedis = () => {
   };
 };
 
+const getRedisTlsOptions = () => {
+  if (!runtimeConfig.redisUrl.startsWith('rediss://')) return undefined;
+
+  return {
+    ca: runtimeConfig.redisTlsCaPath
+      ? readFileSync(runtimeConfig.redisTlsCaPath, 'utf8')
+      : undefined,
+    rejectUnauthorized: runtimeConfig.redisTlsRejectUnauthorized,
+  };
+};
+
 const createRedisClient = (blocking = false) =>
   new (loadRedis().default)(runtimeConfig.redisUrl, {
     maxRetriesPerRequest: blocking ? null : 1,
     lazyConnect: true,
     enableOfflineQueue: !blocking,
-    tls: runtimeConfig.redisUrl.startsWith('rediss://') ? {} : undefined,
+    tls: getRedisTlsOptions(),
   });
 
 export const getRedisPublisher = () => {

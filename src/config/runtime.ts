@@ -12,6 +12,11 @@ const parseNumber = (value: string | undefined, fallback: number) => {
 export const runtimeConfig = {
   redisUrl: process.env.REDIS_URL?.trim() || '',
   redisPrefix: process.env.REDIS_PREFIX?.trim() || 'nexus-procure',
+  redisTlsCaPath: process.env.REDIS_TLS_CA_PATH?.trim() || '',
+  redisTlsRejectUnauthorized: parseBoolean(
+    process.env.REDIS_TLS_REJECT_UNAUTHORIZED,
+    true
+  ),
   cronSecret: process.env.CRON_SECRET?.trim() || '',
   realtimeEnabled: parseBoolean(
     process.env.NOTIFICATIONS_REALTIME_ENABLED,

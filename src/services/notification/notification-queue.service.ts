@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { runtimeConfig } from '../../config/runtime';
 import { isRedisConfigured } from '../../config/runtime';
 
@@ -50,11 +51,22 @@ const loadBullMq = () => {
   };
 };
 
+const getRedisTlsOptions = () => {
+  if (!runtimeConfig.redisUrl.startsWith('rediss://')) return undefined;
+
+  return {
+    ca: runtimeConfig.redisTlsCaPath
+      ? readFileSync(runtimeConfig.redisTlsCaPath, 'utf8')
+      : undefined,
+    rejectUnauthorized: runtimeConfig.redisTlsRejectUnauthorized,
+  };
+};
+
 const getQueueConnection = () => {
   if (!runtimeConfig.redisUrl) return null;
   return {
     url: runtimeConfig.redisUrl,
-    tls: runtimeConfig.redisUrl.startsWith('rediss://') ? {} : undefined,
+    tls: getRedisTlsOptions(),
     maxRetriesPerRequest: null,
   };
 };
