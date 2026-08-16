@@ -76,7 +76,6 @@ export const streamNotifications = async (
     res.write(
       `data: ${JSON.stringify({
         type: 'disabled',
-        polling_fallback_ms: runtimeConfig.pollingFallbackMs,
       })}\n\n`
     );
     res.end();
