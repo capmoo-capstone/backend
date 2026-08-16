@@ -23,6 +23,9 @@ import {
 } from './audit-log.service';
 import { nowUtc, toBangkokParts } from '../lib/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
+import { Capability, assertCapability } from '../lib/access-policy';
+import { activeContractNumberWhere } from '../lib/active-state';
+import { assertProjectCanBeDeleted } from '../lib/deletion-policy';
 
 const currentBangkokBudgetYear = (): number => {
   const parts = toBangkokParts(nowUtc());
@@ -143,6 +146,7 @@ export const createProject = async (
   user: AuthPayload,
   data: CreateProjectDto
 ): Promise<CreateProjectResponse> => {
+  assertCapability(user, Capability.PROJECT_CREATE);
   return await prisma.$transaction(async (tx) => {
     await acquireProjectCreationLock(tx);
 
@@ -173,6 +177,8 @@ export const createProject = async (
     }
 
     const { budget_plan_id, budget_year, ...projectData } = data;
+    void budget_plan_id;
+    void budget_year;
     const project = await tx.project.create({
       data: {
         ...projectData,
@@ -199,6 +205,7 @@ export const importProjects = async (
   user: AuthPayload,
   data: CreateProjectDto[]
 ): Promise<ProjectsListResponse> => {
+  assertCapability(user, Capability.PROJECT_IMPORT);
   return await prisma.$transaction(async (tx) => {
     await acquireProjectCreationLock(tx);
 
@@ -238,6 +245,8 @@ export const importProjects = async (
     const createdProjects = await tx.project.createManyAndReturn({
       data: data.map((d, i) => {
         const { budget_plan_id, budget_year, ...projectData } = d;
+        void budget_plan_id;
+        void budget_year;
         return {
           ...projectData,
           status: ProjectStatus.UNASSIGNED,
@@ -260,6 +269,7 @@ export const updateProjectData = async (
   user: AuthPayload,
   data: UpdateProjectDto
 ): Promise<UpdateProjectDataResponse> => {
+  assertCapability(user, Capability.PROJECT_UPDATE);
   if (!data || !data.updateData || Object.keys(data.updateData).length === 0) {
     throw new BadRequestError('No data provided for update');
   }
@@ -321,6 +331,7 @@ export const generateContractNumber = async (
   type: string,
   budget_year: number
 ): Promise<{ id: string; contract_no: string }> => {
+  assertCapability(user, Capability.CONTRACT_MANAGE);
   return await prisma.$transaction(async (tx) => {
     const lockKey = `${budget_year}:${type}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
@@ -377,9 +388,10 @@ export const cancelContractNumber = async (
   is_active: boolean;
   cancellation_reason: string;
 }> => {
+  assertCapability(user, Capability.CONTRACT_MANAGE);
   return await prisma.$transaction(async (tx) => {
     const contract = await tx.projectContractNumber.findFirst({
-      where: { id: contractId, is_active: true },
+      where: { id: contractId, ...activeContractNumberWhere() },
       select: {
         id: true,
         contract_no: true,
@@ -442,14 +454,14 @@ export const deleteProject = async (
   user: AuthPayload,
   id: string
 ): Promise<void> => {
-  const project = await prisma.project.findUnique({
-    where: { id },
-    select: { status: true },
-  });
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  await prisma.project.delete({
-    where: { id },
+  assertCapability(user, Capability.PROJECT_DELETE);
+  await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!project) throw new NotFoundError('Project not found');
+    await assertProjectCanBeDeleted(tx, id);
+    await tx.project.delete({ where: { id } });
   });
 };

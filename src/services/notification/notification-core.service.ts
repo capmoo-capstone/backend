@@ -13,6 +13,7 @@ import { prisma } from '../../config/prisma';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { nowUtc, toBangkokParts } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
+import { activeDelegationWhere, activeUserWhere } from '../../lib/active-state';
 import type {
   NotificationKind,
   NotificationListItemResponse,
@@ -29,21 +30,12 @@ export type TxClient = Prisma.TransactionClient;
 type NotificationRealtimeEventType =
   | 'notification.created'
   | 'notification.updated';
-type NotificationOutboxRow = {
-  id: string;
-  notification_id: string;
-  user_id: string;
-  event_type: NotificationRealtimeEventType;
-  payload: unknown;
-  unread_count: number;
-};
-
 const isUniqueConstraintError = (error: unknown) =>
   Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'P2002'
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
   );
 
 export type NotificationDispatchInput = {
@@ -93,7 +85,9 @@ const buildNotificationMetadata = (input: NotificationDispatchInput) => ({
 });
 
 const toErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : 'Unknown notification publish failure';
+  error instanceof Error
+    ? error.message
+    : 'Unknown notification publish failure';
 
 const claimableOutboxStatuses: NotificationOutboxStatus[] = [
   NotificationOutboxStatus.PENDING,
@@ -118,7 +112,9 @@ const queueNotificationOutboxEvent = async (
       notification_id: item.notification.id,
       user_id: item.userId,
       event_type: eventType,
-      payload: toNotificationPayloadJson(mapNotificationRecord(item.notification)),
+      payload: toNotificationPayloadJson(
+        mapNotificationRecord(item.notification)
+      ),
       unread_count: item.unreadCount,
       created_at: now,
       updated_at: now,
@@ -228,6 +224,7 @@ export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
       role: scope.role,
       dept_id: deptId,
       unit_id: scope.unit_id ?? null,
+      user: activeUserWhere(),
     },
     select: {
       user: {
@@ -244,8 +241,8 @@ export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
     where: {
       role: scope.role,
       unit_id: scope.unit_id ?? null,
-      is_active: true,
-      OR: [{ end_date: null }, { end_date: { gte: new Date() } }],
+      ...activeDelegationWhere(),
+      delegatee: activeUserWhere(),
     },
     select: {
       delegatee: {
@@ -550,11 +547,7 @@ export const publishPendingNotificationOutbox = async (options?: {
 export const wholeDayDiff = (targetDate: Date, now: Date) => {
   const nowParts = toBangkokParts(now);
   const targetParts = toBangkokParts(targetDate);
-  const start = Date.UTC(
-    nowParts.year,
-    nowParts.month - 1,
-    nowParts.day
-  );
+  const start = Date.UTC(nowParts.year, nowParts.month - 1, nowParts.day);
   const target = Date.UTC(
     targetParts.year,
     targetParts.month - 1,

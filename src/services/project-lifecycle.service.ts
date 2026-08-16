@@ -13,13 +13,13 @@ import { CONTRACT_UNIT_ID } from '../lib/constant';
 import { nowUtc } from '../lib/date';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
+import { Capability, assertCapability } from '../lib/access-policy';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
-  CompleteContractPhaseResponse,
   CompleteProcurementPhaseResponse,
   ProjectCancellationResponse,
   ProjectIdStatusResponse,
@@ -30,6 +30,11 @@ import {
   createProjectHistoryAndAuditEvent,
   recordAuditEvent,
 } from './audit-log.service';
+import {
+  notifyCancellationRequested,
+  notifyProjectAssigned,
+  publishPersistedNotifications,
+} from './notification/notification.service';
 
 const recordCancellationAuditEvent = async (
   tx: Prisma.TransactionClient,
@@ -215,7 +220,8 @@ export const cancelProject = async (
   user: AuthPayload,
   data: CancelProjectDto
 ): Promise<ProjectCancellationResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  assertCapability(user, Capability.PROJECT_CANCEL);
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const projectStatus = await findProjectStatusOrThrow(tx, data.id);
     const cancellation = await tx.projectCancellation.findFirst({
       where: {
@@ -306,14 +312,29 @@ export const cancelProject = async (
       });
     }
 
-    return toCancellationResponse(cancelled);
+    const notificationResults = !isHead
+      ? await notifyCancellationRequested(tx, {
+          project_id: data.id,
+          actor_id: user.id,
+        })
+      : [];
+
+    return {
+      response: toCancellationResponse(cancelled),
+      notificationResults,
+    };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.response;
 };
 
 export const approveCancellation = async (
   user: AuthPayload,
   id: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_APPROVE_CANCELLATION);
   return await prisma.$transaction(async (tx) => {
     const now = nowUtc();
     const projectStatus = await findProjectStatusOrThrow(tx, id);
@@ -367,6 +388,7 @@ export const rejectCancellation = async (
   user: AuthPayload,
   id: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_APPROVE_CANCELLATION);
   return await prisma.$transaction(async (tx) => {
     const now = nowUtc();
     const projectStatus = await findProjectStatusOrThrow(tx, id);
@@ -442,7 +464,8 @@ export const completeProcurementPhase = async (
   user: AuthPayload,
   data: CompleteProcurementPhaseDto
 ): Promise<CompleteProcurementPhaseResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  assertCapability(user, Capability.PROJECT_COMPLETE_PROCUREMENT);
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
       select: {
@@ -527,14 +550,30 @@ export const completeProcurementPhase = async (
       newValue: dataToUpdate,
       changedBy: user,
     });
-    return updated;
+    const notificationResults =
+      updated.assignee_contract.length > 0
+        ? await notifyProjectAssigned(tx, {
+            project_id: data.id,
+            assignee_ids: updated.assignee_contract.map(
+              (assignee) => assignee.id
+            ),
+            actor_id: user.id,
+          })
+        : [];
+
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const closeProject = async (
   user: AuthPayload,
   projectId: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_CLOSE);
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },

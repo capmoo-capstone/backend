@@ -15,7 +15,10 @@ let subscriberClient: RedisClient | null = null;
 const loadRedis = () => {
   const runtimeRequire = eval('require') as NodeRequire;
   return runtimeRequire('ioredis') as {
-    default: new (url?: string, options?: Record<string, unknown>) => RedisClient;
+    default: new (
+      url?: string,
+      options?: Record<string, unknown>
+    ) => RedisClient;
   };
 };
 
@@ -52,10 +55,7 @@ export const getRedisSubscriber = () => {
 };
 
 export const closeRedisClients = async () => {
-  await Promise.allSettled([
-    publisherClient?.quit(),
-    subscriberClient?.quit(),
-  ]);
+  await Promise.allSettled([publisherClient?.quit(), subscriberClient?.quit()]);
   publisherClient = null;
   subscriberClient = null;
 };

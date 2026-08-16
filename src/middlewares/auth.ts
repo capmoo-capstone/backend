@@ -7,6 +7,12 @@ import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../services/auth.service';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
+import {
+  Capability,
+  hasCapability,
+  hasSupplyAccess,
+  isSuperAdmin,
+} from '../lib/access-policy';
 
 interface JwtPayload {
   id: string;
@@ -67,9 +73,9 @@ export const protect = async (
     const result = await fetchAndFormatUserDetails({ id: decoded.id });
     if (!result) throw new UnauthorizedError('User not found');
 
-    const { user, authData } = result;
+    const { user, authData, cacheExpiresAt } = result;
 
-    setUserAuthCache(decoded.id, authData);
+    setUserAuthCache(decoded.id, authData, cacheExpiresAt);
 
     req.user = {
       token,
@@ -88,7 +94,7 @@ export const protect = async (
 };
 
 const hasSuperAdminRole = (req: AuthenticatedRequest): boolean =>
-  !!req.user?.roles.some((r) => r.role === UserRole.SUPER_ADMIN);
+  !!req.user && isSuperAdmin(req.user);
 
 export const authorize = (allowedRoles: UserRole[] = []) => {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
@@ -123,12 +129,14 @@ export const authorizeSupply = (allowedRoles: UserRole[] = []) => {
 
       if (hasSuperAdminRole(req)) return next();
 
-      const hasSupplyPermission = req.user.roles.some(
-        (r) =>
-          r.dept_id === OPS_DEPT_ID &&
-          (allowedRoles.length === 0 ||
-            allowedRoles.includes(r.role as UserRole))
-      );
+      const hasSupplyPermission =
+        allowedRoles.length === 0
+          ? hasSupplyAccess(req.user)
+          : req.user.roles.some(
+              (r) =>
+                r.dept_id === OPS_DEPT_ID &&
+                allowedRoles.includes(r.role as UserRole)
+            );
 
       if (!hasSupplyPermission) {
         throw new ForbiddenError(
@@ -149,3 +157,17 @@ export const requireRoles = authorize;
 export const requireSupplyRoles = authorizeSupply;
 export const requireSuperAdmin = authorize();
 export const requireSupplyAccess = authorizeSupply();
+
+export const requireCapability = (capability: Capability) => {
+  return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) throw new UnauthorizedError('Not authenticated');
+      if (!hasCapability(req.user, capability)) {
+        throw new ForbiddenError('Insufficient permissions');
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+};

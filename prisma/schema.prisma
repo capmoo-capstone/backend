@@ -219,7 +219,7 @@ model Unit {
   requesting_projects  Project[]              @relation("RequestingUnit")
   responsible_projects Project[]              @relation("ResponsibleUnit")
 
-  department  Department   @relation(fields: [dept_id], references: [id])
+  department  Department   @relation(fields: [dept_id], references: [id], onDelete: Restrict)
   budgetPlans BudgetPlan[]
 
   @@map("units")
@@ -279,7 +279,7 @@ model RegistrationRequest {
   created_at      DateTime           @default(now())
   updated_at      DateTime           @updatedAt
 
-  department Department @relation(fields: [dept_id], references: [id])
+  department Department @relation(fields: [dept_id], references: [id], onDelete: Restrict)
 
   @@index([status, created_at(sort: Desc)])
   @@index([username])
@@ -320,10 +320,10 @@ model UserDelegation {
   cancelled_at DateTime?
   cancelled_by String?
 
-  delegator User  @relation("Delegator", fields: [delegator_id], references: [id])
-  delegatee User  @relation("Delegatee", fields: [delegatee_id], references: [id])
-  creator   User  @relation("DelegationCreator", fields: [created_by], references: [id])
-  canceller User? @relation("DelegationCanceller", fields: [cancelled_by], references: [id])
+  delegator User  @relation("Delegator", fields: [delegator_id], references: [id], onDelete: Restrict)
+  delegatee User  @relation("Delegatee", fields: [delegatee_id], references: [id], onDelete: Restrict)
+  creator   User  @relation("DelegationCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  canceller User? @relation("DelegationCanceller", fields: [cancelled_by], references: [id], onDelete: SetNull)
 
   @@index([delegatee_id, is_active])
   @@index([delegatee_id, is_active, role, unit_id], map: "user_delegations_delegatee_active_scope_idx")
@@ -340,8 +340,8 @@ model UserOrganizationRole {
   unit_id String?
 
   user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  department Department @relation(fields: [dept_id], references: [id])
-  unit       Unit?      @relation(fields: [unit_id], references: [id])
+  department Department @relation(fields: [dept_id], references: [id], onDelete: Restrict)
+  unit       Unit?      @relation(fields: [unit_id], references: [id], onDelete: SetNull)
 
   @@index([dept_id])
   @@index([unit_id])
@@ -350,44 +350,44 @@ model UserOrganizationRole {
 }
 
 model Project {
-  id                                   String              @id @default(uuid())
-  receive_no                           String
-  title                                String
-  description                          String?
-  budget                               Decimal             @db.Decimal(18, 2)
-  status                               ProjectStatus
-  procurement_type                     ProcurementType
-  current_workflow_type                UnitResponsibleType
-  responsible_unit_id                  String
-  requesting_dept_id                   String
-  requesting_unit_id                   String?
-  is_urgent                            UrgentType          @default(NORMAL)
-  expected_approval_date               DateTime?
-  installment_rounds                   Int                 @default(1)
-  procurement_started_at               DateTime?
-  procurement_completed_at             DateTime?
-  contract_started_at                  DateTime?
-  contract_completed_at                DateTime?
-  procurement_progress                 Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
-  contract_progress                    Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
-  pr_no                                String?
-  po_no                                String?
-  less_no                              String?
-  migo_103_no                          String?
-  migo_105_no                          String?
-  contract_no_id                       String?             @unique
-  asset_code                           Boolean?
-  vendor_name                          String?
-  vendor_email                         String?
-  created_by                           String
-  created_at                           DateTime            @default(now())
-  updated_at                           DateTime?           @updatedAt
+  id                       String              @id @default(uuid())
+  receive_no               String
+  title                    String
+  description              String?
+  budget                   Decimal             @db.Decimal(18, 2)
+  status                   ProjectStatus
+  procurement_type         ProcurementType
+  current_workflow_type    UnitResponsibleType
+  responsible_unit_id      String
+  requesting_dept_id       String
+  requesting_unit_id       String?
+  is_urgent                UrgentType          @default(NORMAL)
+  expected_approval_date   DateTime?
+  installment_rounds       Int                 @default(1)
+  procurement_started_at   DateTime?
+  procurement_completed_at DateTime?
+  contract_started_at      DateTime?
+  contract_completed_at    DateTime?
+  procurement_progress     Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  contract_progress        Json                @default("{\"GENERAL_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null},\"HEAD_OF_UNIT\":{\"status\":\"NOT_STARTED\",\"step\":null},\"DOCUMENT_STAFF\":{\"status\":\"NOT_STARTED\",\"step\":null}}")
+  pr_no                    String?
+  po_no                    String?
+  less_no                  String?
+  migo_103_no              String?
+  migo_105_no              String?
+  contract_no_id           String?             @unique
+  asset_code               Boolean?
+  vendor_name              String?
+  vendor_email             String?
+  created_by               String
+  created_at               DateTime            @default(now())
+  updated_at               DateTime?           @updatedAt
 
-  creator          User                   @relation("ProjectCreator", fields: [created_by], references: [id])
-  requesting_dept  Department             @relation(fields: [requesting_dept_id], references: [id])
-  requesting_unit  Unit?                  @relation("RequestingUnit", fields: [requesting_unit_id], references: [id])
-  responsible_unit Unit?                  @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id])
-  contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id])
+  creator          User                   @relation("ProjectCreator", fields: [created_by], references: [id], onDelete: Restrict)
+  requesting_dept  Department             @relation(fields: [requesting_dept_id], references: [id], onDelete: Restrict)
+  requesting_unit  Unit?                  @relation("RequestingUnit", fields: [requesting_unit_id], references: [id], onDelete: SetNull)
+  responsible_unit Unit?                  @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id], onDelete: Restrict)
+  contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id], onDelete: SetNull)
 
   assignee_procurement   User[]                 @relation("ProcurementProjects")
   assignee_contract      User[]                 @relation("ContractProjects")
@@ -421,8 +421,8 @@ model ProjectInstallment {
   exported_at         DateTime?
 
   project  Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  exporter User?   @relation("ProjectInstallmentExporter", fields: [exported_by], references: [id])
-  creator  User    @relation("ProjectInstallmentCreator", fields: [created_by], references: [id])
+  exporter User?   @relation("ProjectInstallmentExporter", fields: [exported_by], references: [id], onDelete: SetNull)
+  creator  User    @relation("ProjectInstallmentCreator", fields: [created_by], references: [id], onDelete: Restrict)
 
   @@unique([project_id, installment_no])
   @@index([status])
@@ -558,8 +558,8 @@ model ProjectCancellation {
   decision_at  DateTime?
 
   project   Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  requester User    @relation("CancelRequester", fields: [requested_by], references: [id])
-  decider   User?   @relation("CancelDecider", fields: [decision_by], references: [id])
+  requester User    @relation("CancelRequester", fields: [requested_by], references: [id], onDelete: Restrict)
+  decider   User?   @relation("CancelDecider", fields: [decision_by], references: [id], onDelete: SetNull)
 
   @@index([project_id])
   @@map("project_cancellations")
@@ -633,10 +633,10 @@ model ProjectSubmission {
   meta_data        Json[]
 
   project   Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id])
-  approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id])
-  proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id])
-  completer User?             @relation("CompletedBy", fields: [completed_by], references: [id])
+  submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id], onDelete: SetNull)
+  approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
+  proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id], onDelete: SetNull)
+  completer User?             @relation("CompletedBy", fields: [completed_by], references: [id], onDelete: SetNull)
   documents ProjectDocument[]
 
   @@index([project_id, submitted_at(sort: Desc)])
@@ -671,7 +671,7 @@ model BudgetPlan {
   created_by         String
 
   unit    Unit     @relation(fields: [unit_id], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [project_id], references: [id])
+  project Project? @relation(fields: [project_id], references: [id], onDelete: SetNull)
 
   @@index([unit_id])
   @@index([project_id])

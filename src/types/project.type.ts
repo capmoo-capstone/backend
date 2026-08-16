@@ -38,6 +38,7 @@ export interface ProjectCancellationResponse {
 export interface CompleteProcurementPhaseResponse extends ProjectIdStatusResponse {
   current_workflow_type: UnitResponsibleType;
   responsible_unit_id: string;
+  assignee_contract?: Array<{ id: string }>;
 }
 
 export type CompleteContractPhaseResponse = ProjectIdStatusResponse;

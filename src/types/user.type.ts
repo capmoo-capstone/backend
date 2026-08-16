@@ -52,5 +52,5 @@ export interface RoleMutationParams {
   role?: UserRole;
   deptId?: string;
   unitId?: string | null;
-  roleId?: string
-};
+  roleId?: string;
+}

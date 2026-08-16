@@ -28,6 +28,7 @@ import {
   isHeadOfSupplyUnit,
   isSuperAdmin,
 } from '../lib/permissions';
+import { hasOrganizationWideReadAccess } from '../lib/access-policy';
 import { OwnProjectTab, ProjectFilterQuery } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
@@ -51,6 +52,7 @@ import {
   getOwnProjects as getOwnProjectsFromHelper,
   getOwnProjectsTotal as getOwnProjectsTotalFromHelper,
 } from './project-query-own.helper';
+import { projectReadWhere } from '../lib/project-scope';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
@@ -66,9 +68,8 @@ const buildWhereClause = (
 ): Prisma.ProjectWhereInput => {
   const and: Prisma.ProjectWhereInput[] = [];
 
-  if (!haveSupplyPermission(user)) {
-    and.push({ requesting_dept_id: { in: getDeptIdsForUser(user) } });
-  }
+  const projectScope = projectReadWhere(user);
+  if (Object.keys(projectScope).length > 0) and.push(projectScope);
 
   const hasExplicitDate = Boolean(filters?.dateFrom || filters?.dateTo);
   if (!hasExplicitDate) {
@@ -287,13 +288,11 @@ export const getById = async (
   user: AuthPayload,
   id: string
 ): Promise<ProjectDetailResponse> => {
+  const projectScope = projectReadWhere(user);
   const haveAccess =
-    haveSupplyPermission(user) ||
+    Object.keys(projectScope).length === 0 ||
     (await prisma.project.count({
-      where: {
-        id,
-        requesting_dept_id: { in: getDeptIdsForUser(user) },
-      },
+      where: { AND: [{ id }, projectScope] },
     })) > 0;
 
   if (!haveAccess) {
@@ -403,8 +402,7 @@ export const getById = async (
       migo_105_no: projectData.migo_105_no,
       asset_code: projectData.asset_code,
       expected_approval_date: projectData.expected_approval_date,
-      procurement_completed_date:
-        projectData.procurement_completed_at,
+      procurement_completed_date: projectData.procurement_completed_at,
       created_at: projectData.created_at,
       updated_at: projectData.updated_at,
       vendor: {
@@ -935,8 +933,11 @@ export const getSummaryCards = async (
     };
   }
 
+  const hasOrganizationWideRead = hasOrganizationWideReadAccess(user);
   const deptIds = getDeptIdsForUser(user);
-  const baseWhere = { requesting_dept_id: { in: deptIds } };
+  const baseWhere = hasOrganizationWideRead
+    ? {}
+    : { requesting_dept_id: { in: deptIds } };
 
   const [total, not_started, in_progress, closed, cancelled, urgent] =
     await prisma.$transaction([
@@ -975,6 +976,7 @@ export const getSummaryCards = async (
                     in: [
                       ProjectStatus.UNASSIGNED,
                       ProjectStatus.WAITING_ACCEPT,
+                      
                     ],
                   },
                 },
@@ -1018,13 +1020,11 @@ export const getDocumentSummary = async (
   user: AuthPayload,
   projectId: string
 ) => {
+  const projectScope = projectReadWhere(user);
   const haveAccess =
-    haveSupplyPermission(user) ||
+    Object.keys(projectScope).length === 0 ||
     (await prisma.project.count({
-      where: {
-        id: projectId,
-        requesting_dept_id: { in: getDeptIdsForUser(user) },
-      },
+      where: { AND: [{ id: projectId }, projectScope] },
     })) > 0;
 
   if (!haveAccess) {
@@ -1129,24 +1129,27 @@ export const getDocumentSummary = async (
   };
 };
 
-export const getExpectedApprovalDates = async (
-  user: AuthPayload,
-) => {
-  const and: Prisma.ProjectWhereInput[] = [];
-  
-  if (!haveSupplyPermission(user)) {
-    and.push({ requesting_dept_id: { in: getDeptIdsForUser(user) } });
-  } else if (!isHeadOfSupplyUnit(user) && !isSuperAdmin(user)) {
-    and.push({ 
+export const getExpectedApprovalDates = async (user: AuthPayload) => {
+  const andConditions: Prisma.ProjectWhereInput[] = [
+    { status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } },
+  ];
+
+  const projectScope = projectReadWhere(user);
+  if (Object.keys(projectScope).length > 0) {
+    andConditions.push(projectScope);
+  }
+
+  if (!isHeadOfSupplyUnit(user) && !isSuperAdmin(user)) {
+    andConditions.push({
       OR: [
         { assignee_procurement: { some: { id: user.id } } },
         { assignee_contract: { some: { id: user.id } } },
       ],
     });
   }
-  and.push({ status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } });
-  
-  const where: Prisma.ProjectWhereInput = and.length > 0 ? { AND: and } : {};
+
+  const where: Prisma.ProjectWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {};
 
   const projects = await prisma.project.findMany({
     where,
@@ -1155,13 +1158,11 @@ export const getExpectedApprovalDates = async (
       title: true,
       expected_approval_date: true,
     },
-    orderBy: [
-      { expected_approval_date: 'asc' },
-    ],
+    orderBy: [{ expected_approval_date: 'asc' }],
   });
 
   return {
     total: projects.length,
-    data: projects
+    data: projects,
   };
 };

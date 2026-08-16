@@ -14,7 +14,11 @@ import {
   updateProjectData,
 } from '../project-data.service';
 
-const user = { id: 'user-1', full_name: 'Procurement Staff', roles: [] } as any;
+const user = {
+  id: 'user-1',
+  full_name: 'Procurement Staff',
+  roles: [{ role: 'SUPER_ADMIN' }],
+} as any;
 
 const createProjectDto = (overrides = {}) =>
   ({

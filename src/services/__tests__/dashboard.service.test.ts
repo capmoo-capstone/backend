@@ -5,7 +5,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPS_DEPT_ID } from '../../lib/constant';
+import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../../lib/constant';
 import { IndividualTodoQuerySchema } from '../../schemas/dashboard.schema';
 import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
@@ -67,6 +67,24 @@ const externalUser: AuthPayload = {
       dept_name: 'External Dept',
       unit_id: 'unit-request',
       unit_name: 'External Unit',
+    },
+  ],
+};
+
+const registrationGeneralStaff: AuthPayload = {
+  token: 'token',
+  id: 'registration-staff-1',
+  username: 'registration-staff',
+  full_name: 'Registration Staff',
+  is_delegated: false,
+  delegated_by: [],
+  roles: [
+    {
+      role: UserRole.GENERAL_STAFF,
+      dept_id: REGISTRATION_DEPT_ID,
+      dept_name: 'Registration',
+      unit_id: 'unit-reg',
+      unit_name: 'Registration Unit',
     },
   ],
 };
@@ -276,6 +294,33 @@ describe('dashboard.service', () => {
     expect(prismaMock.budgetPlan.aggregate.mock.calls[0][0].where).toEqual({
       budget_year: 2569,
       unit: { dept_id: { in: ['dept-1'] } },
+    });
+  });
+
+  it('uses global project and budget visibility for DEPT-REG general staff', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.budgetPlan.aggregate
+      .mockResolvedValueOnce({ _sum: { budget_amount: 50000 } })
+      .mockResolvedValueOnce({ _sum: { budget_amount: 30000 } });
+    prismaMock.budgetPlan.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(2);
+
+    await getProcurementOverview(registrationGeneralStaff, {
+      page: 'home',
+      mode: 'fiscalYear',
+      dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+      dateTo: new Date('2026-09-30T16:59:59.999Z'),
+    });
+
+    expect(prismaMock.budgetPlan.aggregate.mock.calls[0][0].where).toEqual({
+      budget_year: 2569,
+    });
+    expect(prismaMock.project.count.mock.calls[0][0].where).not.toMatchObject({
+      requesting_dept_id: expect.anything(),
     });
   });
 

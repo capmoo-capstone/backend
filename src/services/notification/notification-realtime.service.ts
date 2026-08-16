@@ -24,7 +24,10 @@ const writeSse = (res: Response, event: string, data: unknown) => {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 };
 
-const broadcastToUser = (userId: string, payload: NotificationRealtimeEvent) => {
+const broadcastToUser = (
+  userId: string,
+  payload: NotificationRealtimeEvent
+) => {
   const userConnections = connections.get(userId);
   if (!userConnections) return;
 
@@ -46,10 +49,15 @@ const ensureRedisSubscription = async () => {
         subscriber.on('pmessage', (_pattern, channel, message) => {
           const userId = String(channel).replace(USER_CHANNEL_PREFIX, '');
           try {
-            const payload = JSON.parse(String(message)) as NotificationRealtimeEvent;
+            const payload = JSON.parse(
+              String(message)
+            ) as NotificationRealtimeEvent;
             broadcastToUser(userId, payload);
           } catch (error) {
-            console.error('Failed to parse notification realtime payload', error);
+            console.error(
+              'Failed to parse notification realtime payload',
+              error
+            );
           }
         });
         subscriber.on('error', (error) => {

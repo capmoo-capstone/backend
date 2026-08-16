@@ -7,6 +7,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../lib/errors';
+import { assertUnitCanBeDeleted } from '../lib/deletion-policy';
 import {
   CreateUnitDto,
   UpdateUnitDto,
@@ -252,9 +253,11 @@ export const updateUnit = async (data: UpdateUnitDto): Promise<Unit> => {
 };
 
 export const deleteUnit = async (id: string): Promise<Unit> => {
-  await getById(id);
-  return await prisma.unit.delete({
-    where: { id },
+  return await prisma.$transaction(async (tx) => {
+    const unit = await tx.unit.findUnique({ where: { id } });
+    if (!unit) throw new NotFoundError('Unit not found');
+    await assertUnitCanBeDeleted(tx, id);
+    return tx.unit.delete({ where: { id } });
   });
 };
 

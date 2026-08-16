@@ -101,18 +101,15 @@ export const notifyCancellationRequested = async (
   }
 ) => {
   const project = await getProjectContext(tx, input.project_id);
-  const [unitHeads, departmentHeads] = await Promise.all([
-    getRoleRecipients(tx, {
-      role: UserRole.HEAD_OF_UNIT,
-      unit_id: project.responsible_unit_id,
-    }),
-    getRoleRecipients(tx, { role: UserRole.HEAD_OF_DEPARTMENT }),
-  ]);
+  const unitHeads = await getRoleRecipients(tx, {
+    role: UserRole.HEAD_OF_UNIT,
+    unit_id: project.responsible_unit_id,
+  });
 
   return dispatchNotification(tx, {
-    recipient_ids: Array.from(
-      new Set([...unitHeads, ...departmentHeads].map((user) => user.id))
-    ).filter((id) => id !== input.actor_id),
+    recipient_ids: Array.from(new Set(unitHeads.map((user) => user.id))).filter(
+      (id) => id !== input.actor_id
+    ),
     actor_id: input.actor_id,
     project_id: input.project_id,
     kind: 'CANCEL_REQUESTED',
@@ -314,6 +311,7 @@ export const notifyVendorSubmissionReceived = async (
   tx: TxClient,
   input: {
     project_id: string;
+    submission_id: string;
   }
 ) => {
   const project = await getProjectContext(tx, input.project_id);
@@ -332,10 +330,8 @@ export const notifyVendorSubmissionReceived = async (
     target_path: '/app/vendor-response',
     action_label: 'เปิดรายการ',
     requires_action: true,
-    dedupe_key: `vendor-submission:${project.id}`,
+    dedupe_key: `vendor-submission:${input.submission_id}`,
   });
-
-  return documentNotifications;
 
   const financeNotifications = await dispatchNotification(tx, {
     recipient_ids: financeStaff.map((user) => user.id),
@@ -348,7 +344,7 @@ export const notifyVendorSubmissionReceived = async (
     target_path: `/app/projects/${project.id}`,
     action_label: 'เปิดโครงการ',
     requires_action: false,
-    dedupe_key: `finance-handoff:${project.id}`,
+    dedupe_key: `finance-handoff:${input.submission_id}`,
   });
 
   return mergeNotifications(documentNotifications, financeNotifications);
@@ -429,9 +425,7 @@ export const notifyDelegationStarted = async (
   const startDateStr = input.start_date
     ? formatBangkokDate(input.start_date)
     : '';
-  const endDateStr = input.end_date
-    ? formatBangkokDate(input.end_date)
-    : '';
+  const endDateStr = input.end_date ? formatBangkokDate(input.end_date) : '';
   const dateLabel = endDateStr
     ? `ตั้งแต่ ${startDateStr} ถึง ${endDateStr}`
     : `เริ่ม ${startDateStr}`;

@@ -112,17 +112,21 @@ const buildReminderBody = (
     return `${targetLabel} à¸‚à¸­à¸‡à¹‚à¸„à¸£à¸‡à¸à¸²à¸£ "${projectTitle}" à¹€à¸¥à¸¢à¸à¸³à¸«à¸™à¸”à¹à¸¥à¹‰à¸§ à¸à¸£à¸¸à¸“à¸²à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¸—à¸±à¸™à¸—à¸µ`;
   }
 
-  const labelByWindowKey: Record<Exclude<ReminderWindowKey, 'overdue'>, string> =
-    {
-      '7d': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 7 Ã Â¸Â§Ã Â¸Â±Ã Â¸â„¢',
-      '3d': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 3 Ã Â¸Â§Ã Â¸Â±Ã Â¸â„¢',
-      '24h': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 24 Ã Â¸Å Ã Â¸Â±Ã Â¹Ë†Ã Â¸Â§Ã Â¹â€šÃ Â¸Â¡Ã Â¸â€¡',
-    };
+  const labelByWindowKey: Record<
+    Exclude<ReminderWindowKey, 'overdue'>,
+    string
+  > = {
+    '7d': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 7 Ã Â¸Â§Ã Â¸Â±Ã Â¸â„¢',
+    '3d': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 3 Ã Â¸Â§Ã Â¸Â±Ã Â¸â„¢',
+    '24h': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 24 Ã Â¸Å Ã Â¸Â±Ã Â¹Ë†Ã Â¸Â§Ã Â¹â€šÃ Â¸Â¡Ã Â¸â€¡',
+  };
   return `${targetLabel} à¸‚à¸­à¸‡à¹‚à¸„à¸£à¸‡à¸à¸²à¸£ "${projectTitle}" à¸ˆà¸°à¸„à¸£à¸šà¸à¸³à¸«à¸™à¸”à¹ƒà¸™${labelByWindowKey[windowKey] ?? ''}`;
 };
 
 const buildReminderTitle = (windowKey: ReminderWindowKey) =>
-  windowKey === 'overdue' ? 'à¸‡à¸²à¸™à¹€à¸¥à¸¢à¸à¸³à¸«à¸™à¸”' : 'à¹ƒà¸à¸¥à¹‰à¸„à¸£à¸šà¸à¸³à¸«à¸™à¸”';
+  windowKey === 'overdue'
+    ? 'à¸‡à¸²à¸™à¹€à¸¥à¸¢à¸à¸³à¸«à¸™à¸”'
+    : 'à¹ƒà¸à¸¥à¹‰à¸„à¸£à¸šà¸à¸³à¸«à¸™à¸”';
 
 const buildReminderDedupeKey = (
   projectId: string,
@@ -142,9 +146,7 @@ const buildReminderDedupeKey = (
 const getBangkokDayDiff = (targetDate: Date, now: Date) => {
   const nowStart = bangkokTodayStartUtc(now);
   const targetStart = bangkokTodayStartUtc(targetDate);
-  return Math.round(
-    (targetStart.getTime() - nowStart.getTime()) / DAY_MS
-  );
+  return Math.round((targetStart.getTime() - nowStart.getTime()) / DAY_MS);
 };
 
 const buildReminderCandidates = (input: {

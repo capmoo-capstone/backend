@@ -1,21 +1,19 @@
 import { Router } from 'express';
 import * as controller from '../controllers/project.controller';
 import {
-  requireRoles,
-  requireSuperAdmin,
+  requireCapability,
   requireSupplyAccess,
   requireSupplyRoles,
 } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
+import { Capability } from '../lib/access-policy';
 
 const router = Router();
 
 const {
   HEAD_OF_UNIT,
   HEAD_OF_DEPARTMENT,
-  ADMIN,
   GENERAL_STAFF,
-  REPRESENTATIVE,
   DOCUMENT_STAFF,
   FINANCE_STAFF,
 } = UserRole;
@@ -23,7 +21,11 @@ const {
 // ── List / Summary ────────────────────────────────────────────────────────────
 router.post('/', controller.getAll);
 router.get('/summary', controller.getSummary);
-router.get('/approval-dates', requireSupplyAccess, controller.getExpectedApprovalDates);
+router.get(
+  '/approval-dates',
+  requireSupplyAccess,
+  controller.getExpectedApprovalDates
+);
 
 // ── Supply-only views ─────────────────────────────────────────────────────────
 router.get(
@@ -70,37 +72,37 @@ router.get(
 // ── Create / Import ───────────────────────────────────────────────────────────
 router.post(
   '/create',
-  requireRoles([REPRESENTATIVE, DOCUMENT_STAFF]),
+  requireCapability(Capability.PROJECT_CREATE),
   controller.createProject
 );
 router.post(
   '/import',
-  requireSupplyRoles([DOCUMENT_STAFF]),
+  requireCapability(Capability.PROJECT_IMPORT),
   controller.importProjects
 );
 
 // ── Assignment ────────────────────────────────────────────────────────────────
 router.patch(
   '/assign',
-  requireSupplyRoles([HEAD_OF_UNIT]),
+  requireCapability(Capability.PROJECT_ASSIGN),
   controller.assignProjects
 );
 router.patch(
   '/accept',
-  requireSupplyRoles([GENERAL_STAFF]),
+  requireCapability(Capability.PROJECT_ACCEPT),
   controller.acceptProjects
 );
 
 // ── Contract Number ───────────────────────────────────────────────────────────
 router.post(
   '/contract/new',
-  requireSupplyAccess,
+  requireCapability(Capability.CONTRACT_MANAGE),
   controller.getNewContractNumber
 );
 
 router.patch(
   '/contract/:contractId/cancel',
-  requireSupplyAccess,
+  requireCapability(Capability.CONTRACT_MANAGE),
   controller.cancelContractNumber
 );
 
@@ -111,70 +113,69 @@ router.get('/:id', controller.getById);
 
 router.patch(
   '/:id/claim',
-  requireSupplyRoles([GENERAL_STAFF]),
+  requireCapability(Capability.PROJECT_CLAIM),
   controller.claimProject
 );
 router.patch(
   '/:id/change-assignee',
-  requireSupplyRoles([HEAD_OF_UNIT]),
+  requireCapability(Capability.PROJECT_CHANGE_ASSIGNEE),
   controller.changeAssignee
 );
 router.patch(
   '/:id/add-assignee',
-  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, ADMIN]),
+  requireCapability(Capability.PROJECT_ADD_ASSIGNEE),
   controller.addAssignee
 );
 router.patch(
   '/:id/return',
-  requireSupplyRoles([GENERAL_STAFF]),
+  requireCapability(Capability.PROJECT_RETURN),
   controller.returnProject
 );
 
 router.patch(
   '/:id/cancel',
-  requireSupplyRoles([
-    GENERAL_STAFF,
-    DOCUMENT_STAFF,
-    HEAD_OF_UNIT,
-    HEAD_OF_DEPARTMENT,
-  ]),
+  requireCapability(Capability.PROJECT_CANCEL),
   controller.cancelProject
 );
 router.patch(
   '/:id/approve-cancel',
-  requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT]),
+  requireCapability(Capability.PROJECT_APPROVE_CANCELLATION),
   controller.approveCancellation
 );
 router.patch(
   '/:id/reject-cancel',
-  requireSupplyRoles([HEAD_OF_DEPARTMENT, HEAD_OF_UNIT]),
+  requireCapability(Capability.PROJECT_APPROVE_CANCELLATION),
   controller.rejectCancellation
 );
 
 router.patch(
   '/:id/complete-procurement',
-  requireSupplyRoles([GENERAL_STAFF]),
+  requireCapability(Capability.PROJECT_COMPLETE_PROCUREMENT),
   controller.completeProcurement
 );
 
 router.post(
   '/:id/complete-installment/:installmentNo',
-  requireSupplyRoles([GENERAL_STAFF]),
+  requireCapability(Capability.INSTALLMENT_CREATE),
   controller.completeInstallment
 );
 
 router.patch(
   '/:id/close',
-  requireSupplyRoles([FINANCE_STAFF]),
+  requireCapability(Capability.PROJECT_CLOSE),
   controller.closeProject
 );
 
 router.patch(
   '/:id/update',
-  requireSupplyRoles([GENERAL_STAFF, DOCUMENT_STAFF, HEAD_OF_UNIT]),
+  requireCapability(Capability.PROJECT_UPDATE),
   controller.updateProject
 );
 
-router.delete('/:id', requireSuperAdmin, controller.removeProject);
+router.delete(
+  '/:id',
+  requireCapability(Capability.PROJECT_DELETE),
+  controller.removeProject
+);
 
 export default router;

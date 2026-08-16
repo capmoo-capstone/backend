@@ -151,10 +151,7 @@ export const getContractUnitSummary = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const query = UnitGroupQuerySchema.parse(req.query);
-  const data = await DashboardService.getContractUnitSummary(
-    payload,
-    query
-  );
+  const data = await DashboardService.getContractUnitSummary(payload, query);
   res.status(200).json(data);
 };
 
@@ -194,5 +191,3 @@ export const getIndividualStaffTodoTotal = async (
   const data = await DashboardService.getIndividualStaffTodoTotal(query);
   res.status(200).json(data);
 };
-
-

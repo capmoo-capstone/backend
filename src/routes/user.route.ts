@@ -14,11 +14,7 @@ router.patch(
   requireSupplyRoles([ADMIN]),
   controller.updateSupplyRole
 );
-router.post(
-  '/roles/add',
-  requireSupplyRoles([ADMIN]),
-  controller.addRole
-);
+router.post('/roles/add', requireSupplyRoles([ADMIN]), controller.addRole);
 router.delete(
   '/roles/:role_id',
   requireSupplyRoles([ADMIN]),

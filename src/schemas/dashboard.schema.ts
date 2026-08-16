@@ -191,4 +191,3 @@ export type IndividualTodoQuery = z.infer<typeof IndividualTodoQuerySchema>;
 export type IndividualTodoTotalQuery = z.infer<
   typeof IndividualTodoTotalQuerySchema
 >;
-

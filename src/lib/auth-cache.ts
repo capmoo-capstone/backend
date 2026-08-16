@@ -18,12 +18,21 @@ export const getUserAuthCache = (userId: string) => userAuthCache.get(userId);
 
 export const setUserAuthCache = (
   userId: string,
-  value: Omit<CachedAuthData, 'cached_at'>
+  value: Omit<CachedAuthData, 'cached_at'>,
+  expiresAt?: Date | null
 ) => {
-  userAuthCache.set(userId, {
-    ...value,
-    cached_at: nowUtc(),
-  });
+  const now = nowUtc();
+  const ttl = expiresAt
+    ? Math.max(1, Math.min(30 * 60 * 1000, expiresAt.getTime() - now.getTime()))
+    : undefined;
+  userAuthCache.set(
+    userId,
+    {
+      ...value,
+      cached_at: now,
+    },
+    ttl === undefined ? undefined : { ttl }
+  );
 };
 
 export const clearUserAuthCache = (userId: string) => {

@@ -1,4 +1,3 @@
-import { RegistrationStatus } from '@prisma/client';
 import { z } from 'zod';
 
 const RequiredText = z.string().trim().min(1).max(255);

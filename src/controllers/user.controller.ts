@@ -31,17 +31,11 @@ export const getById = async (req: Request, res: Response) => {
   res.status(200).json(user);
 };
 
-export const createUser = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
+export const createUser = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const validatedData = CreateUserSchema.parse(req.body);
-  const data = await UserService.createUser(
-    req.user!,
-    validatedData
-  );
+  const data = await UserService.createUser(req.user!, validatedData);
   res.status(201).json(data);
 };
 
@@ -53,11 +47,7 @@ export const updateUserStatus = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
   const isActive = toBool(req.query.active);
-  const result = await UserService.updateUserStatus(
-    req.user!,
-    id,
-    isActive
-  );
+  const result = await UserService.updateUserStatus(req.user!, id, isActive);
   res.status(200).json(result);
 };
 
@@ -75,7 +65,7 @@ export const updateSupplyRole = async (
 export const addRole = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const user_id = req.params.id ? req.params.id as string : req.body.user_id
+  const user_id = req.params.id ? (req.params.id as string) : req.body.user_id;
   const validatedData = AddRoleSchema.parse({ user_id, ...req.body });
   const result = await UserService.addRole(req.user!, validatedData);
   res.status(201).json(result);
@@ -84,13 +74,16 @@ export const addRole = async (req: AuthenticatedRequest, res: Response) => {
 export const removeRole = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const user_id = req.params.id ? req.params.id as string : req.body.user_id;
+  const user_id = req.params.id ? (req.params.id as string) : req.body.user_id;
   const validatedData = RemoveRoleSchema.parse({ user_id, ...req.body });
   await UserService.removeRole(req.user!, validatedData);
   res.status(204).send();
 };
 
-export const removeRoleById = async (req: AuthenticatedRequest, res: Response) => {
+export const removeRoleById = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
   const role_id = req.params.role_id as string;

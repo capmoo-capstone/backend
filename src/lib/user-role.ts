@@ -3,11 +3,7 @@ import { BadRequestError, NotFoundError } from './errors';
 import { RoleMutationParams, UpdateUserRoleResponse } from '../types/user.type';
 import { OPS_DEPT_ID } from './constant';
 import { nowUtc } from './date';
-
-const activeDelegationWhere = () => ({
-  is_active: true,
-  OR: [{ end_date: { equals: null } }, { end_date: { gte: nowUtc() } }],
-});
+import { openDelegationWhere } from './active-state';
 
 const touchActiveDelegatees = async (
   tx: Prisma.TransactionClient,
@@ -26,7 +22,7 @@ const touchActiveDelegatees = async (
         delegator_id: params.delegatorId,
         role: params.role,
         unit_id: params.unitId,
-        ...activeDelegationWhere(),
+        ...openDelegationWhere(),
       },
       select: { delegatee_id: true },
     })) ?? [];
@@ -129,8 +125,8 @@ export const removeRoleInternal = async (
   const { userId, role, deptId, unitId } = params;
 
   const target = await tx.userOrganizationRole.findFirst({
-        where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
-      });
+    where: { user_id: userId, role, dept_id: deptId, unit_id: unitId },
+  });
 
   if (!target) {
     throw new NotFoundError(

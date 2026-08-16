@@ -14,8 +14,8 @@ import {
   formatBangkokOffset,
   nowUtc,
 } from '../lib/date';
-import { ForbiddenError, NotFoundError } from '../lib/errors';
-import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
+import { NotFoundError } from '../lib/errors';
+import { assertCanReadProject } from '../lib/project-scope';
 import { AuditLogsQuery } from '../schemas/admin.schema';
 import {
   AuditActor,
@@ -118,8 +118,7 @@ const titleByEventType: Record<AuditEventType, string> = {
   [AuditEventType.USER_ROLE_REMOVED]: 'User role removed',
   [AuditEventType.UNIT_STAFF_ADDED]: 'Staff added to unit',
   [AuditEventType.UNIT_STAFF_REMOVED]: 'Staff removed from unit',
-  [AuditEventType.REGISTRATION_REQUESTED]:
-    'Account registration requested',
+  [AuditEventType.REGISTRATION_REQUESTED]: 'Account registration requested',
   [AuditEventType.REGISTRATION_APPROVED]: 'Account registration approved',
   [AuditEventType.REGISTRATION_REJECTED]: 'Account registration rejected',
   [AuditEventType.USER_CREATED]: 'User account created',
@@ -673,12 +672,7 @@ export const listProjectAuditLogs = async (
     throw new NotFoundError('Project not found');
   }
 
-  if (
-    !haveSupplyPermission(user) &&
-    !getDeptIdsForUser(user).includes(project.requesting_dept_id)
-  ) {
-    throw new ForbiddenError('You do not have access to this project');
-  }
+  assertCanReadProject(user, project);
 
   return queryAuditEvents(page, limit, query, projectId);
 };

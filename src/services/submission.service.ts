@@ -44,6 +44,8 @@ import {
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
+import { Capability, assertCapability } from '../lib/access-policy';
+import { assertCanReadProject, projectReadWhere } from '../lib/project-scope';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -158,17 +160,22 @@ const updateProjectForSubmission = async (
 };
 
 export const getProjectSubmissions = async (
-  _user: AuthPayload,
+  user: AuthPayload,
   projectId: string
 ): Promise<ProjectSubmissionsResponse> => {
   const project = await prisma.project
     .findUniqueOrThrow({
       where: { id: projectId },
-      select: { procurement_type: true, installment_rounds: true },
+      select: {
+        procurement_type: true,
+        installment_rounds: true,
+        requesting_dept_id: true,
+      },
     })
     .catch(() => {
       throw new NotFoundError('Project not found');
     });
+  assertCanReadProject(user, project);
 
   const submissionData = await prisma.projectSubmission.findMany({
     where: { project_id: projectId },
@@ -269,7 +276,7 @@ export const getProjectSubmissions = async (
 };
 
 export const getVendorSubmissions = async (
-  _user: AuthPayload,
+  user: AuthPayload,
   page: number,
   limit: number,
   filter?: VendorSubmissionFilterQuery
@@ -278,6 +285,10 @@ export const getVendorSubmissions = async (
     { submission_type: SubmissionType.VENDOR },
     { workflow_type: UnitResponsibleType.CONTRACT },
   ];
+  const projectScope = projectReadWhere(user);
+  if (Object.keys(projectScope).length > 0) {
+    and.push({ project: projectScope });
+  }
 
   if (filter?.receiveNo?.trim()) {
     const term = filter.receiveNo.trim();
@@ -403,6 +414,7 @@ export const createStaffSubmissionsProject = async (
   user: AuthPayload,
   data: CreateStaffSubmissionDto
 ): Promise<SubmissionActionResponse> => {
+  assertCapability(user, Capability.SUBMISSION_CREATE);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.project_id },
@@ -614,6 +626,7 @@ export const createVendorSubmissionsProject = async (
     );
     const notificationResults = await notifyVendorSubmissionReceived(tx, {
       project_id: submission.project_id,
+      submission_id: submission.id,
     });
     return { submission, notificationResults };
   });
@@ -627,6 +640,7 @@ export const rejectSubmission = async (
   user: AuthPayload,
   data: RejectSubmissionDto
 ): Promise<RejectedSubmissionResponse> => {
+  assertCapability(user, Capability.SUBMISSION_APPROVE);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const updated = await tx.projectSubmission.update({
       where: { id: data.id },
@@ -670,6 +684,7 @@ export const approveSubmission = async (
   user: AuthPayload,
   data: ApproveSubmissionDto
 ): Promise<ApprovedSubmissionResponse> => {
+  assertCapability(user, Capability.SUBMISSION_APPROVE);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
@@ -712,21 +727,18 @@ export const approveSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
-    let notificationResults: PersistedNotificationResult[] = [];
-    if (data.required_signature) {
-      notificationResults = await notifySignatureRequired(tx, {
-        project_id: updated.project_id,
-        actor_id: user.id,
-        step_order: updated.step_order,
-      });
-    } else {
-      notificationResults = await notifyWorkflowStepApproved(tx, {
-        project_id: updated.project_id,
-        actor_id: user.id,
-        submitter_id: submission.submitted_by,
-        step_order: updated.step_order,
-      });
-    }
+    const notificationResults = data.required_signature
+      ? await notifySignatureRequired(tx, {
+          project_id: updated.project_id,
+          actor_id: user.id,
+          step_order: updated.step_order,
+        })
+      : await notifyWorkflowStepApproved(tx, {
+          project_id: updated.project_id,
+          actor_id: user.id,
+          submitter_id: submission.submitted_by,
+          step_order: updated.step_order,
+        });
     return { updated, notificationResults };
   });
 
@@ -739,6 +751,7 @@ export const proposeSubmission = async (
   user: AuthPayload,
   id: string
 ): Promise<ProposedSubmissionResponse> => {
+  assertCapability(user, Capability.SUBMISSION_PROPOSE);
   return await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id },
@@ -783,6 +796,7 @@ export const signAndCompleteSubmission = async (
   user: AuthPayload,
   data: CompleteSubmissionDto
 ): Promise<CompletedSubmissionResponse> => {
+  assertCapability(user, Capability.SUBMISSION_SIGN);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },

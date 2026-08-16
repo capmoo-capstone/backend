@@ -10,7 +10,11 @@ import {
   UserRole,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPS_DEPT_ID, PROC1_UNIT_ID } from '../../lib/constant';
+import {
+  OPS_DEPT_ID,
+  PROC1_UNIT_ID,
+  REGISTRATION_DEPT_ID,
+} from '../../lib/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   getAssignedProjects,
@@ -49,6 +53,19 @@ const externalUser = {
       role: UserRole.REPRESENTATIVE,
       dept_id: 'dept-1',
       unit_id: 'unit-request',
+    },
+  ],
+} as any;
+
+const registrationGeneralStaff = {
+  id: 'registration-staff-1',
+  is_delegated: false,
+  delegated_by: [],
+  roles: [
+    {
+      role: UserRole.GENERAL_STAFF,
+      dept_id: REGISTRATION_DEPT_ID,
+      unit_id: 'unit-reg',
     },
   ],
 } as any;
@@ -735,6 +752,27 @@ describe('project-query.service', () => {
     });
   });
 
+  it('getSummaryCards returns global external counts for DEPT-REG general staff', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(5);
+
+    const result = await getSummaryCards(registrationGeneralStaff);
+
+    expect(result).toMatchObject({
+      role: 'EXTERNAL',
+      total: 10,
+      NOT_STARTED: 2,
+      IN_PROGRESS: 4,
+      URGENT: 5,
+    });
+    expect(prismaMock.project.count.mock.calls[0][0]).toEqual({ where: {} });
+  });
+
   describe('getDocumentSummary', () => {
     it('throws ForbiddenError if the user does not have access to the project', async () => {
       prismaMock.project.count.mockResolvedValue(0);
@@ -896,16 +934,16 @@ describe('project-query.service', () => {
   describe('getExpectedApprovalDates', () => {
     it('returns projects ordered by expected_approval_date asc', async () => {
       prismaMock.project.findMany.mockResolvedValue([
-          {
-            id: 'proj-1',
-            title: 'Project A',
-            expected_approval_date: new Date('2026-09-01T00:00:00.000Z'),
-          },
-          {
-            id: 'proj-2',
-            title: 'Project B',
-            expected_approval_date: new Date('2026-09-15T00:00:00.000Z'),
-          },
+        {
+          id: 'proj-1',
+          title: 'Project A',
+          expected_approval_date: new Date('2026-09-01T00:00:00.000Z'),
+        },
+        {
+          id: 'proj-2',
+          title: 'Project B',
+          expected_approval_date: new Date('2026-09-15T00:00:00.000Z'),
+        },
       ] as any);
 
       const result = await getExpectedApprovalDates(supplyUser);
@@ -916,12 +954,14 @@ describe('project-query.service', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             AND: expect.arrayContaining([
-              { status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } },
+              {
+                status: {
+                  notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED],
+                },
+              },
             ]),
           }),
-          orderBy: [
-            { expected_approval_date: 'asc' },
-          ],
+          orderBy: [{ expected_approval_date: 'asc' }],
         })
       );
     });

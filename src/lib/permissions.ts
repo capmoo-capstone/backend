@@ -1,12 +1,16 @@
 import { UserRole } from '@prisma/client';
 import { AuthPayload } from '../types/auth.type';
 import { OPS_DEPT_ID } from './constant';
+import {
+  hasSupplyAccess,
+  isSuperAdmin as hasSuperAdminCapability,
+} from './access-policy';
 
 export const haveSupplyPermission = (user: AuthPayload): boolean =>
-  user.roles.some((r) => r.dept_id === OPS_DEPT_ID) || isSuperAdmin(user);
+  hasSupplyAccess(user);
 
 export const isSuperAdmin = (user: AuthPayload): boolean =>
-  user.roles.some((r) => r.role === UserRole.SUPER_ADMIN);
+  hasSuperAdminCapability(user);
 
 export const isHeadOfSupplyDept = (user: AuthPayload): boolean =>
   user.roles.some(

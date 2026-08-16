@@ -62,9 +62,9 @@ describe('delegation.service', () => {
         role: UserRole.HEAD_OF_UNIT,
         unit_id: 'unit-1',
         is_active: true,
-        start_date: { lte: new Date('2026-06-01T00:00:00.000Z') },
+        cancelled_at: null,
         OR: [
-          { end_date: { equals: null } },
+          { end_date: null },
           { end_date: { gte: new Date('2026-06-01T00:00:00.000Z') } },
         ],
       },
@@ -239,7 +239,8 @@ describe('delegation.service', () => {
       read_at: null,
       created_at: new Date('2026-06-01T00:00:00.000Z'),
       updated_at: new Date('2026-06-01T00:00:00.000Z'),
-      dedupe_key: 'delegation-start:delegator-1:delegatee-1:HEAD_OF_UNIT:2026-06-01',
+      dedupe_key:
+        'delegation-start:delegator-1:delegatee-1:HEAD_OF_UNIT:2026-06-01',
       metadata: { notification_kind: 'DELEGATION_STARTED' },
       actor_id: user.id,
       project_id: null,
@@ -340,7 +341,8 @@ describe('delegation.service', () => {
       read_at: null,
       created_at: new Date('2026-06-01T00:00:00.000Z'),
       updated_at: new Date('2026-06-01T00:00:00.000Z'),
-      dedupe_key: 'delegation-start:delegator-1:delegatee-1:HEAD_OF_UNIT:2026-06-01',
+      dedupe_key:
+        'delegation-start:delegator-1:delegatee-1:HEAD_OF_UNIT:2026-06-01',
       metadata: { notification_kind: 'DELEGATION_STARTED' },
       actor_id: user.id,
       project_id: null,

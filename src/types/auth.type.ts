@@ -32,6 +32,7 @@ export interface FetchAndFormatUserDetailsResponse {
     is_delegated: boolean;
     delegated_by: DelegatedByUser[];
   };
+  cacheExpiresAt: Date | null;
 }
 
 export interface AuthPayload {

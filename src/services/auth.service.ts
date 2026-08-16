@@ -1,10 +1,14 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { RegisterType } from '@prisma/client';
+import { Prisma, RegisterType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { clearUserAuthCache } from '../lib/auth-cache';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { nowUtc } from '../lib/date';
+import {
+  activeDelegationWhere,
+  getNextDelegationBoundary,
+} from '../lib/active-state';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import {
   createSsoExchangeCode,
@@ -17,7 +21,7 @@ import {
 } from '../types/auth.type';
 
 export const fetchAndFormatUserDetails = async (
-  whereClause: any
+  whereClause: Prisma.UserWhereUniqueInput
 ): Promise<FetchAndFormatUserDetailsResponse | null> => {
   const now = nowUtc();
 
@@ -31,11 +35,7 @@ export const fetchAndFormatUserDetails = async (
         },
       },
       delegations_received: {
-        where: {
-          is_active: true,
-          start_date: { lte: now },
-          OR: [{ end_date: null }, { end_date: { gte: now } }],
-        },
+        where: activeDelegationWhere(now),
         select: {
           role: true,
           unit_id: true,
@@ -45,6 +45,7 @@ export const fetchAndFormatUserDetails = async (
             select: {
               id: true,
               full_name: true,
+              is_active: true,
               roles: {
                 include: {
                   department: { select: { id: true, name: true } },
@@ -78,7 +79,12 @@ export const fetchAndFormatUserDetails = async (
     );
 
   const ownRoles = formatRoles(user.roles);
-  const delegatedEntries = user.delegations_received.map((delegation) => ({
+  const effectiveDelegations = user.delegations_received.filter(
+    (delegation) =>
+      delegation.delegator.is_active !== false &&
+      delegation.start_date.getTime() <= now.getTime()
+  );
+  const delegatedEntries = effectiveDelegations.map((delegation) => ({
     id: delegation.delegator.id,
     full_name: delegation.delegator.full_name,
     roles: getDelegatedRoles(delegation).flatMap((role: any) => ({
@@ -119,6 +125,7 @@ export const fetchAndFormatUserDetails = async (
       is_delegated: isDelegated,
       delegated_by: delegatedBy,
     },
+    cacheExpiresAt: getNextDelegationBoundary(user.delegations_received, now),
   };
 };
 

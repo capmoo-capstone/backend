@@ -25,10 +25,8 @@ export const ListDepartmentsQuerySchema = z
         ]
       : undefined,
     withUnit: toBool(query?.withUnit),
-  }))
+  }));
 
 export type CreateDepartmentDto = z.infer<typeof CreateDepartmentSchema>;
 export type UpdateDepartmentDto = z.infer<typeof UpdateDepartmentSchema>;
-export type ListDepartmentsQuery = z.infer<
-  typeof ListDepartmentsQuerySchema
->;
+export type ListDepartmentsQuery = z.infer<typeof ListDepartmentsQuerySchema>;

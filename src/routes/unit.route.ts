@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import * as controller from '../controllers/unit.controller';
-import { protect, requireSuperAdmin, requireSupplyRoles } from '../middlewares/auth';
+import {
+  protect,
+  requireSuperAdmin,
+  requireSupplyRoles,
+} from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
 
 const { ADMIN } = UserRole;
@@ -23,7 +27,17 @@ router.patch(
   requireSupplyRoles([ADMIN]),
   controller.updateRepresentative
 );
-router.patch('/:id/update', protect, requireSupplyRoles([ADMIN]), controller.updateUnit);
-router.delete('/:id', protect, requireSupplyRoles([ADMIN]), controller.removeUnit);
+router.patch(
+  '/:id/update',
+  protect,
+  requireSupplyRoles([ADMIN]),
+  controller.updateUnit
+);
+router.delete(
+  '/:id',
+  protect,
+  requireSupplyRoles([ADMIN]),
+  controller.removeUnit
+);
 
 export default router;

@@ -10,6 +10,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
+import { assertUserCanBeDeleted } from '../lib/deletion-policy';
 import {
   assertDepartmentUnitScope,
   assertManageableRoleScope,
@@ -149,7 +150,7 @@ const removeRoleWithAudit = async (
   data: RoleMutationParams,
   type: 'REMOVE' | 'REVOKE'
 ): Promise<void> => {
-  let assignment
+  let assignment;
   if (type === 'REVOKE') {
     assignment = await tx.userOrganizationRole.findFirst({
       where: {
@@ -160,7 +161,7 @@ const removeRoleWithAudit = async (
       },
       select: roleAssignmentSelect,
     });
-    if (!assignment) throw new NotFoundError("Role not found");
+    if (!assignment) throw new NotFoundError('Role not found');
 
     await removeRoleInternal(tx, {
       userId: assignment.user_id,
@@ -178,7 +179,7 @@ const removeRoleWithAudit = async (
         { field: 'unit_id', oldValue: assignment.unit_id, newValue: null },
       ],
     });
-  };
+  }
 
   if (type === 'REMOVE') {
     assignment = await tx.userOrganizationRole.findFirst({
@@ -186,7 +187,7 @@ const removeRoleWithAudit = async (
       select: roleAssignmentSelect,
     });
 
-    if (!assignment) throw new NotFoundError("Role not found");
+    if (!assignment) throw new NotFoundError('Role not found');
 
     await tx.userOrganizationRole.delete({
       where: { id: data.roleId },
@@ -202,7 +203,7 @@ const removeRoleWithAudit = async (
         { field: 'unit_id', oldValue: assignment.unit_id, newValue: null },
       ],
     });
-  };
+  }
 };
 
 export const listUsers = async (
@@ -321,9 +322,7 @@ export const createUser = async (actor: AuthPayload, data: CreateUserDto) => {
         registerType: user.register_type,
         role: data.role,
       },
-      diff: [
-        { field: 'user', oldValue: null, newValue: user },
-      ],
+      diff: [{ field: 'user', oldValue: null, newValue: user }],
       metadata: { departmentId: data.dept_id, unitId: data.unit_id },
       sourceTable: 'users',
       sourceId: user.id,
@@ -335,9 +334,14 @@ export const createUser = async (actor: AuthPayload, data: CreateUserDto) => {
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
-  await getById(id);
-  await prisma.user.delete({
-    where: { id },
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundError('User not found');
+    await assertUserCanBeDeleted(tx, id);
+    await tx.user.delete({ where: { id } });
   });
 };
 
@@ -532,7 +536,7 @@ export const removeRole = async (
 ): Promise<void> => {
   return await prisma.$transaction(async (tx) => {
     await removeRoleWithAudit(tx, user, data, 'REVOKE');
-  })
+  });
 };
 
 export const removeRoleById = async (
@@ -543,4 +547,3 @@ export const removeRoleById = async (
     await removeRoleWithAudit(tx, user, { roleId }, 'REMOVE');
   });
 };
-

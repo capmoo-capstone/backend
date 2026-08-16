@@ -15,14 +15,11 @@ import {
   validateSamlResponse,
 } from '../services/saml.service';
 
-
 export const requestAccount = async (req: Request, res: Response) => {
   // #swagger.tags = ['Auth']
   const validatedData = CreateRegistrationRequestSchema.parse(req.body);
   const data =
-    await RegistrationService.createRegistrationRequest(
-      validatedData
-    );
+    await RegistrationService.createRegistrationRequest(validatedData);
   res.status(202).json(data);
 };
 
@@ -34,11 +31,11 @@ export const listRegistrationRequests = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const { page, limit } = req.query;
   const query = ListRegistrationRequestsQuerySchema.parse(req.query);
-  const data =
-    await RegistrationService.listRegistrationRequests(
-      parseInt(page as string) || 1,
-      parseInt(limit as string) || 10,
-      query);
+  const data = await RegistrationService.listRegistrationRequests(
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    query
+  );
   res.status(200).json(data);
 };
 
@@ -49,11 +46,10 @@ export const approveRegistrationRequest = async (
   // #swagger.tags = ['Auth']
   // #swagger.security = [{ bearerAuth: [] }]
   const id = req.params.id as string;
-  const data =
-    await RegistrationService.approveRegistrationRequest(
-      req.user!,
-      id
-    );
+  const data = await RegistrationService.approveRegistrationRequest(
+    req.user!,
+    id
+  );
   res.status(201).json(data);
 };
 
@@ -65,7 +61,7 @@ export const rejectRegistrationRequest = async (
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   const id = req.params.id as string;
-  const data = await RegistrationService.rejectRegistrationRequest(payload,id);
+  const data = await RegistrationService.rejectRegistrationRequest(payload, id);
   res.status(200).json(data);
 };
 
@@ -89,17 +85,17 @@ export const samlAcs = async (
   try {
     const claims = await validateSamlResponse(req.body?.SAMLResponse);
     const code = await AuthService.loginWithSamlClaims(claims);
-    
+
     const successUrl = new URL(getSamlFrontendSuccessUrl());
     successUrl.searchParams.set('code', code);
-    
+
     res.redirect(303, successUrl.toString());
   } catch (err) {
     console.error(
       'SAML assertion consumer service failed:',
       err instanceof Error ? err.message : 'Unknown error'
     );
-    
+
     try {
       res.redirect(303, getSamlFrontendFailureUrl());
     } catch (configurationError) {
@@ -114,7 +110,7 @@ export const exchangeSsoCode = async (req: Request, res: Response) => {
   if (!code || typeof code !== 'string') {
     throw new BadRequestError('SSO exchange code is required');
   }
-  
+
   const loginData = await AuthService.exchangeSsoCode(code);
   res.status(200).json(loginData);
 };
