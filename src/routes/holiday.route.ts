@@ -15,4 +15,3 @@ router.put('/:id', requireRoles([ADMIN, SUPER_ADMIN]), controller.update);
 router.delete('/:id', requireRoles([ADMIN, SUPER_ADMIN]), controller.remove);
 
 export default router;
-

@@ -51,7 +51,7 @@ import {
   getOwnProjects as getOwnProjectsFromHelper,
   getOwnProjectsTotal as getOwnProjectsTotalFromHelper,
 } from './project-query-own.helper';
-import { projectReadWhere, scopedProjectWhere } from '../lib/project-scope';
+import { projectReadWhere } from '../lib/project-scope';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',

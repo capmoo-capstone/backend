@@ -12,7 +12,6 @@ import {
 import { ForbiddenError } from '../../lib/errors';
 import {
   getDeptIdsForUser,
-  getUnitIdsForUser,
   haveSupplyPermission,
   isSuperAdmin,
 } from '../../lib/permissions';

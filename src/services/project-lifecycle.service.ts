@@ -20,7 +20,6 @@ import {
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
-  CompleteContractPhaseResponse,
   CompleteProcurementPhaseResponse,
   ProjectCancellationResponse,
   ProjectIdStatusResponse,

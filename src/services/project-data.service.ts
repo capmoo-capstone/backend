@@ -177,6 +177,8 @@ export const createProject = async (
     }
 
     const { budget_plan_id, budget_year, ...projectData } = data;
+    void budget_plan_id;
+    void budget_year;
     const project = await tx.project.create({
       data: {
         ...projectData,
@@ -243,6 +245,8 @@ export const importProjects = async (
     const createdProjects = await tx.project.createManyAndReturn({
       data: data.map((d, i) => {
         const { budget_plan_id, budget_year, ...projectData } = d;
+        void budget_plan_id;
+        void budget_year;
         return {
           ...projectData,
           status: ProjectStatus.UNASSIGNED,

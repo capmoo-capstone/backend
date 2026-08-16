@@ -331,19 +331,17 @@ export const getUnitGroupExecutiveSummary = async (
     throw new NotFoundError('Unit not found');
   }
 
-  let where: Prisma.ProjectWhereInput = {};
-
   const isContractUnit =
     unit.type.length !== 0 && unit.type.includes(UnitResponsibleType.CONTRACT);
 
-  if (isContractUnit) {
-    where = {
-      current_workflow_type: UnitResponsibleType.CONTRACT,
-      responsible_unit_id: unitId,
-    };
-  } else {
-    where = { procurement_type: { in: await getUnitProcurementTypes(unitId) } };
-  }
+  const where: Prisma.ProjectWhereInput = isContractUnit
+    ? {
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+        responsible_unit_id: unitId,
+      }
+    : {
+        procurement_type: { in: await getUnitProcurementTypes(unitId) },
+      };
 
   const currentWhere = projectRangeWhere(where, range);
   const previousWhere = projectRangeWhere(where, previousRange);
@@ -728,7 +726,8 @@ export const getUnitGroupProcurementDetails = async (
   }): boolean =>
     project.status !== ProjectStatus.CANCELLED &&
     project.expected_approval_date !== null &&
-    ((project.expected_approval_date < today) || (project.expected_approval_date < project.procurement_completed_at ));
+    (project.expected_approval_date < today ||
+      project.expected_approval_date < project.procurement_completed_at);
 
   const delayedPercentage = (
     methodProjects: Array<{

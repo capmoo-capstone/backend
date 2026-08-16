@@ -896,16 +896,16 @@ describe('project-query.service', () => {
   describe('getExpectedApprovalDates', () => {
     it('returns projects ordered by expected_approval_date asc', async () => {
       prismaMock.project.findMany.mockResolvedValue([
-          {
-            id: 'proj-1',
-            title: 'Project A',
-            expected_approval_date: new Date('2026-09-01T00:00:00.000Z'),
-          },
-          {
-            id: 'proj-2',
-            title: 'Project B',
-            expected_approval_date: new Date('2026-09-15T00:00:00.000Z'),
-          },
+        {
+          id: 'proj-1',
+          title: 'Project A',
+          expected_approval_date: new Date('2026-09-01T00:00:00.000Z'),
+        },
+        {
+          id: 'proj-2',
+          title: 'Project B',
+          expected_approval_date: new Date('2026-09-15T00:00:00.000Z'),
+        },
       ] as any);
 
       const result = await getExpectedApprovalDates(supplyUser);
@@ -916,12 +916,14 @@ describe('project-query.service', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             AND: expect.arrayContaining([
-              { status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } },
+              {
+                status: {
+                  notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED],
+                },
+              },
             ]),
           }),
-          orderBy: [
-            { expected_approval_date: 'asc' },
-          ],
+          orderBy: [{ expected_approval_date: 'asc' }],
         })
       );
     });

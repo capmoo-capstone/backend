@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { prisma } from '../config/prisma';
 import { UnauthorizedError } from './errors';
 import { AuthPayload } from '../types/auth.type';
+import { randomBytes } from 'node:crypto';
 
 export const SAML_REQUEST_TTL_MS = 5 * 60 * 1000;
 
@@ -90,15 +91,13 @@ export const SSO_CODE_TTL_MS = 60 * 1000; // 1 minute
 export const createSsoExchangeCode = async (
   loginData: unknown
 ): Promise<string> => {
-  const code = require('crypto').randomBytes(16).toString('hex');
+  const code = randomBytes(16).toString('hex');
   const cache = new PrismaSamlRequestCache(SSO_CODE_TTL_MS);
   await cache.saveAsync(`sso_code:${code}`, JSON.stringify(loginData));
   return code;
 };
 
-export const exchangeSsoCode = async (
-  code: string
-): Promise<AuthPayload> => {
+export const exchangeSsoCode = async (code: string): Promise<AuthPayload> => {
   const cache = new PrismaSamlRequestCache(SSO_CODE_TTL_MS);
   const rawValue = await cache.getAsync(`sso_code:${code}`);
   if (!rawValue) {

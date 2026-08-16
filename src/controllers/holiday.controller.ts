@@ -38,7 +38,6 @@ export const create = async (
   }
 };
 
-
 export const update = async (
   req: AuthenticatedRequest,
   res: Response

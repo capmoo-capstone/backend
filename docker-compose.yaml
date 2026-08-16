@@ -14,11 +14,14 @@ services:
     volumes:
       - postgres_local_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexus_local}']
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexus_local}',
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   postgres_local_data:
-

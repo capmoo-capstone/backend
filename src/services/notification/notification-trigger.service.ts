@@ -401,9 +401,7 @@ export const notifyDelegationStarted = async (
   const startDateStr = input.start_date
     ? formatBangkokDate(input.start_date)
     : '';
-  const endDateStr = input.end_date
-    ? formatBangkokDate(input.end_date)
-    : '';
+  const endDateStr = input.end_date ? formatBangkokDate(input.end_date) : '';
   const dateLabel = endDateStr
     ? `ตั้งแต่ ${startDateStr} ถึง ${endDateStr}`
     : `เริ่ม ${startDateStr}`;

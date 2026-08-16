@@ -6,7 +6,10 @@ import {
 } from '../schemas/notification.schema';
 import * as NotificationQueryService from '../services/notification/notification.service';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { issueNotificationStreamToken, verifyNotificationStreamToken } from '../services/notification/notification-stream-token.service';
+import {
+  issueNotificationStreamToken,
+  verifyNotificationStreamToken,
+} from '../services/notification/notification-stream-token.service';
 import { openNotificationStream } from '../services/notification/notification-realtime.service';
 import { runtimeConfig } from '../config/runtime';
 

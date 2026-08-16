@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import * as controller from '../controllers/project.controller';
 import {
-  requireRoles,
   requireCapability,
-  requireSuperAdmin,
   requireSupplyAccess,
   requireSupplyRoles,
 } from '../middlewares/auth';

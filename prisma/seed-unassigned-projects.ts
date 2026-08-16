@@ -1,7 +1,6 @@
 import {
   ProcurementType,
   ProjectStatus,
-  UnitResponsibleType,
   UrgentType,
   UserRole,
 } from '@prisma/client';
@@ -235,7 +234,8 @@ const seedUnassignedProjects = async () => {
       id: ids.projects.unassignedLt100k2,
       receiveSuffix: 102,
       title: 'User Testing - Stationery and office consumables',
-      description: 'UNASSIGNED LT100K project - office consumables procurement.',
+      description:
+        'UNASSIGNED LT100K project - office consumables procurement.',
       budget: 35000,
       procurementType: ProcurementType.LT100K,
       requestingDeptId: 'DEPT-REG',
@@ -323,7 +323,8 @@ const seedUnassignedProjects = async () => {
       id: ids.projects.unassignedMt500k3,
       receiveSuffix: 109,
       title: 'User Testing - Core network switch infrastructure expansion',
-      description: 'UNASSIGNED MT500K project - high-capacity core network switches.',
+      description:
+        'UNASSIGNED MT500K project - high-capacity core network switches.',
       budget: 920000,
       procurementType: ProcurementType.MT500K,
       requestingDeptId: 'DEPT-LOC',
@@ -337,7 +338,8 @@ const seedUnassignedProjects = async () => {
       id: ids.projects.unassignedSelection1,
       receiveSuffix: 110,
       title: 'User Testing - Campus building security guard service contract',
-      description: 'UNASSIGNED SELECTION project - 24/7 security service contract.',
+      description:
+        'UNASSIGNED SELECTION project - 24/7 security service contract.',
       budget: 1200000,
       procurementType: ProcurementType.SELECTION,
       requestingDeptId: 'DEPT-LOC',
@@ -360,8 +362,10 @@ const seedUnassignedProjects = async () => {
     {
       id: ids.projects.unassignedSelection3,
       receiveSuffix: 112,
-      title: 'User Testing - Elevator and escalator maintenance service contract',
-      description: 'UNASSIGNED SELECTION project - elevator preventive maintenance.',
+      title:
+        'User Testing - Elevator and escalator maintenance service contract',
+      description:
+        'UNASSIGNED SELECTION project - elevator preventive maintenance.',
       budget: 2100000,
       procurementType: ProcurementType.SELECTION,
       requestingDeptId: 'DEPT-LOC',
@@ -398,8 +402,10 @@ const seedUnassignedProjects = async () => {
     {
       id: ids.projects.unassignedEbidding3,
       receiveSuffix: 115,
-      title: 'User Testing - Campus-wide high-speed fiber optic network expansion',
-      description: 'UNASSIGNED EBIDDING project - optical fiber network upgrade.',
+      title:
+        'User Testing - Campus-wide high-speed fiber optic network expansion',
+      description:
+        'UNASSIGNED EBIDDING project - optical fiber network upgrade.',
       budget: 7200000,
       procurementType: ProcurementType.EBIDDING,
       requestingDeptId: 'DEPT-REG',
@@ -437,7 +443,8 @@ const seedUnassignedProjects = async () => {
       id: ids.projects.unassignedInternal3,
       receiveSuffix: 118,
       title: 'User Testing - Internal publication paper stock procurement',
-      description: 'UNASSIGNED INTERNAL project - printing paper stock procurement.',
+      description:
+        'UNASSIGNED INTERNAL project - printing paper stock procurement.',
       budget: 350000,
       procurementType: ProcurementType.INTERNAL,
       requestingDeptId: 'DEPT-STUAFF',
@@ -453,14 +460,18 @@ const seedUnassignedProjects = async () => {
 };
 
 async function main() {
-  console.log('--- Start Clearing Project Database & Seeding Unassigned Projects ---');
+  console.log(
+    '--- Start Clearing Project Database & Seeding Unassigned Projects ---'
+  );
   await clearProjectDatabase();
   console.log('--- Project Database Cleared ---');
 
   await ensurePrerequisitesExist();
   await seedUnassignedProjects();
 
-  console.log('--- Successfully Seeded 18 Unassigned Projects (3 per Procurement Type) ---');
+  console.log(
+    '--- Successfully Seeded 18 Unassigned Projects (3 per Procurement Type) ---'
+  );
 }
 
 main()

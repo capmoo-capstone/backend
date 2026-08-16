@@ -201,7 +201,7 @@ describe('project-lifecycle.service', () => {
       assignee_contract: [],
     });
 
-    const result = await completeProcurementPhase(headUser, {
+    await completeProcurementPhase(headUser, {
       id: 'project-1',
       continue_unit_proc: false,
     } as any);
@@ -241,7 +241,7 @@ describe('project-lifecycle.service', () => {
       assignee_contract: [{ id: 'staff-1' }],
     });
 
-    const result = await completeProcurementPhase(headUser, {
+    await completeProcurementPhase(headUser, {
       id: 'project-1',
       continue_unit_proc: true,
     } as any);

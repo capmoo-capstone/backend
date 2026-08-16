@@ -97,10 +97,7 @@ export const holidays2027: HolidayData[] = [
   { date: '2027-12-31', name: 'วันสิ้นปี' },
 ];
 
-export const allHolidays: HolidayData[] = [
-  ...holidays2026,
-  ...holidays2027,
-];
+export const allHolidays: HolidayData[] = [...holidays2026, ...holidays2027];
 
 export async function seedHolidays() {
   console.log('Seeding holidays for 2569 (2026) and 2570 (2027)...');

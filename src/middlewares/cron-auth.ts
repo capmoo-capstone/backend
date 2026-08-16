@@ -1,8 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import {
-  ServiceUnavailableError,
-  UnauthorizedError,
-} from '../lib/errors';
+import { ServiceUnavailableError, UnauthorizedError } from '../lib/errors';
 
 const getBearerToken = (authorization?: string) => {
   if (!authorization) {
@@ -10,9 +7,7 @@ const getBearerToken = (authorization?: string) => {
   }
 
   if (!authorization.toLowerCase().startsWith('bearer ')) {
-    throw new UnauthorizedError(
-      'Authorization header must start with Bearer'
-    );
+    throw new UnauthorizedError('Authorization header must start with Bearer');
   }
 
   const token = authorization.split(' ')[1];

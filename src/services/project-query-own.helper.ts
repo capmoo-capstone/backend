@@ -334,7 +334,7 @@ const roleTabWhere = (
             progressStatusWhere(UserRole.DOCUMENT_STAFF, [
               ProjectPhaseStatus.COMPLETED,
             ]),
-            { contract_completed_at: null },
+            { contract_completed_at: null }
           ),
         ])
       );

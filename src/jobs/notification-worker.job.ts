@@ -12,29 +12,23 @@ const run = async () => {
   const queue = getDeadlineQueue();
 
   if (!worker || !queue) {
-    console.warn('Notification worker skipped because REDIS_URL is not configured');
+    console.warn(
+      'Notification worker skipped because REDIS_URL is not configured'
+    );
     return;
   }
 
-  await queue.add(
-    'scan',
-    { kind: 'scan' },
-    {
-      jobId: 'deadline-scan-repeat',
-      repeat: { every: runtimeConfig.deadlineWorkerRepeatMs },
-      removeOnComplete: 1000,
-    } as Record<string, unknown>
-  );
+  await queue.add('scan', { kind: 'scan' }, {
+    jobId: 'deadline-scan-repeat',
+    repeat: { every: runtimeConfig.deadlineWorkerRepeatMs },
+    removeOnComplete: 1000,
+  } as Record<string, unknown>);
 
-  await queue.add(
-    'outbox-flush',
-    { kind: 'outbox-flush' },
-    {
-      jobId: 'notification-outbox-flush-repeat',
-      repeat: { every: runtimeConfig.outboxWorkerRepeatMs },
-      removeOnComplete: 1000,
-    } as Record<string, unknown>
-  );
+  await queue.add('outbox-flush', { kind: 'outbox-flush' }, {
+    jobId: 'notification-outbox-flush-repeat',
+    repeat: { every: runtimeConfig.outboxWorkerRepeatMs },
+    removeOnComplete: 1000,
+  } as Record<string, unknown>);
 
   await enqueueDeadlineScan();
   await enqueueNotificationOutboxFlush();

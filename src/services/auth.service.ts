@@ -8,7 +8,6 @@ import { nowUtc } from '../lib/date';
 import {
   activeDelegationWhere,
   getNextDelegationBoundary,
-  openDelegationWhere,
 } from '../lib/active-state';
 import { BadRequestError, UnauthorizedError } from '../lib/errors';
 import {

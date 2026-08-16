@@ -1,5 +1,4 @@
 import {
-  ProjectPhaseStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,

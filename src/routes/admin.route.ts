@@ -23,7 +23,10 @@ router.get(
   requireSupplyRoles([ADMIN]),
   controller.getRepresentatives
 );
-router.get('/settings/ops-staff', requireSupplyRoles([ADMIN]), controller.getOpsStaff);
-
+router.get(
+  '/settings/ops-staff',
+  requireSupplyRoles([ADMIN]),
+  controller.getOpsStaff
+);
 
 export default router;

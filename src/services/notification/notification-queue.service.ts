@@ -42,10 +42,16 @@ type WorkerInstance = {
 const loadBullMq = () => {
   const runtimeRequire = eval('require') as NodeRequire;
   return runtimeRequire('bullmq') as {
-    Queue: new (name: string, options?: Record<string, unknown>) => QueueInstance<NotificationDeadlineJob>;
+    Queue: new (
+      name: string,
+      options?: Record<string, unknown>
+    ) => QueueInstance<NotificationDeadlineJob>;
     Worker: new (
       name: string,
-      processor: (job: { name: string; data: NotificationDeadlineJob }) => Promise<unknown>,
+      processor: (job: {
+        name: string;
+        data: NotificationDeadlineJob;
+      }) => Promise<unknown>,
       options?: Record<string, unknown>
     ) => WorkerInstance;
   };
@@ -79,13 +85,10 @@ export const getDeadlineQueue = () => {
   if (!connection || !isRedisConfigured()) return null;
 
   const { Queue } = loadBullMq();
-  deadlineQueue ??= new Queue(
-    DEADLINE_NOTIFICATION_QUEUE_NAME,
-    {
-      connection,
-      prefix: runtimeConfig.redisPrefix,
-    }
-  );
+  deadlineQueue ??= new Queue(DEADLINE_NOTIFICATION_QUEUE_NAME, {
+    connection,
+    prefix: runtimeConfig.redisPrefix,
+  });
 
   return deadlineQueue;
 };
@@ -94,20 +97,28 @@ export const enqueueDeadlineScan = async () => {
   const queue = getDeadlineQueue();
   if (!queue) return null;
 
-  return queue.add('scan', { kind: 'scan' }, {
-    jobId: 'deadline-scan-once',
-    removeOnComplete: 1000,
-  });
+  return queue.add(
+    'scan',
+    { kind: 'scan' },
+    {
+      jobId: 'deadline-scan-once',
+      removeOnComplete: 1000,
+    }
+  );
 };
 
 export const enqueueNotificationOutboxFlush = async () => {
   const queue = getDeadlineQueue();
   if (!queue) return null;
 
-  return queue.add('outbox-flush', { kind: 'outbox-flush' }, {
-    jobId: 'notification-outbox-flush',
-    removeOnComplete: 1000,
-  });
+  return queue.add(
+    'outbox-flush',
+    { kind: 'outbox-flush' },
+    {
+      jobId: 'notification-outbox-flush',
+      removeOnComplete: 1000,
+    }
+  );
 };
 
 export const enqueueDeadlineDispatch = async (

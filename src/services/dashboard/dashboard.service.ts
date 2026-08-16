@@ -98,12 +98,9 @@ export const getIndividualStaffDashboard = (
 
 export const getIndividualStaffTodo = (
   query: IndividualTodoQuery
-): Promise<PaginatedProjects> =>
-  individualHelper.getIndividualStaffTodo(query);
+): Promise<PaginatedProjects> => individualHelper.getIndividualStaffTodo(query);
 
 export const getIndividualStaffTodoTotal = (
   query: IndividualTodoTotalQuery
 ): Promise<Record<string, number>> =>
   individualHelper.getIndividualStaffTodoTotal(query);
-
-

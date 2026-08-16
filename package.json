@@ -25,7 +25,7 @@
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
     "filegen": "tsx filegen.ts",
-    "seed:project": "tsx --env-file=.env prisma/seed-unassigned-projects.ts"  
+    "seed:project": "tsx --env-file=.env prisma/seed-unassigned-projects.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
