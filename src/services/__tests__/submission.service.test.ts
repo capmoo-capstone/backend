@@ -30,6 +30,10 @@ vi.mock('../storage.service', () => ({
   ),
 }));
 
+vi.mock('../notification/notification-realtime.service', () => ({
+  publishNotificationRealtimeEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 const mockedSyncProjectPhases = vi.mocked(syncProjectPhases);
 const mockedDownloadUrl = vi.mocked(generatePresignedDownloadUrl);
 
@@ -583,13 +587,44 @@ describe('submission.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it('rejectSubmission stores the comment and syncs phases', async () => {
+  it('rejectSubmission stores the comment, syncs phases, and notifies the submitter', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.user.findMany.mockResolvedValue([{ id: 'submitter-1' }]);
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'submitter-1',
+      project_id: 'project-1',
+      category: 'WORKFLOW_UPDATES',
+      priority: 'HIGH',
+      title: 'ขั้นตอนถูกตีกลับ',
+      body: 'ขั้นตอนที่ 1 ของโครงการ "Project 1" ถูกตีกลับ: Please revise',
+      target_path: '/app/projects/project-1',
+      action_label: 'เปิดโครงการ',
+      requires_action: true,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'SUBMISSION_REJECTED' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'submitter-1', _count: { _all: 1 } },
+    ]);
     txMock.projectSubmission.update.mockResolvedValue({
       id: 'submission-1',
       project_id: 'project-1',
       workflow_type: UnitResponsibleType.LT100K,
       step_order: 1,
       submission_round: 1,
+      submitted_by: 'submitter-1',
       status: SubmissionStatus.REJECTED,
       comment: 'Please revise',
     });
@@ -613,6 +648,19 @@ describe('submission.service', () => {
       txMock,
       UnitResponsibleType.LT100K,
       'project-1'
+    );
+    expect(txMock.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          user_id: 'submitter-1',
+          project_id: 'project-1',
+          requires_action: true,
+          title: 'ขั้นตอนถูกตีกลับ',
+          metadata: expect.objectContaining({
+            notification_kind: 'SUBMISSION_REJECTED',
+          }),
+        }),
+      })
     );
   });
 });

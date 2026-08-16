@@ -36,6 +36,7 @@ import { checkRefNumberDuplication } from './project-data.service';
 import {
   notifyApprovalRequired,
   publishPersistedNotifications,
+  notifySubmissionRejected,
   notifySignatureRequired,
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
@@ -626,7 +627,7 @@ export const rejectSubmission = async (
   user: AuthPayload,
   data: RejectSubmissionDto
 ): Promise<RejectedSubmissionResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const updated = await tx.projectSubmission.update({
       where: { id: data.id },
       data: {
@@ -642,6 +643,7 @@ export const rejectSubmission = async (
         step_order: true,
         submission_round: true,
         installment_no: true,
+        submitted_by: true,
         status: true,
         comment: true,
         approved_by: true,
@@ -649,8 +651,19 @@ export const rejectSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
-    return updated;
+    const notificationResults = await notifySubmissionRejected(tx, {
+      project_id: updated.project_id,
+      actor_id: user.id,
+      submitter_id: updated.submitted_by,
+      step_order: updated.step_order,
+      reason: updated.comment,
+    });
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const approveSubmission = async (
