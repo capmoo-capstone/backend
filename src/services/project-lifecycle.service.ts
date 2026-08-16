@@ -13,6 +13,7 @@ import { CONTRACT_UNIT_ID } from '../lib/constant';
 import { nowUtc } from '../lib/date';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
+import { Capability, assertCapability } from '../lib/access-policy';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,
@@ -215,6 +216,7 @@ export const cancelProject = async (
   user: AuthPayload,
   data: CancelProjectDto
 ): Promise<ProjectCancellationResponse> => {
+  assertCapability(user, Capability.PROJECT_CANCEL);
   return await prisma.$transaction(async (tx) => {
     const projectStatus = await findProjectStatusOrThrow(tx, data.id);
     const cancellation = await tx.projectCancellation.findFirst({
@@ -314,6 +316,7 @@ export const approveCancellation = async (
   user: AuthPayload,
   id: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_APPROVE_CANCELLATION);
   return await prisma.$transaction(async (tx) => {
     const now = nowUtc();
     const projectStatus = await findProjectStatusOrThrow(tx, id);
@@ -367,6 +370,7 @@ export const rejectCancellation = async (
   user: AuthPayload,
   id: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_APPROVE_CANCELLATION);
   return await prisma.$transaction(async (tx) => {
     const now = nowUtc();
     const projectStatus = await findProjectStatusOrThrow(tx, id);
@@ -442,6 +446,7 @@ export const completeProcurementPhase = async (
   user: AuthPayload,
   data: CompleteProcurementPhaseDto
 ): Promise<CompleteProcurementPhaseResponse> => {
+  assertCapability(user, Capability.PROJECT_COMPLETE_PROCUREMENT);
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
@@ -535,6 +540,7 @@ export const closeProject = async (
   user: AuthPayload,
   projectId: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_CLOSE);
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },

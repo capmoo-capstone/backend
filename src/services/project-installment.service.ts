@@ -13,6 +13,8 @@ import { BadRequestError, NotFoundError } from '../lib/errors';
 import { ListResponse, PaginatedResponse } from '../types/common.type';
 import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
 import { acquireProjectInstallmentLock } from '../lib/project-installment';
+import { Capability, assertCapability } from '../lib/access-policy';
+import { projectReadWhere } from '../lib/project-scope';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import {
   CompleteInstallmentDto,
@@ -62,6 +64,7 @@ export const createInstallment = async (
   user: AuthPayload,
   data: CompleteInstallmentDto
 ): Promise<ProjectInstallment> => {
+  assertCapability(user, Capability.INSTALLMENT_CREATE);
   return await prisma.$transaction(async (tx) => {
     await acquireProjectInstallmentLock(tx, data.id);
 
@@ -136,12 +139,16 @@ export const createInstallment = async (
 };
 
 export const getInstallments = async (
-  _user: AuthPayload,
+  user: AuthPayload,
   page: number,
   limit: number,
   filters?: GetInstallmentsQuery
 ): Promise<PaginatedResponse<ProjectInstallment>> => {
   const where: Prisma.ProjectInstallmentWhereInput = {};
+  const projectScope = projectReadWhere(user);
+  if (Object.keys(projectScope).length > 0) {
+    where.project = projectScope;
+  }
 
   if (filters) {
     const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
@@ -269,6 +276,7 @@ export const exportInstallments = async (
   user: AuthPayload,
   data: ExportInstallmentDto
 ): Promise<ListResponse<ProjectInstallment>> => {
+  assertCapability(user, Capability.INSTALLMENT_EXPORT);
   return await prisma.$transaction(async (tx) => {
     const countExportRequests = await tx.projectInstallment.count({
       where: {
@@ -353,6 +361,7 @@ export const requestEditInstallment = async (
   exportId: string,
   reason: string
 ): Promise<ProjectInstallment> => {
+  assertCapability(user, Capability.INSTALLMENT_REQUEST_EDIT);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const exportRecord = await tx.projectInstallment.findUnique({
       where: { id: exportId },

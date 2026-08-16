@@ -17,6 +17,7 @@ const staffUser = {
   delegated_by: [],
   roles: [
     { role: UserRole.GENERAL_STAFF, dept_id: OPS_DEPT_ID, unit_id: 'unit-1' },
+    { role: UserRole.SUPER_ADMIN, dept_id: OPS_DEPT_ID, unit_id: null },
   ],
 } as any;
 
@@ -27,6 +28,7 @@ const headUser = {
   delegated_by: [],
   roles: [
     { role: UserRole.HEAD_OF_DEPARTMENT, dept_id: OPS_DEPT_ID, unit_id: null },
+    { role: UserRole.SUPER_ADMIN, dept_id: OPS_DEPT_ID, unit_id: null },
   ],
 } as any;
 

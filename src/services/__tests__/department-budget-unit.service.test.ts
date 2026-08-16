@@ -24,7 +24,10 @@ import {
   updateUnitUsers,
 } from '../unit.service';
 
-const user = { id: 'user-1', roles: [{ dept_id: OPS_DEPT_ID }] } as any;
+const user = {
+  id: 'user-1',
+  roles: [{ role: UserRole.ADMIN, dept_id: OPS_DEPT_ID }],
+} as any;
 
 describe('department.service', () => {
   it('listDepartments returns all departments with units included', async () => {
@@ -47,7 +50,10 @@ describe('department.service', () => {
     ]);
     prismaMock.department.count.mockResolvedValue(1);
 
-    const result = await listDepartments({ excludeDeptIds: [], withUnit: true });
+    const result = await listDepartments({
+      excludeDeptIds: [],
+      withUnit: true,
+    });
 
     expect(result.total).toBe(1);
     expect(result.data[0].units?.[0].id).toBe('unit-1');

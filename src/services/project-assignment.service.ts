@@ -20,6 +20,8 @@ import {
 } from '../types/project.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import { nowUtc } from '../lib/date';
+import { activeUserWhere } from '../lib/active-state';
+import { Capability, assertCapability } from '../lib/access-policy';
 import {
   notifyProjectAssigned,
   publishPersistedNotifications,
@@ -40,6 +42,7 @@ export const assignProjectsToUser = async (
   user: AuthPayload,
   data: UpdateStatusProjectsDto
 ): Promise<ProjectAssigneeListResponse> => {
+  assertCapability(user, Capability.PROJECT_ASSIGN);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const projectIds = data.map((d) => d.id);
     const assigneeIds = [...new Set(data.map((d) => d.userId))];
@@ -59,7 +62,7 @@ export const assignProjectsToUser = async (
     });
 
     const assignees = await tx.user.findMany({
-      where: { id: { in: assigneeIds } },
+      where: { id: { in: assigneeIds }, ...activeUserWhere() },
       select: { id: true, full_name: true },
     });
 
@@ -109,9 +112,7 @@ export const assignProjectsToUser = async (
             ...(shouldStartProcurement
               ? { procurement_started_at: nowUtc() }
               : {}),
-            ...(shouldStartContract
-              ? { contract_started_at: nowUtc() }
-              : {}),
+            ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
           },
           select: { id: true, status: true, [assigneeField]: true },
         })
@@ -145,7 +146,8 @@ export const assignProjectsToUser = async (
     );
 
     return {
-      updatedProjects: updatedProjects as unknown as ProjectAssigneeListResponse,
+      updatedProjects:
+        updatedProjects as unknown as ProjectAssigneeListResponse,
       notificationResults,
     };
   });
@@ -159,6 +161,7 @@ export const changeAssignee = async (
   user: AuthPayload,
   data: UpdateStatusProjectDto
 ): Promise<ProjectAssigneeResponse> => {
+  assertCapability(user, Capability.PROJECT_CHANGE_ASSIGNEE);
   const { id, userId: newAssigneeId } = data;
   const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
@@ -184,9 +187,9 @@ export const changeAssignee = async (
     const oldAssigneeId = (project as any)[assigneeField]?.[0]?.id;
     const newAssignee = await tx.user.findUnique({
       where: { id: newAssigneeId },
-      select: { id: true, full_name: true },
+      select: { id: true, full_name: true, is_active: true },
     });
-    if (!newAssignee) {
+    if (!newAssignee || newAssignee.is_active === false) {
       throw new NotFoundError(`New assignee ${newAssigneeId} not found`);
     }
 
@@ -241,6 +244,7 @@ export const claimProject = async (
   user: AuthPayload,
   projectId: string
 ): Promise<ProjectAssigneeResponse> => {
+  assertCapability(user, Capability.PROJECT_CLAIM);
   return await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
@@ -278,12 +282,8 @@ export const claimProject = async (
       data: {
         status: ProjectStatus.IN_PROGRESS,
         [assigneeField]: { connect: { id: user.id } },
-        ...(shouldStartProcurement
-          ? { procurement_started_at: nowUtc() }
-          : {}),
-        ...(shouldStartContract
-          ? { contract_started_at: nowUtc() }
-          : {}),
+        ...(shouldStartProcurement ? { procurement_started_at: nowUtc() } : {}),
+        ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
@@ -309,6 +309,7 @@ export const acceptProjects = async (
   user: AuthPayload,
   data: AcceptProjectsDto
 ): Promise<ProjectIdStatusResponse[]> => {
+  assertCapability(user, Capability.PROJECT_ACCEPT);
   return await prisma.$transaction(async (tx) => {
     const projects = await tx.project.findMany({
       where: { id: { in: data.id } },
@@ -374,6 +375,7 @@ export const addAssignee = async (
   user: AuthPayload,
   data: UpdateStatusProjectDto
 ): Promise<ProjectAssigneeResponse> => {
+  assertCapability(user, Capability.PROJECT_ADD_ASSIGNEE);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
@@ -416,9 +418,9 @@ export const addAssignee = async (
     }
     const assignee = await tx.user.findUnique({
       where: { id: data.userId },
-      select: { id: true, full_name: true },
+      select: { id: true, full_name: true, is_active: true },
     });
-    if (!assignee) {
+    if (!assignee || assignee.is_active === false) {
       throw new NotFoundError(`Assignee ${data.userId} not found`);
     }
 
@@ -462,6 +464,7 @@ export const returnProject = async (
   user: AuthPayload,
   projectId: string
 ): Promise<ProjectIdStatusResponse> => {
+  assertCapability(user, Capability.PROJECT_RETURN);
   const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },

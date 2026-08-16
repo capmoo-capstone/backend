@@ -1,6 +1,7 @@
 import { Department, Prisma, Unit, UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { NotFoundError } from '../lib/errors';
+import { assertDepartmentCanBeDeleted } from '../lib/deletion-policy';
 import {
   CreateDepartmentDto,
   UpdateDepartmentDto,
@@ -152,8 +153,10 @@ export const updateDepartment = async (
 };
 
 export const deleteDepartment = async (id: string): Promise<Department> => {
-  await getById(id);
-  return await prisma.department.delete({
-    where: { id },
+  return await prisma.$transaction(async (tx) => {
+    const department = await tx.department.findUnique({ where: { id } });
+    if (!department) throw new NotFoundError('Department not found');
+    await assertDepartmentCanBeDeleted(tx, id);
+    return tx.department.delete({ where: { id } });
   });
 };

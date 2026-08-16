@@ -37,7 +37,11 @@ vi.mock('../notification/notification-realtime.service', () => ({
 const mockedSyncProjectPhases = vi.mocked(syncProjectPhases);
 const mockedDownloadUrl = vi.mocked(generatePresignedDownloadUrl);
 
-const user = { id: 'user-1', full_name: 'Staff User', roles: [] } as any;
+const user = {
+  id: 'user-1',
+  full_name: 'Staff User',
+  roles: [{ role: 'SUPER_ADMIN' }],
+} as any;
 
 const staffSubmissionDto = (overrides = {}) =>
   ({
@@ -170,16 +174,25 @@ describe('submission.service', () => {
       vendorName: 'Acme',
     });
 
-    const findManyCall = prismaMock.projectSubmission.findMany.mock.calls.at(-1)?.[0];
+    const findManyCall =
+      prismaMock.projectSubmission.findMany.mock.calls.at(-1)?.[0];
     expect(findManyCall?.where).toEqual({
       AND: [
         { submission_type: 'VENDOR' },
         { workflow_type: 'CONTRACT' },
-        { project: { receive_no: { contains: '2569/00001', mode: 'insensitive' } } },
+        {
+          project: {
+            receive_no: { contains: '2569/00001', mode: 'insensitive' },
+          },
+        },
         {
           OR: [
             { po_no: { contains: '1234567890', mode: 'insensitive' } },
-            { project: { po_no: { contains: '1234567890', mode: 'insensitive' } } },
+            {
+              project: {
+                po_no: { contains: '1234567890', mode: 'insensitive' },
+              },
+            },
           ],
         },
         { project: { vendor_name: { contains: 'Acme', mode: 'insensitive' } } },

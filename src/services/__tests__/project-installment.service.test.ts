@@ -21,7 +21,7 @@ const mockUser = {
   id: 'user-1',
   email: 'test@example.com',
   full_name: 'Test User',
-  roles: [],
+  roles: [{ role: 'SUPER_ADMIN' }],
 } as unknown as AuthPayload;
 
 const completedContractInstallment = (installmentNo: number) =>
@@ -458,7 +458,9 @@ describe('project-finance.service', () => {
         responsible_unit_id: 'unit-1',
         created_by: 'creator-1',
         assignee_procurement: [],
-        assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+        assignee_contract: [
+          { id: 'contract-1', full_name: 'Contract One', email: null },
+        ],
         creator: { id: 'creator-1', full_name: 'Creator One', email: null },
       });
       txMock.user.findMany.mockResolvedValue([{ id: 'contract-1' }]);
@@ -547,7 +549,9 @@ describe('project-finance.service', () => {
             responsible_unit_id: 'unit-1',
             created_by: 'creator-1',
             assignee_procurement: [],
-            assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+            assignee_contract: [
+              { id: 'contract-1', full_name: 'Contract One', email: null },
+            ],
             creator: { id: 'creator-1', full_name: 'Creator One', email: null },
           };
         }
@@ -611,7 +615,9 @@ describe('project-finance.service', () => {
             responsible_unit_id: 'unit-1',
             created_by: 'creator-1',
             assignee_procurement: [],
-            assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+            assignee_contract: [
+              { id: 'contract-1', full_name: 'Contract One', email: null },
+            ],
             creator: { id: 'creator-1', full_name: 'Creator One', email: null },
           };
         }

@@ -2,6 +2,7 @@ import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { nowUtc } from '../lib/date';
+import { openDelegationWhere } from '../lib/active-state';
 import { NotFoundError } from '../lib/errors';
 import {
   OpsStaffSettingsResponse,
@@ -38,11 +39,7 @@ export const getOpsUnits = async (): Promise<OpsUnitSettingsResponse> => {
               id: true,
               full_name: true,
               delegations_given: {
-                where: {
-                  is_active: true,
-                  start_date: { lte: now },
-                  OR: [{ end_date: null }, { end_date: { gte: now } }],
-                },
+                where: openDelegationWhere(now),
                 select: {
                   id: true,
                   role: true,
@@ -174,11 +171,7 @@ export const getOpsStaff = async (): Promise<OpsStaffSettingsResponse> => {
               id: true,
               full_name: true,
               delegations_given: {
-                where: {
-                  is_active: true,
-                  start_date: { lte: now },
-                  OR: [{ end_date: null }, { end_date: { gte: now } }],
-                },
+                where: openDelegationWhere(now),
                 select: {
                   id: true,
                   role: true,

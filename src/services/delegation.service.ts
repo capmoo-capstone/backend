@@ -9,10 +9,13 @@ import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { BadRequestError, NotFoundError } from '../lib/errors';
 import { formatBangkokDate, nowUtc } from '../lib/date';
+import {
+  activeDelegationWhere,
+  openDelegationWhere,
+} from '../lib/active-state';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import { AuthPayload } from '../types/auth.type';
 import { DelegationDetail } from '../types/delegation.type';
-import { PersistedNotificationResult } from '../types/notification.type';
 import {
   buildDelegationTargetSnapshot,
   recordAuditEvent,
@@ -27,12 +30,6 @@ import * as UserService from './user.service';
 type DelegableRole =
   | typeof UserRole.HEAD_OF_DEPARTMENT
   | typeof UserRole.HEAD_OF_UNIT;
-
-const activeDelegationWhere = () => ({
-  is_active: true,
-  start_date: { lte: nowUtc() },
-  OR: [{ end_date: { equals: null } }, { end_date: { gte: nowUtc() } }],
-});
 
 const assertValidDelegationScope = (data: AddDelegationDto) => {
   if (data.role === UserRole.HEAD_OF_UNIT && !data.unit_id) {
@@ -79,11 +76,13 @@ export const addDelegation = async (
         delegator_id: data.delegator_id,
         role: data.role,
         unit_id: data.unit_id ?? null,
-        ...activeDelegationWhere(),
+        ...openDelegationWhere(),
       },
     });
     if (validExisting) {
-      const startDateStr = formatBangkokDate(new Date(validExisting.start_date));
+      const startDateStr = formatBangkokDate(
+        new Date(validExisting.start_date)
+      );
       const endDateStr = validExisting.end_date
         ? formatBangkokDate(new Date(validExisting.end_date))
         : 'present';

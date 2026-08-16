@@ -21,7 +21,7 @@ const mockedSyncProjectPhases = vi.mocked(syncProjectPhases);
 const user = {
   id: 'staff-1',
   full_name: 'Staff One',
-  roles: [],
+  roles: [{ role: 'SUPER_ADMIN' }],
 } as any;
 
 describe('project-assignment.service', () => {

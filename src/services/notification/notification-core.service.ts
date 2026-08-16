@@ -12,6 +12,7 @@ import { prisma } from '../../config/prisma';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { nowUtc, toBangkokParts } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
+import { activeDelegationWhere, activeUserWhere } from '../../lib/active-state';
 import type {
   NotificationKind,
   PersistedNotificationResult,
@@ -45,9 +46,9 @@ type NotificationOutboxRow = {
 const isUniqueConstraintError = (error: unknown) =>
   Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'P2002'
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
   );
 
 export type NotificationDispatchInput = {
@@ -97,7 +98,9 @@ const buildNotificationMetadata = (input: NotificationDispatchInput) => ({
 });
 
 const toErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : 'Unknown notification publish failure';
+  error instanceof Error
+    ? error.message
+    : 'Unknown notification publish failure';
 
 const claimableOutboxStatuses: NotificationOutboxStatus[] = [
   'PENDING',
@@ -151,7 +154,9 @@ const loadNotificationOutboxRows = async (
   const limit = options?.limit ?? 100;
   const filters = [
     Prisma.sql`"status" IN (${Prisma.join(
-      claimableOutboxStatuses.map((status) => Prisma.sql`${status}::"NotificationOutboxStatus"`)
+      claimableOutboxStatuses.map(
+        (status) => Prisma.sql`${status}::"NotificationOutboxStatus"`
+      )
     )})`,
   ];
 
@@ -231,6 +236,7 @@ export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
       role: scope.role,
       dept_id: deptId,
       unit_id: scope.unit_id ?? null,
+      user: activeUserWhere(),
     },
     select: {
       user: {
@@ -247,8 +253,8 @@ export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
     where: {
       role: scope.role,
       unit_id: scope.unit_id ?? null,
-      is_active: true,
-      OR: [{ end_date: null }, { end_date: { gte: new Date() } }],
+      ...activeDelegationWhere(),
+      delegatee: activeUserWhere(),
     },
     select: {
       delegatee: {
@@ -553,11 +559,7 @@ export const publishPendingNotificationOutbox = async (options?: {
 export const wholeDayDiff = (targetDate: Date, now: Date) => {
   const nowParts = toBangkokParts(now);
   const targetParts = toBangkokParts(targetDate);
-  const start = Date.UTC(
-    nowParts.year,
-    nowParts.month - 1,
-    nowParts.day
-  );
+  const start = Date.UTC(nowParts.year, nowParts.month - 1, nowParts.day);
   const target = Date.UTC(
     targetParts.year,
     targetParts.month - 1,
