@@ -371,6 +371,22 @@ describe('project-query.service', () => {
       );
     });
 
+    it('includes contract assignee clause for general staff in procurement unit', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(staffUser, 1, 10);
+
+      expect(ownProjectWhereJson()).toContain(
+        `"current_workflow_type":"${UnitResponsibleType.CONTRACT}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"assignee_contract":{"some":{"id":"staff-1"}}'
+      );
+    });
+
     it('combines head-of-unit tab conditions on the all tab', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
