@@ -5,7 +5,7 @@ import * as NotificationService from '../services/notification/notification.serv
 describe('processDeadlineNotifications', () => {
   it('runs the existing deadline sync and returns a success response', async () => {
     const syncSpy = vi
-      .spyOn(NotificationService, 'syncDeadlineNotificationsForAllUsers')
+      .spyOn(NotificationService, 'enqueueDeadlineReminderScan')
       .mockResolvedValue(undefined);
 
     const json = vi.fn();

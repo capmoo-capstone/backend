@@ -7,9 +7,14 @@ import {
   dispatchNotification,
   getProjectContext,
   getRoleRecipients,
+  type PersistedNotificationResult,
   type TxClient,
 } from './notification-core.service';
 import { formatBangkokDate } from '../../lib/date';
+
+const mergeNotifications = (
+  ...batches: PersistedNotificationResult[][]
+): PersistedNotificationResult[] => batches.flat();
 
 export const notifyProjectAssigned = async (
   tx: TxClient,
@@ -20,7 +25,7 @@ export const notifyProjectAssigned = async (
   }
 ) => {
   const project = await getProjectContext(tx, input.project_id);
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: input.assignee_ids.filter((id) => id !== input.actor_id),
     actor_id: input.actor_id,
     project_id: input.project_id,
@@ -45,7 +50,7 @@ export const notifyResponsibleAdded = async (
   }
 ) => {
   const project = await getProjectContext(tx, input.project_id);
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: [input.added_user_id].filter((id) => id !== input.actor_id),
     actor_id: input.actor_id,
     project_id: input.project_id,
@@ -70,7 +75,7 @@ export const notifyResponsibleRemoved = async (
   }
 ) => {
   const project = await getProjectContext(tx, input.project_id);
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: [input.removed_user_id].filter(
       (id) => id !== input.actor_id
     ),
@@ -104,7 +109,7 @@ export const notifyCancellationRequested = async (
     getRoleRecipients(tx, { role: UserRole.HEAD_OF_DEPARTMENT }),
   ]);
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: Array.from(
       new Set([...unitHeads, ...departmentHeads].map((user) => user.id))
     ).filter((id) => id !== input.actor_id),
@@ -136,7 +141,7 @@ export const notifyCancellationApproved = async (
     ...project.assignee_contract.map((item) => item.id),
   ].filter((id) => id !== input.actor_id);
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: recipients,
     actor_id: input.actor_id,
     project_id: input.project_id,
@@ -165,7 +170,7 @@ export const notifyCancellationRejected = async (
     ...project.assignee_contract.map((item) => item.id),
   ].filter((id) => id !== input.actor_id);
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: recipients,
     actor_id: input.actor_id,
     project_id: input.project_id,
@@ -194,7 +199,7 @@ export const notifyApprovalRequired = async (
     unit_id: project.responsible_unit_id,
   });
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: recipients
       .map((user) => user.id)
       .filter((id) => id !== input.actor_id),
@@ -225,7 +230,7 @@ export const notifySignatureRequired = async (
     role: UserRole.DOCUMENT_STAFF,
   });
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: recipients
       .map((user) => user.id)
       .filter((id) => id !== input.actor_id),
@@ -253,11 +258,11 @@ export const notifyWorkflowStepApproved = async (
   }
 ) => {
   if (!input.submitter_id || input.submitter_id === input.actor_id) {
-    return;
+    return [];
   }
 
   const project = await getProjectContext(tx, input.project_id);
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: [input.submitter_id],
     actor_id: input.actor_id,
     project_id: input.project_id,
@@ -286,7 +291,7 @@ export const notifyVendorSubmissionReceived = async (
     role: UserRole.FINANCE_STAFF,
   });
 
-  await dispatchNotification(tx, {
+  const documentNotifications = await dispatchNotification(tx, {
     recipient_ids: documentStaff.map((user) => user.id),
     project_id: input.project_id,
     kind: 'ASSIGNED_DOCUMENT',
@@ -300,7 +305,7 @@ export const notifyVendorSubmissionReceived = async (
     dedupe_key: `vendor-submission:${project.id}`,
   });
 
-  await dispatchNotification(tx, {
+  const financeNotifications = await dispatchNotification(tx, {
     recipient_ids: financeStaff.map((user) => user.id),
     project_id: input.project_id,
     kind: 'FINANCE_SUBMIT',
@@ -313,6 +318,8 @@ export const notifyVendorSubmissionReceived = async (
     requires_action: false,
     dedupe_key: `finance-handoff:${project.id}`,
   });
+
+  return mergeNotifications(documentNotifications, financeNotifications);
 };
 
 export const notifyDelegationStarted = async (
@@ -336,7 +343,7 @@ export const notifyDelegationStarted = async (
     ? `ตั้งแต่ ${startDateStr} ถึง ${endDateStr}`
     : `เริ่ม ${startDateStr}`;
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: [input.delegator_id, input.delegatee_id],
     actor_id: input.actor_id,
     kind: 'DELEGATION_STARTED',
@@ -359,7 +366,7 @@ export const notifyDelegationEnded = async (
     role_label: string;
   }
 ) => {
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: [input.delegator_id, input.delegatee_id],
     actor_id: input.actor_id,
     kind: 'DELEGATION_ENDED',
@@ -388,7 +395,7 @@ export const notifyProjectReturnedForRevision = async (
     ...project.assignee_contract.map((item) => item.id),
   ].filter((id) => id !== input.actor_id);
 
-  await dispatchNotification(tx, {
+  return dispatchNotification(tx, {
     recipient_ids: recipients,
     actor_id: input.actor_id,
     project_id: input.project_id,
