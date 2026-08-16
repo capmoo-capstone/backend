@@ -66,7 +66,6 @@ export const createInstallment = async (
   data: CompleteInstallmentDto
 ): Promise<ProjectInstallment> => {
   assertCapability(user, Capability.INSTALLMENT_CREATE);
-  return await prisma.$transaction(async (tx) => {
   const transactionResult = await prisma.$transaction(async (tx) => {
     await acquireProjectInstallmentLock(tx, data.id);
 
