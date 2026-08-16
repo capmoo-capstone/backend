@@ -13,6 +13,7 @@ export const runtimeConfig = {
   redisUrl: process.env.REDIS_URL?.trim() || '',
   redisPrefix: process.env.REDIS_PREFIX?.trim() || 'nexus-procure',
   redisTlsCaPath: process.env.REDIS_TLS_CA_PATH?.trim() || '',
+  redisTlsServername: process.env.REDIS_TLS_SERVERNAME?.trim() || '',
   redisTlsRejectUnauthorized: parseBoolean(
     process.env.REDIS_TLS_REJECT_UNAUTHORIZED,
     true

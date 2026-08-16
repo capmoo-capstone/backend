@@ -43,6 +43,7 @@ services:
       REDIS_TLS_CA_PATH: ${REDIS_TLS_CA_PATH:-/app/certs/redis-ca.crt}
       REDIS_TLS_REJECT_UNAUTHORIZED: ${REDIS_TLS_REJECT_UNAUTHORIZED}
       NOTIFICATIONS_REALTIME_ENABLED: ${NOTIFICATIONS_REALTIME_ENABLED}
+      REDIS_TLS_SERVERNAME: ${REDIS_TLS_SERVERNAME}
     depends_on:
       db:
         condition: service_healthy

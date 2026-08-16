@@ -58,6 +58,7 @@ const getRedisTlsOptions = () => {
     ca: runtimeConfig.redisTlsCaPath
       ? readFileSync(runtimeConfig.redisTlsCaPath, 'utf8')
       : undefined,
+    servername: runtimeConfig.redisTlsServername || undefined,
     rejectUnauthorized: runtimeConfig.redisTlsRejectUnauthorized,
   };
 };
