@@ -976,7 +976,6 @@ export const getSummaryCards = async (
                     in: [
                       ProjectStatus.UNASSIGNED,
                       ProjectStatus.WAITING_ACCEPT,
-                      
                     ],
                   },
                 },

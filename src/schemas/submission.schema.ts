@@ -69,6 +69,7 @@ export const CompleteSubmissionSchema = z.object({
 });
 
 export const UpdateProjectForSubmissionSchema = z.object({
+  budget: z.coerce.number().optional(),
   pr_no: z.string().optional(),
   po_no: z.string().optional(),
   less_no: z.string().optional(),
