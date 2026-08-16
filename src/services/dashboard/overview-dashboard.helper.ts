@@ -11,6 +11,7 @@ import {
 } from '../../lib/constant';
 import { ForbiddenError } from '../../lib/errors';
 import {
+  getDeptIdsForUser,
   getUnitIdsForUser,
   haveSupplyPermission,
   isSuperAdmin,
@@ -76,9 +77,9 @@ export const buildVisibilityWhere = (
     return {};
   }
 
-  const unitIds = getUnitIdsForUser(user);
-  return unitIds.length > 0
-    ? { requesting_unit_id: { in: unitIds } }
+  const deptIds = getDeptIdsForUser(user);
+  return deptIds.length > 0
+    ? { requesting_dept_id: { in: deptIds } }
     : { id: { in: [] } };
 };
 
@@ -334,8 +335,8 @@ const buildBudgetPlanWhere = (
   }
 
   if (!haveSupplyPermission(user)) {
-    const unitIds = getUnitIdsForUser(user);
-    where.unit_id = { in: unitIds };
+    const deptIds = getDeptIdsForUser(user);
+    where.unit = { dept_id: { in: deptIds } };
   }
 
   return where;
