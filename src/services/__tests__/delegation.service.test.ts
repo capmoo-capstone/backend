@@ -62,6 +62,7 @@ describe('delegation.service', () => {
         role: UserRole.HEAD_OF_UNIT,
         unit_id: 'unit-1',
         is_active: true,
+        start_date: { lte: new Date('2026-06-01T00:00:00.000Z') },
         OR: [
           { end_date: { equals: null } },
           { end_date: { gte: new Date('2026-06-01T00:00:00.000Z') } },

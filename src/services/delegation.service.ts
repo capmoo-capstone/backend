@@ -8,7 +8,7 @@ import {
 import { prisma } from '../config/prisma';
 import { OPS_DEPT_ID } from '../lib/constant';
 import { BadRequestError, NotFoundError } from '../lib/errors';
-import { nowUtc } from '../lib/date';
+import { formatBangkokDate, nowUtc } from '../lib/date';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import { AuthPayload } from '../types/auth.type';
 import { DelegationDetail } from '../types/delegation.type';
@@ -30,6 +30,7 @@ type DelegableRole =
 
 const activeDelegationWhere = () => ({
   is_active: true,
+  start_date: { lte: nowUtc() },
   OR: [{ end_date: { equals: null } }, { end_date: { gte: nowUtc() } }],
 });
 
@@ -82,8 +83,12 @@ export const addDelegation = async (
       },
     });
     if (validExisting) {
+      const startDateStr = formatBangkokDate(new Date(validExisting.start_date));
+      const endDateStr = validExisting.end_date
+        ? formatBangkokDate(new Date(validExisting.end_date))
+        : 'present';
       throw new BadRequestError(
-        'An active delegation already exists for this role scope.'
+        `An active delegation already exists from ${startDateStr} to ${endDateStr}`
       );
     }
     const created = await tx.userDelegation.create({
