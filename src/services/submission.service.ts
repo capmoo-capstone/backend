@@ -493,6 +493,7 @@ export const createStaffSubmissionsProject = async (
         submission_round,
         submission_type: SubmissionType.STAFF,
         status: nextStatus,
+        staff_remark: data.staff_remark,
         meta_data: data.meta_data,
         documents: {
           create: data.files?.map((file) => ({
@@ -510,6 +511,7 @@ export const createStaffSubmissionsProject = async (
         submission_round: true,
         installment_no: true,
         status: true,
+        staff_remark: true,
       },
     });
 
