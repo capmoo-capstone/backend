@@ -129,9 +129,32 @@ describe('project-finance.service', () => {
     });
 
     it('should upsert projectInstallment when all validations pass', async () => {
-      txMock.project.findUnique.mockResolvedValue({
-        installment_rounds: 3,
-        current_workflow_type: UnitResponsibleType.CONTRACT,
+      txMock.userOrganizationRole.findMany.mockResolvedValue([
+        {
+          user: { id: 'finance-1', full_name: 'Finance One', email: null },
+        },
+      ]);
+      txMock.userDelegation.findMany.mockResolvedValue([]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'finance-1' }]);
+      txMock.notification.findFirst.mockResolvedValue(null);
+      txMock.project.findUnique.mockImplementation(async (args: any) => {
+        if (args?.select?.title) {
+          return {
+            id: dto.id,
+            title: 'Project 1',
+            responsible_unit_id: 'unit-1',
+            created_by: 'creator-1',
+            assignee_procurement: [],
+            assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+            creator: { id: 'creator-1', full_name: 'Creator One', email: null },
+          };
+        }
+
+        return {
+          installment_rounds: 3,
+          current_workflow_type: UnitResponsibleType.CONTRACT,
+          contract_completed_at: null,
+        };
       });
 
       const mockExportResult = {
@@ -145,6 +168,25 @@ describe('project-finance.service', () => {
 
       txMock.projectInstallment.upsert.mockResolvedValue(mockExportResult);
       txMock.projectInstallment.count.mockResolvedValue(2);
+      txMock.notification.create.mockResolvedValue({
+        id: 'notification-finance-1',
+        user_id: 'finance-1',
+        project_id: dto.id,
+        category: 'FINANCE_HANDOFFS',
+        priority: 'MEDIUM',
+        title: 'มีงานพร้อมส่งออกการเงิน',
+        body: `งวดที่ ${dto.installment_no} ของโครงการ "Project 1" พร้อมส่งออกการเงิน`,
+        target_path: `/app/projects/${dto.id}`,
+        action_label: 'เปิดโครงการ',
+        requires_action: false,
+        is_read: false,
+        read_at: null,
+        created_at: new Date('2026-06-01T00:00:00.000Z'),
+        metadata: { notification_kind: 'FINANCE_SUBMIT' },
+      });
+      txMock.notification.groupBy.mockResolvedValue([
+        { user_id: 'finance-1', _count: { _all: 1 } },
+      ]);
 
       const result = await createFinanceExportRequest(mockUser, dto);
 
@@ -175,6 +217,17 @@ describe('project-finance.service', () => {
         orderBy: [{ step_order: 'asc' }, { submission_round: 'desc' }],
         select: { step_order: true, status: true },
       });
+      expect(txMock.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            user_id: 'finance-1',
+            category: 'FINANCE_HANDOFFS',
+            metadata: expect.objectContaining({
+              notification_kind: 'FINANCE_SUBMIT',
+            }),
+          }),
+        })
+      );
     });
 
     it('records contract completion when the final installment export is created', async () => {

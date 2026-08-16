@@ -317,15 +317,12 @@ export const notifyVendorSubmissionReceived = async (
   }
 ) => {
   const project = await getProjectContext(tx, input.project_id);
-  const documentStaff = await getRoleRecipients(tx, {
-    role: UserRole.DOCUMENT_STAFF,
-  });
   const financeStaff = await getRoleRecipients(tx, {
     role: UserRole.FINANCE_STAFF,
   });
 
   const documentNotifications = await dispatchNotification(tx, {
-    recipient_ids: documentStaff.map((user) => user.id),
+    recipient_ids: project.assignee_contract.map((user) => user.id),
     project_id: input.project_id,
     kind: 'ASSIGNED_DOCUMENT',
     category: NotificationCategory.VENDOR_SUBMISSIONS,
@@ -337,6 +334,8 @@ export const notifyVendorSubmissionReceived = async (
     requires_action: true,
     dedupe_key: `vendor-submission:${project.id}`,
   });
+
+  return documentNotifications;
 
   const financeNotifications = await dispatchNotification(tx, {
     recipient_ids: financeStaff.map((user) => user.id),
@@ -353,6 +352,35 @@ export const notifyVendorSubmissionReceived = async (
   });
 
   return mergeNotifications(documentNotifications, financeNotifications);
+};
+
+export const notifyFinanceExportReady = async (
+  tx: TxClient,
+  input: {
+    project_id: string;
+    actor_id: string;
+    installment_no: number;
+  }
+) => {
+  const project = await getProjectContext(tx, input.project_id);
+  const financeStaff = await getRoleRecipients(tx, {
+    role: UserRole.FINANCE_STAFF,
+  });
+
+  return dispatchNotification(tx, {
+    recipient_ids: financeStaff.map((user) => user.id),
+    actor_id: input.actor_id,
+    project_id: input.project_id,
+    kind: 'FINANCE_SUBMIT',
+    category: NotificationCategory.FINANCE_HANDOFFS,
+    priority: NotificationPriority.MEDIUM,
+    title: 'มีงานพร้อมส่งออกการเงิน',
+    body: `งวดที่ ${input.installment_no} ของโครงการ "${project.title}" พร้อมส่งออกการเงิน`,
+    target_path: `/app/projects/${project.id}`,
+    action_label: 'เปิดโครงการ',
+    requires_action: false,
+    dedupe_key: `finance-ready:${project.id}:${input.installment_no}`,
+  });
 };
 
 export const notifyFinanceRequestEdit = async (

@@ -1,6 +1,7 @@
 import { runtimeConfig } from '../config/runtime';
 import {
   enqueueDeadlineScan,
+  enqueueNotificationCleanup,
   enqueueNotificationOutboxFlush,
   getDeadlineQueue,
   startNotificationDeadlineWorker,
@@ -36,8 +37,19 @@ const run = async () => {
     } as Record<string, unknown>
   );
 
+  await queue.add(
+    'cleanup',
+    { kind: 'cleanup' },
+    {
+      jobId: 'notification-cleanup-repeat',
+      repeat: { every: runtimeConfig.notificationCleanupRepeatMs },
+      removeOnComplete: 1000,
+    } as Record<string, unknown>
+  );
+
   await enqueueDeadlineScan();
   await enqueueNotificationOutboxFlush();
+  await enqueueNotificationCleanup();
 
   worker.on('failed', (job, error) => {
     const failedJob = job as { id?: string; name?: string } | undefined;
