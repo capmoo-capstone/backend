@@ -2,12 +2,12 @@ import { Prisma } from '@prisma/client';
 import { AuthPayload } from '../types/auth.type';
 import { getDeptIdsForUser } from './permissions';
 import { ForbiddenError } from './errors';
-import { hasSupplyAccess } from './access-policy';
+import { hasOrganizationWideReadAccess } from './access-policy';
 
 export const projectReadWhere = (
   user: AuthPayload
 ): Prisma.ProjectWhereInput => {
-  if (hasSupplyAccess(user)) return {};
+  if (hasOrganizationWideReadAccess(user)) return {};
 
   const deptIds = getDeptIdsForUser(user);
   return deptIds.length > 0
@@ -20,7 +20,7 @@ export const canReadProject = (
   project: { requesting_dept_id: string }
 ): boolean => {
   return (
-    hasSupplyAccess(user) ||
+    hasOrganizationWideReadAccess(user) ||
     getDeptIdsForUser(user).includes(project.requesting_dept_id)
   );
 };

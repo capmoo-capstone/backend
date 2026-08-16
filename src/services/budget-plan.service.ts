@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { getDeptIdsForUser, haveSupplyPermission } from '../lib/permissions';
+import { hasOrganizationWideReadAccess } from '../lib/access-policy';
+import { getDeptIdsForUser } from '../lib/permissions';
 import {
   BudgetPlanFilterQuery,
   ImportBudgetPlanDto,
@@ -19,8 +20,8 @@ export const listBudgetPlans = async (
   filters: BudgetPlanFilterQuery = {}
 ): Promise<PaginatedBudgetPlans> => {
   const andConditions: Prisma.BudgetPlanWhereInput[] = [];
-  const isSupply = haveSupplyPermission(user);
-  if (!isSupply) {
+  const hasOrganizationWideRead = hasOrganizationWideReadAccess(user);
+  if (!hasOrganizationWideRead) {
     const allowedDeptIds = getDeptIdsForUser(user);
     andConditions.push({ unit: { dept_id: { in: allowedDeptIds } } });
   } else if (filters.departments && filters.departments.length > 0) {

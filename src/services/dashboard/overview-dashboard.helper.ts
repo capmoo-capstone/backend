@@ -9,6 +9,7 @@ import {
   IN_PROGRESS_STATUSES,
   PROCUREMENT_WORKFLOW_TYPES,
 } from '../../lib/constant';
+import { hasOrganizationWideReadAccess } from '../../lib/access-policy';
 import { ForbiddenError } from '../../lib/errors';
 import {
   getDeptIdsForUser,
@@ -72,7 +73,7 @@ export const getOverviewRange = (
 export const buildVisibilityWhere = (
   user: AuthPayload
 ): Prisma.ProjectWhereInput => {
-  if (haveSupplyPermission(user)) {
+  if (hasOrganizationWideReadAccess(user)) {
     return {};
   }
 
@@ -333,7 +334,7 @@ const buildBudgetPlanWhere = (
     where.unit = { dept_id: deptId };
   }
 
-  if (!haveSupplyPermission(user)) {
+  if (!hasOrganizationWideReadAccess(user)) {
     const deptIds = getDeptIdsForUser(user);
     where.unit = { dept_id: { in: deptIds } };
   }

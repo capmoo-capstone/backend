@@ -11,6 +11,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_FISCAL_YEAR_OFFSET = 543;
 
 export const OPS_DEPT_ID = 'DEPT-SUP-OPS';
+export const REGISTRATION_DEPT_ID = 'DEPT-REG';
 export const PROC1_UNIT_ID = 'UNIT-PROC-1';
 export const PROC2_UNIT_ID = 'UNIT-PROC-2';
 export const CONTRACT_UNIT_ID = 'UNIT-CONT';

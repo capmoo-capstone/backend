@@ -1,7 +1,12 @@
 import { UserRole } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { Capability, hasCapability, hasSupplyAccess } from '../access-policy';
-import { OPS_DEPT_ID } from '../constant';
+import {
+  Capability,
+  hasCapability,
+  hasOrganizationWideReadAccess,
+  hasSupplyAccess,
+} from '../access-policy';
+import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../constant';
 import { canReadProject, projectReadWhere } from '../project-scope';
 
 const user = (roles: unknown[]) =>
@@ -55,5 +60,45 @@ describe('access policy', () => {
     expect(canReadProject(externalUser, { requesting_dept_id: 'dept-2' })).toBe(
       false
     );
+  });
+
+  it('grants only DEPT-REG general staff organization-wide read access', () => {
+    const registrationGeneralStaff = user([
+      {
+        role: UserRole.GENERAL_STAFF,
+        dept_id: REGISTRATION_DEPT_ID,
+        unit_id: 'unit-reg',
+      },
+    ]);
+    const registrationDocumentStaff = user([
+      {
+        role: UserRole.DOCUMENT_STAFF,
+        dept_id: REGISTRATION_DEPT_ID,
+        unit_id: 'unit-reg',
+      },
+    ]);
+    const externalGeneralStaff = user([
+      {
+        role: UserRole.GENERAL_STAFF,
+        dept_id: 'dept-1',
+        unit_id: 'unit-1',
+      },
+    ]);
+
+    expect(hasOrganizationWideReadAccess(registrationGeneralStaff)).toBe(true);
+    expect(hasSupplyAccess(registrationGeneralStaff)).toBe(false);
+    expect(
+      hasCapability(registrationGeneralStaff, Capability.PROJECT_CLAIM)
+    ).toBe(false);
+    expect(projectReadWhere(registrationGeneralStaff)).toEqual({});
+    expect(
+      canReadProject(registrationGeneralStaff, {
+        requesting_dept_id: 'dept-2',
+      })
+    ).toBe(true);
+    expect(hasOrganizationWideReadAccess(registrationDocumentStaff)).toBe(
+      false
+    );
+    expect(hasOrganizationWideReadAccess(externalGeneralStaff)).toBe(false);
   });
 });

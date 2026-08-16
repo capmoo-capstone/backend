@@ -1,6 +1,6 @@
 import { UnitResponsibleType, UserRole } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { OPS_DEPT_ID } from '../../lib/constant';
+import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../../lib/constant';
 import { BadRequestError } from '../../lib/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
@@ -193,6 +193,35 @@ describe('budget-plan.service', () => {
             },
           ],
         },
+      ],
+    });
+  });
+
+  it('lists budget plans across departments for DEPT-REG general staff', async () => {
+    const registrationGeneralStaff = {
+      id: 'registration-staff-1',
+      roles: [
+        {
+          role: UserRole.GENERAL_STAFF,
+          dept_id: REGISTRATION_DEPT_ID,
+        },
+      ],
+    } as any;
+
+    prismaMock.budgetPlan.findMany.mockResolvedValue([]);
+    prismaMock.budgetPlan.count.mockResolvedValue(0);
+
+    await listBudgetPlans(registrationGeneralStaff, 1, 10, {
+      departments: ['dept-2'],
+      units: ['unit-2'],
+      available: true,
+    });
+
+    expect(prismaMock.budgetPlan.findMany.mock.calls[0][0].where).toEqual({
+      AND: [
+        { unit: { dept_id: { in: ['dept-2'] } } },
+        { unit_id: { in: ['unit-2'] } },
+        { project_id: null },
       ],
     });
   });

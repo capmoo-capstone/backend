@@ -1,6 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { AuthPayload, AuthRoleDetail } from '../types/auth.type';
-import { OPS_DEPT_ID } from './constant';
+import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from './constant';
 import { ForbiddenError } from './errors';
 
 export enum Capability {
@@ -87,6 +87,14 @@ export const isSuperAdmin = (user: AuthPayload): boolean =>
 
 export const hasSupplyAccess = (user: AuthPayload): boolean =>
   isSuperAdmin(user) || user.roles.some(isSupplyRole);
+
+export const hasOrganizationWideReadAccess = (user: AuthPayload): boolean =>
+  hasSupplyAccess(user) ||
+  user.roles.some(
+    (role) =>
+      role.role === UserRole.GENERAL_STAFF &&
+      role.dept_id === REGISTRATION_DEPT_ID
+  );
 
 export const hasCapability = (
   user: AuthPayload,
