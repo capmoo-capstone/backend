@@ -13,9 +13,16 @@ export const MarkNotificationReadSchema = z.object({
   id: z.uuid(),
 });
 
+export const NotificationStreamQuerySchema = z.object({
+  token: z.string().min(1),
+});
+
 export type ListNotificationsQueryDto = z.infer<
   typeof ListNotificationsQuerySchema
 >;
 export type MarkNotificationReadDto = z.infer<
   typeof MarkNotificationReadSchema
+>;
+export type NotificationStreamQueryDto = z.infer<
+  typeof NotificationStreamQuerySchema
 >;

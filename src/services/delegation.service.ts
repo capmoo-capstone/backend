@@ -12,6 +12,7 @@ import { nowUtc } from '../lib/date';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import { AuthPayload } from '../types/auth.type';
 import { DelegationDetail } from '../types/delegation.type';
+import { PersistedNotificationResult } from '../types/notification.type';
 import {
   buildDelegationTargetSnapshot,
   recordAuditEvent,
@@ -19,6 +20,7 @@ import {
 import {
   notifyDelegationEnded,
   notifyDelegationStarted,
+  publishPersistedNotifications,
 } from './notification/notification.service';
 import * as UserService from './user.service';
 
@@ -51,7 +53,7 @@ export const addDelegation = async (
     UserService.getById(data.delegator_id),
     UserService.getById(data.delegatee_id),
   ]);
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const scopeKey = `delegation:${data.delegator_id}:${data.role}:${data.unit_id ?? 'null'}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${scopeKey}))`;
 
@@ -129,7 +131,7 @@ export const addDelegation = async (
       occurredAt: created.created_at,
     });
 
-    await notifyDelegationStarted(tx, {
+    const notificationResults = await notifyDelegationStarted(tx, {
       delegator_id: created.delegator_id,
       delegatee_id: created.delegatee_id,
       actor_id: user.id,
@@ -138,15 +140,19 @@ export const addDelegation = async (
       end_date: created.end_date,
     });
 
-    return created;
+    return { created, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.created;
 };
 
 export const cancelDelegation = async (
   user: AuthPayload,
   id: string
 ): Promise<UserDelegation> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const delegation = await tx.userDelegation.findUnique({
       where: { id },
     });
@@ -197,15 +203,19 @@ export const cancelDelegation = async (
       occurredAt: updated.cancelled_at ?? nowUtc(),
     });
 
-    await notifyDelegationEnded(tx, {
+    const notificationResults = await notifyDelegationEnded(tx, {
       delegator_id: updated.delegator_id,
       delegatee_id: updated.delegatee_id,
       actor_id: user.id,
       role_label: updated.role ?? 'UNKNOWN',
     });
 
-    return updated;
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const getById = async (id: string): Promise<DelegationDetail> => {

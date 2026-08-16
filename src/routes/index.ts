@@ -33,7 +33,7 @@ router.use('/budget-plans', protect, budgetPlanRoutes);
 router.use('/vendors', vendorRoutes);
 router.use('/admin', protect, adminRoutes);
 router.use('/storage', protect, storageRoutes);
-router.use('/notifications', protect, notificationRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/holidays', protect, holidayRoutes);
 router.use('/dashboard', protect, dashboardRoutes);
 

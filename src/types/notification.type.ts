@@ -1,4 +1,5 @@
 import {
+  Notification,
   NotificationCategory,
   NotificationChannel,
   NotificationDeliveryStatus,
@@ -53,4 +54,22 @@ export interface NotificationDeliveryRecord {
   subject: string;
   body: string | null;
   dedupe_key: string | null;
+}
+
+export interface NotificationRealtimeEnvelope {
+  type: 'notification.created' | 'notification.updated';
+  notification: NotificationListItemResponse;
+  unread_count: number;
+}
+
+export interface NotificationStreamTokenResponse {
+  token: string;
+  expires_in_seconds: number;
+}
+
+export interface PersistedNotificationResult {
+  userId: string;
+  action: 'created' | 'updated';
+  notification: Notification;
+  unreadCount: number;
 }

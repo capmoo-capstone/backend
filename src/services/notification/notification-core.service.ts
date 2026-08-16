@@ -1,4 +1,6 @@
+import { randomUUID } from 'crypto';
 import {
+  Notification,
   NotificationCategory,
   NotificationChannel,
   NotificationDeliveryStatus,
@@ -10,13 +12,43 @@ import { prisma } from '../../config/prisma';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { toBangkokParts } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
-import type { NotificationKind } from '../../types/notification.type';
+import type {
+  NotificationKind,
+  PersistedNotificationResult,
+} from '../../types/notification.type';
 import {
   notificationEmailTransport,
   type EmailDeliveryDraft,
 } from './notification-email.service';
+import { mapNotificationRecord } from './notification-response.mapper';
+import { publishNotificationRealtimeEvent } from './notification-realtime.service';
 
 export type TxClient = Prisma.TransactionClient;
+type SqlClient = Pick<Prisma.TransactionClient, '$executeRaw' | '$queryRaw'>;
+type NotificationRealtimeEventType =
+  | 'notification.created'
+  | 'notification.updated';
+type NotificationOutboxStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'PUBLISHED'
+  | 'FAILED';
+type NotificationOutboxRow = {
+  id: string;
+  notification_id: string;
+  user_id: string;
+  event_type: NotificationRealtimeEventType;
+  payload: unknown;
+  unread_count: number;
+};
+
+const isUniqueConstraintError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === 'P2002'
+  );
 
 export type NotificationDispatchInput = {
   recipient_ids: string[];
@@ -63,6 +95,129 @@ const buildNotificationMetadata = (input: NotificationDispatchInput) => ({
   ...(input.metadata ?? {}),
   notification_kind: input.kind,
 });
+
+const toErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'Unknown notification publish failure';
+
+const claimableOutboxStatuses: NotificationOutboxStatus[] = [
+  'PENDING',
+  'FAILED',
+];
+const outboxStatusSql = Prisma.join(
+  claimableOutboxStatuses.map(
+    (status) => Prisma.sql`${status}::"NotificationOutboxStatus"`
+  )
+);
+
+const queueNotificationOutboxEvent = async (
+  db: SqlClient,
+  item: PersistedNotificationResult
+) => {
+  const eventType: NotificationRealtimeEventType =
+    item.action === 'created' ? 'notification.created' : 'notification.updated';
+
+  await db.$executeRaw(Prisma.sql`
+    INSERT INTO "notification_outbox" (
+      "id",
+      "notification_id",
+      "user_id",
+      "event_type",
+      "payload",
+      "unread_count"
+    )
+    VALUES (
+      ${randomUUID()},
+      ${item.notification.id},
+      ${item.userId},
+      ${eventType},
+      ${mapNotificationRecord(item.notification)}::jsonb,
+      ${item.unreadCount}
+    )
+  `);
+};
+
+const loadNotificationOutboxRows = async (
+  db: SqlClient,
+  options?: {
+    notificationIds?: string[];
+    limit?: number;
+  }
+) => {
+  const limit = options?.limit ?? 100;
+  const filters = [
+    Prisma.sql`"status" IN (${Prisma.join(
+      claimableOutboxStatuses.map((status) => Prisma.sql`${status}::"NotificationOutboxStatus"`)
+    )})`,
+  ];
+
+  if (options?.notificationIds?.length) {
+    filters.push(
+      Prisma.sql`"notification_id" IN (${Prisma.join(options.notificationIds)})`
+    );
+  }
+
+  const whereClause =
+    filters.length === 1
+      ? filters[0]
+      : Prisma.sql`${filters[0]} AND ${filters[1]}`;
+  return db.$queryRaw<NotificationOutboxRow[]>(Prisma.sql`
+    SELECT
+      "id",
+      "notification_id",
+      "user_id",
+      "event_type",
+      "payload",
+      "unread_count"
+    FROM "notification_outbox"
+    WHERE ${whereClause}
+    ORDER BY "created_at" ASC
+    LIMIT ${limit}
+  `);
+};
+
+const claimNotificationOutboxRow = async (db: SqlClient, id: string) => {
+  const claimed = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    UPDATE "notification_outbox"
+    SET
+      "status" = 'PROCESSING',
+      "attempts" = "attempts" + 1,
+      "last_attempted_at" = NOW(),
+      "updated_at" = NOW()
+    WHERE
+      "id" = ${id}
+      AND "status" IN (${outboxStatusSql})
+    RETURNING "id"
+  `);
+
+  return claimed.length > 0;
+};
+
+const markNotificationOutboxPublished = async (db: SqlClient, id: string) => {
+  await db.$executeRaw(Prisma.sql`
+    UPDATE "notification_outbox"
+    SET
+      "status" = 'PUBLISHED',
+      "published_at" = NOW(),
+      "error_message" = NULL,
+      "updated_at" = NOW()
+    WHERE "id" = ${id}
+  `);
+};
+
+const markNotificationOutboxFailed = async (
+  db: SqlClient,
+  id: string,
+  errorMessage: string
+) => {
+  await db.$executeRaw(Prisma.sql`
+    UPDATE "notification_outbox"
+    SET
+      "status" = 'FAILED',
+      "error_message" = ${errorMessage},
+      "updated_at" = NOW()
+    WHERE "id" = ${id}
+  `);
+};
 
 export const getRoleRecipients = async (tx: TxClient, scope: RoleScope) => {
   const deptId = scope.dept_id ?? OPS_DEPT_ID;
@@ -172,19 +327,33 @@ export const queueEmailDelivery = async (
     return null;
   }
 
-  return tx.notificationDelivery.create({
-    data: {
-      notification_id: draft.notificationId ?? null,
-      user_id: draft.userId,
-      channel: draft.channel,
-      subject: draft.subject,
-      body: draft.body,
-      dedupe_key: draft.dedupeKey ?? null,
-      status: result.status,
-      error_message: result.errorMessage ?? null,
-      sent_at: result.sentAt ?? null,
-    },
-  });
+  try {
+    return await tx.notificationDelivery.create({
+      data: {
+        notification_id: draft.notificationId ?? null,
+        user_id: draft.userId,
+        channel: draft.channel,
+        subject: draft.subject,
+        body: draft.body,
+        dedupe_key: draft.dedupeKey ?? null,
+        status: result.status,
+        error_message: result.errorMessage ?? null,
+        sent_at: result.sentAt ?? null,
+      },
+    });
+  } catch (error) {
+    if (!draft.dedupeKey || !isUniqueConstraintError(error)) {
+      throw error;
+    }
+
+    return tx.notificationDelivery.findFirst({
+      where: {
+        user_id: draft.userId,
+        channel: draft.channel,
+        dedupe_key: draft.dedupeKey,
+      },
+    });
+  }
 };
 
 const upsertInAppNotification = async (
@@ -196,7 +365,7 @@ const upsertInAppNotification = async (
     return null;
   }
 
-  if (input.dedupe_key && tx.notification.findFirst) {
+  const updateExistingNotification = async () => {
     const existing = await tx.notification.findFirst({
       where: {
         user_id: userId,
@@ -208,49 +377,82 @@ const upsertInAppNotification = async (
       select: { id: true, is_read: true },
     });
 
+    if (!existing) {
+      return null;
+    }
+
+    const notification = await tx.notification.update({
+      where: { id: existing.id },
+      data: {
+        title: input.title,
+        body: input.body,
+        priority: input.priority,
+        target_path: input.target_path ?? null,
+        action_label: input.action_label ?? null,
+        requires_action: input.requires_action ?? false,
+        metadata: toNullableJsonInput(buildNotificationMetadata(input)),
+        read_at: existing.is_read ? undefined : null,
+        is_read: existing.is_read ? undefined : false,
+      },
+    });
+
+    return {
+      action: 'updated' as const,
+      notification,
+    };
+  };
+
+  if (input.dedupe_key) {
+    const existing = await updateExistingNotification();
     if (existing) {
-      return tx.notification.update({
-        where: { id: existing.id },
-        data: {
-          title: input.title,
-          body: input.body,
-          priority: input.priority,
-          target_path: input.target_path ?? null,
-          action_label: input.action_label ?? null,
-          requires_action: input.requires_action ?? false,
-          metadata: toNullableJsonInput(buildNotificationMetadata(input)),
-          read_at: existing.is_read ? undefined : null,
-          is_read: existing.is_read ? undefined : false,
-        },
-      });
+      return existing;
     }
   }
 
-  return tx.notification.create({
-    data: {
-      user_id: userId,
-      actor_id: input.actor_id ?? null,
-      project_id: input.project_id ?? null,
-      category: input.category,
-      priority: input.priority,
-      title: input.title,
-      body: input.body,
-      target_path: input.target_path ?? null,
-      action_label: input.action_label ?? null,
-      requires_action: input.requires_action ?? false,
-      dedupe_key: input.dedupe_key ?? null,
-      metadata: toNullableJsonInput(buildNotificationMetadata(input)),
-    },
-  });
+  let notification: Notification;
+  try {
+    notification = await tx.notification.create({
+      data: {
+        user_id: userId,
+        actor_id: input.actor_id ?? null,
+        project_id: input.project_id ?? null,
+        category: input.category,
+        priority: input.priority,
+        title: input.title,
+        body: input.body,
+        target_path: input.target_path ?? null,
+        action_label: input.action_label ?? null,
+        requires_action: input.requires_action ?? false,
+        dedupe_key: input.dedupe_key ?? null,
+        metadata: toNullableJsonInput(buildNotificationMetadata(input)),
+      },
+    });
+  } catch (error) {
+    if (!input.dedupe_key || !isUniqueConstraintError(error)) {
+      throw error;
+    }
+
+    const existing = await updateExistingNotification();
+    if (!existing) {
+      throw error;
+    }
+
+    return existing;
+  }
+
+  return {
+    action: 'created' as const,
+    notification,
+  };
 };
 
 export const dispatchNotification = async (
   tx: TxClient,
   input: NotificationDispatchInput
-) => {
+): Promise<PersistedNotificationResult[]> => {
   const recipientIds = Array.from(new Set(input.recipient_ids)).filter(Boolean);
   if (recipientIds.length === 0) {
-    return;
+    return [];
   }
 
   const recipients =
@@ -259,11 +461,88 @@ export const dispatchNotification = async (
       select: { id: true },
     })) ?? [];
 
-  await Promise.all(
-    (recipients ?? []).map((recipient) =>
-      upsertInAppNotification(tx, recipient.id, input)
-    )
+  const persisted = await Promise.all(
+    (recipients ?? []).map(async (recipient) => {
+      const result = await upsertInAppNotification(tx, recipient.id, input);
+      if (!result) return null;
+
+      return {
+        userId: recipient.id,
+        action: result.action,
+        notification: result.notification,
+        unreadCount: 0,
+      } satisfies PersistedNotificationResult;
+    })
   );
+
+  const finalResults = persisted.filter(
+    (item): item is PersistedNotificationResult => Boolean(item)
+  );
+
+  if (finalResults.length === 0) {
+    return [];
+  }
+
+  const unreadCounts = await tx.notification.groupBy({
+    by: ['user_id'],
+    where: {
+      user_id: {
+        in: finalResults.map((item) => item.userId),
+      },
+      is_read: false,
+    },
+    _count: {
+      _all: true,
+    },
+  });
+
+  const unreadCountByUserId = new Map(
+    unreadCounts.map((item) => [item.user_id, item._count._all])
+  );
+
+  for (const item of finalResults) {
+    item.unreadCount = unreadCountByUserId.get(item.userId) ?? 0;
+    await queueNotificationOutboxEvent(tx, item);
+  }
+
+  return finalResults;
+};
+
+export const publishPersistedNotifications = async (
+  persistedNotifications: PersistedNotificationResult[]
+) => {
+  if (persistedNotifications.length === 0) {
+    return;
+  }
+
+  await publishPendingNotificationOutbox({
+    notificationIds: persistedNotifications.map((item) => item.notification.id),
+  });
+};
+
+export const publishPendingNotificationOutbox = async (options?: {
+  notificationIds?: string[];
+  limit?: number;
+}) => {
+  const rows = await loadNotificationOutboxRows(prisma, options);
+
+  for (const row of rows) {
+    const claimed = await claimNotificationOutboxRow(prisma, row.id);
+    if (!claimed) {
+      continue;
+    }
+
+    try {
+      await publishNotificationRealtimeEvent(row.user_id, {
+        type: row.event_type,
+        notification: row.payload as ReturnType<typeof mapNotificationRecord>,
+        unread_count: row.unread_count,
+      });
+      await markNotificationOutboxPublished(prisma, row.id);
+    } catch (error) {
+      await markNotificationOutboxFailed(prisma, row.id, toErrorMessage(error));
+    }
+  }
 };
 
 export const wholeDayDiff = (targetDate: Date, now: Date) => {
@@ -283,3 +562,4 @@ export const wholeDayDiff = (targetDate: Date, now: Date) => {
 };
 
 export { prisma, NotificationChannel };
+export type { PersistedNotificationResult };
