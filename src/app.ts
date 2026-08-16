@@ -35,6 +35,7 @@ const allowedOrigins = [
   'http://localhost:5173', // Vite local dev
   `http://localhost:${PORT}`, // Express local dev
   'https://www.nexus-procure.com', // VPS production frontend
+  'https://nexus-procure.com', // VPS production frontend
   'https://vendor.nexus-procure.com', // VPS production vendor portal
   'https://nexus-procure.pages.dev', // Cloudflare Pages production
   'https://dev.nexus-procure.pages.dev', // Cloudflare Pages development
