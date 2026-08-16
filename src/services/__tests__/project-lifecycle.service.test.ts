@@ -291,8 +291,12 @@ describe('project-lifecycle.service', () => {
         title: 'Project 1',
         responsible_unit_id: 'unit-proc',
         created_by: 'user-1',
-        assignee_procurement: [{ id: 'staff-1', full_name: 'Staff One', email: null }],
-        assignee_contract: [{ id: 'staff-1', full_name: 'Staff One', email: null }],
+        assignee_procurement: [
+          { id: 'staff-1', full_name: 'Staff One', email: null },
+        ],
+        assignee_contract: [
+          { id: 'staff-1', full_name: 'Staff One', email: null },
+        ],
         creator: { id: 'user-1', full_name: 'User One', email: null },
       });
     txMock.user.findMany.mockImplementation(async (args: any) => {
@@ -374,7 +378,9 @@ describe('project-lifecycle.service', () => {
         responsible_unit_id: CONTRACT_UNIT_ID,
         created_by: 'user-1',
         assignee_procurement: [],
-        assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+        assignee_contract: [
+          { id: 'contract-1', full_name: 'Contract One', email: null },
+        ],
         creator: { id: 'user-1', full_name: 'User One', email: null },
       });
     txMock.user.findMany.mockImplementation(async (args: any) => {

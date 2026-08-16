@@ -554,7 +554,9 @@ export const completeProcurementPhase = async (
       updated.assignee_contract.length > 0
         ? await notifyProjectAssigned(tx, {
             project_id: data.id,
-            assignee_ids: updated.assignee_contract.map((assignee) => assignee.id),
+            assignee_ids: updated.assignee_contract.map(
+              (assignee) => assignee.id
+            ),
             actor_id: user.id,
           })
         : [];

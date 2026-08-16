@@ -293,7 +293,9 @@ describe('submission.service', () => {
       responsible_unit_id: 'unit-1',
       created_by: 'user-1',
       assignee_procurement: [],
-      assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+      assignee_contract: [
+        { id: 'contract-1', full_name: 'Contract One', email: null },
+      ],
       creator: { id: 'user-1', full_name: 'User One', email: null },
     });
     txMock.userOrganizationRole.findMany.mockResolvedValue([

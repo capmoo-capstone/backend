@@ -370,7 +370,9 @@ describe('notification date handling', () => {
         unread_count: 1,
       },
     ] as any);
-    prismaMock.notificationOutbox.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.notificationOutbox.updateMany.mockResolvedValueOnce({
+      count: 1,
+    });
     prismaMock.notificationReminder.update.mockResolvedValueOnce(undefined);
     txMock.user.findMany.mockResolvedValue([{ id: user.id }]);
     txMock.notification.findFirst.mockResolvedValue(null);
@@ -468,7 +470,9 @@ describe('notification date handling', () => {
         unread_count: 0,
       },
     ] as any);
-    prismaMock.notificationOutbox.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.notificationOutbox.updateMany.mockResolvedValueOnce({
+      count: 1,
+    });
 
     await markNotificationRead(user, 'notification-1');
 

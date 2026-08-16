@@ -30,15 +30,6 @@ export type TxClient = Prisma.TransactionClient;
 type NotificationRealtimeEventType =
   | 'notification.created'
   | 'notification.updated';
-type NotificationOutboxRow = {
-  id: string;
-  notification_id: string;
-  user_id: string;
-  event_type: NotificationRealtimeEventType;
-  payload: unknown;
-  unread_count: number;
-};
-
 const isUniqueConstraintError = (error: unknown) =>
   Boolean(
     error &&
@@ -121,7 +112,9 @@ const queueNotificationOutboxEvent = async (
       notification_id: item.notification.id,
       user_id: item.userId,
       event_type: eventType,
-      payload: toNotificationPayloadJson(mapNotificationRecord(item.notification)),
+      payload: toNotificationPayloadJson(
+        mapNotificationRecord(item.notification)
+      ),
       unread_count: item.unreadCount,
       created_at: now,
       updated_at: now,

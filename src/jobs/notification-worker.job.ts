@@ -31,15 +31,11 @@ const run = async () => {
     removeOnComplete: 1000,
   } as Record<string, unknown>);
 
-  await queue.add(
-    'cleanup',
-    { kind: 'cleanup' },
-    {
-      jobId: 'notification-cleanup-repeat',
-      repeat: { every: runtimeConfig.notificationCleanupRepeatMs },
-      removeOnComplete: 1000,
-    } as Record<string, unknown>
-  );
+  await queue.add('cleanup', { kind: 'cleanup' }, {
+    jobId: 'notification-cleanup-repeat',
+    repeat: { every: runtimeConfig.notificationCleanupRepeatMs },
+    removeOnComplete: 1000,
+  } as Record<string, unknown>);
 
   await enqueueDeadlineScan();
   await enqueueNotificationOutboxFlush();
