@@ -14,7 +14,7 @@ export const OPS_DEPT_ID = 'DEPT-SUP-OPS';
 export const PROC1_UNIT_ID = 'UNIT-PROC-1';
 export const PROC2_UNIT_ID = 'UNIT-PROC-2';
 export const CONTRACT_UNIT_ID = 'UNIT-CONT';
-export const SUPPLY_UNIT_ID = 'UNIT-SUP';
+export const SUPPLY_UNIT_ID = 'UNIT-FIN-SUP';
 
 export const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
   [UnitResponsibleType.LT100K]: [1, 2, 3, 4],

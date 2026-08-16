@@ -7,7 +7,7 @@ export const processDeadlineNotifications = async (
 ) => {
   // #swagger.tags = ['Cron']
   // #swagger.security = [{ bearerAuth: [] }]
-  await NotificationService.syncDeadlineNotificationsForAllUsers();
+  await NotificationService.enqueueDeadlineReminderScan();
 
   res.status(200).json({
     status: 'success',

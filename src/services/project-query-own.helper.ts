@@ -193,14 +193,12 @@ const buildGeneralStaffScope = (
     );
   }
 
-  if (workflowTypes.includes(UnitResponsibleType.CONTRACT)) {
-    clauses.push(
-      andWhere(
-        { current_workflow_type: UnitResponsibleType.CONTRACT },
-        { assignee_contract: { some: { id: user.id } } }
-      )
-    );
-  }
+  clauses.push(
+    andWhere(
+      { current_workflow_type: UnitResponsibleType.CONTRACT },
+      { assignee_contract: { some: { id: user.id } } }
+    )
+  );
 
   return clauses.length > 0 ? orWhere(clauses) : null;
 };

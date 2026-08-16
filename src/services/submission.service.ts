@@ -30,10 +30,12 @@ import {
   SubmissionActionResponse,
   VendorSubmissionsResponse,
 } from '../types/submission.type';
+import { PersistedNotificationResult } from '../types/notification.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import { checkRefNumberDuplication } from './project-data.service';
 import {
   notifyApprovalRequired,
+  publishPersistedNotifications,
   notifySignatureRequired,
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
@@ -400,7 +402,7 @@ export const createStaffSubmissionsProject = async (
   user: AuthPayload,
   data: CreateStaffSubmissionDto
 ): Promise<SubmissionActionResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.project_id },
       select: {
@@ -520,21 +522,26 @@ export const createStaffSubmissionsProject = async (
     if (nextStatus === SubmissionStatus.COMPLETED && data.required_updating) {
       await updateProjectForSubmission(tx, project, data.meta_data, user.id);
     }
+    let notificationResults: PersistedNotificationResult[] = [];
     if (nextStatus === SubmissionStatus.WAITING_APPROVAL) {
-      await notifyApprovalRequired(tx, {
+      notificationResults = await notifyApprovalRequired(tx, {
         project_id: submission.project_id,
         actor_id: user.id,
         step_order: submission.step_order,
       });
     }
-    return submission;
+    return { submission, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.submission;
 };
 
 export const createVendorSubmissionsProject = async (
   data: CreateVendorSubmissionDto
 ): Promise<SubmissionActionResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project
       .findFirstOrThrow({
         where: { po_no: data.po_no },
@@ -602,11 +609,15 @@ export const createVendorSubmissionsProject = async (
       submission.workflow_type,
       submission.project_id
     );
-    await notifyVendorSubmissionReceived(tx, {
+    const notificationResults = await notifyVendorSubmissionReceived(tx, {
       project_id: submission.project_id,
     });
-    return submission;
+    return { submission, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.submission;
 };
 
 export const rejectSubmission = async (
@@ -644,7 +655,7 @@ export const approveSubmission = async (
   user: AuthPayload,
   data: ApproveSubmissionDto
 ): Promise<ApprovedSubmissionResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
       select: { status: true, submitted_by: true },
@@ -686,22 +697,27 @@ export const approveSubmission = async (
       },
     });
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
+    let notificationResults: PersistedNotificationResult[] = [];
     if (data.required_signature) {
-      await notifySignatureRequired(tx, {
+      notificationResults = await notifySignatureRequired(tx, {
         project_id: updated.project_id,
         actor_id: user.id,
         step_order: updated.step_order,
       });
     } else {
-      await notifyWorkflowStepApproved(tx, {
+      notificationResults = await notifyWorkflowStepApproved(tx, {
         project_id: updated.project_id,
         actor_id: user.id,
         submitter_id: submission.submitted_by,
         step_order: updated.step_order,
       });
     }
-    return updated;
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const proposeSubmission = async (
@@ -752,7 +768,7 @@ export const signAndCompleteSubmission = async (
   user: AuthPayload,
   data: CompleteSubmissionDto
 ): Promise<CompletedSubmissionResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
       select: { status: true, submitted_by: true, meta_data: true },
@@ -812,12 +828,16 @@ export const signAndCompleteSubmission = async (
         user.id
       );
     }
-    await notifyWorkflowStepApproved(tx, {
+    const notificationResults = await notifyWorkflowStepApproved(tx, {
       project_id: updated.project_id,
       actor_id: user.id,
       submitter_id: submission.submitted_by,
       step_order: updated.step_order,
     });
-    return updated;
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };

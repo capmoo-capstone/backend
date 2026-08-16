@@ -2,6 +2,7 @@ import { UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
+import * as NotificationRealtimeService from '../notification/notification-realtime.service';
 import {
   addDelegation,
   cancelDelegation,
@@ -191,6 +192,174 @@ describe('delegation.service', () => {
         cancelled_by: user.id,
       },
     });
+  });
+
+  it('publishes delegation notifications only after the transaction resolves', async () => {
+    const publishSpy = vi
+      .spyOn(NotificationRealtimeService, 'publishNotificationRealtimeEvent')
+      .mockResolvedValue(undefined);
+    const callOrder: string[] = [];
+
+    prismaMock.$transaction.mockImplementationOnce(async (callback: any) => {
+      callOrder.push('tx:start');
+      const result = await callback(txMock);
+      callOrder.push('tx:commit');
+      return result;
+    });
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({ id: 'role-1' });
+    txMock.userDelegation.findFirst.mockResolvedValue(null);
+    txMock.userDelegation.create.mockResolvedValue({
+      id: 'delegation-1',
+      delegator_id: 'delegator-1',
+      delegatee_id: 'delegatee-1',
+      role: UserRole.HEAD_OF_UNIT,
+      unit_id: 'unit-1',
+      is_active: true,
+      start_date: new Date('2026-06-01T00:00:00.000Z'),
+      end_date: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+    });
+    txMock.user.findMany.mockResolvedValue([
+      { id: 'delegator-1' },
+      { id: 'delegatee-1' },
+    ]);
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'delegator-1',
+      category: 'DELEGATION',
+      priority: 'HIGH',
+      title: 'Delegation started',
+      body: 'Delegation body',
+      target_path: '/app/me/profile',
+      action_label: 'Open',
+      requires_action: false,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      updated_at: new Date('2026-06-01T00:00:00.000Z'),
+      dedupe_key: 'delegation-start:delegator-1:delegatee-1:HEAD_OF_UNIT:2026-06-01',
+      metadata: { notification_kind: 'DELEGATION_STARTED' },
+      actor_id: user.id,
+      project_id: null,
+    } as any);
+    txMock.notification.groupBy.mockImplementation(async () => {
+      callOrder.push('groupBy');
+      return [
+        { user_id: 'delegator-1', _count: { _all: 1 } },
+        { user_id: 'delegatee-1', _count: { _all: 1 } },
+      ];
+    });
+    prismaMock.$queryRaw
+      .mockImplementationOnce(async () => {
+        callOrder.push('outbox:load');
+        return [
+          {
+            id: 'outbox-1',
+            notification_id: 'notification-1',
+            user_id: 'delegator-1',
+            event_type: 'notification.created',
+            payload: {
+              id: 'notification-1',
+              kind: 'DELEGATION_STARTED',
+            },
+            unread_count: 1,
+          },
+          {
+            id: 'outbox-2',
+            notification_id: 'notification-1',
+            user_id: 'delegatee-1',
+            event_type: 'notification.created',
+            payload: {
+              id: 'notification-1',
+              kind: 'DELEGATION_STARTED',
+            },
+            unread_count: 1,
+          },
+        ];
+      })
+      .mockImplementationOnce(async () => [{ id: 'outbox-1' }])
+      .mockImplementationOnce(async () => [{ id: 'outbox-2' }]);
+    publishSpy.mockImplementation(async () => {
+      callOrder.push('publish');
+    });
+
+    await addDelegation(user, {
+      delegator_id: 'delegator-1',
+      delegatee_id: 'delegatee-1',
+      role: UserRole.HEAD_OF_UNIT,
+      unit_id: 'unit-1',
+      start_date: new Date('2026-06-01T00:00:00.000Z'),
+    } as any);
+
+    expect(callOrder.indexOf('tx:commit')).toBeLessThan(
+      callOrder.indexOf('publish')
+    );
+    expect(publishSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not publish delegation notifications if the transaction rolls back', async () => {
+    const publishSpy = vi
+      .spyOn(NotificationRealtimeService, 'publishNotificationRealtimeEvent')
+      .mockResolvedValue(undefined);
+
+    prismaMock.$transaction.mockImplementationOnce(async (callback: any) => {
+      await callback(txMock);
+      throw new Error('transaction rolled back');
+    });
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({ id: 'role-1' });
+    txMock.userDelegation.findFirst.mockResolvedValue(null);
+    txMock.userDelegation.create.mockResolvedValue({
+      id: 'delegation-1',
+      delegator_id: 'delegator-1',
+      delegatee_id: 'delegatee-1',
+      role: UserRole.HEAD_OF_UNIT,
+      unit_id: 'unit-1',
+      is_active: true,
+      start_date: new Date('2026-06-01T00:00:00.000Z'),
+      end_date: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+    });
+    txMock.user.findMany.mockResolvedValue([
+      { id: 'delegator-1' },
+      { id: 'delegatee-1' },
+    ]);
+    txMock.notification.findFirst.mockResolvedValue(null);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'delegator-1',
+      category: 'DELEGATION',
+      priority: 'HIGH',
+      title: 'Delegation started',
+      body: 'Delegation body',
+      target_path: '/app/me/profile',
+      action_label: 'Open',
+      requires_action: false,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      updated_at: new Date('2026-06-01T00:00:00.000Z'),
+      dedupe_key: 'delegation-start:delegator-1:delegatee-1:HEAD_OF_UNIT:2026-06-01',
+      metadata: { notification_kind: 'DELEGATION_STARTED' },
+      actor_id: user.id,
+      project_id: null,
+    } as any);
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'delegator-1', _count: { _all: 1 } },
+      { user_id: 'delegatee-1', _count: { _all: 1 } },
+    ]);
+
+    await expect(
+      addDelegation(user, {
+        delegator_id: 'delegator-1',
+        delegatee_id: 'delegatee-1',
+        role: UserRole.HEAD_OF_UNIT,
+        unit_id: 'unit-1',
+        start_date: new Date('2026-06-01T00:00:00.000Z'),
+      } as any)
+    ).rejects.toThrow('transaction rolled back');
+
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 
   it('cancelDelegation rejects an already cancelled delegation', async () => {

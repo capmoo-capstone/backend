@@ -84,10 +84,17 @@ export const addRole = async (req: AuthenticatedRequest, res: Response) => {
 export const removeRole = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['User']
   // #swagger.security = [{ bearerAuth: [] }]
-  const user_id = req.params.id as string;
-  const role_id = req.params.role_id as string;
-  const validatedData = RemoveRoleSchema.parse({ user_id, role_id, ...req.body });
+  const user_id = req.params.id ? req.params.id as string : req.body.user_id;
+  const validatedData = RemoveRoleSchema.parse({ user_id, ...req.body });
   await UserService.removeRole(req.user!, validatedData);
+  res.status(204).send();
+};
+
+export const removeRoleById = async (req: AuthenticatedRequest, res: Response) => {
+  // #swagger.tags = ['User']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const role_id = req.params.role_id as string;
+  await UserService.removeRoleById(req.user!, role_id);
   res.status(204).send();
 };
 

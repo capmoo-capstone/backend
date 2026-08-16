@@ -108,7 +108,7 @@ describe('dashboard.service', () => {
 
     expect(prismaMock.project.count.mock.calls[0][0].where).toMatchObject({
       AND: [
-        { requesting_unit_id: { in: ['unit-request'] } },
+        { requesting_dept_id: { in: ['dept-1'] } },
         { created_at: expect.any(Object) },
       ],
     });
@@ -119,7 +119,7 @@ describe('dashboard.service', () => {
         path: ['status'],
         equals: ProjectStatus.CLOSED,
       },
-      project: { requesting_unit_id: { in: ['unit-request'] } },
+      project: { requesting_dept_id: { in: ['dept-1'] } },
     });
   });
 
@@ -218,7 +218,7 @@ describe('dashboard.service', () => {
     ]);
     expect(prismaMock.project.count.mock.calls[0][0].where).toMatchObject({
       AND: [
-        { requesting_unit_id: { in: ['unit-request'] } },
+        { requesting_dept_id: { in: ['dept-1'] } },
         { created_at: expect.any(Object) },
         { procurement_type: ProcurementType.LT100K },
       ],
@@ -275,8 +275,7 @@ describe('dashboard.service', () => {
 
     expect(prismaMock.budgetPlan.aggregate.mock.calls[0][0].where).toEqual({
       budget_year: 2569,
-      unit: { dept_id: 'dept-1' },
-      unit_id: { in: ['unit-request'] },
+      unit: { dept_id: { in: ['dept-1'] } },
     });
   });
 

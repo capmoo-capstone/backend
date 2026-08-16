@@ -7,6 +7,7 @@ import { prisma } from '../config/prisma';
 import { NotFoundError, BadRequestError } from '../lib/errors';
 import { syncProjectPhases } from '../lib/phase-status';
 import { AuthPayload } from '../types/auth.type';
+import { PersistedNotificationResult } from '../types/notification.type';
 import {
   UpdateStatusProjectsDto,
   UpdateStatusProjectDto,
@@ -21,9 +22,14 @@ import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import { nowUtc } from '../lib/date';
 import {
   notifyProjectAssigned,
+  publishPersistedNotifications,
   notifyResponsibleAdded,
   notifyResponsibleRemoved,
 } from './notification/notification.service';
+
+const collectNotificationResults = (
+  ...batches: PersistedNotificationResult[][]
+) => batches.flat();
 
 const resolveAssigneeField = (workflowType: UnitResponsibleType) =>
   workflowType === UnitResponsibleType.CONTRACT
@@ -34,7 +40,7 @@ export const assignProjectsToUser = async (
   user: AuthPayload,
   data: UpdateStatusProjectsDto
 ): Promise<ProjectAssigneeListResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const projectIds = data.map((d) => d.id);
     const assigneeIds = [...new Set(data.map((d) => d.userId))];
 
@@ -62,6 +68,7 @@ export const assignProjectsToUser = async (
 
     const updatePromises = [];
     const historyPromises = [];
+    const notificationPromises: Promise<PersistedNotificationResult[]>[] = [];
 
     for (const item of data) {
       const { id, userId: assigneeId } = item;
@@ -120,7 +127,9 @@ export const assignProjectsToUser = async (
             [assigneeField]: [assignee.full_name],
           },
           changedBy: user,
-        }),
+        })
+      );
+      notificationPromises.push(
         notifyProjectAssigned(tx, {
           project_id: id,
           assignee_ids: [assigneeId],
@@ -131,9 +140,19 @@ export const assignProjectsToUser = async (
 
     const updatedProjects = await Promise.all(updatePromises);
     await Promise.all(historyPromises);
+    const notificationResults = collectNotificationResults(
+      ...(await Promise.all(notificationPromises))
+    );
 
-    return updatedProjects as unknown as ProjectAssigneeListResponse;
+    return {
+      updatedProjects: updatedProjects as unknown as ProjectAssigneeListResponse,
+      notificationResults,
+    };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updatedProjects;
 };
 
 export const changeAssignee = async (
@@ -141,7 +160,7 @@ export const changeAssignee = async (
   data: UpdateStatusProjectDto
 ): Promise<ProjectAssigneeResponse> => {
   const { id, userId: newAssigneeId } = data;
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id },
       select: {
@@ -190,20 +209,32 @@ export const changeAssignee = async (
       newValue: { [assigneeField]: [newAssignee.full_name] },
       changedBy: user,
     });
+    const notificationResults: PersistedNotificationResult[] = [];
     if (oldAssigneeId) {
-      await notifyResponsibleRemoved(tx, {
-        project_id: id,
-        removed_user_id: oldAssigneeId,
-        actor_id: user.id,
-      });
+      notificationResults.push(
+        ...(await notifyResponsibleRemoved(tx, {
+          project_id: id,
+          removed_user_id: oldAssigneeId,
+          actor_id: user.id,
+        }))
+      );
     }
-    await notifyProjectAssigned(tx, {
-      project_id: id,
-      assignee_ids: [newAssigneeId],
-      actor_id: user.id,
-    });
-    return updated as unknown as ProjectAssigneeResponse;
+    notificationResults.push(
+      ...(await notifyProjectAssigned(tx, {
+        project_id: id,
+        assignee_ids: [newAssigneeId],
+        actor_id: user.id,
+      }))
+    );
+    return {
+      updated: updated as unknown as ProjectAssigneeResponse,
+      notificationResults,
+    };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const claimProject = async (
@@ -343,7 +374,7 @@ export const addAssignee = async (
   user: AuthPayload,
   data: UpdateStatusProjectDto
 ): Promise<ProjectAssigneeResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: data.id },
       select: {
@@ -411,20 +442,27 @@ export const addAssignee = async (
       },
       changedBy: user,
     });
-    await notifyResponsibleAdded(tx, {
+    const notificationResults = await notifyResponsibleAdded(tx, {
       project_id: data.id,
       added_user_id: data.userId,
       actor_id: user.id,
     });
-    return updated as unknown as ProjectAssigneeResponse;
+    return {
+      updated: updated as unknown as ProjectAssigneeResponse,
+      notificationResults,
+    };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };
 
 export const returnProject = async (
   user: AuthPayload,
   projectId: string
 ): Promise<ProjectIdStatusResponse> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const project = await tx.project.findUnique({
       where: { id: projectId },
       select: {
@@ -478,11 +516,15 @@ export const returnProject = async (
       newValue: { status: updated.status, [assigneeField]: [] },
       changedBy: user,
     });
-    await notifyResponsibleRemoved(tx, {
+    const notificationResults = await notifyResponsibleRemoved(tx, {
       project_id: projectId,
       removed_user_id: user.id,
       actor_id: user.id,
     });
-    return updated;
+    return { updated, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updated;
 };

@@ -28,6 +28,28 @@ describe('project-assignment.service', () => {
   beforeEach(() => {
     mockedSyncProjectPhases.mockReset();
     mockedSyncProjectPhases.mockResolvedValue({ id: 'project-1' } as any);
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'staff-2',
+      category: 'ASSIGNMENTS',
+      priority: 'HIGH',
+      title: 'Assignment',
+      body: 'Assignment body',
+      target_path: '/app/projects/project-1',
+      action_label: 'Open',
+      requires_action: true,
+      is_read: false,
+      read_at: null,
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      updated_at: new Date('2026-06-01T00:00:00.000Z'),
+      dedupe_key: 'assignment:project-1:staff-2',
+      metadata: { notification_kind: 'ASSIGNED_PROJECTS' },
+      actor_id: user.id,
+      project_id: 'project-1',
+    } as any);
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'staff-2', _count: { _all: 1 } },
+    ]);
   });
 
   it('assignProjectsToUser assigns unassigned projects and records history', async () => {

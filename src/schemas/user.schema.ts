@@ -139,18 +139,17 @@ export const AddRoleSchema = z.object({
 
 export const RemoveRoleSchema = z
   .object({
-    user_id: z.uuid().optional(),
-    role: z.enum(manageableUserRoles).optional(),
-    dept_id: z.string().trim().optional(),
+    user_id: z.uuid(),
+    role: z.enum(manageableUserRoles),
+    dept_id: z.string().trim().min(1),
     unit_id: z.string().trim().optional(),
-    role_id: z.uuid().optional(),
   })
-  .refine((data) => {
-    if (!(data.user_id && data.dept_id && data.role) && !data.role_id) {
-      throw new BadRequestError('Missing required parameters');
-    }
-    return true;
-  });
+  .transform((data) => ({
+    userId: data.user_id,
+    role: data.role,
+    deptId: data.dept_id,
+    unitId: data.unit_id,
+  }));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

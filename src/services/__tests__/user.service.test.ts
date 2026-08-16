@@ -9,6 +9,7 @@ import {
   getById,
   listUsers,
   removeRole,
+  removeRoleById,
   updateSupplyRole,
   updateUserStatus,
 } from '../user.service';
@@ -358,10 +359,10 @@ describe('user.service', () => {
     txMock.userOrganizationRole.count.mockResolvedValue(0);
 
     await removeRole(actor, {
-      user_id: 'user-1',
+      userId: 'user-1',
       role: UserRole.GENERAL_STAFF,
-      dept_id: 'dept-1',
-      unit_id: 'unit-1',
+      deptId: 'dept-1',
+      unitId: 'unit-1',
     } as any);
 
     expect(txMock.userOrganizationRole.delete).toHaveBeenCalledWith({
@@ -391,20 +392,7 @@ describe('user.service', () => {
     );
   });
 
-  it('removeRole removes role when role_id is provided', async () => {
-    txMock.userOrganizationRole.findUnique.mockResolvedValue({
-      id: 'role-123',
-      user_id: 'user-1',
-      role: UserRole.GENERAL_STAFF,
-      dept_id: 'dept-1',
-      unit_id: 'unit-1',
-    });
-    txMock.user.count.mockResolvedValue(1);
-    txMock.department.findUnique.mockResolvedValue({ id: 'dept-1' });
-    txMock.unit.findUnique.mockResolvedValue({
-      id: 'unit-1',
-      dept_id: 'dept-1',
-    });
+  it('removeRoleById removes role when roleId is provided', async () => {
     txMock.userOrganizationRole.findFirst.mockResolvedValue({
       id: 'role-123',
       user_id: 'user-1',
@@ -412,14 +400,12 @@ describe('user.service', () => {
       dept_id: 'dept-1',
       unit_id: 'unit-1',
     });
-    txMock.userOrganizationRole.count.mockResolvedValue(0);
 
-    await removeRole(actor, {
-      role_id: 'role-123',
-    } as any);
+    await removeRoleById(actor, 'role-123');
 
-    expect(txMock.userOrganizationRole.findUnique).toHaveBeenCalledWith({
+    expect(txMock.userOrganizationRole.findFirst).toHaveBeenCalledWith({
       where: { id: 'role-123' },
+      select: expect.any(Object),
     });
     expect(txMock.userOrganizationRole.delete).toHaveBeenCalledWith({
       where: { id: 'role-123' },
