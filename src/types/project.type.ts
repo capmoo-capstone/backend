@@ -42,7 +42,7 @@ export interface CompleteProcurementPhaseResponse extends ProjectIdStatusRespons
 
 export type CompleteContractPhaseResponse = ProjectIdStatusResponse;
 
-export interface ProjectDetailsResponse {
+export interface ProjectDetailResponse {
   id: string;
   procurement_type: ProcurementType;
   current_workflow_type: UnitResponsibleType;
@@ -69,7 +69,7 @@ export interface ProjectDetailsResponse {
   migo_105_no: string | null;
   asset_code: boolean | null;
   expected_approval_date: Date | null;
-  expected_completion_procurement_date: Date | null;
+  procurement_completed_date: Date | null;
   created_at: Date;
   updated_at: Date | null;
   vendor: {

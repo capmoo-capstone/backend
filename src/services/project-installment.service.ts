@@ -19,6 +19,10 @@ import {
   ExportInstallmentDto,
   GetInstallmentsQuery,
 } from '../schemas/project.schema';
+import {
+  notifyFinanceRequestEdit,
+  publishPersistedNotifications,
+} from './notification/notification.service';
 
 const assertContractInstallmentCompleted = async (
   tx: Prisma.TransactionClient,
@@ -349,7 +353,7 @@ export const requestEditInstallment = async (
   exportId: string,
   reason: string
 ): Promise<ProjectInstallment> => {
-  return await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const exportRecord = await tx.projectInstallment.findUnique({
       where: { id: exportId },
     });
@@ -397,6 +401,17 @@ export const requestEditInstallment = async (
       });
     }
 
-    return updatedInstallment;
+    const notificationResults = await notifyFinanceRequestEdit(tx, {
+      project_id: exportRecord.project_id,
+      actor_id: user.id,
+      installment_no: exportRecord.installment_no,
+      reason,
+    });
+
+    return { updatedInstallment, notificationResults };
   });
+
+  await publishPersistedNotifications(transactionResult.notificationResults);
+
+  return transactionResult.updatedInstallment;
 };

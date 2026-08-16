@@ -277,6 +277,39 @@ export const notifyWorkflowStepApproved = async (
   });
 };
 
+export const notifySubmissionRejected = async (
+  tx: TxClient,
+  input: {
+    project_id: string;
+    actor_id: string;
+    submitter_id?: string | null;
+    step_order: number;
+    reason?: string | null;
+  }
+) => {
+  if (!input.submitter_id || input.submitter_id === input.actor_id) {
+    return [];
+  }
+
+  const project = await getProjectContext(tx, input.project_id);
+  return dispatchNotification(tx, {
+    recipient_ids: [input.submitter_id],
+    actor_id: input.actor_id,
+    project_id: input.project_id,
+    kind: 'SUBMISSION_REJECTED',
+    category: NotificationCategory.WORKFLOW_UPDATES,
+    priority: NotificationPriority.HIGH,
+    title: 'ขั้นตอนถูกตีกลับ',
+    body: input.reason
+      ? `ขั้นตอนที่ ${input.step_order} ของโครงการ "${project.title}" ถูกตีกลับ: ${input.reason}`
+      : `ขั้นตอนที่ ${input.step_order} ของโครงการ "${project.title}" ถูกตีกลับ`,
+    target_path: `/app/projects/${project.id}`,
+    action_label: 'เปิดโครงการ',
+    requires_action: true,
+    dedupe_key: `submission-rejected:${project.id}:${input.step_order}`,
+  });
+};
+
 export const notifyVendorSubmissionReceived = async (
   tx: TxClient,
   input: {
@@ -320,6 +353,38 @@ export const notifyVendorSubmissionReceived = async (
   });
 
   return mergeNotifications(documentNotifications, financeNotifications);
+};
+
+export const notifyFinanceRequestEdit = async (
+  tx: TxClient,
+  input: {
+    project_id: string;
+    actor_id: string;
+    installment_no: number;
+    reason?: string | null;
+  }
+) => {
+  const project = await getProjectContext(tx, input.project_id);
+  const recipients = project.assignee_contract
+    .map((item) => item.id)
+    .filter((id) => id !== input.actor_id);
+
+  return dispatchNotification(tx, {
+    recipient_ids: recipients,
+    actor_id: input.actor_id,
+    project_id: input.project_id,
+    kind: 'FINANCE_REQUEST_EDIT',
+    category: NotificationCategory.FINANCE_HANDOFFS,
+    priority: NotificationPriority.HIGH,
+    title: 'การเงินส่งคืนให้แก้ไข',
+    body: input.reason
+      ? `งวดที่ ${input.installment_no} ของโครงการ "${project.title}" ถูกส่งคืนจากการเงินเพื่อแก้ไข: ${input.reason}`
+      : `งวดที่ ${input.installment_no} ของโครงการ "${project.title}" ถูกส่งคืนจากการเงินเพื่อแก้ไข`,
+    target_path: `/app/projects/${project.id}`,
+    action_label: 'เปิดโครงการ',
+    requires_action: true,
+    dedupe_key: `finance-request-edit:${project.id}:${input.installment_no}`,
+  });
 };
 
 export const notifyDelegationStarted = async (

@@ -39,7 +39,7 @@ import {
 } from '../lib/date';
 import {
   PaginatedProjects,
-  ProjectDetailsResponse,
+  ProjectDetailResponse,
   ProjectPhaseProgress,
   ProjectsListResponse,
   StaffWorkload,
@@ -286,7 +286,7 @@ export const listProjects = async (
 export const getById = async (
   user: AuthPayload,
   id: string
-): Promise<ProjectDetailsResponse> => {
+): Promise<ProjectDetailResponse> => {
   const haveAccess =
     haveSupplyPermission(user) ||
     (await prisma.project.count({
@@ -403,8 +403,8 @@ export const getById = async (
       migo_105_no: projectData.migo_105_no,
       asset_code: projectData.asset_code,
       expected_approval_date: projectData.expected_approval_date,
-      expected_completion_procurement_date:
-        projectData.expected_completion_procurement_date,
+      procurement_completed_date:
+        projectData.procurement_completed_at,
       created_at: projectData.created_at,
       updated_at: projectData.updated_at,
       vendor: {

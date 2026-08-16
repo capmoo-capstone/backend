@@ -24,7 +24,8 @@
     "notifications:worker": "tsx --env-file=.env src/jobs/notification-worker.job.ts",
     "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
-    "filegen": "tsx filegen.ts"
+    "filegen": "tsx filegen.ts",
+    "seed:project": "tsx --env-file=.env prisma/seed-unassigned-projects.ts"  
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

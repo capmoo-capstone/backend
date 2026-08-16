@@ -363,7 +363,6 @@ model Project {
   requesting_unit_id                   String?
   is_urgent                            UrgentType          @default(NORMAL)
   expected_approval_date               DateTime?
-  expected_completion_procurement_date DateTime?
   installment_rounds                   Int                 @default(1)
   procurement_started_at               DateTime?
   procurement_completed_at             DateTime?
@@ -630,6 +629,7 @@ model ProjectSubmission {
   completed_by     String?
   completed_at     DateTime?
   comment          String?
+  staff_remark     String?
   meta_data        Json[]
 
   project   Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)

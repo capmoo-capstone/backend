@@ -445,14 +445,48 @@ describe('project-finance.service', () => {
       );
     });
 
-    it('should update status to REQUEST_EDIT and set request_edit_reason', async () => {
+    it('should update status to REQUEST_EDIT, set request_edit_reason, and notify contract assignees', async () => {
       txMock.projectInstallment.findUnique.mockResolvedValue({
         id: 'export-1',
+        project_id: 'project-1',
+        installment_no: 2,
         status: ProjectInstallmentStatus.EXPORTED,
       } as ProjectInstallment);
+      txMock.project.findUnique.mockResolvedValue({
+        id: 'project-1',
+        title: 'Project 1',
+        responsible_unit_id: 'unit-1',
+        created_by: 'creator-1',
+        assignee_procurement: [],
+        assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+        creator: { id: 'creator-1', full_name: 'Creator One', email: null },
+      });
+      txMock.user.findMany.mockResolvedValue([{ id: 'contract-1' }]);
+      txMock.notification.findFirst.mockResolvedValue(null);
+      txMock.notification.create.mockResolvedValue({
+        id: 'notification-1',
+        user_id: 'contract-1',
+        project_id: 'project-1',
+        category: 'FINANCE_HANDOFFS',
+        priority: 'HIGH',
+        title: 'การเงินส่งคืนให้แก้ไข',
+        body: 'งวดที่ 2 ของโครงการ "Project 1" ถูกส่งคืนจากการเงินเพื่อแก้ไข: Fix details',
+        target_path: '/app/projects/project-1',
+        action_label: 'เปิดโครงการ',
+        requires_action: true,
+        is_read: false,
+        read_at: null,
+        created_at: new Date('2026-06-01T00:00:00.000Z'),
+        metadata: { notification_kind: 'FINANCE_REQUEST_EDIT' },
+      });
+      txMock.notification.groupBy.mockResolvedValue([
+        { user_id: 'contract-1', _count: { _all: 1 } },
+      ]);
 
       const mockUpdated = {
         id: 'export-1',
+        project_id: 'project-1',
+        installment_no: 2,
         status: ProjectInstallmentStatus.REQUEST_EDIT,
         request_edit_reason: 'Fix details',
       } as ProjectInstallment;
@@ -473,12 +507,26 @@ describe('project-finance.service', () => {
           request_edit_reason: 'Fix details',
         },
       });
+      expect(txMock.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            user_id: 'contract-1',
+            project_id: 'project-1',
+            requires_action: true,
+            title: 'การเงินส่งคืนให้แก้ไข',
+            metadata: expect.objectContaining({
+              notification_kind: 'FINANCE_REQUEST_EDIT',
+            }),
+          }),
+        })
+      );
     });
 
     it('should revert project status from WAITING_CLOSE to IN_PROGRESS when requestEditInstallment is called', async () => {
       txMock.projectInstallment.findUnique.mockResolvedValue({
         id: 'export-1',
         project_id: 'p1',
+        installment_no: 1,
         status: ProjectInstallmentStatus.EXPORTED,
       } as ProjectInstallment);
 
@@ -491,10 +539,33 @@ describe('project-finance.service', () => {
 
       txMock.projectInstallment.update.mockResolvedValue(mockUpdated);
 
-      txMock.project.findUnique.mockResolvedValue({
-        id: 'p1',
-        status: ProjectStatus.WAITING_CLOSE,
+      txMock.project.findUnique.mockImplementation(async (args: any) => {
+        if (args?.select?.title) {
+          return {
+            id: 'p1',
+            title: 'Project 1',
+            responsible_unit_id: 'unit-1',
+            created_by: 'creator-1',
+            assignee_procurement: [],
+            assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+            creator: { id: 'creator-1', full_name: 'Creator One', email: null },
+          };
+        }
+
+        return {
+          id: 'p1',
+          status: ProjectStatus.WAITING_CLOSE,
+        };
       });
+      txMock.user.findMany.mockResolvedValue([{ id: 'contract-1' }]);
+      txMock.notification.findFirst.mockResolvedValue(null);
+      txMock.notification.create.mockResolvedValue({
+        id: 'notification-1',
+        user_id: 'contract-1',
+      });
+      txMock.notification.groupBy.mockResolvedValue([
+        { user_id: 'contract-1', _count: { _all: 1 } },
+      ]);
 
       txMock.project.update.mockResolvedValue({
         id: 'p1',
@@ -519,6 +590,7 @@ describe('project-finance.service', () => {
       txMock.projectInstallment.findUnique.mockResolvedValue({
         id: 'export-1',
         project_id: 'p1',
+        installment_no: 1,
         status: ProjectInstallmentStatus.EXPORTED,
       } as ProjectInstallment);
 
@@ -531,10 +603,33 @@ describe('project-finance.service', () => {
 
       txMock.projectInstallment.update.mockResolvedValue(mockUpdated);
 
-      txMock.project.findUnique.mockResolvedValue({
-        id: 'p1',
-        status: ProjectStatus.CLOSED,
+      txMock.project.findUnique.mockImplementation(async (args: any) => {
+        if (args?.select?.title) {
+          return {
+            id: 'p1',
+            title: 'Project 1',
+            responsible_unit_id: 'unit-1',
+            created_by: 'creator-1',
+            assignee_procurement: [],
+            assignee_contract: [{ id: 'contract-1', full_name: 'Contract One', email: null }],
+            creator: { id: 'creator-1', full_name: 'Creator One', email: null },
+          };
+        }
+
+        return {
+          id: 'p1',
+          status: ProjectStatus.CLOSED,
+        };
       });
+      txMock.user.findMany.mockResolvedValue([{ id: 'contract-1' }]);
+      txMock.notification.findFirst.mockResolvedValue(null);
+      txMock.notification.create.mockResolvedValue({
+        id: 'notification-1',
+        user_id: 'contract-1',
+      });
+      txMock.notification.groupBy.mockResolvedValue([
+        { user_id: 'contract-1', _count: { _all: 1 } },
+      ]);
 
       txMock.project.update.mockResolvedValue({
         id: 'p1',

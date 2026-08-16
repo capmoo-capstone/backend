@@ -10,6 +10,7 @@ export type NotificationKind =
   | 'ASSIGNED_PROJECTS'
   | 'ASSIGNED_DOCUMENT'
   | 'RETURNED_FOR_REVISION'
+  | 'SUBMISSION_REJECTED'
   | 'DUE_SOON'
   | 'APPROVED_STEP'
   | 'SIGNED_STEP'
@@ -22,7 +23,8 @@ export type NotificationKind =
   | 'WAITING_APPROVE'
   | 'CANCEL_REQUESTED'
   | 'SIGN_REQUIRED'
-  | 'FINANCE_SUBMIT';
+  | 'FINANCE_SUBMIT'
+  | 'FINANCE_REQUEST_EDIT';
 
 export interface NotificationListItemResponse {
   id: string;

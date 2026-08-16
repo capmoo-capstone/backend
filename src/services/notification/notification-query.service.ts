@@ -1,4 +1,4 @@
-﻿import { randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import {
   NotificationCategory,
   NotificationPriority,
@@ -9,6 +9,7 @@ import { runtimeConfig } from '../../config/runtime';
 import {
   bangkokTodayStartUtc,
   formatBangkokDate,
+  nowUtc,
 } from '../../lib/date';
 import { NotFoundError } from '../../lib/errors';
 import { ListNotificationsQueryDto } from '../../schemas/notification.schema';
@@ -339,12 +340,7 @@ const collectReminderCandidates = async (userIds?: string[]) => {
         notIn: [ProjectStatus.CANCELLED, ProjectStatus.CLOSED],
       },
       AND: [
-        {
-          OR: [
-            { expected_approval_date: { not: null } },
-            { expected_completion_procurement_date: { not: null } },
-          ],
-        },
+        { expected_approval_date: { not: null } },
         ...(userIds?.length
           ? [
               {
@@ -363,7 +359,6 @@ const collectReminderCandidates = async (userIds?: string[]) => {
       title: true,
       created_by: true,
       expected_approval_date: true,
-      expected_completion_procurement_date: true,
       assignee_procurement: { select: { id: true } },
       assignee_contract: { select: { id: true } },
     },
@@ -386,13 +381,6 @@ const collectReminderCandidates = async (userIds?: string[]) => {
             key: 'approval',
             label: 'à¸à¸³à¸«à¸™à¸”à¸­à¸™à¸¸à¸¡à¸±à¸•à¸´',
             date: project.expected_approval_date,
-          }
-        : null,
-      project.expected_completion_procurement_date
-        ? {
-            key: 'completion',
-            label: 'à¸à¸³à¸«à¸™à¸”à¸ªà¹ˆà¸‡à¸•à¹ˆà¸­à¸‡à¸²à¸™à¸ˆà¸±à¸”à¸‹à¸·à¹‰à¸­',
-            date: project.expected_completion_procurement_date,
           }
         : null,
     ].filter((item): item is DeadlineTarget => Boolean(item));
@@ -630,7 +618,8 @@ export const markNotificationRead = async (
         "user_id",
         "event_type",
         "payload",
-        "unread_count"
+        "unread_count",
+        "updated_at"
       )
       VALUES (
         ${randomUUID()},
@@ -638,7 +627,8 @@ export const markNotificationRead = async (
         ${user.id},
         'notification.updated',
         ${mapNotificationRecord(updated)}::jsonb,
-        ${unreadCount}
+        ${unreadCount},
+        ${nowUtc()}
       )
     `);
 
@@ -698,7 +688,8 @@ export const markAllNotificationsRead = async (user: AuthPayload) => {
           "user_id",
           "event_type",
           "payload",
-          "unread_count"
+          "unread_count",
+          "updated_at"
         )
         VALUES (
           ${randomUUID()},
@@ -706,7 +697,8 @@ export const markAllNotificationsRead = async (user: AuthPayload) => {
           ${user.id},
           'notification.updated',
           ${mapNotificationRecord(notification)}::jsonb,
-          0
+          0,
+          ${nowUtc()}
         )
       `);
     }

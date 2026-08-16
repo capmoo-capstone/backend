@@ -84,10 +84,9 @@ export const openNotificationStream = async (userId: string, res: Response) => {
   try {
     await ensureRedisSubscription();
   } catch (error) {
-    console.error('Notification realtime stream unavailable, falling back to polling', error);
+    console.error('Notification realtime stream unavailable', error);
     writeSse(res, 'disabled', {
       type: 'disabled',
-      polling_fallback_ms: runtimeConfig.pollingFallbackMs,
     });
     res.end();
     return;
@@ -116,6 +115,5 @@ export const openNotificationStream = async (userId: string, res: Response) => {
 
   writeSse(res, 'ready', {
     type: 'ready',
-    polling_fallback_ms: runtimeConfig.pollingFallbackMs,
   });
 };
