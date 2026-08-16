@@ -10,7 +10,11 @@ import {
   UserRole,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPS_DEPT_ID, PROC1_UNIT_ID } from '../../lib/constant';
+import {
+  OPS_DEPT_ID,
+  PROC1_UNIT_ID,
+  REGISTRATION_DEPT_ID,
+} from '../../lib/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   getAssignedProjects,
@@ -49,6 +53,19 @@ const externalUser = {
       role: UserRole.REPRESENTATIVE,
       dept_id: 'dept-1',
       unit_id: 'unit-request',
+    },
+  ],
+} as any;
+
+const registrationGeneralStaff = {
+  id: 'registration-staff-1',
+  is_delegated: false,
+  delegated_by: [],
+  roles: [
+    {
+      role: UserRole.GENERAL_STAFF,
+      dept_id: REGISTRATION_DEPT_ID,
+      unit_id: 'unit-reg',
     },
   ],
 } as any;
@@ -733,6 +750,27 @@ describe('project-query.service', () => {
     expect(prismaMock.project.count.mock.calls[0][0]).toEqual({
       where: { requesting_dept_id: { in: ['dept-1'] } },
     });
+  });
+
+  it('getSummaryCards returns global external counts for DEPT-REG general staff', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(5);
+
+    const result = await getSummaryCards(registrationGeneralStaff);
+
+    expect(result).toMatchObject({
+      role: 'EXTERNAL',
+      total: 10,
+      NOT_STARTED: 2,
+      IN_PROGRESS: 4,
+      URGENT: 5,
+    });
+    expect(prismaMock.project.count.mock.calls[0][0]).toEqual({ where: {} });
   });
 
   describe('getDocumentSummary', () => {

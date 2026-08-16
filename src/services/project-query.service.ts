@@ -28,6 +28,7 @@ import {
   isHeadOfSupplyUnit,
   isSuperAdmin,
 } from '../lib/permissions';
+import { hasOrganizationWideReadAccess } from '../lib/access-policy';
 import { OwnProjectTab, ProjectFilterQuery } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
@@ -932,8 +933,11 @@ export const getSummaryCards = async (
     };
   }
 
+  const hasOrganizationWideRead = hasOrganizationWideReadAccess(user);
   const deptIds = getDeptIdsForUser(user);
-  const baseWhere = { requesting_dept_id: { in: deptIds } };
+  const baseWhere = hasOrganizationWideRead
+    ? {}
+    : { requesting_dept_id: { in: deptIds } };
 
   const [total, not_started, in_progress, closed, cancelled, urgent] =
     await prisma.$transaction([
@@ -972,6 +976,7 @@ export const getSummaryCards = async (
                     in: [
                       ProjectStatus.UNASSIGNED,
                       ProjectStatus.WAITING_ACCEPT,
+                      
                     ],
                   },
                 },
