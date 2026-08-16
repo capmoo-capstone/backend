@@ -40,20 +40,25 @@ const ensureRedisSubscription = async () => {
 
   if (!subscriberReady) {
     subscriberReady = (async () => {
-      await subscriber.connect();
-      await subscriber.psubscribe(`${USER_CHANNEL_PREFIX}*`);
-      subscriber.on('pmessage', (_pattern, channel, message) => {
-        const userId = String(channel).replace(USER_CHANNEL_PREFIX, '');
-        try {
-          const payload = JSON.parse(String(message)) as NotificationRealtimeEvent;
-          broadcastToUser(userId, payload);
-        } catch (error) {
-          console.error('Failed to parse notification realtime payload', error);
-        }
-      });
-      subscriber.on('error', (error) => {
-        console.error('Notification realtime subscriber error', error);
-      });
+      try {
+        await subscriber.connect();
+        await subscriber.psubscribe(`${USER_CHANNEL_PREFIX}*`);
+        subscriber.on('pmessage', (_pattern, channel, message) => {
+          const userId = String(channel).replace(USER_CHANNEL_PREFIX, '');
+          try {
+            const payload = JSON.parse(String(message)) as NotificationRealtimeEvent;
+            broadcastToUser(userId, payload);
+          } catch (error) {
+            console.error('Failed to parse notification realtime payload', error);
+          }
+        });
+        subscriber.on('error', (error) => {
+          console.error('Notification realtime subscriber error', error);
+        });
+      } catch (error) {
+        subscriberReady = null;
+        throw error;
+      }
     })();
   }
 
@@ -76,7 +81,17 @@ export const publishNotificationRealtimeEvent = async (
 };
 
 export const openNotificationStream = async (userId: string, res: Response) => {
-  await ensureRedisSubscription();
+  try {
+    await ensureRedisSubscription();
+  } catch (error) {
+    console.error('Notification realtime stream unavailable, falling back to polling', error);
+    writeSse(res, 'disabled', {
+      type: 'disabled',
+      polling_fallback_ms: runtimeConfig.pollingFallbackMs,
+    });
+    res.end();
+    return;
+  }
 
   const connectionId = `${userId}:${Date.now()}:${Math.random()
     .toString(36)
