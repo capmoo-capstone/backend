@@ -322,9 +322,6 @@ export const queueEmailDelivery = async (
   }
 
   const result = await notificationEmailTransport.queue(draft);
-  if (result.status === NotificationDeliveryStatus.SKIPPED) {
-    return null;
-  }
 
   try {
     return await tx.notificationDelivery.create({
