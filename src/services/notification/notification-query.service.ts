@@ -78,26 +78,26 @@ const REMINDER_WINDOWS: ReminderWindow[] = [
   {
     key: '7d',
     offsetMs: 7 * DAY_MS,
-    label: 'à¸­à¸µà¸ 7 à¸§à¸±à¸™',
+    label: 'อีก 7 วัน',
     priority: NotificationPriority.MEDIUM,
   },
   {
     key: '3d',
     offsetMs: 3 * DAY_MS,
-    label: 'à¸­à¸µà¸ 2 à¸§à¸±à¸™',
+    label: 'อีก 3 วัน',
     priority: NotificationPriority.HIGH,
   },
   {
     key: '24h',
     offsetMs: 24 * HOUR_MS,
-    label: 'à¸­à¸µà¸ 24 à¸Šà¸±à¹ˆà¸§à¹‚à¸¡à¸‡',
+    label: 'อีก 24 ชั่วโมง',
     priority: NotificationPriority.HIGH,
   },
   /*
   {
     key: '1h',
     offsetMs: 1 * HOUR_MS,
-    label: 'à¸­à¸µà¸ 1 à¸Šà¸±à¹ˆà¸§à¹‚à¸¡à¸‡',
+    label: 'อีก 1 ชั่วโมง',
     priority: NotificationPriority.CRITICAL,
   },
   */
@@ -109,24 +109,22 @@ const buildReminderBody = (
   windowKey: ReminderWindowKey
 ) => {
   if (windowKey === 'overdue') {
-    return `${targetLabel} à¸‚à¸­à¸‡à¹‚à¸„à¸£à¸‡à¸à¸²à¸£ "${projectTitle}" à¹€à¸¥à¸¢à¸à¸³à¸«à¸™à¸”à¹à¸¥à¹‰à¸§ à¸à¸£à¸¸à¸“à¸²à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¸—à¸±à¸™à¸—à¸µ`;
+    return `${targetLabel} ของโครงการ "${projectTitle}" เลยกำหนดแล้ว กรุณาตรวจสอบทันที`;
   }
 
   const labelByWindowKey: Record<
     Exclude<ReminderWindowKey, 'overdue'>,
     string
   > = {
-    '7d': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 7 Ã Â¸Â§Ã Â¸Â±Ã Â¸â„¢',
-    '3d': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 3 Ã Â¸Â§Ã Â¸Â±Ã Â¸â„¢',
-    '24h': 'Ã Â¸Â­Ã Â¸ÂµÃ Â¸Â 24 Ã Â¸Å Ã Â¸Â±Ã Â¹Ë†Ã Â¸Â§Ã Â¹â€šÃ Â¸Â¡Ã Â¸â€¡',
+    '7d': 'อีก 7 วัน',
+    '3d': 'อีก 3 วัน',
+    '24h': 'อีก 24 ชั่วโมง',
   };
-  return `${targetLabel} à¸‚à¸­à¸‡à¹‚à¸„à¸£à¸‡à¸à¸²à¸£ "${projectTitle}" à¸ˆà¸°à¸„à¸£à¸šà¸à¸³à¸«à¸™à¸”à¹ƒà¸™${labelByWindowKey[windowKey] ?? ''}`;
+  return `${targetLabel} ของโครงการ "${projectTitle}" จะครบกำหนดใน${labelByWindowKey[windowKey] ?? ''}`;
 };
 
 const buildReminderTitle = (windowKey: ReminderWindowKey) =>
-  windowKey === 'overdue'
-    ? 'à¸‡à¸²à¸™à¹€à¸¥à¸¢à¸à¸³à¸«à¸™à¸”'
-    : 'à¹ƒà¸à¸¥à¹‰à¸„à¸£à¸šà¸à¸³à¸«à¸™à¸”';
+  windowKey === 'overdue' ? 'งานเลยกำหนด' : 'ใกล้ครบกำหนด';
 
 const buildReminderDedupeKey = (
   projectId: string,
@@ -384,7 +382,7 @@ const collectReminderCandidates = async (userIds?: string[]) => {
       project.expected_approval_date
         ? {
             key: 'approval',
-            label: 'à¸à¸³à¸«à¸™à¸”à¸­à¸™à¸¸à¸¡à¸±à¸•à¸´',
+            label: 'กำหนดอนุมัติ',
             date: project.expected_approval_date,
           }
         : null,
@@ -423,7 +421,7 @@ export const processDeadlineDispatchJob = async (
         title: job.title,
         body: job.body,
         target_path: job.targetPath,
-        action_label: 'à¹€à¸›à¸´à¸”à¹‚à¸„à¸£à¸‡à¸à¸²à¸£',
+        action_label: 'เปิดโครงการ',
         requires_action: true,
         dedupe_key: job.dedupeKey,
         metadata: {
@@ -722,3 +720,4 @@ export const markAllNotificationsRead = async (user: AuthPayload) => {
 };
 
 export { getNotificationKind };
+
