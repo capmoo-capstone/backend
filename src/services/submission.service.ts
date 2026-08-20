@@ -820,6 +820,7 @@ export const signAndCompleteSubmission = async (
         status: SubmissionStatus.COMPLETED,
         completed_at: nowUtc(),
         completed_by: user.id,
+        signed_at: data.signed_at ?? nowUtc(),
       },
       select: {
         id: true,
@@ -831,8 +832,20 @@ export const signAndCompleteSubmission = async (
         status: true,
         completed_at: true,
         completed_by: true,
+        signed_at: true,
       },
     });
+
+    if (data.files && data.files.length > 0) {
+      await tx.projectDocument.createMany({
+        data: data.files.map((file) => ({
+          submission_id: data.id,
+          field_key: file.field_key ?? null,
+          file_name: file.file_name,
+          file_path: file.file_path,
+        })),
+      });
+    }
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     if (data.required_updating) {
       const project = await tx.project.findUnique({

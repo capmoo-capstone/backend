@@ -629,6 +629,7 @@ model ProjectSubmission {
   proposing_at     DateTime?
   completed_by     String?
   completed_at     DateTime?
+  signed_at        DateTime?
   comment          String?
   staff_remark     String?
   meta_data        Json[]

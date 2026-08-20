@@ -637,6 +637,66 @@ describe('submission.service', () => {
     );
   });
 
+  it('signAndCompleteSubmission saves provided signed_at and creates document records when files are provided', async () => {
+    const customSignDate = new Date('2026-08-20T10:00:00.000Z');
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_SIGNATURE,
+      submitted_by: 'submitter-1',
+      meta_data: [],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 2,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+      completed_at: customSignDate,
+      completed_by: user.id,
+      signed_at: customSignDate,
+    });
+    txMock.projectDocument.createMany.mockResolvedValue({ count: 1 });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      requesting_dept_id: 'dept-1',
+    });
+
+    const result = await signAndCompleteSubmission(user, {
+      id: 'submission-1',
+      required_updating: false,
+      signed_at: customSignDate,
+      files: [
+        {
+          field_key: 'signed_doc',
+          file_name: 'contract_signed.pdf',
+          file_path: 'projects/1/contract_signed.pdf',
+        },
+      ],
+    } as any);
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(txMock.projectSubmission.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'submission-1' },
+        data: expect.objectContaining({
+          signed_at: customSignDate,
+          status: SubmissionStatus.COMPLETED,
+        }),
+      })
+    );
+    expect(txMock.projectDocument.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          submission_id: 'submission-1',
+          field_key: 'signed_doc',
+          file_name: 'contract_signed.pdf',
+          file_path: 'projects/1/contract_signed.pdf',
+        },
+      ],
+    });
+  });
+
   it('signAndCompleteSubmission rejects submissions that are not waiting signature', async () => {
     txMock.projectSubmission.findUnique.mockResolvedValue({
       status: SubmissionStatus.WAITING_PROPOSAL,
