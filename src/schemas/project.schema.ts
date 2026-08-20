@@ -6,29 +6,13 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 import { BangkokDateTimeSchema } from '../lib/date';
-
-export const OwnProjectTabEnum = z.enum([
-  'all',
-  'waiting_accept',
-  'need_action',
-  'rejected',
-  'waiting_approval',
-  'waiting_cancel',
-  'waiting_proposal',
-  'waiting_signature',
-  'waiting_others',
-  'urgent',
-  'very_urgent',
-  'super_urgent',
-  'waiting_finance_export',
-  'waiting_close_project',
-  'waiting_edit',
-]);
-
-export const OwnProjectTabSchema = OwnProjectTabEnum.default('all');
+import { OwnProjectTab } from '../types/project.type';
 
 export const GetOwnProjectsQuerySchema = z.object({
-  tab: OwnProjectTabSchema,
+  tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
+  search: z.string().trim().optional(),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export const CreateProjectSchema = z.object({
@@ -194,5 +178,5 @@ export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;
 export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
-export type OwnProjectTab = z.infer<typeof OwnProjectTabSchema>;
+export type GetOwnProjectsQuery = z.infer<typeof GetOwnProjectsQuerySchema>;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;

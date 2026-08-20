@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { ProcurementType } from '@prisma/client';
 import {
+  BangkokDateTimeSchema,
   bangkokDayEndUtc,
   bangkokDayStartUtc,
   parseBangkokDateTime,
 } from '../lib/date';
-import { OwnProjectTabSchema } from './project.schema';
+import { OwnProjectTab } from '../types/project.type';
 
 export const DashboardModeEnum = z.enum([
   'today',
@@ -163,9 +164,9 @@ export const IndividualDashboardQuerySchema = z.object({
 
 export const IndividualTodoQuerySchema = z.object({
   targetUserId: z.string(),
-  tab: OwnProjectTabSchema,
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export const IndividualTodoTotalQuerySchema = z.object({

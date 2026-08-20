@@ -16,6 +16,7 @@ import {
   getPeriodicSummary,
   getProcurementOverview,
 } from '../dashboard/dashboard.service';
+import { OwnProjectTab } from '../../types/project.type';
 
 const supplyUser: AuthPayload = {
   token: 'token',
@@ -918,9 +919,7 @@ describe('dashboard.service', () => {
           IndividualTodoQuerySchema.parse({ targetUserId: 'staff-1' })
         ).toEqual({
           targetUserId: 'staff-1',
-          tab: 'all',
-          page: 1,
-          limit: 10,
+          tab: OwnProjectTab.ALL,
         });
       });
 
@@ -951,11 +950,9 @@ describe('dashboard.service', () => {
         ] as any);
         prismaMock.project.count.mockResolvedValue(1);
 
-        const result = await DashboardService.getIndividualStaffTodo({
+        const result = await DashboardService.getIndividualStaffTodo(2, 20, {
           targetUserId: 'staff-1',
-          tab: 'waiting_accept',
-          page: 2,
-          limit: 20,
+          tab: OwnProjectTab.WAITING_ACCEPT,
         });
 
         expect(result).toMatchObject({
@@ -983,11 +980,9 @@ describe('dashboard.service', () => {
         prismaMock.user.findUnique.mockResolvedValue(null);
 
         await expect(
-          DashboardService.getIndividualStaffTodo({
+          DashboardService.getIndividualStaffTodo(1, 10, {
             targetUserId: 'missing-user',
-            tab: 'all',
-            page: 1,
-            limit: 10,
+            tab: OwnProjectTab.ALL,
           })
         ).rejects.toThrowError('User not found');
         expect(prismaMock.project.findMany).not.toHaveBeenCalled();

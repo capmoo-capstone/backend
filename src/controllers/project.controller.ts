@@ -138,14 +138,14 @@ export const getOwnProjects = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, tab } = req.query;
+  const { page, limit, ...query } = req.query;
   const payload = req.user!;
-  const validated = GetOwnProjectsQuerySchema.parse({ tab });
+  const validated = GetOwnProjectsQuerySchema.parse(query);
   const projects = await ProjectQueryService.getOwnProjects(
     payload,
     parseInt(page as string) || 1,
     parseInt(limit as string) || 10,
-    validated.tab
+    validated
   );
   res.status(200).json(projects);
 };
@@ -552,15 +552,5 @@ export const getDocumentSummary = async (
   const projectId = req.params.id as string;
   const payload = req.user!;
   const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
-  res.status(200).json(data);
-};
-
-export const getExpectedApprovalDates = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  // #swagger.tags = ['Project']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const data = await ProjectQueryService.getExpectedApprovalDates(req.user!);
   res.status(200).json(data);
 };

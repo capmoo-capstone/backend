@@ -29,7 +29,10 @@ import {
   isSuperAdmin,
 } from '../lib/permissions';
 import { hasOrganizationWideReadAccess } from '../lib/access-policy';
-import { OwnProjectTab, ProjectFilterQuery } from '../schemas/project.schema';
+import {
+  GetOwnProjectsQuery,
+  ProjectFilterQuery,
+} from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
   addBangkokMonths,
@@ -506,10 +509,16 @@ export const getUnassignedProjectsByUnit = async (
         receive_no: true,
         title: true,
         status: true,
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
           select: {
+            id: true,
             name: true,
-            department: { select: { name: true, id: true } },
           },
         },
         budget: true,
@@ -632,10 +641,16 @@ export const getAssignedProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
           select: {
+            id: true,
             name: true,
-            department: { select: { name: true, id: true } },
           },
         },
         budget: true,
@@ -709,10 +724,16 @@ export const getWaitingCancellationProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
           select: {
+            id: true,
             name: true,
-            department: { select: { name: true, id: true } },
           },
         },
         budget: true,
@@ -749,9 +770,9 @@ export const getOwnProjects = async (
   user: AuthPayload,
   page: number,
   limit: number,
-  tab: OwnProjectTab = 'all'
+  query: GetOwnProjectsQuery
 ): Promise<PaginatedProjects> => {
-  return getOwnProjectsFromHelper(user, page, limit, tab);
+  return getOwnProjectsFromHelper(user, page, limit, query);
 };
 
 export const getOwnProjectsTotal = async (
@@ -1125,43 +1146,5 @@ export const getDocumentSummary = async (
         };
       })
     ),
-  };
-};
-
-export const getExpectedApprovalDates = async (user: AuthPayload) => {
-  const andConditions: Prisma.ProjectWhereInput[] = [
-    { status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] } },
-  ];
-
-  const projectScope = projectReadWhere(user);
-  if (Object.keys(projectScope).length > 0) {
-    andConditions.push(projectScope);
-  }
-
-  if (!isHeadOfSupplyUnit(user) && !isSuperAdmin(user)) {
-    andConditions.push({
-      OR: [
-        { assignee_procurement: { some: { id: user.id } } },
-        { assignee_contract: { some: { id: user.id } } },
-      ],
-    });
-  }
-
-  const where: Prisma.ProjectWhereInput =
-    andConditions.length > 0 ? { AND: andConditions } : {};
-
-  const projects = await prisma.project.findMany({
-    where,
-    select: {
-      id: true,
-      title: true,
-      expected_approval_date: true,
-    },
-    orderBy: [{ expected_approval_date: 'asc' }],
-  });
-
-  return {
-    total: projects.length,
-    data: projects,
   };
 };
