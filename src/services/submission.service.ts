@@ -104,7 +104,7 @@ const validateInstallmentNo = (
 type ProjectForUpdate = Pick<
   Project,
   | 'id'
-  | 'budget'
+  | 'actual_cost'
   | 'pr_no'
   | 'po_no'
   | 'less_no'
@@ -422,7 +422,7 @@ export const createStaffSubmissionsProject = async (
       select: {
         id: true,
         current_workflow_type: true,
-        budget: true,
+        actual_cost: true,
         pr_no: true,
         po_no: true,
         less_no: true,
@@ -820,6 +820,7 @@ export const signAndCompleteSubmission = async (
         status: SubmissionStatus.COMPLETED,
         completed_at: nowUtc(),
         completed_by: user.id,
+        signed_at: data.signed_at ?? nowUtc(),
       },
       select: {
         id: true,
@@ -831,15 +832,27 @@ export const signAndCompleteSubmission = async (
         status: true,
         completed_at: true,
         completed_by: true,
+        signed_at: true,
       },
     });
+
+    if (data.files && data.files.length > 0) {
+      await tx.projectDocument.createMany({
+        data: data.files.map((file) => ({
+          submission_id: data.id,
+          field_key: file.field_key ?? null,
+          file_name: file.file_name,
+          file_path: file.file_path,
+        })),
+      });
+    }
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     if (data.required_updating) {
       const project = await tx.project.findUnique({
         where: { id: updated.project_id },
         select: {
           id: true,
-          budget: true,
+          actual_cost: true,
           pr_no: true,
           po_no: true,
           less_no: true,

@@ -66,10 +66,20 @@ export const ApproveSubmissionSchema = z.object({
 export const CompleteSubmissionSchema = z.object({
   id: z.uuid(),
   required_updating: z.boolean(),
+  signed_at: BangkokDateTimeSchema.optional(),
+  files: z
+    .array(
+      z.object({
+        field_key: z.string().optional(),
+        file_name: z.string(),
+        file_path: z.string(),
+      })
+    )
+    .optional(),
 });
 
 export const UpdateProjectForSubmissionSchema = z.object({
-  budget: z.coerce.number().optional(),
+  actual_cost: z.coerce.number().optional(),
   pr_no: z.string().optional(),
   po_no: z.string().optional(),
   less_no: z.string().optional(),

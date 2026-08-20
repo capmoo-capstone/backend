@@ -51,6 +51,7 @@ export interface ProposedSubmissionResponse extends SubmissionActionResponse {
 export interface CompletedSubmissionResponse extends SubmissionActionResponse {
   completed_at: Date | null;
   completed_by: string | null;
+  signed_at: Date | null;
 }
 
 export interface SubmissionDetailResponse {
@@ -68,6 +69,7 @@ export interface SubmissionDetailResponse {
   approved_at: Date | null;
   proposing_at: Date | null;
   completed_at: Date | null;
+  signed_at: Date | null;
   submitted_by: string | null;
   approved_by: string | null;
   proposing_by: string | null;

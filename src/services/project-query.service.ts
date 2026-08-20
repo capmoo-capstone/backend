@@ -389,6 +389,7 @@ export const getById = async (
       title: projectData.title,
       description: projectData.description,
       budget: projectData.budget,
+      actual_cost: projectData.actual_cost,
       status: projectData.status,
       installment_rounds: projectData.installment_rounds,
       procurement_progress:

@@ -354,7 +354,8 @@ model Project {
   receive_no               String
   title                    String
   description              String?
-  budget                   Decimal             @db.Decimal(18, 2)
+  budget                   Decimal?            @db.Decimal(18, 2)
+  actual_cost              Decimal?            @db.Decimal(18, 2)
   status                   ProjectStatus
   procurement_type         ProcurementType
   current_workflow_type    UnitResponsibleType
@@ -628,6 +629,7 @@ model ProjectSubmission {
   proposing_at     DateTime?
   completed_by     String?
   completed_at     DateTime?
+  signed_at        DateTime?
   comment          String?
   staff_remark     String?
   meta_data        Json[]
