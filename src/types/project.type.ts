@@ -160,3 +160,20 @@ export interface ProjectPhaseProgress {
   HEAD_OF_UNIT: PhaseEntry;
   DOCUMENT_STAFF: PhaseEntry;
 }
+
+export enum OwnProjectTab {
+  ALL = 'all',
+  WAITING_ACCEPT = 'waiting_accept',
+  NEED_ACTION = 'need_action',
+  REJECTED = 'rejected',
+  COMPLETED = 'completed',
+  WAITING_APPROVAL = 'waiting_approval',
+  WAITING_CANCEL = 'waiting_cancel',
+  WAITING_PROPOSAL = 'waiting_proposal',
+  WAITING_SIGNATURE = 'waiting_signature',
+  WAITING_OTHERS = 'waiting_others',
+  WAITING_FINANCE_EXPORT = 'waiting_finance_export',
+  WAITING_CLOSE_PROJECT = 'waiting_close_project',
+  WAITING_EDIT = 'waiting_edit',
+  URGENT = 'urgent',
+}

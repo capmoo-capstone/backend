@@ -31,7 +31,6 @@ import {
 import { hasOrganizationWideReadAccess } from '../lib/access-policy';
 import {
   GetOwnProjectsQuery,
-  OwnProjectTab,
   ProjectFilterQuery,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';

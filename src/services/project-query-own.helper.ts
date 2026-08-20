@@ -12,9 +12,8 @@ import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../lib/constant';
 import { isHeadOfSupplyDept, isSuperAdmin } from '../lib/permissions';
 import {
   GetOwnProjectsQuery,
-  OwnProjectTab,
-  OwnProjectTabEnum,
 } from '../schemas/project.schema';
+import { OwnProjectTab } from '../types/project.type';
 import { bangkokDayEndUtc, bangkokDayStartUtc } from '../lib/date';
 import { AuthPayload } from '../types/auth.type';
 import { PaginatedProjects } from '../types/project.type';
@@ -78,22 +77,22 @@ const PROJECT_SELECT = {
 
 const ACTION_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
   [UserRole.GENERAL_STAFF]: [
-    'waiting_accept',
-    'need_action',
-    'rejected',
-    'waiting_others',
-    'completed',
+    OwnProjectTab.WAITING_ACCEPT,
+    OwnProjectTab.NEED_ACTION,
+    OwnProjectTab.REJECTED,
+    OwnProjectTab.WAITING_OTHERS,
+    OwnProjectTab.COMPLETED,
   ],
   [UserRole.HEAD_OF_UNIT]: [
-    'waiting_approval',
-    'waiting_others',
-    'waiting_cancel',
+    OwnProjectTab.WAITING_APPROVAL,
+    OwnProjectTab.WAITING_OTHERS,
+    OwnProjectTab.WAITING_CANCEL,
   ],
-  [UserRole.DOCUMENT_STAFF]: ['waiting_proposal', 'waiting_signature'],
+  [UserRole.DOCUMENT_STAFF]: [OwnProjectTab.WAITING_PROPOSAL, OwnProjectTab.WAITING_SIGNATURE],
   [UserRole.FINANCE_STAFF]: [
-    'waiting_finance_export',
-    'waiting_edit',
-    'waiting_close_project',
+    OwnProjectTab.WAITING_FINANCE_EXPORT,
+    OwnProjectTab.WAITING_EDIT,
+    OwnProjectTab.WAITING_CLOSE_PROJECT,
   ],
 };
 
@@ -526,7 +525,7 @@ const ownProjectWhereClause = async (
   user: AuthPayload,
   query: GetOwnProjectsQuery
 ): Promise<Prisma.ProjectWhereInput> => {
-  const tab = query.tab ?? 'all';
+  const tab = query.tab ?? OwnProjectTab.ALL;
 
   const scopes = await buildRoleScopes(user);
   const clauses = scopes
@@ -656,7 +655,7 @@ export const getOwnProjects = async (
   limit: number,
   query: GetOwnProjectsQuery
 ): Promise<PaginatedProjects> => {
-  const tab = query.tab ?? 'all';
+  const tab = query.tab ?? OwnProjectTab.ALL;
 
   const whereClause = await ownProjectWhereClause(user, query);
 
@@ -693,7 +692,7 @@ export const getOwnProjects = async (
 
 const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
   if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
-    return OwnProjectTabEnum.options;
+    return Object.values(OwnProjectTab);
   }
 
   const roleTabs = user.roles
@@ -701,10 +700,10 @@ const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
     .flatMap((r) => ACTION_TAB_UNION[r.role as OwnRole] ?? []);
 
   if (roleTabs.length === 0) {
-    return ['all', 'urgent'];
+    return [OwnProjectTab.ALL, OwnProjectTab.URGENT];
   }
 
-  return ['all', ...unique(roleTabs), 'urgent'];
+  return [OwnProjectTab.ALL, ...unique(roleTabs), OwnProjectTab.URGENT];
 };
 
 export const getOwnProjectsTotal = async (
