@@ -326,17 +326,18 @@ describe('project-query.service', () => {
       );
     });
 
-    it('filters general staff waiting_accept by project status', async () => {
+    it('filters general staff waiting_accept by project status and maps response status', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
       ]);
       mockOwnProjectPage();
 
-      await getOwnProjects(staffUser, 1, 10, 'waiting_accept');
+      const result = await getOwnProjects(staffUser, 1, 10, 'waiting_accept');
 
       expect(ownProjectWhere()).toMatchObject({
         AND: [expect.any(Object), { status: ProjectStatus.WAITING_ACCEPT }],
       });
+      expect(result.data[0].status).toBe('WAITING_ACCEPT');
     });
 
     it('filters general staff need_action to active work or completed procurement handoff', async () => {
@@ -633,6 +634,49 @@ describe('project-query.service', () => {
       });
     });
 
+    it('filters completed tab without date restrictions when dates are omitted', async () => {
+      mockOwnProjectPage();
+
+      const result = await getOwnProjects(supplyUser, 1, 10, 'completed');
+
+      expect(ownProjectWhere().OR).toBeDefined();
+      expect(result.data[0].status).toBe('COMPLETED');
+    });
+
+    it('filters completed tab with dateFrom and dateTo across workflow types', async () => {
+      mockOwnProjectPage();
+
+      await getOwnProjects(supplyUser, 1, 10, {
+        tab: 'completed',
+        dateFrom: new Date('2026-01-01'),
+        dateTo: new Date('2026-01-31'),
+      });
+
+      expect(ownProjectWhereJson()).toContain('"procurement_completed_at"');
+      expect(ownProjectWhereJson()).toContain('"contract_completed_at"');
+    });
+
+    it('applies search query filter on receive_no, title, and assignees', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(staffUser, 1, 10, {
+        tab: 'all',
+        search: 'Project Alpha',
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        '"receive_no":{"contains":"Project Alpha","mode":"insensitive"}'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"title":{"contains":"Project Alpha","mode":"insensitive"}'
+      );
+      expect(ownProjectWhereJson()).toContain('"assignee_procurement"');
+      expect(ownProjectWhereJson()).toContain('"assignee_contract"');
+    });
+
     describe('getOwnProjectsTotal', () => {
       it('returns project counts per tab for finance user', async () => {
         prismaMock.project.count.mockResolvedValue(3);
@@ -645,6 +689,7 @@ describe('project-query.service', () => {
           waiting_edit: 3,
           waiting_close_project: 3,
           urgent: 3,
+          completed: 3,
         });
       });
 

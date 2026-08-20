@@ -29,7 +29,11 @@ import {
   isSuperAdmin,
 } from '../lib/permissions';
 import { hasOrganizationWideReadAccess } from '../lib/access-policy';
-import { OwnProjectTab, ProjectFilterQuery } from '../schemas/project.schema';
+import {
+  GetOwnProjectsQuery,
+  OwnProjectTab,
+  ProjectFilterQuery,
+} from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
 import {
   addBangkokMonths,
@@ -767,9 +771,9 @@ export const getOwnProjects = async (
   user: AuthPayload,
   page: number,
   limit: number,
-  tab: OwnProjectTab = 'all'
+  query: GetOwnProjectsQuery
 ): Promise<PaginatedProjects> => {
-  return getOwnProjectsFromHelper(user, page, limit, tab);
+  return getOwnProjectsFromHelper(user, page, limit, query);
 };
 
 export const getOwnProjectsTotal = async (

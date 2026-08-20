@@ -21,12 +21,14 @@ export const OwnProjectTabEnum = z.enum([
   'waiting_finance_export',
   'waiting_close_project',
   'waiting_edit',
+  'completed',
 ]);
 
-export const OwnProjectTabSchema = OwnProjectTabEnum.default('all');
-
 export const GetOwnProjectsQuerySchema = z.object({
-  tab: OwnProjectTabSchema,
+  tab: OwnProjectTabEnum.default('all'),
+  search: z.string().trim().optional(),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export const CreateProjectSchema = z.object({
@@ -192,5 +194,6 @@ export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;
 export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
-export type OwnProjectTab = z.infer<typeof OwnProjectTabSchema>;
+export type OwnProjectTab = z.infer<typeof OwnProjectTabEnum>;
+export type GetOwnProjectsQuery = z.infer<typeof GetOwnProjectsQuerySchema>;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;
