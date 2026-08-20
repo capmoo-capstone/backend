@@ -43,11 +43,16 @@ const PROJECT_SELECT = {
   },
   procurement_progress: true,
   contract_progress: true,
+  requesting_dept: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   requesting_unit: {
     select: {
       id: true,
       name: true,
-      department: { select: { name: true, id: true } },
     },
   },
   budget: true,

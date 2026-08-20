@@ -506,10 +506,16 @@ export const getUnassignedProjectsByUnit = async (
         receive_no: true,
         title: true,
         status: true,
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
           select: {
+            id: true,
             name: true,
-            department: { select: { name: true, id: true } },
           },
         },
         budget: true,
@@ -632,10 +638,16 @@ export const getAssignedProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
           select: {
+            id: true,
             name: true,
-            department: { select: { name: true, id: true } },
           },
         },
         budget: true,
@@ -709,10 +721,16 @@ export const getWaitingCancellationProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        requesting_dept: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         requesting_unit: {
           select: {
+            id: true,
             name: true,
-            department: { select: { name: true, id: true } },
           },
         },
         budget: true,
