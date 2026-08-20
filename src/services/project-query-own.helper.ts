@@ -61,12 +61,6 @@ const PROJECT_SELECT = {
   updated_at: true,
 } satisfies Prisma.ProjectSelect;
 
-const URGENT_TAB: Partial<Record<OwnProjectTab, UrgentType>> = {
-  urgent: UrgentType.URGENT,
-  very_urgent: UrgentType.VERY_URGENT,
-  super_urgent: UrgentType.SUPER_URGENT,
-};
-
 const ACTION_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
   [UserRole.GENERAL_STAFF]: [
     'waiting_accept',
@@ -84,27 +78,6 @@ const ACTION_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
     'waiting_finance_export',
     'waiting_edit',
     'waiting_close_project',
-  ],
-};
-
-const URGENT_TABS: OwnProjectTab[] = ['urgent', 'very_urgent', 'super_urgent'];
-
-const ROLE_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
-  [UserRole.GENERAL_STAFF]: [
-    ...ACTION_TAB_UNION[UserRole.GENERAL_STAFF],
-    ...URGENT_TABS,
-  ],
-  [UserRole.HEAD_OF_UNIT]: [
-    ...ACTION_TAB_UNION[UserRole.HEAD_OF_UNIT],
-    ...URGENT_TABS,
-  ],
-  [UserRole.DOCUMENT_STAFF]: [
-    ...ACTION_TAB_UNION[UserRole.DOCUMENT_STAFF],
-    ...URGENT_TABS,
-  ],
-  [UserRole.FINANCE_STAFF]: [
-    ...ACTION_TAB_UNION[UserRole.FINANCE_STAFF],
-    ...URGENT_TABS,
   ],
 };
 
@@ -295,9 +268,10 @@ const roleTabWhere = (
   scope: RoleScope,
   tab: OwnProjectTab
 ): Prisma.ProjectWhereInput | null => {
-  const urgentStatus = URGENT_TAB[tab];
-  if (urgentStatus) {
-    return andWhere(roleAllTabWhere(scope), { is_urgent: urgentStatus });
+  if (tab === 'urgent') {
+    return andWhere(roleAllTabWhere(scope), {
+      is_urgent: { not: UrgentType.NORMAL },
+    });
   }
 
   if (tab === 'all') {
@@ -459,9 +433,8 @@ const broadAccessWhere = (
     return null;
   }
 
-  const urgentStatus = URGENT_TAB[tab];
-  if (urgentStatus) {
-    return { is_urgent: urgentStatus };
+  if (tab === 'urgent') {
+    return { is_urgent: { not: UrgentType.NORMAL } };
   }
 
   return tab === 'all' ? {} : null;
@@ -520,13 +493,13 @@ const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
 
   const roleTabs = user.roles
     .filter((r) => r.dept_id === OPS_DEPT_ID)
-    .flatMap((r) => ROLE_TAB_UNION[r.role as OwnRole] ?? []);
+    .flatMap((r) => ACTION_TAB_UNION[r.role as OwnRole] ?? []);
 
   if (roleTabs.length === 0) {
     return [];
   }
 
-  return ['all', ...unique(roleTabs)];
+  return ['all', ...unique(roleTabs), 'urgent'];
 };
 
 export const getOwnProjectsTotal = async (

@@ -18,8 +18,6 @@ export const OwnProjectTabEnum = z.enum([
   'waiting_signature',
   'waiting_others',
   'urgent',
-  'very_urgent',
-  'super_urgent',
   'waiting_finance_export',
   'waiting_close_project',
   'waiting_edit',

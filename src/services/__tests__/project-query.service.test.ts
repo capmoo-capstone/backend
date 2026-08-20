@@ -301,10 +301,12 @@ describe('project-query.service', () => {
     it('preserves broad urgency filtering for super/supply head users', async () => {
       mockOwnProjectPage();
 
-      await getOwnProjects(supplyUser, 1, 10, 'super_urgent');
+      await getOwnProjects(supplyUser, 1, 10, 'urgent');
 
       expect(ownProjectWhere()).toEqual({
-        is_urgent: UrgentType.SUPER_URGENT,
+        is_urgent: {
+          not: UrgentType.NORMAL,
+        },
       });
     });
 
@@ -550,7 +552,7 @@ describe('project-query.service', () => {
 
       expect(ownProjectWhere().OR).toHaveLength(2);
       expect(ownProjectWhereJson()).toContain(
-        `"is_urgent":"${UrgentType.URGENT}"`
+        `"is_urgent":{"not":"${UrgentType.NORMAL}"}`
       );
       expect(ownProjectWhereJson()).toContain(
         '"assignee_procurement":{"some":{"id":"staff-1"}}'
@@ -614,7 +616,7 @@ describe('project-query.service', () => {
       await getOwnProjects(financeUser, 1, 10, 'urgent');
       expect(ownProjectWhere().AND).toBeDefined();
       expect(ownProjectWhereJson()).toContain(
-        `"is_urgent":"${UrgentType.URGENT}"`
+        `"is_urgent":{"not":"${UrgentType.NORMAL}"}`
       );
       expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.WAITING_CLOSE}"`
@@ -644,8 +646,6 @@ describe('project-query.service', () => {
           waiting_edit: 3,
           waiting_close_project: 3,
           urgent: 3,
-          very_urgent: 3,
-          super_urgent: 3,
         });
       });
 
