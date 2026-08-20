@@ -104,7 +104,7 @@ const validateInstallmentNo = (
 type ProjectForUpdate = Pick<
   Project,
   | 'id'
-  | 'budget'
+  | 'actual_cost'
   | 'pr_no'
   | 'po_no'
   | 'less_no'
@@ -422,7 +422,7 @@ export const createStaffSubmissionsProject = async (
       select: {
         id: true,
         current_workflow_type: true,
-        budget: true,
+        actual_cost: true,
         pr_no: true,
         po_no: true,
         less_no: true,
@@ -839,7 +839,7 @@ export const signAndCompleteSubmission = async (
         where: { id: updated.project_id },
         select: {
           id: true,
-          budget: true,
+          actual_cost: true,
           pr_no: true,
           po_no: true,
           less_no: true,

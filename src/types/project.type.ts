@@ -51,7 +51,8 @@ export interface ProjectDetailResponse {
   is_urgent: UrgentType;
   title: string;
   description: string | null;
-  budget: Decimal;
+  budget: Decimal | null;
+  actual_cost: Decimal | null;
   status: ProjectStatus;
   installment_rounds: number;
   procurement_progress: ProjectPhaseProgress;
