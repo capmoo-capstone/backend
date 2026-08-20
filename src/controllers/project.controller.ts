@@ -554,13 +554,3 @@ export const getDocumentSummary = async (
   const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
   res.status(200).json(data);
 };
-
-export const getExpectedApprovalDates = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  // #swagger.tags = ['Project']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const data = await ProjectQueryService.getExpectedApprovalDates(req.user!);
-  res.status(200).json(data);
-};
