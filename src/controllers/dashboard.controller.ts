@@ -176,8 +176,13 @@ export const getIndividualStaffTodo = async (
 ) => {
   // #swagger.tags = ['Dashboard']
   // #swagger.security = [{ bearerAuth: [] }]
+  const { page, limit } = req.query;
   const query = IndividualTodoQuerySchema.parse(req.query);
-  const data = await DashboardService.getIndividualStaffTodo(query);
+  const data = await DashboardService.getIndividualStaffTodo(
+    parseInt(page as string) || 1,
+    parseInt(limit as string) || 10,
+    query
+  );
   res.status(200).json(data);
 };
 
