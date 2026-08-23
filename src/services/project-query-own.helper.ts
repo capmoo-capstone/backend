@@ -679,6 +679,10 @@ export const getOwnProjects = async (
     expected_approval_date: project.expected_approval_date,
     requesting_dept: project.requesting_dept,
     requesting_unit: project.requesting_unit,
+    assignee:
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+        ? project.assignee_contract
+        : project.assignee_procurement,
   }));
 
   return {

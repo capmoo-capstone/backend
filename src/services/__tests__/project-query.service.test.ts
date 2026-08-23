@@ -321,6 +321,32 @@ describe('project-query.service', () => {
         AND: [expect.any(Object), { status: ProjectStatus.WAITING_ACCEPT }],
       });
       expect(result.data[0].status).toBe('WAITING_ACCEPT');
+      expect((result.data[0] as any).assignee).toEqual([
+        { id: 'staff-1', full_name: 'Staff One' },
+      ]);
+    });
+
+    it('maps contract assignee when current_workflow_type is CONTRACT', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      prismaMock.project.findMany.mockResolvedValue([
+        {
+          ...projectRow,
+          current_workflow_type: UnitResponsibleType.CONTRACT,
+          assignee_procurement: [{ id: 'staff-1', full_name: 'Staff One' }],
+          assignee_contract: [{ id: 'contract-staff-1', full_name: 'Contract Staff' }],
+        },
+      ]);
+      prismaMock.project.count.mockResolvedValue(1);
+
+      const result = await getOwnProjects(staffUser, 1, 10, {
+        tab: OwnProjectTab.ALL,
+      });
+
+      expect((result.data[0] as any).assignee).toEqual([
+        { id: 'contract-staff-1', full_name: 'Contract Staff' },
+      ]);
     });
 
     it('filters general staff need_action to active work or completed procurement handoff', async () => {
