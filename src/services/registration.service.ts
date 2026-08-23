@@ -22,6 +22,7 @@ import {
   PaginatedRegistrationRequest,
   RegistrationRequestItem,
 } from '../types/registration.type';
+import * as NotificationEmailService from './notification/notification-email.service';
 
 const safeUserSelect = {
   id: true,
@@ -105,10 +106,24 @@ const assertRegistrationUnitScopes = async (
   }
 };
 
+const safeSendRegistrationEmail = async (
+  send: () => Promise<void>,
+  context: string
+) => {
+  try {
+    await send();
+  } catch (error) {
+    console.error(
+      `${context} failed:`,
+      error instanceof Error ? error.message : 'Unknown email error'
+    );
+  }
+};
+
 export const createRegistrationRequest = async (
   data: CreateRegistrationRequestDto
 ): Promise<RegistrationRequest> => {
-  return await prisma.$transaction(async (tx) => {
+  const request = await prisma.$transaction(async (tx) => {
     await lockRegistrationIdentity(tx, data.username, data.email);
     await assertRegistrationUnitScopes(tx, data.dept_id, data.unit_id);
     await assertNoExistingUser(tx, data.username, data.email);
@@ -127,7 +142,7 @@ export const createRegistrationRequest = async (
       );
     }
 
-    const request = await tx.registrationRequest.create({
+    const requestRow = await tx.registrationRequest.create({
       data: {
         username: data.username,
         email: data.email!,
@@ -142,8 +157,8 @@ export const createRegistrationRequest = async (
       kind: AuditLogType.USER_MANAGEMENT,
       eventType: AuditEventType.REGISTRATION_REQUESTED,
       targetType: AuditTargetType.REGISTRATION_REQUEST,
-      targetId: request.id,
-      targetSnapshot: requestTargetSnapshot(request, data.unit_id),
+      targetId: requestRow.id,
+      targetSnapshot: requestTargetSnapshot(requestRow, data.unit_id),
       diff: [
         {
           field: 'status',
@@ -152,17 +167,28 @@ export const createRegistrationRequest = async (
         },
       ],
       metadata: {
-        username: request.username,
-        email: request.email,
-        registerTypes: request.register_type,
+        username: requestRow.username,
+        email: requestRow.email,
+        registerTypes: requestRow.register_type,
       },
       sourceTable: 'registration_requests',
-      sourceId: request.id,
-      occurredAt: request.created_at,
+      sourceId: requestRow.id,
+      occurredAt: requestRow.created_at,
     });
 
-    return request;
+    return requestRow;
   });
+
+  await safeSendRegistrationEmail(
+    () =>
+      NotificationEmailService.sendRegistrationPendingEmail({
+        fullName: request.full_name,
+        email: request.email,
+      }),
+    'Registration pending email'
+  );
+
+  return request;
 };
 
 export const listRegistrationRequests = async (
@@ -210,7 +236,7 @@ export const listRegistrationRequests = async (
   ]);
 
   const requestedUnitIds = [
-    ...new Set(data.flatMap((request) => request.unit_id)),
+    ...new Set(data.flatMap((requestRow) => requestRow.unit_id)),
   ];
   const units =
     requestedUnitIds.length === 0
@@ -220,9 +246,9 @@ export const listRegistrationRequests = async (
           select: { id: true, name: true },
         });
   const unitsById = new Map(units.map((unit) => [unit.id, unit]));
-  const items: RegistrationRequestItem[] = data.map((request) => ({
-    ...request,
-    units: request.unit_id.flatMap((unitId) => {
+  const items: RegistrationRequestItem[] = data.map((requestRow) => ({
+    ...requestRow,
+    units: requestRow.unit_id.flatMap((unitId) => {
       const unit = unitsById.get(unitId);
       return unit ? [unit] : [];
     }),
@@ -241,7 +267,7 @@ export const approveRegistrationRequest = async (
   actor: AuthPayload,
   requestId: string
 ) => {
-  return await prisma.$transaction(async (tx) => {
+  const user = await prisma.$transaction(async (tx) => {
     const request = await tx.registrationRequest.findUnique({
       where: { id: requestId },
     });
@@ -264,7 +290,7 @@ export const approveRegistrationRequest = async (
     await assertRegistrationUnitScopes(tx, request.dept_id, request.unit_id);
     await assertNoExistingUser(tx, request.username, request.email);
 
-    const user = await tx.user.create({
+    const createdUser = await tx.user.create({
       data: {
         username: request.username,
         email: request.email,
@@ -288,7 +314,7 @@ export const approveRegistrationRequest = async (
         status: RegistrationStatus.APPROVED,
         reviewed_by: actor.id,
         reviewed_at: nowUtc(),
-        created_user_id: user.id,
+        created_user_id: createdUser.id,
       },
     });
 
@@ -305,10 +331,10 @@ export const approveRegistrationRequest = async (
           oldValue: RegistrationStatus.PENDING,
           newValue: RegistrationStatus.APPROVED,
         },
-        { field: 'created_user_id', oldValue: null, newValue: user.id },
+        { field: 'created_user_id', oldValue: null, newValue: createdUser.id },
       ],
       metadata: {
-        createdUserId: user.id,
+        createdUserId: createdUser.id,
         registerTypes: request.register_type,
       },
       sourceTable: 'registration_requests',
@@ -316,8 +342,21 @@ export const approveRegistrationRequest = async (
       occurredAt: approved.reviewed_at ?? nowUtc(),
     });
 
-    return user;
+    return createdUser;
   });
+
+  if (user.email) {
+    await safeSendRegistrationEmail(
+      () =>
+        NotificationEmailService.sendRegistrationApprovedEmail({
+          fullName: user.full_name,
+          email: user.email,
+        }),
+      'Registration approved email'
+    );
+  }
+
+  return user;
 };
 
 export const rejectRegistrationRequest = async (
