@@ -720,4 +720,3 @@ export const markAllNotificationsRead = async (user: AuthPayload) => {
 };
 
 export { getNotificationKind };
-

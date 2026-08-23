@@ -9,5 +9,6 @@ router.get(
   protectCron,
   controller.processDeadlineNotifications
 );
+router.get('/send-test-email', protectCron, controller.sendTestEmail);
 
 export default router;
