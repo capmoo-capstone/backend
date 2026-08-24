@@ -108,11 +108,6 @@ export const ProcurementOverviewQuerySchema = z
     }
   });
 
-export const DeadlinesQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
-});
-
 export const UnitGroupQuerySchema = z
   .object({
     unitId: z.string(),
@@ -177,7 +172,6 @@ export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<
   typeof ProcurementOverviewQuerySchema
 >;
-export type DeadlinesQuery = z.infer<typeof DeadlinesQuerySchema>;
 export type UnitGroupQuery = z.infer<typeof UnitGroupQuerySchema>;
 export type UnitGroupTopDelayedQuery = z.infer<
   typeof UnitGroupTopDelayedQuerySchema
