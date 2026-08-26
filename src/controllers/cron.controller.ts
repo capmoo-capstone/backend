@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import * as NotificationService from '../services/notification/notification.service';
+import { sendContractCommitteeReminders } from '../services/notification/contract-committee-reminder.service';
 import {
   sendDailySummaryEmailsToOpsUsers,
   sendHelloTestEmail,
@@ -57,10 +58,7 @@ export const sendVendorPoEmail = async (req: Request, res: Response) => {
   });
 };
 
-export const sendDailySummaryEmail = async (
-  _req: Request,
-  res: Response
-) => {
+export const sendDailySummaryEmail = async (_req: Request, res: Response) => {
   // #swagger.tags = ['Cron']
   // #swagger.security = [{ bearerAuth: [] }]
   const result = await sendDailySummaryEmailsToOpsUsers();
@@ -72,3 +70,19 @@ export const sendDailySummaryEmail = async (
   });
 };
 
+export const sendContractCommitteeReminderEmail = async (
+  _req: Request,
+  res: Response
+) => {
+  // #swagger.tags = ['Cron']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const result = await sendContractCommitteeReminders();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Contract committee reminder emails sent',
+    matchedSubmissionCount: result.matchedSubmissionCount,
+    recipientCount: result.recipientCount,
+    deliveryCount: result.deliveryCount,
+  });
+};

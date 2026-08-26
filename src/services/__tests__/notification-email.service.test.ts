@@ -2,7 +2,9 @@ import { NotificationDeliveryStatus } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock } from '../../test/prisma-mock';
 import {
+  buildContractCommitteeReminderEmail,
   notificationEmailTransport,
+  sendContractCommitteeReminderEmail,
   sendDailySummaryEmailsToOpsUsers,
   sendHelloTestEmail,
   sendRegistrationApprovedEmail,
@@ -27,8 +29,7 @@ describe('notification-email.service', () => {
 
   beforeEach(() => {
     process.env.RESEND_API_KEY = 're_test';
-    process.env.RESEND_FROM = 'NexusProcure <onboarding@resend.dev>';
-    process.env.VENDOR_APP_PUBLIC_URL = 'https://nexus-procure.com';
+    process.env.RESEND_FROM = 'NexusProcure <onboarding@resend.dev>';    process.env.VENDOR_APP_PUBLIC_URL = 'https://nexus-procure.com';
   });
 
   afterEach(() => {
@@ -118,6 +119,43 @@ describe('notification-email.service', () => {
     expect(payload.to).toEqual(['somying@example.com']);
     expect(payload.text).toContain('ขอบคุณสำหรับการลงทะเบียน');
     expect(payload.text).toContain('สมหญิง ใจดี');
+  });
+
+  it('renders the contract committee reminder email with inspection date and remaining days', async () => {
+    const content = buildContractCommitteeReminderEmail({
+      recipientEmail: 'committee@example.com',
+      recipientName: 'กรรมการตัวอย่าง',
+      projectTitle: 'โครงการจัดซื้อครุภัณฑ์',
+      inspectionDate: new Date('2026-08-31T00:00:00.000Z'),
+      remainingDays: 5,
+    });
+
+    expect(content.subject).toBe(
+      'แจ้งเตือนกำหนดตรวจรับอีก 5 วัน - โครงการจัดซื้อครุภัณฑ์'
+    );
+    expect(content.text).toContain('เรียนคุณ กรรมการตัวอย่าง,');
+    expect(content.text).toContain('วันที่ตรวจรับ: 2026-08-31');
+    expect(content.text).toContain('เหลือเวลาอีก 5 วัน');
+  });
+
+  it('sends the contract committee reminder email through Resend', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sendContractCommitteeReminderEmail({
+      recipientEmail: 'committee@example.com',
+      recipientName: 'กรรมการตัวอย่าง',
+      projectTitle: 'โครงการจัดซื้อครุภัณฑ์',
+      inspectionDate: new Date('2026-08-31T00:00:00.000Z'),
+      remainingDays: 5,
+    });
+
+    const payload = getSentPayload(fetchMock);
+    expect(payload.to).toEqual(['committee@example.com']);
+    expect(payload.subject).toBe(
+      'แจ้งเตือนกำหนดตรวจรับอีก 5 วัน - โครงการจัดซื้อครุภัณฑ์'
+    );
+    expect(payload.text).toContain('เหลือเวลาอีก 5 วัน');
   });
 
   it('sends the vendor PO email from project data and includes the vendor form URL', async () => {

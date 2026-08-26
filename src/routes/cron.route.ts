@@ -16,6 +16,10 @@ router.get(
   protectCron,
   controller.sendDailySummaryEmail
 );
+router.get(
+  '/send-contract-committee-reminders',
+  protectCron,
+  controller.sendContractCommitteeReminderEmail
+);
 
 export default router;
-

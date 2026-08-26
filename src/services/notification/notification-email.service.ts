@@ -4,6 +4,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../lib/active-state';
+import { formatBangkokDate } from '../../lib/date';
 import { OPS_DEPT_ID } from '../../lib/constant';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
 
@@ -21,6 +22,14 @@ type EmailRecipient = {
   email: string;
   fullName: string;
 };
+
+export interface ContractCommitteeReminderEmailInput {
+  recipientEmail: string;
+  recipientName?: string | null;
+  projectTitle: string;
+  inspectionDate: Date;
+  remainingDays: number;
+}
 
 export interface EmailDeliveryDraft {
   userId: string;
@@ -138,6 +147,32 @@ const dedupeRecipientsByEmail = <T extends { email: string }>(
   });
 };
 
+export const buildContractCommitteeReminderEmail = (
+  input: ContractCommitteeReminderEmailInput
+) => {
+  const subject = `แจ้งเตือนกำหนดตรวจรับอีก ${input.remainingDays} วัน - ${input.projectTitle}`;
+  const greeting = input.recipientName?.trim()
+    ? `เรียนคุณ ${input.recipientName.trim()},`
+    : 'เรียนกรรมการตรวจรับ,';
+  const inspectionDateLabel = formatBangkokDate(input.inspectionDate);
+  const text = [
+    greeting,
+    '',
+    `ขอแจ้งเตือนกำหนดตรวจรับสำหรับโครงการ ${input.projectTitle}`,
+    `วันที่ตรวจรับ: ${inspectionDateLabel}`,
+    `เหลือเวลาอีก ${input.remainingDays} วัน`,
+    '',
+    'กรุณาเตรียมการตรวจรับและดำเนินการตามขั้นตอนที่เกี่ยวข้องให้เรียบร้อย',
+    '',
+    formatCompanyClosing(),
+  ].join('\n');
+
+  return {
+    subject,
+    text,
+  };
+};
+
 export const sendHelloTestEmail = async (to?: string | null) => {
   await sendPlainTextEmail({
     to: to?.trim() || '',
@@ -241,6 +276,17 @@ export const sendVendorPoRequestEmailForProject = async (projectId: string) => {
     poNumber: project.po_no,
     recipientEmail: project.vendor_email,
   };
+};
+
+export const sendContractCommitteeReminderEmail = async (
+  input: ContractCommitteeReminderEmailInput
+) => {
+  const content = buildContractCommitteeReminderEmail(input);
+  await sendPlainTextEmail({
+    to: input.recipientEmail,
+    subject: content.subject,
+    text: content.text,
+  });
 };
 
 export const sendDailySummaryEmail = async (recipient: EmailRecipient) => {

@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   processDeadlineNotifications,
+  sendContractCommitteeReminderEmail,
   sendDailySummaryEmail,
   sendTestEmail,
   sendVendorPoEmail,
 } from './cron.controller';
 import * as NotificationService from '../services/notification/notification.service';
+import * as ContractCommitteeReminderService from '../services/notification/contract-committee-reminder.service';
 import * as NotificationEmailService from '../services/notification/notification-email.service';
 
 describe('processDeadlineNotifications', () => {
@@ -103,3 +105,32 @@ describe('sendDailySummaryEmail', () => {
   });
 });
 
+describe('sendContractCommitteeReminderEmail', () => {
+  it('runs the contract committee reminder scan and returns delivery counts', async () => {
+    const sendSpy = vi
+      .spyOn(
+        ContractCommitteeReminderService,
+        'sendContractCommitteeReminders'
+      )
+      .mockResolvedValue({
+        matchedSubmissionCount: 1,
+        recipientCount: 2,
+        deliveryCount: 2,
+      });
+
+    const json = vi.fn();
+    const status = vi.fn().mockReturnValue({ json });
+
+    await sendContractCommitteeReminderEmail({} as any, { status } as any);
+
+    expect(sendSpy).toHaveBeenCalledOnce();
+    expect(status).toHaveBeenCalledWith(200);
+    expect(json).toHaveBeenCalledWith({
+      status: 'success',
+      message: 'Contract committee reminder emails sent',
+      matchedSubmissionCount: 1,
+      recipientCount: 2,
+      deliveryCount: 2,
+    });
+  });
+});
