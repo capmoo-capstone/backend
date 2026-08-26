@@ -15,7 +15,6 @@ type ResendEmailPayload = {
   to: string[];
   subject: string;
   text: string;
-  reply_to?: string;
 };
 
 type EmailRecipient = {
@@ -46,20 +45,18 @@ export interface NotificationEmailTransport {
 const getResendConfig = () => ({
   apiKey: process.env.RESEND_API_KEY?.trim() || '',
   from: process.env.RESEND_FROM?.trim() || '',
-  replyTo: process.env.RESEND_REPLY_TO?.trim() || '',
-  testTo: process.env.RESEND_TEST_TO?.trim() || '',
-  appPublicUrl: process.env.APP_PUBLIC_URL?.trim() || '',
+  vendorAppPublicUrl: process.env.VENDOR_APP_PUBLIC_URL?.trim() || '',
 });
 
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 
 const getAppPublicUrl = () => {
-  const { appPublicUrl } = getResendConfig();
-  if (!appPublicUrl) {
-    throw new Error('APP_PUBLIC_URL is not configured');
+  const { vendorAppPublicUrl } = getResendConfig();
+  if (!vendorAppPublicUrl) {
+    throw new Error('VENDOR_APP_PUBLIC_URL is not configured');
   }
 
-  return normalizeUrl(appPublicUrl);
+  return normalizeUrl(vendorAppPublicUrl);
 };
 
 const buildLoginUrl = () => `${getAppPublicUrl()}/login`;
@@ -100,7 +97,7 @@ const sendPlainTextEmail = async (payload: {
   subject: string;
   text: string;
 }) => {
-  const { apiKey, from, replyTo } = getResendConfig();
+  const { apiKey, from } = getResendConfig();
   if (!apiKey) {
     throw new Error('RESEND_API_KEY is not configured');
   }
@@ -119,7 +116,6 @@ const sendPlainTextEmail = async (payload: {
     to: [recipient],
     subject: payload.subject,
     text: payload.text,
-    ...(replyTo ? { reply_to: replyTo } : {}),
   });
 };
 
@@ -143,11 +139,8 @@ const dedupeRecipientsByEmail = <T extends { email: string }>(
 };
 
 export const sendHelloTestEmail = async (to?: string | null) => {
-  const { testTo } = getResendConfig();
-  const recipient = to?.trim() || testTo;
-
   await sendPlainTextEmail({
-    to: recipient,
+    to: to?.trim() || '',
     subject: 'NexusProcure test email',
     text: 'hello test email',
   });

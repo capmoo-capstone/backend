@@ -23,16 +23,12 @@ const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>) => {
 describe('notification-email.service', () => {
   const originalApiKey = process.env.RESEND_API_KEY;
   const originalFrom = process.env.RESEND_FROM;
-  const originalReplyTo = process.env.RESEND_REPLY_TO;
-  const originalTestTo = process.env.RESEND_TEST_TO;
-  const originalAppPublicUrl = process.env.APP_PUBLIC_URL;
+  const originalVendorAppPublicUrl = process.env.VENDOR_APP_PUBLIC_URL;
 
   beforeEach(() => {
     process.env.RESEND_API_KEY = 're_test';
     process.env.RESEND_FROM = 'NexusProcure <onboarding@resend.dev>';
-    process.env.RESEND_REPLY_TO = '';
-    process.env.RESEND_TEST_TO = 'fallback@example.com';
-    process.env.APP_PUBLIC_URL = 'https://nexus-procure.com';
+    process.env.VENDOR_APP_PUBLIC_URL = 'https://nexus-procure.com';
   });
 
   afterEach(() => {
@@ -48,22 +44,10 @@ describe('notification-email.service', () => {
       process.env.RESEND_FROM = originalFrom;
     }
 
-    if (originalReplyTo === undefined) {
-      delete process.env.RESEND_REPLY_TO;
+    if (originalVendorAppPublicUrl === undefined) {
+      delete process.env.VENDOR_APP_PUBLIC_URL;
     } else {
-      process.env.RESEND_REPLY_TO = originalReplyTo;
-    }
-
-    if (originalTestTo === undefined) {
-      delete process.env.RESEND_TEST_TO;
-    } else {
-      process.env.RESEND_TEST_TO = originalTestTo;
-    }
-
-    if (originalAppPublicUrl === undefined) {
-      delete process.env.APP_PUBLIC_URL;
-    } else {
-      process.env.APP_PUBLIC_URL = originalAppPublicUrl;
+      process.env.VENDOR_APP_PUBLIC_URL = originalVendorAppPublicUrl;
     }
 
     vi.unstubAllGlobals();
@@ -94,18 +78,10 @@ describe('notification-email.service', () => {
     });
   });
 
-  it('uses RESEND_TEST_TO when no explicit recipient is provided', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
-    await sendHelloTestEmail();
-
-    expect(getSentPayload(fetchMock)).toEqual({
-      from: 'NexusProcure <onboarding@resend.dev>',
-      to: ['fallback@example.com'],
-      subject: 'NexusProcure test email',
-      text: 'hello test email',
-    });
+  it('requires an explicit recipient for test email', async () => {
+    await expect(sendHelloTestEmail()).rejects.toThrow(
+      'A recipient email is required'
+    );
   });
 
   it('renders the approved registration email with the login URL', async () => {

@@ -38,7 +38,7 @@ export const sendTestEmail = async (req: Request, res: Response) => {
   res.status(200).json({
     status: 'success',
     message: 'Test email sent',
-    to: to ?? process.env.RESEND_TEST_TO ?? null,
+    to: to ?? null,
   });
 };
 
