@@ -25,11 +25,14 @@ const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>) => {
 describe('notification-email.service', () => {
   const originalApiKey = process.env.RESEND_API_KEY;
   const originalFrom = process.env.RESEND_FROM;
+  const originalAppPublicUrl = process.env.APP_PUBLIC_URL;
   const originalVendorAppPublicUrl = process.env.VENDOR_APP_PUBLIC_URL;
 
   beforeEach(() => {
     process.env.RESEND_API_KEY = 're_test';
-    process.env.RESEND_FROM = 'NexusProcure <onboarding@resend.dev>';    process.env.VENDOR_APP_PUBLIC_URL = 'https://nexus-procure.com';
+    process.env.RESEND_FROM = 'NexusProcure <onboarding@resend.dev>';
+    process.env.APP_PUBLIC_URL = 'https://nexus-procure.com';
+    process.env.VENDOR_APP_PUBLIC_URL = 'https://vendor.nexus-procure.com';
   });
 
   afterEach(() => {
@@ -43,6 +46,12 @@ describe('notification-email.service', () => {
       delete process.env.RESEND_FROM;
     } else {
       process.env.RESEND_FROM = originalFrom;
+    }
+
+    if (originalAppPublicUrl === undefined) {
+      delete process.env.APP_PUBLIC_URL;
+    } else {
+      process.env.APP_PUBLIC_URL = originalAppPublicUrl;
     }
 
     if (originalVendorAppPublicUrl === undefined) {
@@ -273,4 +282,3 @@ describe('notification-email.service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
-
