@@ -1,4 +1,4 @@
-﻿import {
+import {
   NotificationChannel,
   NotificationDeliveryStatus,
   Prisma,

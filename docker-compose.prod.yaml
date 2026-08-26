@@ -46,6 +46,8 @@ services:
       REDIS_TLS_SERVERNAME: ${REDIS_TLS_SERVERNAME}
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_FROM: ${RESEND_FROM}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
+      VENDOR_APP_PUBLIC_URL: ${VENDOR_APP_PUBLIC_URL}
     depends_on:
       db:
         condition: service_healthy
