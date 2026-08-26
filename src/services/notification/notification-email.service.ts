@@ -54,12 +54,22 @@ export interface NotificationEmailTransport {
 const getResendConfig = () => ({
   apiKey: process.env.RESEND_API_KEY?.trim() || '',
   from: process.env.RESEND_FROM?.trim() || '',
+  appPublicUrl: process.env.APP_PUBLIC_URL?.trim() || '',
   vendorAppPublicUrl: process.env.VENDOR_APP_PUBLIC_URL?.trim() || '',
 });
 
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 
 const getAppPublicUrl = () => {
+  const { appPublicUrl } = getResendConfig();
+  if (!appPublicUrl) {
+    throw new Error('APP_PUBLIC_URL is not configured');
+  }
+
+  return normalizeUrl(appPublicUrl);
+};
+
+const getVendorAppPublicUrl = () => {
   const { vendorAppPublicUrl } = getResendConfig();
   if (!vendorAppPublicUrl) {
     throw new Error('VENDOR_APP_PUBLIC_URL is not configured');
@@ -69,7 +79,7 @@ const getAppPublicUrl = () => {
 };
 
 const buildLoginUrl = () => `${getAppPublicUrl()}/login`;
-const buildVendorFormUrl = () => `${getAppPublicUrl()}/vendor-form`;
+const buildVendorFormUrl = () => `${getVendorAppPublicUrl()}/vendor-form`;
 
 const sendResendEmail = async (payload: ResendEmailPayload) => {
   const { apiKey } = getResendConfig();
