@@ -11,8 +11,6 @@ import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
 import * as DashboardService from '../dashboard/dashboard.service';
 import {
-  getDueSoonDeadlines,
-  getOverdueDeadlines,
   getPeriodicSummary,
   getProcurementOverview,
 } from '../dashboard/dashboard.service';
@@ -323,80 +321,6 @@ describe('dashboard.service', () => {
     expect(prismaMock.project.count.mock.calls[0][0].where).not.toMatchObject({
       requesting_dept_id: expect.anything(),
     });
-  });
-
-  it('returns sorted deadline pages with computed priority levels', async () => {
-    vi.setSystemTime(new Date('2026-07-12T05:00:00.000Z'));
-    prismaMock.holiday.findMany.mockResolvedValue([]);
-    prismaMock.project.findMany
-      .mockResolvedValueOnce([
-        {
-          id: 'late-1',
-          title: 'Very late',
-          expected_approval_date: new Date('2026-06-30T17:00:00.000Z'),
-        },
-        {
-          id: 'late-2',
-          title: 'Late',
-          expected_approval_date: new Date('2026-07-09T17:00:00.000Z'),
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: 'soon-1',
-          title: 'Urgent',
-          expected_approval_date: new Date('2026-07-14T17:00:00.000Z'),
-        },
-        {
-          id: 'soon-2',
-          title: 'Watch',
-          expected_approval_date: new Date('2026-07-16T17:00:00.000Z'),
-        },
-        {
-          id: 'soon-3',
-          title: 'Normal',
-          expected_approval_date: new Date('2026-07-18T17:00:00.000Z'),
-        },
-      ]);
-    prismaMock.project.count.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
-
-    const overdue = await getOverdueDeadlines(staffUser, 1, 10);
-    const dueSoon = await getDueSoonDeadlines(staffUser, 1, 10);
-
-    expect(overdue.data.map((row) => row.daysLate)).toEqual([7, 0]);
-    expect(dueSoon.data.map((row) => row.priority)).toEqual([
-      'URGENT',
-      'WATCH',
-      'WATCH',
-    ]);
-    expect(dueSoon.data.map((row) => row.daysRemaining)).toEqual([3, 5, 5]);
-    expect(prismaMock.project.findMany.mock.calls[0][0]).toMatchObject({
-      where: expect.objectContaining({
-        AND: expect.arrayContaining([
-          expect.objectContaining({
-            current_workflow_type: {
-              in: [
-                'LT100K',
-                'LT500K',
-                'MT500K',
-                'SELECTION',
-                'EBIDDING',
-                'INTERNAL',
-              ],
-            },
-          }),
-        ]),
-      }),
-      orderBy: { expected_approval_date: 'asc' },
-      skip: 0,
-      take: 10,
-    });
-  });
-
-  it('rejects deadline access for non-supply users', async () => {
-    await expect(getOverdueDeadlines(externalUser, 1, 10)).rejects.toThrowError(
-      'You do not have permission to view deadlines'
-    );
   });
 
   describe('Unit Group KPI Dashboard', () => {

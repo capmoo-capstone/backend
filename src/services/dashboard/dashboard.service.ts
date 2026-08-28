@@ -10,8 +10,6 @@ import {
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
-  DueSoonProjectRow,
-  OverdueProjectRow,
   PeriodicSummaryResponse,
   ProcurementOverviewResponse,
   UnitGroupExecutiveSummaryResponse,
@@ -22,7 +20,6 @@ import {
   ContractUnitSummaryResponse,
   IndividualDashboardResponse,
 } from '../../types/dashboard.type';
-import { PaginatedResponse } from '../../types/common.type';
 import { PaginatedProjects } from '../../types/project.type';
 import * as overviewHelper from './overview-dashboard.helper';
 import * as kpiHelper from './kpi-dashboard.helper';
@@ -39,20 +36,6 @@ export const getProcurementOverview = (
   query: ProcurementOverviewQuery
 ): Promise<ProcurementOverviewResponse> =>
   overviewHelper.getProcurementOverview(user, query);
-
-export const getOverdueDeadlines = (
-  user: AuthPayload,
-  page: number,
-  limit: number
-): Promise<PaginatedResponse<OverdueProjectRow>> =>
-  overviewHelper.getOverdueDeadlines(user, page, limit);
-
-export const getDueSoonDeadlines = (
-  user: AuthPayload,
-  page: number,
-  limit: number
-): Promise<PaginatedResponse<DueSoonProjectRow>> =>
-  overviewHelper.getDueSoonDeadlines(user, page, limit);
 
 export const getUnitGroupExecutiveSummary = (
   user: AuthPayload,

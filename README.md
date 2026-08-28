@@ -227,8 +227,6 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 | ------ | --------------------------------- | ---------------------------------------- |
 | GET    | `/periodic-summary`               | Get periodic project statistics summary  |
 | GET    | `/procurement-overview`           | Get overall procurement status summary   |
-| GET    | `/deadlines/overdue`              | Get list of overdue project deadlines    |
-| GET    | `/deadlines/due-soon`             | Get list of project deadlines due soon   |
 | GET    | `/unit-group/executive-summary`   | Get unit group executive summary metrics |
 | GET    | `/unit-group/procurement-metrics` | Get unit group procurement metrics       |
 | GET    | `/unit-group/procurement-details` | Get unit group procurement details       |
@@ -344,9 +342,8 @@ The dashboard uses the same `holiday.service.ts` functions as the delivery-date 
 | Executive summary    | Longest procurement method, average duration, and workload-duration timeline use project working-day durations. A closed project's endpoint is its `STATUS_UPDATE` history record that changed status to `CLOSED`, rather than its mutable `updated_at`; legacy records without that history fall back to `updated_at`. The completion timestamp is used only while the current project status is still `CLOSED`.                                                                                                                                                                                                                        |
 | Procurement details  | Average completed procurement and contract phase durations use working days; the delayed-rate trend compares the current range with the prior range. No completed phase returns `0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Top delayed projects | `totalDays` is elapsed working time. The non-overlapping chart stages are assignment, procurement, contract, approval, and finance. Finance starts when the contract is completed and ends when the project closes (or today for an active project). Procurement and contract days exclude their approval intervals, so `assignmentDays + procurementDays + contractDays + approvalDays + financeDays` equals `totalDays`. Approval time runs from submission to completion; rejected submissions end at the rejection decision, unresolved submissions run through today, and direct completions with no approval event contribute `0`. |
-| Deadline lists       | `daysLate`, `daysRemaining`, and the urgent/watch priority use working days. The due-soon window covers the next seven working days.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-Calendar-day arithmetic remains only where a calendar range is required, such as building daily/monthly chart buckets and comparing completion timestamps to a deadline.
+Calendar-day arithmetic remains only where a calendar range is required, such as building daily/monthly chart buckets and comparing completion timestamps to an expected approval target.
 
 ### Default Delivery Date
 

@@ -36,38 +36,6 @@ export const getProcurementOverview = async (
   res.status(200).json(data);
 };
 
-export const getOverdueDeadlines = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  // #swagger.tags = ['Dashboard']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const payload = req.user!;
-  const { page, limit } = req.query;
-  const data = await DashboardService.getOverdueDeadlines(
-    payload,
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
-  );
-  res.status(200).json(data);
-};
-
-export const getDueSoonDeadlines = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
-  // #swagger.tags = ['Dashboard']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const payload = req.user!;
-  const { page, limit } = req.query;
-  const data = await DashboardService.getDueSoonDeadlines(
-    payload,
-    parseInt(page as string) || 1,
-    parseInt(limit as string) || 10
-  );
-  res.status(200).json(data);
-};
-
 export const getUnitGroupExecutiveSummary = async (
   req: AuthenticatedRequest,
   res: Response

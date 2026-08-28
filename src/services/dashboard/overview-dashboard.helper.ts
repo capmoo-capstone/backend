@@ -1,24 +1,12 @@
-import {
-  Prisma,
-  ProjectActionType,
-  ProjectStatus,
-  UserRole,
-} from '@prisma/client';
+import { Prisma, ProjectActionType, ProjectStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import {
   IN_PROGRESS_STATUSES,
   PROCUREMENT_WORKFLOW_TYPES,
 } from '../../lib/constant';
 import { hasOrganizationWideReadAccess } from '../../lib/access-policy';
-import { ForbiddenError } from '../../lib/errors';
+import { getDeptIdsForUser, haveSupplyPermission } from '../../lib/permissions';
 import {
-  getDeptIdsForUser,
-  haveSupplyPermission,
-  isSuperAdmin,
-} from '../../lib/permissions';
-import {
-  addBangkokDays,
-  bangkokDayEndUtc,
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
@@ -31,19 +19,10 @@ import {
 import { AuthPayload } from '../../types/auth.type';
 import {
   DashboardStatusPoint,
-  DeadlinePriority,
-  DueSoonProjectRow,
-  OverdueProjectRow,
   PeriodicSummaryResponse,
   ProcurementOverviewResponse,
   ProcurementPlanSummary,
 } from '../../types/dashboard.type';
-import { PaginatedResponse } from '../../types/common.type';
-import {
-  addBangkokWorkingDays,
-  countBangkokWorkingDays,
-  getBangkokWorkingDayHolidayIndex,
-} from '../holiday.service';
 import {
   DateRange,
   daysBetweenBangkokDates,
@@ -62,7 +41,6 @@ export const getPeriodicRanges = (
   const previous = getPreviousRange(current, query.mode);
   return { current, previous };
 };
-
 export const getOverviewRange = (
   query: ProcurementOverviewQuery
 ): { range: DateRange } => {
@@ -148,7 +126,6 @@ export const getPeriodicSummary = async (
     pendingWork: toComparison(currentPending, previousPending),
   };
 };
-
 const statusWhere = (
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange,
@@ -463,161 +440,5 @@ export const getProcurementOverview = async (
     statusBar,
     budgetInvestment,
     timeline,
-  };
-};
-
-const canViewDeadlines = (user: AuthPayload): boolean => {
-  if (isSuperAdmin(user)) return true;
-  if (!haveSupplyPermission(user)) return false;
-  return user.roles.some(
-    (role) =>
-      role.role === UserRole.GENERAL_STAFF ||
-      role.role === UserRole.HEAD_OF_UNIT ||
-      role.role === UserRole.HEAD_OF_DEPARTMENT
-  );
-};
-
-const dueSoonPriority = (daysRemaining: number): DeadlinePriority => {
-  if (daysRemaining <= 3) return 'URGENT';
-  if (daysRemaining <= 5) return 'WATCH';
-  return 'NORMAL';
-};
-
-export const getOverdueDeadlines = async (
-  user: AuthPayload,
-  page: number,
-  limit: number
-): Promise<PaginatedResponse<OverdueProjectRow>> => {
-  if (!canViewDeadlines(user)) {
-    throw new ForbiddenError('You do not have permission to view deadlines');
-  }
-
-  const now = nowUtc();
-  const today = (() => {
-    const parts = toBangkokParts(now);
-    return fromBangkokDate(parts.year, parts.month, parts.day);
-  })();
-  const skip = (page - 1) * limit;
-  const visibilityWhere = buildVisibilityWhere(user);
-  const activeWhere: Prisma.ProjectWhereInput = {
-    current_workflow_type: {
-      in: PROCUREMENT_WORKFLOW_TYPES,
-    },
-    expected_approval_date: { not: null },
-  };
-
-  const overdueWhere = andWhere(visibilityWhere, activeWhere, {
-    expected_approval_date: { lt: today },
-  });
-
-  const [projects, total] = await prisma.$transaction([
-    prisma.project.findMany({
-      where: overdueWhere,
-      skip,
-      take: limit,
-      orderBy: { expected_approval_date: 'asc' },
-      select: {
-        id: true,
-        title: true,
-        expected_approval_date: true,
-      },
-    }),
-    prisma.project.count({ where: overdueWhere }),
-  ]);
-
-  const holidayIndex = await getBangkokWorkingDayHolidayIndex(
-    projects.map((project) => ({
-      from: project.expected_approval_date!,
-      to: today,
-    }))
-  );
-
-  const rows: OverdueProjectRow[] = projects.map((project) => ({
-    projectId: project.id,
-    title: project.title,
-    dueDate: project.expected_approval_date!,
-    daysLate: countBangkokWorkingDays(
-      project.expected_approval_date!,
-      today,
-      holidayIndex
-    ),
-  }));
-
-  return {
-    total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
-    data: rows,
-  };
-};
-
-export const getDueSoonDeadlines = async (
-  user: AuthPayload,
-  page: number,
-  limit: number
-): Promise<PaginatedResponse<DueSoonProjectRow>> => {
-  if (!canViewDeadlines(user)) {
-    throw new ForbiddenError('You do not have permission to view deadlines');
-  }
-
-  const now = nowUtc();
-  const today = (() => {
-    const parts = toBangkokParts(now);
-    return fromBangkokDate(parts.year, parts.month, parts.day);
-  })();
-  const workingDaySearchEnd = addBangkokDays(today, 31, true);
-  const holidayIndex = await getBangkokWorkingDayHolidayIndex([
-    { from: today, to: workingDaySearchEnd },
-  ]);
-  const dueSoonEnd = bangkokDayEndUtc(
-    addBangkokWorkingDays(today, 7, holidayIndex)
-  );
-  const skip = (page - 1) * limit;
-  const visibilityWhere = buildVisibilityWhere(user);
-  const activeWhere: Prisma.ProjectWhereInput = {
-    current_workflow_type: {
-      in: PROCUREMENT_WORKFLOW_TYPES,
-    },
-    expected_approval_date: { not: null },
-  };
-
-  const dueSoonWhere = andWhere(visibilityWhere, activeWhere, {
-    expected_approval_date: { gte: today, lte: dueSoonEnd },
-  });
-
-  const [projects, total] = await prisma.$transaction([
-    prisma.project.findMany({
-      where: dueSoonWhere,
-      skip,
-      take: limit,
-      orderBy: { expected_approval_date: 'asc' },
-      select: {
-        id: true,
-        title: true,
-        expected_approval_date: true,
-      },
-    }),
-    prisma.project.count({ where: dueSoonWhere }),
-  ]);
-
-  const rows: DueSoonProjectRow[] = projects.map((project) => {
-    const dueDate = project.expected_approval_date!;
-    const daysRemaining = countBangkokWorkingDays(today, dueDate, holidayIndex);
-    return {
-      projectId: project.id,
-      title: project.title,
-      dueDate,
-      daysRemaining,
-      priority: dueSoonPriority(daysRemaining),
-    };
-  });
-
-  return {
-    total,
-    page,
-    pageSize: limit,
-    totalPages: Math.ceil(total / limit),
-    data: rows,
   };
 };
