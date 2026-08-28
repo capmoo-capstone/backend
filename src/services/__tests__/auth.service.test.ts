@@ -28,7 +28,7 @@ vi.mock('jsonwebtoken', () => ({
   sign: vi.fn(),
 }));
 
-vi.mock('../../lib/auth-cache', () => ({
+vi.mock('../../utils/auth-cache', () => ({
   clearUserAuthCache: vi.fn(),
 }));
 

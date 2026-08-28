@@ -20,7 +20,7 @@ import {
   signAndCompleteSubmission,
 } from '../submission.service';
 
-vi.mock('../../lib/phase-status', () => ({
+vi.mock('../../utils/phase-status', () => ({
   syncProjectPhases: vi.fn().mockResolvedValue({ id: 'project-1' }),
 }));
 
