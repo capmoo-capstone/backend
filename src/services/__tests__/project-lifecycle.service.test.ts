@@ -334,6 +334,7 @@ describe('project-lifecycle.service', () => {
     const result = await completeProcurementPhase(headUser, {
       id: 'project-1',
       continue_unit_proc: true,
+      assignee_contract: 'staff-1',
     } as any);
 
     expect(txMock.project.update).toHaveBeenCalledWith(
