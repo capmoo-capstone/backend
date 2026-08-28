@@ -1,17 +1,15 @@
 name: Deploy to Vercel
 
-# Workflow disabled from automatic execution
 on:
-  # push:
-  #   branches:
-  #     - main
-  #     - dev
-  # pull_request:
-  #   branches:
-  #     - main
-  #     - dev
-  workflow_dispatch: # Can still be manually triggered from GitHub Actions UI if needed
-
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
