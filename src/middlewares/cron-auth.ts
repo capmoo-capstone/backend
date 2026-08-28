@@ -1,5 +1,14 @@
+import { timingSafeEqual } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import { ServiceUnavailableError, UnauthorizedError } from '../utils/errors';
+
+const isValidCronSecret = (provided: string, expected: string): boolean => {
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  return timingSafeEqual(providedBuffer, expectedBuffer);
+};
 
 const getBearerToken = (authorization?: string) => {
   if (!authorization) {
@@ -30,7 +39,7 @@ export const protectCron = (
     }
 
     const token = getBearerToken(req.headers.authorization);
-    if (token !== cronSecret) {
+    if (!isValidCronSecret(token, cronSecret)) {
       throw new UnauthorizedError('Invalid cron secret');
     }
 

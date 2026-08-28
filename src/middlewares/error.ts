@@ -9,6 +9,8 @@ type ErrorResponse = {
   error?: string;
 };
 
+const includeErrorDetails = () => process.env.NODE_ENV !== 'production';
+
 const logServerError = (err: unknown, req: Request, context: string) => {
   console.error(`[${context}] ${req.method} ${req.originalUrl}`, err);
 };
@@ -130,7 +132,7 @@ export const errorHandler = (
     return res.status(400).json({
       status: 'error',
       message: 'Invalid JSON payload format',
-      error: err.message,
+      ...(includeErrorDetails() ? { error: err.message } : {}),
     });
   }
 
@@ -140,7 +142,7 @@ export const errorHandler = (
     return res.status(prismaErrorResponse.statusCode).json({
       status: 'error',
       message: prismaErrorResponse.message,
-      ...(prismaErrorResponse.error
+      ...(includeErrorDetails() && prismaErrorResponse.error
         ? { error: prismaErrorResponse.error }
         : {}),
     });
@@ -152,6 +154,6 @@ export const errorHandler = (
   res.status(500).json({
     status: 'error',
     message: 'Internal Server Error',
-    error: errorMessage,
+    ...(includeErrorDetails() ? { error: errorMessage } : {}),
   });
 };
