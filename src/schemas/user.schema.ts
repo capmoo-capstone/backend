@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UserRole, RegisterType } from '@prisma/client';
-import { BadRequestError } from '../lib/errors';
+import { BadRequestError } from '../utils/errors';
 
 export const manageableUserRoles = [
   UserRole.ADMIN,

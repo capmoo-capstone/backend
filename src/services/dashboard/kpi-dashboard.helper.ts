@@ -14,8 +14,8 @@ import {
   fromBangkokDate,
   nowUtc,
   toBangkokParts,
-} from '../../lib/date';
-import { BadRequestError, NotFoundError } from '../../lib/errors';
+} from '../../utils/date';
+import { BadRequestError, NotFoundError } from '../../utils/errors';
 import {
   countBangkokWorkingDays,
   getBangkokWorkingDayHolidayIndex,

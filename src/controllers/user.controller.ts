@@ -8,7 +8,7 @@ import {
   CreateUserSchema,
 } from '../schemas/user.schema';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { toBool } from '../lib/helper';
+import { toBool } from '../utils/helper';
 
 export const getAll = async (req: Request, res: Response) => {
   // #swagger.tags = ['User']

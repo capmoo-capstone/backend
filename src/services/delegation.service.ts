@@ -6,13 +6,13 @@ import {
   UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { BadRequestError, NotFoundError } from '../lib/errors';
-import { formatBangkokDate, nowUtc } from '../lib/date';
+import { OPS_DEPT_ID } from '../utils/constant';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+import { formatBangkokDate, nowUtc } from '../utils/date';
 import {
   activeDelegationWhere,
   openDelegationWhere,
-} from '../lib/active-state';
+} from '../utils/active-state';
 import { AddDelegationDto } from '../schemas/delegation.schema';
 import { AuthPayload } from '../types/auth.type';
 import { DelegationDetail } from '../types/delegation.type';

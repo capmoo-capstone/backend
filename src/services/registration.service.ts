@@ -9,9 +9,9 @@ import {
   RegistrationRequest,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { nowUtc } from '../lib/date';
-import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
-import { assertDepartmentUnitScope } from '../lib/roles';
+import { nowUtc } from '../utils/date';
+import { AppError, BadRequestError, NotFoundError } from '../utils/errors';
+import { assertDepartmentUnitScope } from '../utils/roles';
 import {
   CreateRegistrationRequestDto,
   ListRegistrationRequestsQuery,

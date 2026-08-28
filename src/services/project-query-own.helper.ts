@@ -8,13 +8,13 @@ import {
   UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../lib/constant';
-import { isHeadOfSupplyDept, isSuperAdmin } from '../lib/permissions';
+import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../utils/constant';
+import { isHeadOfSupplyDept, isSuperAdmin } from '../utils/permissions';
 import {
   GetOwnProjectsQuery,
 } from '../schemas/project.schema';
 import { OwnProjectTab } from '../types/project.type';
-import { bangkokDayEndUtc, bangkokDayStartUtc } from '../lib/date';
+import { bangkokDayEndUtc, bangkokDayStartUtc } from '../utils/date';
 import { AuthPayload } from '../types/auth.type';
 import { PaginatedProjects } from '../types/project.type';
 

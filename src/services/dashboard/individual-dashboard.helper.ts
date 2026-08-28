@@ -1,6 +1,6 @@
 import { ProcurementType, UnitResponsibleType } from '@prisma/client';
 import { prisma } from '../../config/prisma';
-import { NotFoundError } from '../../lib/errors';
+import { NotFoundError } from '../../utils/errors';
 import {
   countBangkokWorkingDays,
   getBangkokWorkingDayHolidayIndex,

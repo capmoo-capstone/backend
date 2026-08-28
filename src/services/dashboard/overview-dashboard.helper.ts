@@ -3,15 +3,15 @@ import { prisma } from '../../config/prisma';
 import {
   IN_PROGRESS_STATUSES,
   PROCUREMENT_WORKFLOW_TYPES,
-} from '../../lib/constant';
-import { hasOrganizationWideReadAccess } from '../../lib/access-policy';
-import { getDeptIdsForUser, haveSupplyPermission } from '../../lib/permissions';
+} from '../../utils/constant';
+import { hasOrganizationWideReadAccess } from '../../utils/access-policy';
+import { getDeptIdsForUser, haveSupplyPermission } from '../../utils/permissions';
 import {
   daysInBangkokMonth,
   fromBangkokDate,
   nowUtc,
   toBangkokParts,
-} from '../../lib/date';
+} from '../../utils/date';
 import {
   PeriodicSummaryQuery,
   ProcurementOverviewQuery,

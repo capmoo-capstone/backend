@@ -8,19 +8,19 @@ import {
 } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { AppError, BadRequestError, NotFoundError } from '../lib/errors';
-import { assertUserCanBeDeleted } from '../lib/deletion-policy';
+import { OPS_DEPT_ID } from '../utils/constant';
+import { AppError, BadRequestError, NotFoundError } from '../utils/errors';
+import { assertUserCanBeDeleted } from '../utils/deletion-policy';
 import {
   assertDepartmentUnitScope,
   assertManageableRoleScope,
-} from '../lib/roles';
+} from '../utils/roles';
 import {
   addRoleInternal,
   assertNoDuplicatesOrOverlap,
   assertUsersExist,
   removeRoleInternal,
-} from '../lib/user-role';
+} from '../utils/user-role';
 import {
   AddRoleDto,
   CreateUserDto,

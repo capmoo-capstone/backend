@@ -1,6 +1,6 @@
 import { ProjectStatus, UnitResponsibleType, UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONTRACT_UNIT_ID, OPS_DEPT_ID } from '../../lib/constant';
+import { CONTRACT_UNIT_ID, OPS_DEPT_ID } from '../../utils/constant';
 import { txMock } from '../../test/prisma-mock';
 import {
   approveCancellation,

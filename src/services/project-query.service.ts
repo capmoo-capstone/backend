@@ -18,8 +18,8 @@ import {
   PROC2_UNIT_ID,
   WORKLOAD_STATUSES,
   WORKFLOW_STEP_ORDERS,
-} from '../lib/constant';
-import { ForbiddenError, NotFoundError } from '../lib/errors';
+} from '../utils/constant';
+import { ForbiddenError, NotFoundError } from '../utils/errors';
 import { generatePresignedDownloadUrl } from './storage.service';
 import {
   getDeptIdsForUser,
@@ -27,8 +27,8 @@ import {
   isHeadOfSupplyDept,
   isHeadOfSupplyUnit,
   isSuperAdmin,
-} from '../lib/permissions';
-import { hasOrganizationWideReadAccess } from '../lib/access-policy';
+} from '../utils/permissions';
+import { hasOrganizationWideReadAccess } from '../utils/access-policy';
 import {
   GetOwnProjectsQuery,
   ProjectFilterQuery,
@@ -40,7 +40,7 @@ import {
   bangkokDayStartUtc,
   bangkokTodayStartUtc,
   nowUtc,
-} from '../lib/date';
+} from '../utils/date';
 import {
   PaginatedProjects,
   ProjectDetailResponse,
@@ -55,7 +55,7 @@ import {
   getOwnProjects as getOwnProjectsFromHelper,
   getOwnProjectsTotal as getOwnProjectsTotalFromHelper,
 } from './project-query-own.helper';
-import { projectReadWhere } from '../lib/project-scope';
+import { projectReadWhere } from '../utils/project-scope';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',

@@ -1,7 +1,7 @@
 import { Department, Prisma, Unit, UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError } from '../lib/errors';
-import { assertDepartmentCanBeDeleted } from '../lib/deletion-policy';
+import { NotFoundError } from '../utils/errors';
+import { assertDepartmentCanBeDeleted } from '../utils/deletion-policy';
 import {
   CreateDepartmentDto,
   UpdateDepartmentDto,

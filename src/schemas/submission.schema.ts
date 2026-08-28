@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SubmissionType, UnitResponsibleType } from '@prisma/client';
-import { BangkokDateTimeSchema } from '../lib/date';
+import { BangkokDateTimeSchema } from '../utils/date';
 
 export const CreateStaffSubmissionSchema = z.object({
   project_id: z.uuid(),

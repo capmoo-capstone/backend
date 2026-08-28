@@ -8,7 +8,7 @@ import { r2 } from '../config/r2';
 import {
   PRESIGN_DOWNLOAD_EXPIRES,
   PRESIGN_UPLOAD_EXPIRES,
-} from '../lib/constant';
+} from '../utils/constant';
 import { randomUUID } from 'crypto';
 
 const BUCKET = process.env.R2_BUCKET_NAME!;

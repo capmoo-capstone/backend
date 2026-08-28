@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BangkokDateTimeSchema } from '../lib/date';
+import { BangkokDateTimeSchema } from '../utils/date';
 
 export const CreateHolidaySchema = z.object({
   date: z.string().date(),

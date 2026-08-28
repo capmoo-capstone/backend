@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
-import { BangkokDateTimeSchema } from '../lib/date';
+import { BangkokDateTimeSchema } from '../utils/date';
 
 const delegableRoles = [
   UserRole.HEAD_OF_DEPARTMENT,

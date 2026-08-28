@@ -3,10 +3,10 @@ import {
   NotificationDeliveryStatus,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
-import { activeUserWhere } from '../../lib/active-state';
-import { formatBangkokDate } from '../../lib/date';
-import { OPS_DEPT_ID } from '../../lib/constant';
-import { BadRequestError, NotFoundError } from '../../lib/errors';
+import { activeUserWhere } from '../../utils/active-state';
+import { formatBangkokDate } from '../../utils/date';
+import { OPS_DEPT_ID } from '../../utils/constant';
+import { BadRequestError, NotFoundError } from '../../utils/errors';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const COMPANY_NAME = 'NexusProcure';

@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { runtimeConfig } from '../../config/runtime';
-import { getRedisPublisher, getRedisSubscriber } from '../../lib/redis';
+import { getRedisPublisher, getRedisSubscriber } from '../../utils/redis';
 import { NotificationListItemResponse } from '../../types/notification.type';
 
 export interface NotificationRealtimeEvent {

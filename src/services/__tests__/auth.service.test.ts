@@ -2,8 +2,8 @@ import { UserRole, RegisterType } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearUserAuthCache } from '../../lib/auth-cache';
-import { OPS_DEPT_ID } from '../../lib/constant';
+import { clearUserAuthCache } from '../../utils/auth-cache';
+import { OPS_DEPT_ID } from '../../utils/constant';
 import { prismaMock } from '../../test/prisma-mock';
 import {
   clearSessionCache,

@@ -1,7 +1,7 @@
 import { UnitResponsibleType, UrgentType } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, NotFoundError } from '../../lib/errors';
-import { parseBangkokDateTime } from '../../lib/date';
+import { BadRequestError, NotFoundError } from '../../utils/errors';
+import { parseBangkokDateTime } from '../../utils/date';
 import { prismaMock } from '../../test/prisma-mock';
 import {
   addBangkokWorkingDays,

@@ -9,11 +9,11 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { CONTRACT_UNIT_ID } from '../lib/constant';
-import { nowUtc } from '../lib/date';
-import { BadRequestError, NotFoundError } from '../lib/errors';
-import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
-import { Capability, assertCapability } from '../lib/access-policy';
+import { CONTRACT_UNIT_ID } from '../utils/constant';
+import { nowUtc } from '../utils/date';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../utils/permissions';
+import { Capability, assertCapability } from '../utils/access-policy';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,

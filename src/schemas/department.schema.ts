@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { toBool, toStringArray } from '../lib/helper';
+import { toBool, toStringArray } from '../utils/helper';
 
 export const CreateDepartmentSchema = z.object({
   id: z.string(),

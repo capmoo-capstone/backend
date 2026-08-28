@@ -5,7 +5,7 @@ import {
   UrgentType,
 } from '@prisma/client';
 import { z } from 'zod';
-import { BangkokDateTimeSchema } from '../lib/date';
+import { BangkokDateTimeSchema } from '../utils/date';
 import { OwnProjectTab } from '../types/project.type';
 
 export const GetOwnProjectsQuerySchema = z.object({

@@ -4,8 +4,8 @@ import {
   ProjectActionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError, BadRequestError } from '../lib/errors';
-import { syncProjectPhases } from '../lib/phase-status';
+import { NotFoundError, BadRequestError } from '../utils/errors';
+import { syncProjectPhases } from '../utils/phase-status';
 import { AuthPayload } from '../types/auth.type';
 import { PersistedNotificationResult } from '../types/notification.type';
 import {
@@ -19,9 +19,9 @@ import {
   ProjectIdStatusResponse,
 } from '../types/project.type';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
-import { nowUtc } from '../lib/date';
-import { activeUserWhere } from '../lib/active-state';
-import { Capability, assertCapability } from '../lib/access-policy';
+import { nowUtc } from '../utils/date';
+import { activeUserWhere } from '../utils/active-state';
+import { Capability, assertCapability } from '../utils/access-policy';
 import {
   notifyProjectAssigned,
   publishPersistedNotifications,

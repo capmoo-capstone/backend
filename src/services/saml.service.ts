@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { Profile, SAML, ValidateInResponseTo } from '@node-saml/node-saml';
 import { XMLParser } from 'fast-xml-parser';
-import { PrismaSamlRequestCache, claimSamlResponse } from '../lib/saml-cache';
-import { ServiceUnavailableError, UnauthorizedError } from '../lib/errors';
+import { PrismaSamlRequestCache, claimSamlResponse } from '../utils/saml-cache';
+import { ServiceUnavailableError, UnauthorizedError } from '../utils/errors';
 
 const HTTP_REDIRECT_BINDING =
   'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect';

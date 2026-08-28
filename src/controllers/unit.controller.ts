@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { toBool } from '../lib/helper';
+import { toBool } from '../utils/helper';
 import {
   CreateUnitSchema,
   UpdateRepresentativeSchema,

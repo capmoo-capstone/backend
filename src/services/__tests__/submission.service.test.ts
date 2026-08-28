@@ -5,8 +5,8 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, NotFoundError } from '../../lib/errors';
-import { syncProjectPhases } from '../../lib/phase-status';
+import { BadRequestError, NotFoundError } from '../../utils/errors';
+import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock, prismaMock } from '../../test/prisma-mock';
 import { generatePresignedDownloadUrl } from '../storage.service';
 import {

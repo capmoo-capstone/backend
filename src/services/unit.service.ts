@@ -6,8 +6,8 @@ import {
   UnitResponsibleType,
   UserRole,
 } from '@prisma/client';
-import { BadRequestError, NotFoundError } from '../lib/errors';
-import { assertUnitCanBeDeleted } from '../lib/deletion-policy';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+import { assertUnitCanBeDeleted } from '../utils/deletion-policy';
 import {
   CreateUnitDto,
   UpdateUnitDto,
@@ -20,8 +20,8 @@ import {
   UnitListOptions,
   UnitRepresentativeResponse,
 } from '../types/unit.type';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { nowUtc } from '../lib/date';
+import { OPS_DEPT_ID } from '../utils/constant';
+import { nowUtc } from '../utils/date';
 import { AuthPayload } from '../types/auth.type';
 import { recordUserManagementAuditEvent } from './audit-log.service';
 import {
@@ -29,7 +29,7 @@ import {
   assertNoDuplicatesOrOverlap,
   assertUsersExist,
   removeRoleInternal,
-} from '../lib/user-role';
+} from '../utils/user-role';
 
 export const listUnits = async (
   page: number,

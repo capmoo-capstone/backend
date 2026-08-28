@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { hasOrganizationWideReadAccess } from '../lib/access-policy';
-import { getDeptIdsForUser } from '../lib/permissions';
+import { hasOrganizationWideReadAccess } from '../utils/access-policy';
+import { getDeptIdsForUser } from '../utils/permissions';
 import {
   BudgetPlanFilterQuery,
   ImportBudgetPlanDto,

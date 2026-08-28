@@ -14,7 +14,7 @@ import {
   OPS_DEPT_ID,
   PROC1_UNIT_ID,
   REGISTRATION_DEPT_ID,
-} from '../../lib/constant';
+} from '../../utils/constant';
 import { OwnProjectTab } from '../../types/project.type';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {

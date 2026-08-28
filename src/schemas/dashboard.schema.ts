@@ -5,7 +5,7 @@ import {
   bangkokDayEndUtc,
   bangkokDayStartUtc,
   parseBangkokDateTime,
-} from '../lib/date';
+} from '../utils/date';
 import { OwnProjectTab } from '../types/project.type';
 
 export const DashboardModeEnum = z.enum([

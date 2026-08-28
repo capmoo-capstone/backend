@@ -2,18 +2,18 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Prisma, RegisterType } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { clearUserAuthCache } from '../lib/auth-cache';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { nowUtc } from '../lib/date';
+import { clearUserAuthCache } from '../utils/auth-cache';
+import { OPS_DEPT_ID } from '../utils/constant';
+import { nowUtc } from '../utils/date';
 import {
   activeDelegationWhere,
   getNextDelegationBoundary,
-} from '../lib/active-state';
-import { BadRequestError, UnauthorizedError } from '../lib/errors';
+} from '../utils/active-state';
+import { BadRequestError, UnauthorizedError } from '../utils/errors';
 import {
   createSsoExchangeCode,
   exchangeSsoCode as exchangeSsoCodeCache,
-} from '../lib/saml-cache';
+} from '../utils/saml-cache';
 import type { CuPortalClaims } from './saml.service';
 import {
   AuthPayload,

@@ -1,6 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPS_DEPT_ID } from '../../lib/constant';
+import { OPS_DEPT_ID } from '../../utils/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import * as NotificationRealtimeService from '../notification/notification-realtime.service';
 import {

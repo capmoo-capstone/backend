@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
-import { AppError } from '../lib/errors';
+import { AppError } from '../utils/errors';
 
 type ErrorResponse = {
   statusCode: number;

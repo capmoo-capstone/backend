@@ -6,7 +6,7 @@ import {
   requireSupplyRoles,
 } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
-import { Capability } from '../lib/access-policy';
+import { Capability } from '../utils/access-policy';
 
 const router = Router();
 

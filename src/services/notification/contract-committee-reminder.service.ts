@@ -11,7 +11,7 @@ import {
   formatBangkokDate,
   nowUtc,
   parseBangkokDateTime,
-} from '../../lib/date';
+} from '../../utils/date';
 import { wholeDayDiff } from './notification-core.service';
 import {
   buildContractCommitteeReminderEmail,

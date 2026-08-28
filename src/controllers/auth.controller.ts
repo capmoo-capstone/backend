@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import * as AuthService from '../services/auth.service';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { BadRequestError } from '../lib/errors';
+import { BadRequestError } from '../utils/errors';
 import {
   CreateRegistrationRequestSchema,
   ListRegistrationRequestsQuerySchema,

@@ -5,7 +5,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../../lib/constant';
+import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../../utils/constant';
 import { IndividualTodoQuerySchema } from '../../schemas/dashboard.schema';
 import { prismaMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';

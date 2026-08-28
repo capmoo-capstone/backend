@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AuditEventType, AuditLogType } from '@prisma/client';
-import { BangkokDateTimeSchema } from '../lib/date';
+import { BangkokDateTimeSchema } from '../utils/date';
 
 export const AuditLogsQuerySchema = z.object({
   q: z.string().trim().optional(),

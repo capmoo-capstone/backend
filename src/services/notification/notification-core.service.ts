@@ -10,10 +10,10 @@ import {
   UserRole,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
-import { OPS_DEPT_ID } from '../../lib/constant';
-import { nowUtc, toBangkokParts } from '../../lib/date';
-import { NotFoundError } from '../../lib/errors';
-import { activeDelegationWhere, activeUserWhere } from '../../lib/active-state';
+import { OPS_DEPT_ID } from '../../utils/constant';
+import { nowUtc, toBangkokParts } from '../../utils/date';
+import { NotFoundError } from '../../utils/errors';
+import { activeDelegationWhere, activeUserWhere } from '../../utils/active-state';
 import type {
   NotificationKind,
   NotificationListItemResponse,

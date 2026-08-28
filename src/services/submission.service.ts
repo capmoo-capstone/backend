@@ -7,9 +7,9 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
-import { BadRequestError, NotFoundError } from '../lib/errors';
-import { syncProjectPhases } from '../lib/phase-status';
+import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+import { syncProjectPhases } from '../utils/phase-status';
 import {
   ApproveSubmissionDto,
   CompleteSubmissionDto,
@@ -42,10 +42,10 @@ import {
   notifyWorkflowStepApproved,
 } from './notification/notification.service';
 import { generatePresignedDownloadUrl } from './storage.service';
-import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
-import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
-import { Capability, assertCapability } from '../lib/access-policy';
-import { assertCanReadProject, projectReadWhere } from '../lib/project-scope';
+import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
+import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
+import { Capability, assertCapability } from '../utils/access-policy';
+import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,

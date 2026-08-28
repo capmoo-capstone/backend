@@ -13,9 +13,9 @@ import {
   deleteObject,
 } from '../services/storage.service';
 import { prisma } from '../config/prisma';
-import { Capability, assertCapability } from '../lib/access-policy';
-import { projectReadWhere } from '../lib/project-scope';
-import { ForbiddenError } from '../lib/errors';
+import { Capability, assertCapability } from '../utils/access-policy';
+import { projectReadWhere } from '../utils/project-scope';
+import { ForbiddenError } from '../utils/errors';
 
 // Client calls this BEFORE uploading — gets back a URL + the key to save later
 export const presignUpload = async (

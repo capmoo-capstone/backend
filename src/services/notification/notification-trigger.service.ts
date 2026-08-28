@@ -10,7 +10,7 @@ import {
   type PersistedNotificationResult,
   type TxClient,
 } from './notification-core.service';
-import { formatBangkokDate } from '../../lib/date';
+import { formatBangkokDate } from '../../utils/date';
 
 const mergeNotifications = (
   ...batches: PersistedNotificationResult[][]

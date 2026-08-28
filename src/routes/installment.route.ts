@@ -3,7 +3,7 @@ import { UserRole } from '@prisma/client';
 import * as controller from '../controllers/project.controller';
 import { requireSupplyRoles } from '../middlewares/auth';
 import { requireCapability } from '../middlewares/auth';
-import { Capability } from '../lib/access-policy';
+import { Capability } from '../utils/access-policy';
 
 const router = Router();
 
