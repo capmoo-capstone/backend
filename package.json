@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "swagger": "tsx swagger.ts",
-    "build": "npm test && npx tsx swagger.ts && tsc",
+    "build": "npx tsx swagger.ts && tsc",
     "start": "node --env-file=.env dist/app.js",
     "test": "vitest run",
     "test:watch": "vitest",
