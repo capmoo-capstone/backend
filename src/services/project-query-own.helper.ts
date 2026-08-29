@@ -25,10 +25,14 @@ type SupplyProgressRole =
 
 type OwnRole = SupplyProgressRole | typeof UserRole.FINANCE_STAFF;
 
+export type OwnProjectRole = OwnRole;
+
 type RoleScope = {
   role: OwnRole;
   where: Prisma.ProjectWhereInput;
 };
+
+export type OwnProjectRoleScope = RoleScope;
 
 type UnitScope = {
   id: string;
@@ -75,7 +79,7 @@ const PROJECT_SELECT = {
   },
 } satisfies Prisma.ProjectSelect;
 
-const ACTION_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
+export const OWN_PROJECT_ACTION_TABS: Record<OwnRole, OwnProjectTab[]> = {
   [UserRole.GENERAL_STAFF]: [
     OwnProjectTab.WAITING_ACCEPT,
     OwnProjectTab.NEED_ACTION,
@@ -235,7 +239,9 @@ const progressStatusWhere = (
     ])
   );
 
-const buildRoleScopes = async (user: AuthPayload): Promise<RoleScope[]> => {
+export const buildOwnProjectRoleScopes = async (
+  user: AuthPayload
+): Promise<RoleScope[]> => {
   const roleUnits = await getUnitsByRole(user, [
     UserRole.GENERAL_STAFF,
     UserRole.HEAD_OF_UNIT,
@@ -274,12 +280,12 @@ const buildRoleScopes = async (user: AuthPayload): Promise<RoleScope[]> => {
 
 const roleAllTabWhere = (scope: RoleScope): Prisma.ProjectWhereInput =>
   orWhere(
-    ACTION_TAB_UNION[scope.role]
-      .map((roleTab) => roleTabWhere(scope, roleTab))
+    OWN_PROJECT_ACTION_TABS[scope.role]
+      .map((roleTab) => buildOwnProjectRoleTabWhere(scope, roleTab))
       .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause))
   );
 
-const roleTabWhere = (
+export const buildOwnProjectRoleTabWhere = (
   scope: RoleScope,
   tab: OwnProjectTab
 ): Prisma.ProjectWhereInput | null => {
@@ -493,7 +499,7 @@ const buildSearchFilter = (search?: string): Prisma.ProjectWhereInput => {
   };
 };
 
-const buildCompletedDateFilter = (
+export const buildOwnProjectCompletedDateFilter = (
   dateFrom?: Date,
   dateTo?: Date
 ): Prisma.ProjectWhereInput => {
@@ -527,9 +533,9 @@ const ownProjectWhereClause = async (
 ): Promise<Prisma.ProjectWhereInput> => {
   const tab = query.tab ?? OwnProjectTab.ALL;
 
-  const scopes = await buildRoleScopes(user);
+  const scopes = await buildOwnProjectRoleScopes(user);
   const clauses = scopes
-    .map((scope) => roleTabWhere(scope, tab))
+    .map((scope) => buildOwnProjectRoleTabWhere(scope, tab))
     .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause));
   const baseWhere = orWhere(clauses);
 
@@ -541,7 +547,7 @@ const ownProjectWhereClause = async (
   }
 
   if (tab === 'completed') {
-    const dateWhere = buildCompletedDateFilter(
+    const dateWhere = buildOwnProjectCompletedDateFilter(
       query.dateFrom,
       query.dateTo
     );
@@ -701,7 +707,7 @@ const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
 
   const roleTabs = user.roles
     .filter((r) => r.dept_id === OPS_DEPT_ID)
-    .flatMap((r) => ACTION_TAB_UNION[r.role as OwnRole] ?? []);
+    .flatMap((r) => OWN_PROJECT_ACTION_TABS[r.role as OwnRole] ?? []);
 
   if (roleTabs.length === 0) {
     return [OwnProjectTab.ALL, OwnProjectTab.URGENT];
