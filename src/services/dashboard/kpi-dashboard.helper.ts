@@ -15,7 +15,7 @@ import {
   nowUtc,
   toBangkokParts,
 } from '../../utils/date';
-import { BadRequestError, NotFoundError } from '../../utils/errors';
+import { NotFoundError } from '../../utils/errors';
 import {
   countBangkokWorkingDays,
   getBangkokWorkingDayHolidayIndex,
@@ -40,7 +40,6 @@ import {
 } from '../../types/dashboard.type';
 import {
   getPreviousRange,
-  getProcurementTypeDonut,
   projectRangeWhere,
   resolveTargetUnitId,
   toComparison,
@@ -84,17 +83,9 @@ const isPhaseCompleted = (
   completedAt: Date | null | undefined
 ): boolean => Boolean(startedAt && completedAt);
 
-const hasUnitAssignee = (
-  assignees?: Array<{ roles?: Array<{ unit_id: string | null }> }>
-): boolean => {
-  if (assignees === undefined) return true;
-  if (assignees.length === 0) return false;
-  return assignees.some(
-    (assignee) =>
-      assignee.roles === undefined ||
-      assignee.roles.some((role) => role.unit_id !== null)
-  );
-};
+const unitOwnedPhaseWhere = (unitId: string): Prisma.ProjectWhereInput => ({
+  OR: [{ procurement_unit_id: unitId }, { contract_unit_id: unitId }],
+});
 
 export const getUnitGroupStaffPerformance = async (
   user: AuthPayload,
@@ -105,7 +96,7 @@ export const getUnitGroupStaffPerformance = async (
 
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
-    select: { id: true, type: true },
+    select: { id: true },
   });
   if (!unit) {
     throw new NotFoundError('Unit not found');
@@ -124,30 +115,18 @@ export const getUnitGroupStaffPerformance = async (
   });
   const staffIds = staff.map((member) => member.id);
 
-  const includesProcurementWork =
-    !unit.type ||
-    unit.type.length === 0 ||
-    unit.type.some(
-      (type: UnitResponsibleType) => type !== UnitResponsibleType.CONTRACT
-    );
-  const includesContractWork =
-    !unit.type ||
-    unit.type.length === 0 ||
-    unit.type.includes(UnitResponsibleType.CONTRACT);
-
-  const projectPhaseFilters: Prisma.ProjectWhereInput[] = [];
-  if (includesProcurementWork) {
-    projectPhaseFilters.push({
+  const projectPhaseFilters: Prisma.ProjectWhereInput[] = [
+    {
+      procurement_unit_id: unitId,
       procurement_started_at: { lte: range.to },
       assignee_procurement: { some: { id: { in: staffIds } } },
-    });
-  }
-  if (includesContractWork) {
-    projectPhaseFilters.push({
+    },
+    {
+      contract_unit_id: unitId,
       contract_started_at: { lte: range.to },
       assignee_contract: { some: { id: { in: staffIds } } },
-    });
-  }
+    },
+  ];
 
   const projects =
     staffIds.length === 0 || projectPhaseFilters.length === 0
@@ -158,6 +137,8 @@ export const getUnitGroupStaffPerformance = async (
             OR: projectPhaseFilters,
           },
           select: {
+            procurement_unit_id: true,
+            contract_unit_id: true,
             procurement_started_at: true,
             procurement_completed_at: true,
             contract_started_at: true,
@@ -165,19 +146,11 @@ export const getUnitGroupStaffPerformance = async (
             assignee_procurement: {
               select: {
                 id: true,
-                roles: {
-                  where: { unit_id: unitId },
-                  select: { unit_id: true },
-                },
               },
             },
             assignee_contract: {
               select: {
                 id: true,
-                roles: {
-                  where: { unit_id: unitId },
-                  select: { unit_id: true },
-                },
               },
             },
           },
@@ -189,12 +162,8 @@ export const getUnitGroupStaffPerformance = async (
     const addPhase = (
       startedAt: Date | null,
       completedAt: Date | null,
-      assignees: Array<{
-        id: string;
-        roles?: Array<{ unit_id: string | null }>;
-      }>
+      assignees: Array<{ id: string }>
     ) => {
-      if (!hasUnitAssignee(assignees)) return;
       const assigneeIds = assignees.map((assignee) => assignee.id);
       if (isCompletedInRange(startedAt, completedAt, range)) {
         completedPhases.push({ startedAt, completedAt, assigneeIds });
@@ -203,14 +172,14 @@ export const getUnitGroupStaffPerformance = async (
       }
     };
 
-    if (includesProcurementWork) {
+    if (project.procurement_unit_id === unitId) {
       addPhase(
         project.procurement_started_at,
         project.procurement_completed_at,
         project.assignee_procurement
       );
     }
-    if (includesContractWork) {
+    if (project.contract_unit_id === unitId) {
       addPhase(
         project.contract_started_at,
         project.contract_completed_at,
@@ -296,25 +265,6 @@ export const getUnitGroupStaffPerformance = async (
   };
 };
 
-export const getUnitProcurementTypes = async (
-  unitId: string
-): Promise<ProcurementType[]> => {
-  const unit = await prisma.unit.findUnique({
-    where: { id: unitId },
-    select: { type: true },
-  });
-  if (!unit || !unit.type) {
-    return Object.values(ProcurementType);
-  }
-  if (unit.type.length === 0) {
-    return [];
-  }
-  const validTypes = new Set(Object.values(ProcurementType));
-  return unit.type
-    .filter((t) => validTypes.has(t as unknown as ProcurementType))
-    .map((t) => t as unknown as ProcurementType);
-};
-
 export const getUnitGroupExecutiveSummary = async (
   user: AuthPayload,
   query: UnitGroupQuery
@@ -325,23 +275,13 @@ export const getUnitGroupExecutiveSummary = async (
 
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
-    select: { id: true, type: true },
+    select: { id: true },
   });
   if (!unit) {
     throw new NotFoundError('Unit not found');
   }
 
-  const isContractUnit =
-    unit.type.length !== 0 && unit.type.includes(UnitResponsibleType.CONTRACT);
-
-  const where: Prisma.ProjectWhereInput = isContractUnit
-    ? {
-        current_workflow_type: UnitResponsibleType.CONTRACT,
-        responsible_unit_id: unitId,
-      }
-    : {
-        procurement_type: { in: await getUnitProcurementTypes(unitId) },
-      };
+  const where = unitOwnedPhaseWhere(unitId);
 
   const currentWhere = projectRangeWhere(where, range);
   const previousWhere = projectRangeWhere(where, previousRange);
@@ -351,6 +291,8 @@ export const getUnitGroupExecutiveSummary = async (
       where: currentWhere,
       select: {
         procurement_type: true,
+        procurement_unit_id: true,
+        contract_unit_id: true,
         created_at: true,
         expected_approval_date: true,
         procurement_started_at: true,
@@ -363,6 +305,8 @@ export const getUnitGroupExecutiveSummary = async (
       where: previousWhere,
       select: {
         procurement_type: true,
+        procurement_unit_id: true,
+        contract_unit_id: true,
         created_at: true,
         expected_approval_date: true,
         procurement_started_at: true,
@@ -376,6 +320,8 @@ export const getUnitGroupExecutiveSummary = async (
   const toCompletedPhases = (
     projects: Array<{
       procurement_type: ProcurementType;
+      procurement_unit_id: string | null;
+      contract_unit_id: string | null;
       created_at: Date;
       expected_approval_date: Date | null;
       procurement_started_at: Date | null;
@@ -393,6 +339,7 @@ export const getUnitGroupExecutiveSummary = async (
       };
 
       if (
+        project.procurement_unit_id === unitId &&
         isPhaseCompleted(
           project.procurement_started_at,
           project.procurement_completed_at
@@ -405,6 +352,7 @@ export const getUnitGroupExecutiveSummary = async (
         });
       }
       if (
+        project.contract_unit_id === unitId &&
         isPhaseCompleted(
           project.contract_started_at,
           project.contract_completed_at
@@ -553,15 +501,9 @@ export const getUnitGroupProcurementMetrics = async (
     toBangkokParts(now).day
   );
 
-  const types = await getUnitProcurementTypes(unitId);
-  if (types.length === 0) {
-    throw new BadRequestError('Unit is not a procurement unit');
-  }
-
-  const typeWhere: Prisma.ProjectWhereInput = {
-    procurement_type: {
-      in: types,
-    },
+  const types = Object.values(ProcurementType);
+  const procurementOwnedWhere: Prisma.ProjectWhereInput = {
+    procurement_unit_id: unitId,
   };
 
   const delayedWhere: Prisma.ProjectWhereInput = {
@@ -582,22 +524,60 @@ export const getUnitGroupProcurementMetrics = async (
   };
 
   const [byTotalType, byDelayedType] = await Promise.all([
-    getProcurementTypeDonut(typeWhere, range, types),
-    getProcurementTypeDonut(typeWhere, range, types, delayedWhere),
+    prisma.$transaction(
+      types.map((type) =>
+        prisma.project.count({
+          where: projectRangeWhere(
+            { ...procurementOwnedWhere, procurement_type: type },
+            range
+          ),
+        })
+      )
+    ),
+    prisma.$transaction(
+      types.map((type) =>
+        prisma.project.count({
+          where: {
+            AND: [
+              projectRangeWhere(
+                { ...procurementOwnedWhere, procurement_type: type },
+                range
+              ),
+              delayedWhere,
+            ],
+          },
+        })
+      )
+    ),
   ]);
 
-  const total = byTotalType.reduce((sum, item) => sum + item.count, 0);
-  const delayedTotal = byDelayedType.reduce((sum, item) => sum + item.count, 0);
+  const totalByProcurementType = types.map((type, index) => ({
+    type,
+    count: byTotalType[index],
+  }));
+  const delayedByProcurementType = types.map((type, index) => ({
+    type,
+    count: byDelayedType[index],
+  }));
+
+  const total = totalByProcurementType.reduce(
+    (sum, item) => sum + item.count,
+    0
+  );
+  const delayedTotal = delayedByProcurementType.reduce(
+    (sum, item) => sum + item.count,
+    0
+  );
 
   return {
     unitId,
     totalProjects: {
       total,
-      byProcurementType: byTotalType,
+      byProcurementType: totalByProcurementType,
     },
     delayedProjects: {
       total: delayedTotal,
-      byProcurementType: byDelayedType,
+      byProcurementType: delayedByProcurementType,
     },
   };
 };
@@ -616,18 +596,13 @@ export const getUnitGroupProcurementDetails = async (
     toBangkokParts(now).day
   );
 
-  const types = await getUnitProcurementTypes(unitId);
-  if (types.length === 0) {
-    throw new BadRequestError('Unit is not a procurement unit');
-  }
-  const typeWhere: Prisma.ProjectWhereInput = {
-    procurement_type: {
-      in: types,
-    },
+  const types = Object.values(ProcurementType);
+  const procurementOwnedWhere: Prisma.ProjectWhereInput = {
+    procurement_unit_id: unitId,
   };
 
-  const baseWhere = projectRangeWhere(typeWhere, range);
-  const previousWhere = projectRangeWhere(typeWhere, previousRange);
+  const baseWhere = projectRangeWhere(procurementOwnedWhere, range);
+  const previousWhere = projectRangeWhere(procurementOwnedWhere, previousRange);
 
   const [projects, previousProjects] = await Promise.all([
     prisma.project.findMany({
@@ -635,6 +610,8 @@ export const getUnitGroupProcurementDetails = async (
       select: {
         id: true,
         procurement_type: true,
+        procurement_unit_id: true,
+        contract_unit_id: true,
         status: true,
         expected_approval_date: true,
         created_at: true,
@@ -643,22 +620,6 @@ export const getUnitGroupProcurementDetails = async (
         procurement_completed_at: true,
         contract_started_at: true,
         contract_completed_at: true,
-        assignee_procurement: {
-          select: {
-            roles: {
-              where: { unit_id: unitId },
-              select: { unit_id: true },
-            },
-          },
-        },
-        assignee_contract: {
-          select: {
-            roles: {
-              where: { unit_id: unitId },
-              select: { unit_id: true },
-            },
-          },
-        },
       },
     }),
     prisma.project.findMany({
@@ -675,20 +636,16 @@ export const getUnitGroupProcurementDetails = async (
 
   const completedPhaseRanges = projects.flatMap((project) => {
     const ranges: Array<{ from: Date; to: Date }> = [];
-    if (
-      project.procurement_started_at &&
-      project.procurement_completed_at &&
-      hasUnitAssignee(project.assignee_procurement)
-    ) {
+    if (project.procurement_started_at && project.procurement_completed_at) {
       ranges.push({
         from: project.procurement_started_at,
         to: project.procurement_completed_at,
       });
     }
     if (
+      project.contract_unit_id === unitId &&
       project.contract_started_at &&
-      project.contract_completed_at &&
-      hasUnitAssignee(project.assignee_contract)
+      project.contract_completed_at
     ) {
       ranges.push({
         from: project.contract_started_at,
@@ -753,9 +710,7 @@ export const getUnitGroupProcurementDetails = async (
       previousProjects.filter((project) => project.procurement_type === type)
     );
     const procurementPhases = typeProjects.flatMap((project) =>
-      project.procurement_started_at &&
-      project.procurement_completed_at &&
-      hasUnitAssignee(project.assignee_procurement)
+      project.procurement_started_at && project.procurement_completed_at
         ? [
             {
               startedAt: project.procurement_started_at,
@@ -767,7 +722,7 @@ export const getUnitGroupProcurementDetails = async (
     const contractPhases = typeProjects.flatMap((project) =>
       project.contract_started_at &&
       project.contract_completed_at &&
-      hasUnitAssignee(project.assignee_contract)
+      project.contract_unit_id === unitId
         ? [
             {
               startedAt: project.contract_started_at,
@@ -854,33 +809,13 @@ export const getUnitGroupTopDelayedProjects = async (
     toBangkokParts(now).day
   );
 
-  const unit = await prisma.unit.findUnique({
-    where: { id: unitId },
-    select: { type: true },
-  });
-  const isContractUnit =
-    unit?.type.length !== 0 &&
-    unit?.type.includes(UnitResponsibleType.CONTRACT);
-
   const where: Prisma.ProjectWhereInput = {
     status: { not: ProjectStatus.CANCELLED },
+    ...unitOwnedPhaseWhere(unitId),
   };
 
   if (query.procurementType) {
     where.procurement_type = query.procurementType;
-  }
-
-  if (isContractUnit) {
-    where.OR = [
-      { current_workflow_type: UnitResponsibleType.CONTRACT },
-      { contract_started_at: { not: null } },
-      { responsible_unit_id: unitId },
-    ];
-  } else {
-    const procurementTypes = await getUnitProcurementTypes(unitId);
-    where.procurement_type = query.procurementType
-      ? query.procurementType
-      : { in: procurementTypes };
   }
 
   const projects = await prisma.project.findMany({
@@ -890,6 +825,8 @@ export const getUnitGroupTopDelayedProjects = async (
       title: true,
       status: true,
       procurement_type: true,
+      procurement_unit_id: true,
+      contract_unit_id: true,
       created_at: true,
       procurement_started_at: true,
       procurement_completed_at: true,
@@ -992,8 +929,9 @@ export const getUnitGroupTopDelayedProjects = async (
     );
   };
 
-  const calculatedProjects: TopDelayedProjectItem[] = projects.map((p) => {
-    if (isContractUnit) {
+  const calculatedProjects: TopDelayedProjectItem[] = projects.flatMap((p) => {
+    const items: TopDelayedProjectItem[] = [];
+    if (p.contract_unit_id === unitId) {
       const procurementComplete = p.procurement_completed_at!;
       const contractStart = p.contract_started_at ?? today;
       const contractEnd = p.contract_completed_at ?? today;
@@ -1036,10 +974,11 @@ export const getUnitGroupTopDelayedProjects = async (
           )
         : 0;
 
-      return {
+      items.push({
         projectId: p.id,
         title: p.title,
         procurementType: p.procurement_type,
+        workflowType: UnitResponsibleType.CONTRACT,
         totalDays,
         stageBreakdownDays: {
           assignmentDays,
@@ -1048,8 +987,10 @@ export const getUnitGroupTopDelayedProjects = async (
           approvalDays,
           financeDays,
         },
-      };
-    } else {
+      });
+    }
+
+    if (p.procurement_unit_id === unitId) {
       const startAt = p.created_at;
       const procurementEnd = p.procurement_completed_at ?? today;
 
@@ -1089,10 +1030,11 @@ export const getUnitGroupTopDelayedProjects = async (
 
       const procurementDays = Math.max(0, procurementStageDays - approvalDays);
 
-      return {
+      items.push({
         projectId: p.id,
         title: p.title,
         procurementType: p.procurement_type,
+        workflowType: p.procurement_type as UnitResponsibleType,
         totalDays,
         stageBreakdownDays: {
           assignmentDays,
@@ -1101,8 +1043,10 @@ export const getUnitGroupTopDelayedProjects = async (
           approvalDays,
           financeDays: 0,
         },
-      };
+      });
     }
+
+    return items;
   });
 
   calculatedProjects.sort((a, b) => b.totalDays - a.totalDays);
@@ -1124,22 +1068,17 @@ export const getContractUnitSummary = async (
 
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
-    select: { id: true, type: true },
+    select: { id: true },
   });
 
   if (!unit) {
     throw new NotFoundError('Unit not found');
   }
 
-  if (!unit.type.includes(UnitResponsibleType.CONTRACT)) {
-    throw new BadRequestError('Unit is not a contract unit');
-  }
-
   const statusCounts = await prisma.project.groupBy({
     by: ['status'],
     where: {
-      responsible_unit_id: unitId,
-      current_workflow_type: UnitResponsibleType.CONTRACT,
+      contract_unit_id: unitId,
       created_at: { gte: range.from, lte: range.to },
     },
     _count: {
@@ -1162,31 +1101,19 @@ export const getContractUnitSummary = async (
 
   const contractProjects = await prisma.project.findMany({
     where: {
-      responsible_unit_id: unitId,
-      current_workflow_type: UnitResponsibleType.CONTRACT,
+      contract_unit_id: unitId,
       created_at: { gte: range.from, lte: range.to },
     },
     select: {
       contract_started_at: true,
       contract_completed_at: true,
-      assignee_contract: {
-        select: {
-          roles: {
-            where: { unit_id: unitId },
-            select: { unit_id: true },
-          },
-        },
-      },
     },
   });
 
-  const unitContractProjects = contractProjects.filter((project) =>
-    hasUnitAssignee(project.assignee_contract)
-  );
-  const completedContractProjects = unitContractProjects.filter((project) =>
+  const completedContractProjects = contractProjects.filter((project) =>
     isPhaseCompleted(project.contract_started_at, project.contract_completed_at)
   );
-  const inProgressContractProjects = unitContractProjects.filter(
+  const inProgressContractProjects = contractProjects.filter(
     (project) =>
       project.contract_started_at !== null &&
       !isPhaseCompleted(

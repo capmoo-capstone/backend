@@ -379,6 +379,8 @@ describe('project-lifecycle.service', () => {
         data: expect.objectContaining({
           procurement_completed_at: expect.any(Date),
           contract_started_at: expect.any(Date),
+          responsible_unit_id: 'unit-proc',
+          contract_unit_id: 'unit-proc',
         }),
       })
     );

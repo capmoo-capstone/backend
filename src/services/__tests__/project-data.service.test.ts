@@ -70,6 +70,7 @@ describe('project-data.service', () => {
         data: expect.objectContaining({
           receive_no: '2569/00005',
           responsible_unit_id: 'unit-proc-1',
+          procurement_unit_id: 'unit-proc-1',
           status: ProjectStatus.UNASSIGNED,
           created_by: user.id,
         }),
@@ -100,8 +101,14 @@ describe('project-data.service', () => {
     expect(txMock.project.createManyAndReturn).toHaveBeenCalledWith(
       expect.objectContaining({
         data: [
-          expect.objectContaining({ receive_no: '2569/00011' }),
-          expect.objectContaining({ receive_no: '2569/00012' }),
+          expect.objectContaining({
+            receive_no: '2569/00011',
+            procurement_unit_id: 'unit-proc-1',
+          }),
+          expect.objectContaining({
+            receive_no: '2569/00012',
+            procurement_unit_id: 'unit-proc-1',
+          }),
         ],
       })
     );

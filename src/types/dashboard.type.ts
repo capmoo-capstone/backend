@@ -142,6 +142,7 @@ export interface TopDelayedProjectItem {
   projectId: string;
   title: string;
   procurementType: ProcurementType;
+  workflowType: UnitResponsibleType;
   totalDays: number;
   stageBreakdownDays: {
     assignmentDays: number;
