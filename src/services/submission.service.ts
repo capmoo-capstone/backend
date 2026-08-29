@@ -41,11 +41,40 @@ import {
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
 } from './notification/notification.service';
+import { sendVendorPoRequestEmailForProject } from './notification/notification-email.service';
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
 import { Capability, assertCapability } from '../utils/access-policy';
 import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
+
+const VENDOR_PO_EMAIL_STEP_ORDERS = new Map<UnitResponsibleType, number>([
+  [UnitResponsibleType.MT500K, 5],
+  [UnitResponsibleType.EBIDDING, 9],
+  [UnitResponsibleType.SELECTION, 6],
+  [UnitResponsibleType.LT500K, 3],
+  [UnitResponsibleType.LT100K, 3],
+  [UnitResponsibleType.INTERNAL, 3],
+]);
+
+const shouldSendVendorPoEmailForSubmission = (input: {
+  workflowType: UnitResponsibleType;
+  stepOrder: number;
+  status: SubmissionStatus;
+}) =>
+  input.status === SubmissionStatus.COMPLETED &&
+  VENDOR_PO_EMAIL_STEP_ORDERS.get(input.workflowType) === input.stepOrder;
+
+const safeSendVendorPoEmail = async (projectId: string) => {
+  try {
+    await sendVendorPoRequestEmailForProject(projectId);
+  } catch (error) {
+    console.error(
+      'Vendor PO request email failed:',
+      error instanceof Error ? error.message : 'Unknown email error'
+    );
+  }
+};
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -745,6 +774,15 @@ export const approveSubmission = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
+  if (
+    shouldSendVendorPoEmailForSubmission({
+      workflowType: transactionResult.updated.workflow_type,
+      stepOrder: transactionResult.updated.step_order,
+      status: transactionResult.updated.status,
+    })
+  ) {
+    await safeSendVendorPoEmail(transactionResult.updated.project_id);
+  }
 
   return transactionResult.updated;
 };
@@ -883,6 +921,16 @@ export const signAndCompleteSubmission = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
+  if (
+    shouldSendVendorPoEmailForSubmission({
+      workflowType: transactionResult.updated.workflow_type,
+      stepOrder: transactionResult.updated.step_order,
+      status: transactionResult.updated.status,
+    })
+  ) {
+    await safeSendVendorPoEmail(transactionResult.updated.project_id);
+  }
 
   return transactionResult.updated;
 };
+
