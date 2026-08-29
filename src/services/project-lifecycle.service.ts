@@ -490,25 +490,18 @@ export const completeProcurementPhase = async (
 
     const transitionAt = nowUtc();
     const hasContractAssignee = Boolean(data.assignee_contract);
-    const assigneeContract = data.assignee_contract
-      ? { connect: { id: data.assignee_contract } }
-      : undefined;
 
-    const dataToUpdate: Prisma.ProjectUpdateInput = {
+    const dataToUpdate: Prisma.ProjectUncheckedUpdateInput = {
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      procurement_completed_at: transitionAt,
       status: hasContractAssignee
         ? ProjectStatus.WAITING_ACCEPT
         : ProjectStatus.UNASSIGNED,
-      ...(project.procurement_completed_at
-        ? {}
-        : { procurement_completed_at: transitionAt }),
-      ...(hasContractAssignee && !project.contract_started_at
-        ? { contract_started_at: transitionAt }
-        : {}),
-      ...(data.continue_unit_proc
-        ? {}
-        : { responsible_unit_id: CONTRACT_UNIT_ID }),
-      ...(assigneeContract ? { assignee_contract: assigneeContract } : {}),
+      contract_started_at: hasContractAssignee ? transitionAt : undefined,
+      responsible_unit_id: data.contract_unit_id,
+      assignee_contract: data.assignee_contract
+        ? { connect: { id: data.assignee_contract } }
+        : undefined,
     };
 
     const oldValue: Record<string, unknown> = {};

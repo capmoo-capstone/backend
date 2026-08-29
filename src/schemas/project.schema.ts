@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 import { BangkokDateTimeSchema } from '../utils/date';
 import { OwnProjectTab } from '../types/project.type';
+import { CONTRACT_UNIT_ID } from '../utils/constant';
 
 export const GetOwnProjectsQuerySchema = z.object({
   tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
@@ -52,7 +53,10 @@ export const AcceptProjectsSchema = z.object({
 
 export const CompleteProcurementPhaseSchema = z.object({
   id: z.uuid(),
-  continue_unit_proc: z.boolean().default(false),
+  contract_unit_id: z
+    .string()
+    .optional()
+    .transform((value) => value || CONTRACT_UNIT_ID),
   assignee_contract: z.uuid().optional(),
 });
 
