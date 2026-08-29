@@ -253,7 +253,7 @@ export const listUsers = async (
       skip: (page - 1) * limit,
       take: limit,
       select: safeUserSelect,
-      orderBy: { full_name: 'asc' },
+      orderBy: { created_at: 'desc' },
     }),
     prisma.user.count({ where: userWhere }),
   ]);
