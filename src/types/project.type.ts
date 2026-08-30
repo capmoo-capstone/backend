@@ -51,7 +51,8 @@ export interface ProjectDetailResponse {
   is_urgent: UrgentType;
   title: string;
   description: string | null;
-  budget: Decimal;
+  budget: Decimal | null;
+  actual_cost: Decimal | null;
   status: ProjectStatus;
   installment_rounds: number;
   procurement_progress: ProjectPhaseProgress;
@@ -159,4 +160,21 @@ export interface ProjectPhaseProgress {
   GENERAL_STAFF: PhaseEntry;
   HEAD_OF_UNIT: PhaseEntry;
   DOCUMENT_STAFF: PhaseEntry;
+}
+
+export enum OwnProjectTab {
+  ALL = 'all',
+  WAITING_ACCEPT = 'waiting_accept',
+  NEED_ACTION = 'need_action',
+  REJECTED = 'rejected',
+  COMPLETED = 'completed',
+  WAITING_APPROVAL = 'waiting_approval',
+  WAITING_CANCEL = 'waiting_cancel',
+  WAITING_PROPOSAL = 'waiting_proposal',
+  WAITING_SIGNATURE = 'waiting_signature',
+  WAITING_OTHERS = 'waiting_others',
+  WAITING_FINANCE_EXPORT = 'waiting_finance_export',
+  WAITING_CLOSE_PROJECT = 'waiting_close_project',
+  WAITING_EDIT = 'waiting_edit',
+  URGENT = 'urgent',
 }

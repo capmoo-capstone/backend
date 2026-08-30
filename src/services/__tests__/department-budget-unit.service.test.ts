@@ -1,7 +1,7 @@
 import { UnitResponsibleType, UserRole } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../../lib/constant';
-import { BadRequestError } from '../../lib/errors';
+import { OPS_DEPT_ID, REGISTRATION_DEPT_ID } from '../../utils/constant';
+import { BadRequestError } from '../../utils/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import {
   createDepartment,

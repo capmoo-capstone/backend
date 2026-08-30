@@ -9,11 +9,11 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { CONTRACT_UNIT_ID } from '../lib/constant';
-import { nowUtc } from '../lib/date';
-import { BadRequestError, NotFoundError } from '../lib/errors';
-import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../lib/permissions';
-import { Capability, assertCapability } from '../lib/access-policy';
+import { CONTRACT_UNIT_ID } from '../utils/constant';
+import { nowUtc } from '../utils/date';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../utils/permissions';
+import { Capability, assertCapability } from '../utils/access-policy';
 import {
   CancelProjectDto,
   CompleteProcurementPhaseDto,
@@ -489,44 +489,24 @@ export const completeProcurementPhase = async (
     }
 
     const transitionAt = nowUtc();
-    const hasContractAssignee = Boolean(
-      data.continue_unit_proc || data.assignee_contract
-    );
-    let dataToUpdate: any = {
+    const hasContractAssignee = Boolean(data.assignee_contract);
+
+    const dataToUpdate: Prisma.ProjectUncheckedUpdateInput = {
       current_workflow_type: UnitResponsibleType.CONTRACT,
-      ...(project.procurement_completed_at
-        ? {}
-        : { procurement_completed_at: transitionAt }),
-      ...(hasContractAssignee && !project.contract_started_at
-        ? { contract_started_at: transitionAt }
-        : {}),
+      procurement_completed_at: transitionAt,
+      status: hasContractAssignee
+        ? ProjectStatus.WAITING_ACCEPT
+        : ProjectStatus.UNASSIGNED,
+      contract_started_at: hasContractAssignee ? transitionAt : undefined,
+      responsible_unit_id: data.contract_unit_id,
+      assignee_contract: data.assignee_contract
+        ? { connect: { id: data.assignee_contract } }
+        : undefined,
     };
 
-    if (data.continue_unit_proc) {
-      dataToUpdate = {
-        ...dataToUpdate,
-        assignee_contract: {
-          connect: project.assignee_procurement.map((u) => ({ id: u.id })),
-        },
-      };
-    } else if (data.assignee_contract) {
-      dataToUpdate = {
-        ...dataToUpdate,
-        status: ProjectStatus.WAITING_ACCEPT,
-        responsible_unit_id: CONTRACT_UNIT_ID,
-        assignee_contract: { connect: { id: data.assignee_contract } },
-      };
-    } else {
-      dataToUpdate = {
-        ...dataToUpdate,
-        status: ProjectStatus.UNASSIGNED,
-        responsible_unit_id: CONTRACT_UNIT_ID,
-      };
-    }
-
-    const oldValue = {};
-    for (const key in dataToUpdate) {
-      oldValue[key] = project[key];
+    const oldValue: Record<string, unknown> = {};
+    for (const key of Object.keys(dataToUpdate)) {
+      oldValue[key] = project[key as keyof typeof project];
     }
 
     const updated = await tx.project.update({
@@ -542,10 +522,9 @@ export const completeProcurementPhase = async (
     });
     await createProjectHistoryAndAuditEvent(tx, {
       projectId: data.id,
-      action:
-        !data.assignee_contract && !data.continue_unit_proc
-          ? ProjectActionType.STATUS_UPDATE
-          : ProjectActionType.ASSIGNEE_UPDATE,
+      action: !data.assignee_contract
+        ? ProjectActionType.STATUS_UPDATE
+        : ProjectActionType.ASSIGNEE_UPDATE,
       oldValue,
       newValue: dataToUpdate,
       changedBy: user,

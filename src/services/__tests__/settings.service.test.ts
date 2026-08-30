@@ -1,6 +1,6 @@
 import { UnitResponsibleType, UserRole } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { OPS_DEPT_ID } from '../../lib/constant';
+import { OPS_DEPT_ID } from '../../utils/constant';
 import { prismaMock } from '../../test/prisma-mock';
 import { getOpsStaff, getOpsUnits } from '../settings.service';
 

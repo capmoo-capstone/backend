@@ -5,47 +5,32 @@ import {
   UrgentType,
 } from '@prisma/client';
 import { z } from 'zod';
-import { BangkokDateTimeSchema } from '../lib/date';
-
-export const OwnProjectTabEnum = z.enum([
-  'all',
-  'waiting_accept',
-  'need_action',
-  'rejected',
-  'waiting_approval',
-  'waiting_cancel',
-  'waiting_proposal',
-  'waiting_signature',
-  'waiting_others',
-  'urgent',
-  'very_urgent',
-  'super_urgent',
-  'waiting_finance_export',
-  'waiting_close_project',
-  'waiting_edit',
-]);
-
-export const OwnProjectTabSchema = OwnProjectTabEnum.default('all');
+import { BangkokDateTimeSchema } from '../utils/date';
+import { OwnProjectTab } from '../types/project.type';
+import { CONTRACT_UNIT_ID } from '../utils/constant';
 
 export const GetOwnProjectsQuerySchema = z.object({
-  tab: OwnProjectTabSchema,
+  tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
+  search: z.string().trim().optional(),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
-  budget: z.number(),
+  budget: z.number().optional(),
+  actual_cost: z.number().optional(),
   budget_year: z.coerce.number().int().optional(),
   budget_plan_id: z.array(z.string()).optional(),
   pr_no: z.string().optional(),
   less_no: z.string().optional(),
   po_no: z.string().optional(),
   requesting_dept_id: z.string(),
-  requesting_unit_id: z.string(),
+  requesting_unit_id: z.string().optional(),
   procurement_type: z.enum(ProcurementType),
   is_urgent: z.enum(UrgentType).default(UrgentType.NORMAL),
   expected_approval_date: BangkokDateTimeSchema.optional(),
-  expected_completion_procurement_date: BangkokDateTimeSchema.optional(),
   installment_rounds: z.coerce.number().int().min(1).default(1),
 });
 
@@ -68,7 +53,10 @@ export const AcceptProjectsSchema = z.object({
 
 export const CompleteProcurementPhaseSchema = z.object({
   id: z.uuid(),
-  continue_unit_proc: z.boolean().default(false),
+  contract_unit_id: z
+    .string()
+    .optional()
+    .transform((value) => value || CONTRACT_UNIT_ID),
   assignee_contract: z.uuid().optional(),
 });
 
@@ -118,6 +106,7 @@ export const UpdateProjectSchema = z.object({
     title: z.string().optional(),
     description: z.string().optional(),
     budget: z.number().optional(),
+    actual_cost: z.number().optional(),
     pr_no: z.string().optional(),
     po_no: z.string().optional(),
     less_no: z.string().optional(),
@@ -194,5 +183,5 @@ export type ProjectFilterQuery = z.infer<typeof ProjectFilterQuerySchema>;
 export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
-export type OwnProjectTab = z.infer<typeof OwnProjectTabSchema>;
+export type GetOwnProjectsQuery = z.infer<typeof GetOwnProjectsQuerySchema>;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;

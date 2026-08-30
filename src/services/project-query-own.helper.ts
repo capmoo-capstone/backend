@@ -8,9 +8,13 @@ import {
   UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../lib/constant';
-import { isHeadOfSupplyDept, isSuperAdmin } from '../lib/permissions';
-import { OwnProjectTab, OwnProjectTabEnum } from '../schemas/project.schema';
+import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../utils/constant';
+import { isHeadOfSupplyDept, isSuperAdmin } from '../utils/permissions';
+import {
+  GetOwnProjectsQuery,
+} from '../schemas/project.schema';
+import { OwnProjectTab } from '../types/project.type';
+import { bangkokDayEndUtc, bangkokDayStartUtc } from '../utils/date';
 import { AuthPayload } from '../types/auth.type';
 import { PaginatedProjects } from '../types/project.type';
 
@@ -21,10 +25,14 @@ type SupplyProgressRole =
 
 type OwnRole = SupplyProgressRole | typeof UserRole.FINANCE_STAFF;
 
+export type OwnProjectRole = OwnRole;
+
 type RoleScope = {
   role: OwnRole;
   where: Prisma.ProjectWhereInput;
 };
+
+export type OwnProjectRoleScope = RoleScope;
 
 type UnitScope = {
   id: string;
@@ -43,11 +51,16 @@ const PROJECT_SELECT = {
   },
   procurement_progress: true,
   contract_progress: true,
+  requesting_dept: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   requesting_unit: {
     select: {
       id: true,
       name: true,
-      department: { select: { name: true, id: true } },
     },
   },
   budget: true,
@@ -59,52 +72,31 @@ const PROJECT_SELECT = {
   expected_approval_date: true,
   created_at: true,
   updated_at: true,
+  project_installments: {
+    select: {
+      status: true,
+    },
+  },
 } satisfies Prisma.ProjectSelect;
 
-const URGENT_TAB: Partial<Record<OwnProjectTab, UrgentType>> = {
-  urgent: UrgentType.URGENT,
-  very_urgent: UrgentType.VERY_URGENT,
-  super_urgent: UrgentType.SUPER_URGENT,
-};
-
-const ACTION_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
+export const OWN_PROJECT_ACTION_TABS: Record<OwnRole, OwnProjectTab[]> = {
   [UserRole.GENERAL_STAFF]: [
-    'waiting_accept',
-    'need_action',
-    'rejected',
-    'waiting_others',
+    OwnProjectTab.WAITING_ACCEPT,
+    OwnProjectTab.NEED_ACTION,
+    OwnProjectTab.REJECTED,
+    OwnProjectTab.WAITING_OTHERS,
+    OwnProjectTab.COMPLETED,
   ],
   [UserRole.HEAD_OF_UNIT]: [
-    'waiting_approval',
-    'waiting_others',
-    'waiting_cancel',
+    OwnProjectTab.WAITING_APPROVAL,
+    OwnProjectTab.WAITING_OTHERS,
+    OwnProjectTab.WAITING_CANCEL,
   ],
-  [UserRole.DOCUMENT_STAFF]: ['waiting_proposal', 'waiting_signature'],
+  [UserRole.DOCUMENT_STAFF]: [OwnProjectTab.WAITING_PROPOSAL, OwnProjectTab.WAITING_SIGNATURE],
   [UserRole.FINANCE_STAFF]: [
-    'waiting_finance_export',
-    'waiting_edit',
-    'waiting_close_project',
-  ],
-};
-
-const URGENT_TABS: OwnProjectTab[] = ['urgent', 'very_urgent', 'super_urgent'];
-
-const ROLE_TAB_UNION: Record<OwnRole, OwnProjectTab[]> = {
-  [UserRole.GENERAL_STAFF]: [
-    ...ACTION_TAB_UNION[UserRole.GENERAL_STAFF],
-    ...URGENT_TABS,
-  ],
-  [UserRole.HEAD_OF_UNIT]: [
-    ...ACTION_TAB_UNION[UserRole.HEAD_OF_UNIT],
-    ...URGENT_TABS,
-  ],
-  [UserRole.DOCUMENT_STAFF]: [
-    ...ACTION_TAB_UNION[UserRole.DOCUMENT_STAFF],
-    ...URGENT_TABS,
-  ],
-  [UserRole.FINANCE_STAFF]: [
-    ...ACTION_TAB_UNION[UserRole.FINANCE_STAFF],
-    ...URGENT_TABS,
+    OwnProjectTab.WAITING_FINANCE_EXPORT,
+    OwnProjectTab.WAITING_EDIT,
+    OwnProjectTab.WAITING_CLOSE_PROJECT,
   ],
 };
 
@@ -247,7 +239,9 @@ const progressStatusWhere = (
     ])
   );
 
-const buildRoleScopes = async (user: AuthPayload): Promise<RoleScope[]> => {
+export const buildOwnProjectRoleScopes = async (
+  user: AuthPayload
+): Promise<RoleScope[]> => {
   const roleUnits = await getUnitsByRole(user, [
     UserRole.GENERAL_STAFF,
     UserRole.HEAD_OF_UNIT,
@@ -286,18 +280,19 @@ const buildRoleScopes = async (user: AuthPayload): Promise<RoleScope[]> => {
 
 const roleAllTabWhere = (scope: RoleScope): Prisma.ProjectWhereInput =>
   orWhere(
-    ACTION_TAB_UNION[scope.role]
-      .map((roleTab) => roleTabWhere(scope, roleTab))
+    OWN_PROJECT_ACTION_TABS[scope.role]
+      .map((roleTab) => buildOwnProjectRoleTabWhere(scope, roleTab))
       .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause))
   );
 
-const roleTabWhere = (
+export const buildOwnProjectRoleTabWhere = (
   scope: RoleScope,
   tab: OwnProjectTab
 ): Prisma.ProjectWhereInput | null => {
-  const urgentStatus = URGENT_TAB[tab];
-  if (urgentStatus) {
-    return andWhere(roleAllTabWhere(scope), { is_urgent: urgentStatus });
+  if (tab === 'urgent') {
+    return andWhere(roleAllTabWhere(scope), {
+      is_urgent: { not: UrgentType.NORMAL },
+    });
   }
 
   if (tab === 'all') {
@@ -362,6 +357,16 @@ const roleTabWhere = (
           UserRole.DOCUMENT_STAFF,
           NON_COMPLETED_PHASE_STATUSES
         )
+      );
+    }
+    if (tab === 'completed') {
+      return andWhere(
+        scope.where,
+        orWhere([
+          { status: ProjectStatus.CLOSED },
+          { procurement_completed_at: { not: null } },
+          { contract_completed_at: { not: null } },
+        ])
       );
     }
   }
@@ -450,48 +455,215 @@ const roleTabWhere = (
   return null;
 };
 
-const broadAccessWhere = (
-  user: AuthPayload,
-  tab: OwnProjectTab
-): Prisma.ProjectWhereInput | null => {
-  const hasBroadAccess = isSuperAdmin(user) || isHeadOfSupplyDept(user);
-  if (!hasBroadAccess) {
-    return null;
+const buildSearchFilter = (search?: string): Prisma.ProjectWhereInput => {
+  if (!search?.trim()) {
+    return {};
   }
 
-  const urgentStatus = URGENT_TAB[tab];
-  if (urgentStatus) {
-    return { is_urgent: urgentStatus };
+  const searchTerm = search.trim();
+  return {
+    OR: [
+      {
+        receive_no: {
+          contains: searchTerm,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+      {
+        title: {
+          contains: searchTerm,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+      {
+        assignee_procurement: {
+          some: {
+            full_name: {
+              contains: searchTerm,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          },
+        },
+      },
+      {
+        assignee_contract: {
+          some: {
+            full_name: {
+              contains: searchTerm,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          },
+        },
+      },
+    ],
+  };
+};
+
+export const buildOwnProjectCompletedDateFilter = (
+  dateFrom?: Date,
+  dateTo?: Date
+): Prisma.ProjectWhereInput => {
+  if (!dateFrom && !dateTo) {
+    return {};
   }
 
-  return tab === 'all' ? {} : null;
+  const dateFilter: Prisma.DateTimeFilter = {};
+  if (dateFrom) {
+    dateFilter.gte = bangkokDayStartUtc(dateFrom);
+  }
+  if (dateTo) {
+    dateFilter.lte = bangkokDayEndUtc(dateTo);
+  }
+
+  return orWhere([
+    andWhere(
+      { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
+      { procurement_completed_at: dateFilter }
+    ),
+    andWhere(
+      { current_workflow_type: UnitResponsibleType.CONTRACT },
+      { contract_completed_at: dateFilter }
+    ),
+  ]);
 };
 
 const ownProjectWhereClause = async (
   user: AuthPayload,
-  tab: OwnProjectTab
+  query: GetOwnProjectsQuery
 ): Promise<Prisma.ProjectWhereInput> => {
-  const broadWhere = broadAccessWhere(user, tab);
-  if (broadWhere) {
-    return broadWhere;
+  const tab = query.tab ?? OwnProjectTab.ALL;
+
+  const scopes = await buildOwnProjectRoleScopes(user);
+  const clauses = scopes
+    .map((scope) => buildOwnProjectRoleTabWhere(scope, tab))
+    .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause));
+  const baseWhere = orWhere(clauses);
+
+  const andClauses: Prisma.ProjectWhereInput[] = [baseWhere];
+
+  const searchWhere = buildSearchFilter(query.search);
+  if (Object.keys(searchWhere).length > 0) {
+    andClauses.push(searchWhere);
   }
 
-  const scopes = await buildRoleScopes(user);
+  if (tab === 'completed') {
+    const dateWhere = buildOwnProjectCompletedDateFilter(
+      query.dateFrom,
+      query.dateTo
+    );
+    if (Object.keys(dateWhere).length > 0) {
+      andClauses.push(dateWhere);
+    }
+  }
 
-  const clauses = scopes
-    .map((scope) => roleTabWhere(scope, tab))
-    .filter((clause): clause is Prisma.ProjectWhereInput => Boolean(clause));
+  return andWhere(...andClauses);
+};
 
-  return orWhere(clauses);
+const resolveOwnProjectStatus = (
+  project: {
+    status: ProjectStatus;
+    current_workflow_type: UnitResponsibleType;
+    procurement_progress?: unknown;
+    contract_progress?: unknown;
+    project_installments?: Array<{ status: ProjectInstallmentStatus }>;
+  },
+  user: AuthPayload,
+  tab: OwnProjectTab
+): string => {
+  if (tab !== 'all' && tab !== 'urgent') {
+    return tab.toUpperCase();
+  }
+
+  const roles = user.roles
+    .filter((r) => r.dept_id === OPS_DEPT_ID)
+    .map((r) => r.role as OwnRole);
+
+  const activeProgress = (
+    project.current_workflow_type === UnitResponsibleType.CONTRACT
+      ? project.contract_progress
+      : project.procurement_progress
+  ) as Record<string, { status?: ProjectPhaseStatus }> | undefined;
+
+  if (roles.includes(UserRole.GENERAL_STAFF)) {
+    if (project.status === ProjectStatus.WAITING_ACCEPT) {
+      return 'WAITING_ACCEPT';
+    }
+    const staffStatus = activeProgress?.[UserRole.GENERAL_STAFF]?.status;
+    const headStatus = activeProgress?.[UserRole.HEAD_OF_UNIT]?.status;
+    const docStatus = activeProgress?.[UserRole.DOCUMENT_STAFF]?.status;
+
+    if (staffStatus === ProjectPhaseStatus.REJECTED) {
+      return 'REJECTED';
+    }
+    if (
+      (staffStatus === ProjectPhaseStatus.WAITING_APPROVAL ||
+        staffStatus === ProjectPhaseStatus.COMPLETED) &&
+      (headStatus !== ProjectPhaseStatus.COMPLETED ||
+        docStatus !== ProjectPhaseStatus.COMPLETED)
+    ) {
+      return 'WAITING_OTHERS';
+    }
+    return 'NEED_ACTION';
+  }
+
+  if (roles.includes(UserRole.HEAD_OF_UNIT)) {
+    if (project.status === ProjectStatus.WAITING_CANCEL) {
+      return 'WAITING_CANCEL';
+    }
+    const staffStatus = activeProgress?.[UserRole.GENERAL_STAFF]?.status;
+    const headStatus = activeProgress?.[UserRole.HEAD_OF_UNIT]?.status;
+
+    if (
+      staffStatus === ProjectPhaseStatus.REJECTED &&
+      headStatus === ProjectPhaseStatus.NOT_STARTED
+    ) {
+      return 'WAITING_OTHERS';
+    }
+    if (headStatus === ProjectPhaseStatus.WAITING_APPROVAL) {
+      return 'WAITING_APPROVAL';
+    }
+  }
+
+  if (roles.includes(UserRole.DOCUMENT_STAFF)) {
+    const docStatus = activeProgress?.[UserRole.DOCUMENT_STAFF]?.status;
+    if (docStatus === ProjectPhaseStatus.WAITING_PROPOSAL) {
+      return 'WAITING_PROPOSAL';
+    }
+    if (docStatus === ProjectPhaseStatus.WAITING_SIGNATURE) {
+      return 'WAITING_SIGNATURE';
+    }
+  }
+
+  if (roles.includes(UserRole.FINANCE_STAFF)) {
+    if (project.status === ProjectStatus.WAITING_CLOSE) {
+      return 'WAITING_CLOSE_PROJECT';
+    }
+    const hasRequestEdit = project.project_installments?.some(
+      (i) => i.status === ProjectInstallmentStatus.REQUEST_EDIT
+    );
+    if (hasRequestEdit) {
+      return 'WAITING_EDIT';
+    }
+    const hasWaitingExport = project.project_installments?.some(
+      (i) => i.status === ProjectInstallmentStatus.WAITING_EXPORT
+    );
+    if (hasWaitingExport) {
+      return 'WAITING_FINANCE_EXPORT';
+    }
+  }
+
+  return String(project.status);
 };
 
 export const getOwnProjects = async (
   user: AuthPayload,
   page: number,
   limit: number,
-  tab: OwnProjectTab
+  query: GetOwnProjectsQuery
 ): Promise<PaginatedProjects> => {
-  const whereClause = await ownProjectWhereClause(user, tab);
+  const tab = query.tab ?? OwnProjectTab.ALL;
+
+  const whereClause = await ownProjectWhereClause(user, query);
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
@@ -504,29 +676,44 @@ export const getOwnProjects = async (
     prisma.project.count({ where: whereClause }),
   ]);
 
+  const data = projects.map((project) => ({
+    title: project.title,
+    id: project.id,
+    status: resolveOwnProjectStatus(project, user, tab),
+    receive_no: project.receive_no,
+    procurement_type: project.procurement_type,
+    expected_approval_date: project.expected_approval_date,
+    requesting_dept: project.requesting_dept,
+    requesting_unit: project.requesting_unit,
+    assignee:
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+        ? project.assignee_contract
+        : project.assignee_procurement,
+  }));
+
   return {
     total,
     page,
     pageSize: limit,
     totalPages: Math.ceil(total / limit),
-    data: projects,
-  } as PaginatedProjects;
+    data,
+  } as unknown as PaginatedProjects;
 };
 
 const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
   if (isSuperAdmin(user) || isHeadOfSupplyDept(user)) {
-    return OwnProjectTabEnum.options;
+    return Object.values(OwnProjectTab);
   }
 
   const roleTabs = user.roles
     .filter((r) => r.dept_id === OPS_DEPT_ID)
-    .flatMap((r) => ROLE_TAB_UNION[r.role as OwnRole] ?? []);
+    .flatMap((r) => OWN_PROJECT_ACTION_TABS[r.role as OwnRole] ?? []);
 
   if (roleTabs.length === 0) {
-    return [];
+    return [OwnProjectTab.ALL, OwnProjectTab.URGENT];
   }
 
-  return ['all', ...unique(roleTabs)];
+  return [OwnProjectTab.ALL, ...unique(roleTabs), OwnProjectTab.URGENT];
 };
 
 export const getOwnProjectsTotal = async (
@@ -540,7 +727,7 @@ export const getOwnProjectsTotal = async (
   const whereEntries = await Promise.all(
     tabs.map(async (tab) => ({
       tab,
-      where: await ownProjectWhereClause(user, tab),
+      where: await ownProjectWhereClause(user, { tab }),
     }))
   );
 

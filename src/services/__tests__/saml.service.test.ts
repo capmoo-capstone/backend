@@ -24,9 +24,8 @@ const setSamlEnvironment = () => {
     'https://api.example.chula.ac.th/api/v1/auth/saml/acs';
   process.env.SAML_IDP_METADATA_URL = 'https://portal.it.chula.ac.th/metadata';
   process.env.SAML_IDP_ENTITY_ID = 'liferay-idp';
-  process.env.SAML_FRONTEND_SUCCESS_URL = 'https://www.example.chula.ac.th/';
-  process.env.SAML_FRONTEND_FAILURE_URL =
-    'https://www.example.chula.ac.th/login?error=sso_failed';
+  process.env.SAML_FRONTEND_REDIRECT_URL =
+    'https://www.example.chula.ac.th/login';
 };
 
 describe('SAML service', () => {

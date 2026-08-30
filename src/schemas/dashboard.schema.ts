@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { ProcurementType } from '@prisma/client';
 import {
+  BangkokDateTimeSchema,
   bangkokDayEndUtc,
   bangkokDayStartUtc,
   parseBangkokDateTime,
-} from '../lib/date';
-import { OwnProjectTabSchema } from './project.schema';
+} from '../utils/date';
+import { OwnProjectTab } from '../types/project.type';
 
 export const DashboardModeEnum = z.enum([
   'today',
@@ -107,11 +108,6 @@ export const ProcurementOverviewQuerySchema = z
     }
   });
 
-export const DeadlinesQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
-});
-
 export const UnitGroupQuerySchema = z
   .object({
     unitId: z.string(),
@@ -163,9 +159,9 @@ export const IndividualDashboardQuerySchema = z.object({
 
 export const IndividualTodoQuerySchema = z.object({
   targetUserId: z.string(),
-  tab: OwnProjectTabSchema,
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
 });
 
 export const IndividualTodoTotalQuerySchema = z.object({
@@ -176,7 +172,6 @@ export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<
   typeof ProcurementOverviewQuerySchema
 >;
-export type DeadlinesQuery = z.infer<typeof DeadlinesQuerySchema>;
 export type UnitGroupQuery = z.infer<typeof UnitGroupQuerySchema>;
 export type UnitGroupTopDelayedQuery = z.infer<
   typeof UnitGroupTopDelayedQuerySchema

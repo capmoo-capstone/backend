@@ -1,18 +1,18 @@
 import { NextFunction, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { ForbiddenError, UnauthorizedError } from '../lib/errors';
+import { ForbiddenError, UnauthorizedError } from '../utils/errors';
 import { UserRole } from '@prisma/client';
 import { AuthenticatedRequest } from '../types/auth.type';
 import { prisma } from '../config/prisma';
 import { fetchAndFormatUserDetails } from '../services/auth.service';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { getUserAuthCache, setUserAuthCache } from '../lib/auth-cache';
+import { OPS_DEPT_ID } from '../utils/constant';
+import { getUserAuthCache, setUserAuthCache } from '../utils/auth-cache';
 import {
   Capability,
   hasCapability,
   hasSupplyAccess,
   isSuperAdmin,
-} from '../lib/access-policy';
+} from '../utils/access-policy';
 
 interface JwtPayload {
   id: string;

@@ -13,9 +13,9 @@ import {
   bangkokDayStartUtc,
   formatBangkokOffset,
   nowUtc,
-} from '../lib/date';
-import { NotFoundError } from '../lib/errors';
-import { assertCanReadProject } from '../lib/project-scope';
+} from '../utils/date';
+import { NotFoundError } from '../utils/errors';
+import { assertCanReadProject } from '../utils/project-scope';
 import { AuditLogsQuery } from '../schemas/admin.schema';
 import {
   AuditActor,

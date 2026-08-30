@@ -1,9 +1,9 @@
 import { UserRole } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { OPS_DEPT_ID } from '../lib/constant';
-import { nowUtc } from '../lib/date';
-import { openDelegationWhere } from '../lib/active-state';
-import { NotFoundError } from '../lib/errors';
+import { OPS_DEPT_ID } from '../utils/constant';
+import { nowUtc } from '../utils/date';
+import { openDelegationWhere } from '../utils/active-state';
+import { NotFoundError } from '../utils/errors';
 import {
   OpsStaffSettingsResponse,
   OpsStaffSettingsRole,

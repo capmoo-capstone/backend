@@ -80,27 +80,6 @@ export interface ProcurementOverviewResponse {
   budgetPlanSummary?: ProcurementPlanSummary | null;
 }
 
-export type DeadlinePriority = 'URGENT' | 'WATCH' | 'NORMAL';
-
-export interface DeadlineProjectRow {
-  projectId: string;
-  title: string;
-  dueDate: Date;
-}
-
-export interface OverdueProjectRow extends DeadlineProjectRow {
-  daysLate: number;
-}
-
-export interface DueSoonProjectRow extends DeadlineProjectRow {
-  daysRemaining: number;
-  priority: DeadlinePriority;
-}
-
-export type OverdueProjectResponse = PaginatedResponse<OverdueProjectRow>;
-
-export type DueSoonProjectResponse = PaginatedResponse<DueSoonProjectRow>;
-
 // --- Unit Group KPI Dashboard Types ---
 
 export interface WorkloadVsDurationPoint {

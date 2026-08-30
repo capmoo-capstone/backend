@@ -7,9 +7,9 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
-import { BadRequestError, NotFoundError } from '../lib/errors';
-import { syncProjectPhases } from '../lib/phase-status';
+import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
+import { BadRequestError, NotFoundError } from '../utils/errors';
+import { syncProjectPhases } from '../utils/phase-status';
 import {
   ApproveSubmissionDto,
   CompleteSubmissionDto,
@@ -41,11 +41,40 @@ import {
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
 } from './notification/notification.service';
+import { sendVendorPoRequestEmailForProject } from './notification/notification-email.service';
 import { generatePresignedDownloadUrl } from './storage.service';
-import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../lib/date';
-import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
-import { Capability, assertCapability } from '../lib/access-policy';
-import { assertCanReadProject, projectReadWhere } from '../lib/project-scope';
+import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
+import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
+import { Capability, assertCapability } from '../utils/access-policy';
+import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
+
+const VENDOR_PO_EMAIL_STEP_ORDERS = new Map<UnitResponsibleType, number>([
+  [UnitResponsibleType.MT500K, 5],
+  [UnitResponsibleType.EBIDDING, 9],
+  [UnitResponsibleType.SELECTION, 6],
+  [UnitResponsibleType.LT500K, 3],
+  [UnitResponsibleType.LT100K, 3],
+  [UnitResponsibleType.INTERNAL, 3],
+]);
+
+const shouldSendVendorPoEmailForSubmission = (input: {
+  workflowType: UnitResponsibleType;
+  stepOrder: number;
+  status: SubmissionStatus;
+}) =>
+  input.status === SubmissionStatus.COMPLETED &&
+  VENDOR_PO_EMAIL_STEP_ORDERS.get(input.workflowType) === input.stepOrder;
+
+const safeSendVendorPoEmail = async (projectId: string) => {
+  try {
+    await sendVendorPoRequestEmailForProject(projectId);
+  } catch (error) {
+    console.error(
+      'Vendor PO request email failed:',
+      error instanceof Error ? error.message : 'Unknown email error'
+    );
+  }
+};
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -104,7 +133,7 @@ const validateInstallmentNo = (
 type ProjectForUpdate = Pick<
   Project,
   | 'id'
-  | 'budget'
+  | 'actual_cost'
   | 'pr_no'
   | 'po_no'
   | 'less_no'
@@ -422,7 +451,7 @@ export const createStaffSubmissionsProject = async (
       select: {
         id: true,
         current_workflow_type: true,
-        budget: true,
+        actual_cost: true,
         pr_no: true,
         po_no: true,
         less_no: true,
@@ -745,6 +774,15 @@ export const approveSubmission = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
+  if (
+    shouldSendVendorPoEmailForSubmission({
+      workflowType: transactionResult.updated.workflow_type,
+      stepOrder: transactionResult.updated.step_order,
+      status: transactionResult.updated.status,
+    })
+  ) {
+    await safeSendVendorPoEmail(transactionResult.updated.project_id);
+  }
 
   return transactionResult.updated;
 };
@@ -820,6 +858,7 @@ export const signAndCompleteSubmission = async (
         status: SubmissionStatus.COMPLETED,
         completed_at: nowUtc(),
         completed_by: user.id,
+        signed_at: data.signed_at ?? nowUtc(),
       },
       select: {
         id: true,
@@ -831,15 +870,27 @@ export const signAndCompleteSubmission = async (
         status: true,
         completed_at: true,
         completed_by: true,
+        signed_at: true,
       },
     });
+
+    if (data.files && data.files.length > 0) {
+      await tx.projectDocument.createMany({
+        data: data.files.map((file) => ({
+          submission_id: data.id,
+          field_key: file.field_key ?? null,
+          file_name: file.file_name,
+          file_path: file.file_path,
+        })),
+      });
+    }
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     if (data.required_updating) {
       const project = await tx.project.findUnique({
         where: { id: updated.project_id },
         select: {
           id: true,
-          budget: true,
+          actual_cost: true,
           pr_no: true,
           po_no: true,
           less_no: true,
@@ -870,6 +921,16 @@ export const signAndCompleteSubmission = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
+  if (
+    shouldSendVendorPoEmailForSubmission({
+      workflowType: transactionResult.updated.workflow_type,
+      stepOrder: transactionResult.updated.step_order,
+      status: transactionResult.updated.status,
+    })
+  ) {
+    await safeSendVendorPoEmail(transactionResult.updated.project_id);
+  }
 
   return transactionResult.updated;
 };
+

@@ -6,6 +6,7 @@ import {
   ListRegistrationRequestsQuerySchema,
 } from '../../schemas/registration.schema';
 import { prismaMock, txMock } from '../../test/prisma-mock';
+import * as NotificationEmailService from '../notification/notification-email.service';
 import {
   approveRegistrationRequest,
   createRegistrationRequest,
@@ -65,6 +66,9 @@ describe('account-registration.service', () => {
 
   it('creates a pending SSO request for multiple units without creating a user', async () => {
     mockDepartmentAndUnit();
+    const sendSpy = vi
+      .spyOn(NotificationEmailService, 'sendRegistrationPendingEmail')
+      .mockResolvedValue(undefined);
     txMock.registrationRequest.create.mockResolvedValue({
       id: 'request-1',
       ...requestData,
@@ -84,6 +88,10 @@ describe('account-registration.service', () => {
     });
     expect(txMock.user.create).not.toHaveBeenCalled();
     expect(txMock.auditEvent.create).toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledWith({
+      fullName: requestData.full_name,
+      email: requestData.email,
+    });
   });
 
   it('rejects a request whose unit is in another department', async () => {
@@ -115,6 +123,9 @@ describe('account-registration.service', () => {
 
   it('approves a pending request with a guest role for every requested unit', async () => {
     mockDepartmentAndUnit();
+    const sendSpy = vi
+      .spyOn(NotificationEmailService, 'sendRegistrationApprovedEmail')
+      .mockResolvedValue(undefined);
     txMock.registrationRequest.findUnique.mockResolvedValue({
       id: 'request-1',
       ...requestData,
@@ -170,6 +181,10 @@ describe('account-registration.service', () => {
         }),
       })
     );
+    expect(sendSpy).toHaveBeenCalledWith({
+      fullName: requestData.full_name,
+      email: requestData.email,
+    });
   });
 
   it('rejects a pending request and records the reason', async () => {

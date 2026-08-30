@@ -1,47 +1,98 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
-import { AppError } from '../lib/errors';
+import { AppError } from '../utils/errors';
 
 type ErrorResponse = {
   statusCode: number;
   message: string;
+  error?: string;
 };
 
+const includeErrorDetails = () => process.env.NODE_ENV !== 'production';
+
 const logServerError = (err: unknown, req: Request, context: string) => {
-  console.error(`[${context}] ${req.method} ${req.originalUrl}`, err);
+  console.error('[%s] %s %s', context, req.method, req.originalUrl, err);
 };
 
 const getPrismaErrorResponse = (err: unknown): ErrorResponse | null => {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     switch (err.code) {
-      case 'P2002':
-        return { statusCode: 409, message: 'Duplicate value already exists' };
+      case 'P2002': {
+        const target = Array.isArray(err.meta?.target)
+          ? err.meta.target.join(', ')
+          : typeof err.meta?.target === 'string'
+            ? err.meta.target
+            : undefined;
+        return {
+          statusCode: 409,
+          message: 'Duplicate value already exists',
+          error: target
+            ? `Unique constraint failed on field: ${target}`
+            : err.message,
+        };
+      }
       case 'P2025':
-        return { statusCode: 404, message: 'Record not found' };
-      case 'P2003':
-        return { statusCode: 400, message: 'Invalid related record' };
+        return {
+          statusCode: 404,
+          message: 'Record not found',
+          error:
+            typeof err.meta?.cause === 'string' ? err.meta.cause : err.message,
+        };
+      case 'P2003': {
+        const fieldName =
+          typeof err.meta?.field_name === 'string'
+            ? err.meta.field_name
+            : undefined;
+        return {
+          statusCode: 400,
+          message: 'Invalid related record',
+          error: fieldName
+            ? `Foreign key constraint failed on: ${fieldName}`
+            : err.message,
+        };
+      }
       default:
         if (err.code.startsWith('P10')) {
-          return { statusCode: 503, message: 'Database unavailable' };
+          return {
+            statusCode: 503,
+            message: 'Database unavailable',
+            error: err.message,
+          };
         }
-        return { statusCode: 500, message: 'Database error' };
+        return {
+          statusCode: 500,
+          message: 'Database error',
+          error: err.message,
+        };
     }
   }
 
   if (err instanceof Prisma.PrismaClientValidationError) {
-    return { statusCode: 400, message: 'Invalid database query input' };
+    return {
+      statusCode: 400,
+      message: 'Invalid database query input',
+      error: err.message,
+    };
   }
 
   if (err instanceof Prisma.PrismaClientInitializationError) {
-    return { statusCode: 503, message: 'Database unavailable' };
+    return {
+      statusCode: 503,
+      message: 'Database unavailable',
+      error: err.message,
+    };
   }
 
   if (
     err instanceof Prisma.PrismaClientUnknownRequestError ||
     err instanceof Prisma.PrismaClientRustPanicError
   ) {
-    return { statusCode: 500, message: 'Database error' };
+    return {
+      statusCode: 500,
+      message: 'Database error',
+      error: err.message,
+    };
   }
 
   return null;
@@ -54,10 +105,14 @@ export const errorHandler = (
   _next: NextFunction
 ) => {
   if (err instanceof ZodError) {
+    const issueSummary = err.issues
+      .map((issue) => `${issue.path.join('.') || 'root'}: ${issue.message}`)
+      .join(', ');
+
     return res.status(422).json({
       status: 'unprocessable_entity',
       message: 'Validation failed',
-      errors: err.flatten().fieldErrors,
+      error: issueSummary || err.message,
     });
   }
 
@@ -77,6 +132,7 @@ export const errorHandler = (
     return res.status(400).json({
       status: 'error',
       message: 'Invalid JSON payload format',
+      ...(includeErrorDetails() ? { error: err.message } : {}),
     });
   }
 
@@ -86,9 +142,18 @@ export const errorHandler = (
     return res.status(prismaErrorResponse.statusCode).json({
       status: 'error',
       message: prismaErrorResponse.message,
+      ...(includeErrorDetails() && prismaErrorResponse.error
+        ? { error: prismaErrorResponse.error }
+        : {}),
     });
   }
 
   logServerError(err, req, 'Unhandled error');
-  res.status(500).json({ status: 'error', message: 'Internal Server Error' });
+  const errorMessage =
+    err instanceof Error ? err.message : String(err ?? 'Unknown server error');
+  res.status(500).json({
+    status: 'error',
+    message: 'Internal Server Error',
+    ...(includeErrorDetails() ? { error: errorMessage } : {}),
+  });
 };

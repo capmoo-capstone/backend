@@ -1,7 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import * as AuthService from '../services/auth.service';
 import { AuthenticatedRequest } from '../types/auth.type';
-import { BadRequestError } from '../lib/errors';
+import {
+  BadRequestError,
+  SSO_FAILURE_CODES,
+  SsoAuthenticationError,
+} from '../utils/errors';
 import {
   CreateRegistrationRequestSchema,
   ListRegistrationRequestsQuerySchema,
@@ -9,8 +13,7 @@ import {
 import * as RegistrationService from '../services/registration.service';
 import {
   createSamlLoginUrl,
-  getSamlFrontendFailureUrl,
-  getSamlFrontendSuccessUrl,
+  getSamlFrontendRedirectUrl,
   getSamlMetadata,
   validateSamlResponse,
 } from '../services/saml.service';
@@ -86,10 +89,11 @@ export const samlAcs = async (
     const claims = await validateSamlResponse(req.body?.SAMLResponse);
     const code = await AuthService.loginWithSamlClaims(claims);
 
-    const successUrl = new URL(getSamlFrontendSuccessUrl());
-    successUrl.searchParams.set('code', code);
+    const redirectUrl = new URL(getSamlFrontendRedirectUrl());
+    redirectUrl.searchParams.delete('error');
+    redirectUrl.searchParams.set('code', code);
 
-    res.redirect(303, successUrl.toString());
+    res.redirect(303, redirectUrl.toString());
   } catch (err) {
     console.error(
       'SAML assertion consumer service failed:',
@@ -97,7 +101,14 @@ export const samlAcs = async (
     );
 
     try {
-      res.redirect(303, getSamlFrontendFailureUrl());
+      const redirectUrl = new URL(getSamlFrontendRedirectUrl());
+      const failureCode =
+        err instanceof SsoAuthenticationError
+          ? err.code
+          : SSO_FAILURE_CODES.SSO_FAILED;
+      redirectUrl.searchParams.delete('code');
+      redirectUrl.searchParams.set('error', failureCode);
+      res.redirect(303, redirectUrl.toString());
     } catch (configurationError) {
       next(configurationError);
     }

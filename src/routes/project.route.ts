@@ -6,7 +6,7 @@ import {
   requireSupplyRoles,
 } from '../middlewares/auth';
 import { UserRole } from '@prisma/client';
-import { Capability } from '../lib/access-policy';
+import { Capability } from '../utils/access-policy';
 
 const router = Router();
 
@@ -21,11 +21,6 @@ const {
 // ── List / Summary ────────────────────────────────────────────────────────────
 router.post('/', controller.getAll);
 router.get('/summary', controller.getSummary);
-router.get(
-  '/approval-dates',
-  requireSupplyAccess,
-  controller.getExpectedApprovalDates
-);
 
 // ── Supply-only views ─────────────────────────────────────────────────────────
 router.get(

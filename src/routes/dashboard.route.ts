@@ -14,17 +14,6 @@ router.get(
 );
 router.get('/procurement-overview', controller.getProcurementOverview);
 router.get(
-  '/deadlines/overdue',
-  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getOverdueDeadlines
-);
-router.get(
-  '/deadlines/due-soon',
-  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
-  controller.getDueSoonDeadlines
-);
-
-router.get(
   '/unit-group/executive-summary',
   requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getUnitGroupExecutiveSummary

@@ -1,6 +1,7 @@
 import { ProjectStatus, UnitResponsibleType, UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONTRACT_UNIT_ID, OPS_DEPT_ID } from '../../lib/constant';
+import { CONTRACT_UNIT_ID, OPS_DEPT_ID } from '../../utils/constant';
+import { CompleteProcurementPhaseSchema } from '../../schemas/project.schema';
 import { txMock } from '../../test/prisma-mock';
 import {
   approveCancellation,
@@ -250,8 +251,7 @@ describe('project-lifecycle.service', () => {
 
     const result = await completeProcurementPhase(headUser, {
       id: 'project-1',
-      continue_unit_proc: false,
-    } as any);
+    });
 
     expect(result).toMatchObject({
       status: ProjectStatus.UNASSIGNED,
@@ -268,6 +268,43 @@ describe('project-lifecycle.service', () => {
     );
     const updateCall = txMock.project.update.mock.calls[0][0];
     expect(updateCall.data.contract_started_at).toBeUndefined();
+  });
+
+  it('defaults contract_unit_id to CONTRACT_UNIT_ID when omitted from schema input', async () => {
+    const parsed = CompleteProcurementPhaseSchema.parse({
+      id: 'a0000000-0000-4000-8000-000000000001',
+      assignee_contract: 'b0000000-0000-4000-8000-000000000001',
+    });
+
+    expect(parsed.contract_unit_id).toBe(CONTRACT_UNIT_ID);
+
+    txMock.project.findUnique.mockResolvedValue({
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      procurement_progress: {},
+      responsible_unit_id: 'unit-proc',
+      procurement_completed_at: null,
+      contract_started_at: null,
+      assignee_procurement: [],
+    });
+    txMock.project.update.mockResolvedValue({
+      id: parsed.id,
+      status: ProjectStatus.WAITING_ACCEPT,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      responsible_unit_id: CONTRACT_UNIT_ID,
+      assignee_contract: [{ id: 'b0000000-0000-4000-8000-000000000001' }],
+    });
+
+    const result = await completeProcurementPhase(headUser, parsed);
+
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          responsible_unit_id: CONTRACT_UNIT_ID,
+        }),
+      })
+    );
+    expect(result.responsible_unit_id).toBe(CONTRACT_UNIT_ID);
   });
 
   it('completeProcurementPhase sets contract_started_at when assignee_contract is attached', async () => {
@@ -325,7 +362,7 @@ describe('project-lifecycle.service', () => {
     ]);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
-      status: ProjectStatus.IN_PROGRESS,
+      status: ProjectStatus.WAITING_ACCEPT,
       current_workflow_type: UnitResponsibleType.CONTRACT,
       responsible_unit_id: 'unit-proc',
       assignee_contract: [{ id: 'staff-1' }],
@@ -333,8 +370,9 @@ describe('project-lifecycle.service', () => {
 
     const result = await completeProcurementPhase(headUser, {
       id: 'project-1',
-      continue_unit_proc: true,
-    } as any);
+      contract_unit_id: 'unit-proc',
+      assignee_contract: 'staff-1',
+    });
 
     expect(txMock.project.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -353,7 +391,12 @@ describe('project-lifecycle.service', () => {
         }),
       })
     );
-    expect(result.assignee_contract).toEqual([{ id: 'staff-1' }]);
+    expect(result).toMatchObject({
+      status: ProjectStatus.WAITING_ACCEPT,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      responsible_unit_id: 'unit-proc',
+      assignee_contract: [{ id: 'staff-1' }],
+    });
   });
 
   it('completeProcurementPhase notifies directly assigned contract staff', async () => {
@@ -418,8 +461,8 @@ describe('project-lifecycle.service', () => {
     await completeProcurementPhase(headUser, {
       id: 'project-1',
       assignee_contract: 'contract-1',
-      continue_unit_proc: false,
-    } as any);
+      contract_unit_id: 'unit-cont',
+    });
 
     expect(txMock.notification.create).toHaveBeenCalledWith(
       expect.objectContaining({

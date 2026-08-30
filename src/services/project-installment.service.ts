@@ -9,12 +9,12 @@ import {
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AuthPayload } from '../types/auth.type';
-import { BadRequestError, NotFoundError } from '../lib/errors';
+import { BadRequestError, NotFoundError } from '../utils/errors';
 import { ListResponse, PaginatedResponse } from '../types/common.type';
-import { WORKFLOW_STEP_ORDERS } from '../lib/constant';
-import { acquireProjectInstallmentLock } from '../lib/project-installment';
-import { Capability, assertCapability } from '../lib/access-policy';
-import { projectReadWhere } from '../lib/project-scope';
+import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
+import { acquireProjectInstallmentLock } from '../utils/project-installment';
+import { Capability, assertCapability } from '../utils/access-policy';
+import { projectReadWhere } from '../utils/project-scope';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import {
   CompleteInstallmentDto,

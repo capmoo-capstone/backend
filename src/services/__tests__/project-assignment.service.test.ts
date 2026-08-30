@@ -1,7 +1,7 @@
 import { ProjectStatus, UnitResponsibleType } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError } from '../../lib/errors';
-import { syncProjectPhases } from '../../lib/phase-status';
+import { BadRequestError } from '../../utils/errors';
+import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock } from '../../test/prisma-mock';
 import {
   acceptProjects,
@@ -12,7 +12,7 @@ import {
   returnProject,
 } from '../project-assignment.service';
 
-vi.mock('../../lib/phase-status', () => ({
+vi.mock('../../utils/phase-status', () => ({
   syncProjectPhases: vi.fn().mockResolvedValue({ id: 'project-1' }),
 }));
 

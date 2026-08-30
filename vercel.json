@@ -1,14 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/v1/cron/process-deadlines",
-      "schedule": "0 0 * * *"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/dist/app.js"
+      "path": "/api/v1/cron/send-contract-committee-reminders",
+      "schedule": "30 0 * * *"
     }
   ],
   "headers": [

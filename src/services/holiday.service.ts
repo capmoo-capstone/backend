@@ -1,6 +1,6 @@
 import { Holiday, UnitResponsibleType, UrgentType } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { DAY_MS } from '../lib/constant';
+import { DAY_MS } from '../utils/constant';
 import {
   addBangkokDays,
   bangkokDayEndUtc,
@@ -9,8 +9,8 @@ import {
   bangkokWeekday,
   formatBangkokDate,
   formatBangkokOffset,
-} from '../lib/date';
-import { BadRequestError, NotFoundError } from '../lib/errors';
+} from '../utils/date';
+import { BadRequestError, NotFoundError } from '../utils/errors';
 import {
   CalculateTimelineDto,
   CreateHolidayDto,

@@ -1,6 +1,6 @@
 import { ProcurementType, UnitResponsibleType } from '@prisma/client';
 import { prisma } from '../../config/prisma';
-import { NotFoundError } from '../../lib/errors';
+import { NotFoundError } from '../../utils/errors';
 import {
   countBangkokWorkingDays,
   getBangkokWorkingDayHolidayIndex,
@@ -22,6 +22,8 @@ import { resolveTargetUnitId } from './dashboard.helper';
 import { getUnitProcurementTypes } from './kpi-dashboard.helper';
 
 export const getIndividualStaffTodo = async (
+  page: number,
+  limit: number,
   query: IndividualTodoQuery
 ): Promise<PaginatedProjects> => {
   const target = await fetchAndFormatUserDetails({
@@ -42,7 +44,7 @@ export const getIndividualStaffTodo = async (
     ...target.authData,
   };
 
-  return getOwnProjects(targetUser, query.page, query.limit, query.tab);
+  return getOwnProjects(targetUser, page, limit, query);
 };
 
 export const getIndividualStaffTodoTotal = async (

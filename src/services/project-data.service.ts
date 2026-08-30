@@ -7,8 +7,8 @@ import {
   AuditTargetType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError, BadRequestError, AppError } from '../lib/errors';
-import { getProcurementTypeToUnitIdMap } from '../lib/unit-type';
+import { NotFoundError, BadRequestError, AppError } from '../utils/errors';
+import { getProcurementTypeToUnitIdMap } from '../utils/unit-type';
 import { AuthPayload } from '../types/auth.type';
 import { CreateProjectDto, UpdateProjectDto } from '../schemas/project.schema';
 import {
@@ -21,11 +21,11 @@ import {
   recordAuditEvent,
   buildContractNumberTargetSnapshot,
 } from './audit-log.service';
-import { nowUtc, toBangkokParts } from '../lib/date';
-import { assertInstallmentRoundsCanBeUpdated } from '../lib/project-installment';
-import { Capability, assertCapability } from '../lib/access-policy';
-import { activeContractNumberWhere } from '../lib/active-state';
-import { assertProjectCanBeDeleted } from '../lib/deletion-policy';
+import { nowUtc, toBangkokParts } from '../utils/date';
+import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
+import { Capability, assertCapability } from '../utils/access-policy';
+import { activeContractNumberWhere } from '../utils/active-state';
+import { assertProjectCanBeDeleted } from '../utils/deletion-policy';
 
 const currentBangkokBudgetYear = (): number => {
   const parts = toBangkokParts(nowUtc());

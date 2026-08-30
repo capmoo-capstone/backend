@@ -6,8 +6,8 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WORKFLOW_STEP_ORDERS } from '../../lib/constant';
-import { BadRequestError, NotFoundError } from '../../lib/errors';
+import { WORKFLOW_STEP_ORDERS } from '../../utils/constant';
+import { BadRequestError, NotFoundError } from '../../utils/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
 import {

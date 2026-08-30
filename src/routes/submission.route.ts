@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as controller from '../controllers/submission.controller';
 import { requireCapability } from '../middlewares/auth';
-import { Capability } from '../lib/access-policy';
+import { Capability } from '../utils/access-policy';
 
 const router = Router();
 

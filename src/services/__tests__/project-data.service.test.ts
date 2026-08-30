@@ -1,4 +1,4 @@
-import { AppError, BadRequestError, NotFoundError } from '../../lib/errors';
+import { AppError, BadRequestError, NotFoundError } from '../../utils/errors';
 import {
   ProcurementType,
   ProjectStatus,

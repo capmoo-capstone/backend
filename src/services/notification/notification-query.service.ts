@@ -11,8 +11,8 @@ import {
   bangkokTodayStartUtc,
   formatBangkokDate,
   nowUtc,
-} from '../../lib/date';
-import { NotFoundError } from '../../lib/errors';
+} from '../../utils/date';
+import { NotFoundError } from '../../utils/errors';
 import { ListNotificationsQueryDto } from '../../schemas/notification.schema';
 import { AuthPayload } from '../../types/auth.type';
 import { NotificationListResponse } from '../../types/notification.type';
@@ -720,4 +720,3 @@ export const markAllNotificationsRead = async (user: AuthPayload) => {
 };
 
 export { getNotificationKind };
-

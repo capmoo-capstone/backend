@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { Profile, SAML, ValidateInResponseTo } from '@node-saml/node-saml';
 import { XMLParser } from 'fast-xml-parser';
-import { PrismaSamlRequestCache, claimSamlResponse } from '../lib/saml-cache';
-import { ServiceUnavailableError, UnauthorizedError } from '../lib/errors';
+import { PrismaSamlRequestCache, claimSamlResponse } from '../utils/saml-cache';
+import { ServiceUnavailableError, UnauthorizedError } from '../utils/errors';
 
 const HTTP_REDIRECT_BINDING =
   'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect';
@@ -19,8 +19,7 @@ type SamlRuntimeConfig = {
   idpEntityId: string;
   idpMetadataUrl: string;
   acsUrl: string;
-  frontendSuccessUrl: string;
-  frontendFailureUrl: string;
+  frontendRedirectUrl: string;
 };
 
 type IdpMetadata = {
@@ -90,13 +89,9 @@ const getRuntimeConfig = (): SamlRuntimeConfig => {
       process.env.SAML_IDP_METADATA_URL || DEFAULT_IDP_METADATA_URL
     ),
     acsUrl,
-    frontendSuccessUrl: requireHttpsUrl(
-      'SAML_FRONTEND_SUCCESS_URL',
-      process.env.SAML_FRONTEND_SUCCESS_URL
-    ),
-    frontendFailureUrl: requireHttpsUrl(
-      'SAML_FRONTEND_FAILURE_URL',
-      process.env.SAML_FRONTEND_FAILURE_URL
+    frontendRedirectUrl: requireHttpsUrl(
+      'SAML_FRONTEND_REDIRECT_URL',
+      process.env.SAML_FRONTEND_REDIRECT_URL
     ),
   };
 };
@@ -392,11 +387,8 @@ export const validateSamlResponse = async (
   return extractCuPortalClaims(profile);
 };
 
-export const getSamlFrontendSuccessUrl = () =>
-  getRuntimeConfig().frontendSuccessUrl;
-
-export const getSamlFrontendFailureUrl = () =>
-  getRuntimeConfig().frontendFailureUrl;
+export const getSamlFrontendRedirectUrl = () =>
+  getRuntimeConfig().frontendRedirectUrl;
 
 export const resetSamlClientForTest = () => {
   samlClientPromise = undefined;

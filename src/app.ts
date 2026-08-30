@@ -1,3 +1,4 @@
+import './config/env';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import express from 'express';
@@ -12,19 +13,15 @@ const NODE_ENV = process.env.NODE_ENV || 'local';
 const PORT = process.env.PORT || 3000;
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
-          'https://cdnjs.cloudflare.com',
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-        imgSrc: ["'self'", 'data:', 'https:'],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
       },
     },
@@ -67,7 +64,7 @@ app.use(cookieParser());
 app.use(bangkokDateResponse);
 
 // Import API v1 routes
-app.get('/', (req, res, _next) => {
+app.get('/', (_req, res) => {
   res.status(200).send('Welcome to the API');
 });
 app.use('/api/v1', apiV1Routes);
@@ -110,8 +107,26 @@ app.get('/api-docs/swagger.json', (req, res) => {
   });
 });
 
+const swaggerCsp = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        'https://cdnjs.cloudflare.com',
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+    },
+  },
+});
+
 app.use(
   '/api-docs',
+  swaggerCsp,
   swaggerUi.serve,
   swaggerUi.setup(undefined, swaggerUiOptions)
 );

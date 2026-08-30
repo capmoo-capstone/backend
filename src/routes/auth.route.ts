@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as controller from '../controllers/auth.controller';
 import { protect, requireSupplyRoles } from '../middlewares/auth';
+import { authLimiter } from '../middlewares/rate-limit';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
@@ -8,8 +9,8 @@ const router = Router();
 router.get('/saml/metadata', controller.samlMetadata);
 router.get('/saml/login', controller.startSamlLogin);
 router.post('/saml/acs', controller.samlAcs);
-router.post('/saml/exchange', controller.exchangeSsoCode);
-router.post('/create-request', controller.requestAccount);
+router.post('/saml/exchange', authLimiter, controller.exchangeSsoCode);
+router.post('/create-request', authLimiter, controller.requestAccount);
 router.get(
   '/requests',
   protect,
@@ -28,7 +29,7 @@ router.patch(
   requireSupplyRoles([UserRole.ADMIN]),
   controller.rejectRegistrationRequest
 );
-router.post('/login', controller.login);
+router.post('/login', authLimiter, controller.login);
 router.get('/me', protect, controller.getMe);
 router.patch('/logout', protect, controller.logout);
 

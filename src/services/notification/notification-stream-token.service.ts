@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { UnauthorizedError } from '../../lib/errors';
+import { UnauthorizedError } from '../../utils/errors';
 import type { AuthPayload } from '../../types/auth.type';
 import { runtimeConfig } from '../../config/runtime';
 
