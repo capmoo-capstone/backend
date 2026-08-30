@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { Prisma, RegisterType } from '@prisma/client';
+import { Prisma, RegistrationStatus, RegisterType } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { clearUserAuthCache } from '../utils/auth-cache';
 import { OPS_DEPT_ID } from '../utils/constant';
@@ -9,7 +9,12 @@ import {
   activeDelegationWhere,
   getNextDelegationBoundary,
 } from '../utils/active-state';
-import { BadRequestError, UnauthorizedError } from '../utils/errors';
+import {
+  BadRequestError,
+  SSO_FAILURE_CODES,
+  SsoAuthenticationError,
+  UnauthorizedError,
+} from '../utils/errors';
 import {
   createSsoExchangeCode,
   exchangeSsoCode as exchangeSsoCodeCache,
@@ -212,23 +217,42 @@ export const loginWithSamlClaims = async (
     select: { id: true, email: true, register_type: true, is_active: true },
   });
 
-  if (
-    !user ||
-    !user.register_type.includes(RegisterType.SSO) ||
-    user.email !== email
-  ) {
-    throw new UnauthorizedError(
-      'No system account is assigned to this SSO user'
+  const isAuthorizedSsoAccount =
+    user?.register_type.includes(RegisterType.SSO) &&
+    user.email?.trim().toLowerCase() === email;
+
+  if (user && isAuthorizedSsoAccount) {
+    if (!user.is_active) {
+      throw new SsoAuthenticationError(
+        SSO_FAILURE_CODES.ACCOUNT_INACTIVE,
+        'Account is inactive'
+      );
+    }
+
+    const authPayload = await issueLoginForUserId(user.id);
+    const code = await createSsoExchangeCode(authPayload);
+    return code;
+  }
+
+  const pendingRegistration = await prisma.registrationRequest.findFirst({
+    where: {
+      status: RegistrationStatus.PENDING,
+      OR: [{ username }, { email }],
+    },
+    select: { id: true },
+  });
+
+  if (pendingRegistration) {
+    throw new SsoAuthenticationError(
+      SSO_FAILURE_CODES.REGISTRATION_PENDING,
+      'Registration request is pending approval'
     );
   }
 
-  if (!user.is_active) {
-    throw new UnauthorizedError('Account is inactive');
-  }
-
-  const authPayload = await issueLoginForUserId(user.id);
-  const code = await createSsoExchangeCode(authPayload);
-  return code;
+  throw new SsoAuthenticationError(
+    SSO_FAILURE_CODES.NOT_AUTHORIZED,
+    'No system account is assigned to this SSO user'
+  );
 };
 /**
  * Clears server-side cached authorization data for the current user.

@@ -38,3 +38,22 @@ export class ServiceUnavailableError extends AppError {
     super(message, 503);
   }
 }
+
+export const SSO_FAILURE_CODES = {
+  REGISTRATION_PENDING: 'registration_pending',
+  NOT_AUTHORIZED: 'not_authorized',
+  ACCOUNT_INACTIVE: 'account_inactive',
+  SSO_FAILED: 'sso_failed',
+} as const;
+
+export type SsoFailureCode =
+  (typeof SSO_FAILURE_CODES)[keyof typeof SSO_FAILURE_CODES];
+
+export class SsoAuthenticationError extends UnauthorizedError {
+  constructor(
+    public readonly code: SsoFailureCode,
+    message: string
+  ) {
+    super(message);
+  }
+}

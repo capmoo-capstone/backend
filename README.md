@@ -510,11 +510,18 @@ with `GET /api/v1/auth/saml/metadata`. The SP Name and Entity ID are both
 `nexusproc` by default.
 
 The frontend starts SSO at `GET /api/v1/auth/saml/login`. CU Portal returns to
-`POST /api/v1/auth/saml/acs`; successful sign-in sets a host-only, HttpOnly
-cookie and redirects to `SAML_FRONTEND_SUCCESS_URL`. The API accepts that
-cookie or the existing Bearer JWT. Only a pre-existing user whose `username`
-matches CU Portal's `screenName` and whose login methods include `SSO` can
-sign in; SSO never creates a user or role.
+`POST /api/v1/auth/saml/acs`, and the API redirects both successful and failed
+sign-ins to `SAML_FRONTEND_REDIRECT_URL`. Success adds a short-lived `code`
+query parameter for `POST /api/v1/auth/saml/exchange`. Only a pre-existing user
+whose `username` matches CU Portal's `screenName` and whose login methods
+include `SSO` can sign in; SSO never creates a user or role.
+
+Failed sign-in adds an `error` query parameter. The stable error codes are
+`registration_pending` for a matching pending account request,
+`not_authorized` when no usable SSO account is assigned, `account_inactive`
+for a disabled account, and `sso_failed` for invalid SAML responses or
+unexpected technical failures. Existing query parameters on the configured
+redirect URL are preserved.
 
 ---
 

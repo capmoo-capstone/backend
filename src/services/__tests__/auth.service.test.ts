@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearUserAuthCache } from '../../utils/auth-cache';
 import { OPS_DEPT_ID } from '../../utils/constant';
+import { SSO_FAILURE_CODES, SsoAuthenticationError } from '../../utils/errors';
 import { prismaMock } from '../../test/prisma-mock';
 import {
   clearSessionCache,
@@ -253,18 +254,121 @@ describe('auth.service', () => {
 
   it('rejects an SSO user that does not already exist', async () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.registrationRequest.findFirst.mockResolvedValue(null);
 
-    await expect(
-      loginWithSamlClaims({
-        screenName: 'unknown.user',
-        emailAddress: 'unknown@chula.ac.th',
-        firstName: 'Unknown',
-        lastName: 'User',
-      })
-    ).rejects.toThrow('No system account is assigned');
+    const loginAttempt = loginWithSamlClaims({
+      screenName: 'unknown.user',
+      emailAddress: 'unknown@chula.ac.th',
+      firstName: 'Unknown',
+      lastName: 'User',
+    });
+
+    await expect(loginAttempt).rejects.toBeInstanceOf(SsoAuthenticationError);
+    await expect(loginAttempt).rejects.toMatchObject({
+      code: SSO_FAILURE_CODES.NOT_AUTHORIZED,
+      statusCode: 401,
+    });
 
     expect(prismaMock.user.create).not.toHaveBeenCalled();
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('reports a registration pending when the username matches', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.registrationRequest.findFirst.mockResolvedValue({
+      id: 'request-1',
+    });
+
+    const loginAttempt = loginWithSamlClaims({
+      screenName: 'pending.user',
+      emailAddress: 'other@chula.ac.th',
+      firstName: 'Pending',
+      lastName: 'User',
+    });
+
+    await expect(loginAttempt).rejects.toMatchObject({
+      code: SSO_FAILURE_CODES.REGISTRATION_PENDING,
+      statusCode: 401,
+    });
+    expect(prismaMock.registrationRequest.findFirst).toHaveBeenCalledWith({
+      where: {
+        status: 'PENDING',
+        OR: [{ username: 'pending.user' }, { email: 'other@chula.ac.th' }],
+      },
+      select: { id: true },
+    });
+  });
+
+  it('reports a registration pending when the normalized email matches', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.registrationRequest.findFirst.mockResolvedValue({
+      id: 'request-1',
+    });
+
+    const loginAttempt = loginWithSamlClaims({
+      screenName: 'different.user',
+      emailAddress: '  Pending.User@CHULA.AC.TH  ',
+      firstName: 'Pending',
+      lastName: 'User',
+    });
+
+    await expect(loginAttempt).rejects.toMatchObject({
+      code: SSO_FAILURE_CODES.REGISTRATION_PENDING,
+    });
+    expect(prismaMock.registrationRequest.findFirst).toHaveBeenCalledWith({
+      where: {
+        status: 'PENDING',
+        OR: [
+          { username: 'different.user' },
+          { email: 'pending.user@chula.ac.th' },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+
+  it('reports an inactive matching SSO account', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'inactive@chula.ac.th',
+      register_type: [RegisterType.SSO],
+      is_active: false,
+    });
+
+    const loginAttempt = loginWithSamlClaims({
+      screenName: 'inactive.user',
+      emailAddress: 'inactive@chula.ac.th',
+      firstName: 'Inactive',
+      lastName: 'User',
+    });
+
+    await expect(loginAttempt).rejects.toMatchObject({
+      code: SSO_FAILURE_CODES.ACCOUNT_INACTIVE,
+      statusCode: 401,
+    });
+    expect(prismaMock.registrationRequest.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('maps a rejected registration to not authorized', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.registrationRequest.findFirst.mockResolvedValue(null);
+
+    const loginAttempt = loginWithSamlClaims({
+      screenName: 'unknown.user',
+      emailAddress: 'unknown@chula.ac.th',
+      firstName: 'Unknown',
+      lastName: 'User',
+    });
+
+    await expect(loginAttempt).rejects.toMatchObject({
+      code: SSO_FAILURE_CODES.NOT_AUTHORIZED,
+    });
+    expect(prismaMock.registrationRequest.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
+      })
+    );
   });
 
   it('rejects login for an inactive user account', async () => {
