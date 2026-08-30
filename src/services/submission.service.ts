@@ -47,6 +47,7 @@ import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
 import { Capability, assertCapability } from '../utils/access-policy';
 import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
+import { isHeadOfSupplyUnit } from '../utils/permissions';
 
 const VENDOR_PO_EMAIL_STEP_ORDERS = new Map<UnitResponsibleType, number>([
   [UnitResponsibleType.MT500K, 5],
@@ -523,9 +524,18 @@ export const createStaffSubmissionsProject = async (
       workflow_type: data.workflow_type,
       installment_no: installmentNo,
     });
-    const nextStatus: SubmissionStatus = data.required_approval
+    
+    let nextStatus: SubmissionStatus = data.required_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
+
+    if (isHeadOfSupplyUnit(user)) {
+      if (!data.required_signature) {
+        nextStatus = SubmissionStatus.WAITING_PROPOSAL;
+      } else {
+        nextStatus = SubmissionStatus.COMPLETED;
+      }
+    }
 
     const submission = await tx.projectSubmission.create({
       data: {

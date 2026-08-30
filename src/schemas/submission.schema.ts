@@ -10,6 +10,7 @@ export const CreateStaffSubmissionSchema = z.object({
   installment_no: z.number().int().min(1).optional(),
   staff_remark: z.string().optional(),
   required_approval: z.boolean(),
+  required_signature: z.boolean(),
   required_updating: z.boolean(),
   meta_data: z
     .array(
