@@ -60,6 +60,7 @@ export interface DailySummaryEmailContentInput {
   audienceText: string;
   counts: DailySummaryCounts;
   reportDate: Date;
+  appPublicUrl: string;
 }
 
 const emptyWhere = (): Prisma.ProjectWhereInput => ({ id: { in: [] } });
@@ -108,9 +109,14 @@ export const buildDailySummaryAudienceText = (input: {
       (input.unitNames ?? []).map((name) => name.trim()).filter(Boolean)
     );
     const unitLabel = unitNames.join(', ');
-    return unitLabel
-      ? `สถานะโครงการของกลุ่มงาน${unitLabel}`
-      : 'สถานะโครงการของกลุ่มงาน';
+
+    if (!unitLabel) {
+      return 'สถานะโครงการของกลุ่มงาน';
+    }
+
+    return unitLabel.startsWith('กลุ่มงาน')
+      ? `สถานะโครงการของ${unitLabel}`
+      : `สถานะโครงการของกลุ่มงาน${unitLabel}`;
   }
 
   return 'สถานะโครงการที่ท่านรับผิดชอบ';
@@ -133,7 +139,7 @@ export const buildDailySummaryEmailContent = (
       `- งานคงค้างทั้งสิ้น ${input.counts.pending_count} โครงการ`,
       `- งานเร่งด่วนทั้งสิ้น ${input.counts.urgent_count} โครงการ`,
       '',
-      'ท่านสามารถเข้าสู่ระบบเพื่อดูรายละเอียดโครงการทั้งหมดได้ที่ https://www.nexus-procure.com',
+      `ท่านสามารถเข้าสู่ระบบเพื่อดูรายละเอียดโครงการทั้งหมดได้ที่ ${input.appPublicUrl}`,
       '',
       'ขอแสดงความนับถือ',
       'NexusProcure',

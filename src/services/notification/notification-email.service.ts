@@ -403,6 +403,7 @@ export const sendDailySummaryEmail = async (
     audienceText: recipient.audienceText,
     counts,
     reportDate,
+    appPublicUrl: getAppPublicUrl(),
   });
 
   await sendPlainTextEmail({

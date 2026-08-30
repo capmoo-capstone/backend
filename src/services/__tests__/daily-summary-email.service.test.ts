@@ -250,7 +250,7 @@ describe('daily-summary-email.service', () => {
         role: UserRole.HEAD_OF_UNIT,
         unitNames: ['กลุ่มงานพัสดุ'],
       })
-    ).toBe('สถานะโครงการของกลุ่มงานกลุ่มงานพัสดุ');
+    ).toBe('สถานะโครงการของกลุ่มงานพัสดุ');
     expect(
       buildDailySummaryAudienceText({ role: UserRole.GENERAL_STAFF })
     ).toBe('สถานะโครงการที่ท่านรับผิดชอบ');
@@ -266,6 +266,7 @@ describe('daily-summary-email.service', () => {
         urgent_count: 2,
       },
       reportDate: REPORT_DATE,
+      appPublicUrl: 'https://nexus-procure.com',
     });
 
     expect(content.subject).toBe(
@@ -274,6 +275,6 @@ describe('daily-summary-email.service', () => {
     expect(content.text).toContain('เรียน คุณฌามา วจนชัย');
     expect(content.text).toContain('สถานะโครงการที่ท่านรับผิดชอบ');
     expect(content.text).toContain('งานที่เพิ่มใหม่ทั้งสิ้น 1 โครงการ');
-    expect(content.text).toContain('https://www.nexus-procure.com');
+    expect(content.text).toContain('https://nexus-procure.com');
   });
 });

@@ -303,7 +303,7 @@ describe('notification-email.service', () => {
     expect(documentPayload.text).toContain('สถานะโครงการทั้งหมด');
     expect(documentPayload.text).toContain('งานที่เพิ่มใหม่ทั้งสิ้น 1 โครงการ');
     expect(documentPayload.text).toContain('งานคงค้างทั้งสิ้น 7 โครงการ');
-    expect(documentPayload.text).toContain('https://www.nexus-procure.com');
+    expect(documentPayload.text).toContain('https://nexus-procure.com');
 
     const financePayload = getSentPayload(fetchMock, 1);
     expect(financePayload.to).toEqual(['ops2@example.com']);
@@ -349,3 +349,4 @@ describe('notification-email.service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
