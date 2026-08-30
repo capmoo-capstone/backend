@@ -1,6 +1,6 @@
-﻿import { NotificationDeliveryStatus } from '@prisma/client';
+import { NotificationDeliveryStatus, UserRole } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prismaMock } from '../../test/prisma-mock';
+import { prismaMock, resetPrismaMock } from '../../test/prisma-mock';
 import {
   buildContractCommitteeReminderEmail,
   notificationEmailTransport,
@@ -12,8 +12,11 @@ import {
   sendVendorPoRequestEmailForProject,
 } from '../notification/notification-email.service';
 
-const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>) => {
-  const [, options] = fetchMock.mock.calls[0] as [string, { body: string }];
+const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>, callIndex = 0) => {
+  const [, options] = fetchMock.mock.calls[callIndex] as [
+    string,
+    { body: string },
+  ];
   return JSON.parse(options.body) as {
     from: string;
     to: string[];
@@ -29,6 +32,7 @@ describe('notification-email.service', () => {
   const originalVendorAppPublicUrl = process.env.VENDOR_APP_PUBLIC_URL;
 
   beforeEach(() => {
+    resetPrismaMock();
     process.env.RESEND_API_KEY = 're_test';
     process.env.RESEND_FROM = 'NexusProcure <onboarding@resend.dev>';
     process.env.APP_PUBLIC_URL = 'https://nexus-procure.com';
@@ -125,7 +129,7 @@ describe('notification-email.service', () => {
     expect(payload.text).toContain('Somying Test');
   });
 
-  it('renders the contract committee reminder email with inspection date and remaining days', async () => {
+  it('renders the contract committee reminder email with inspection date and remaining days', () => {
     const content = buildContractCommitteeReminderEmail({
       recipientEmail: 'committee@example.com',
       recipientName: 'Committee Member',
@@ -201,28 +205,78 @@ describe('notification-email.service', () => {
     ).rejects.toThrow('Project vendor email is missing');
   });
 
-  it('sends good-morning emails to active ops users and deduplicates email addresses', async () => {
+  it('sends one daily summary email per resolved recipient with Thai content and deduplicated email addresses', async () => {
+    const reportDate = new Date('2026-08-29T03:00:00.000Z');
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
     prismaMock.user.findMany.mockResolvedValue([
       {
         id: 'user-1',
+        username: 'ops.doc',
         email: 'ops1@example.com',
-        full_name: 'Ops One',
+        full_name: 'Ops Document',
+        roles: [
+          {
+            role: UserRole.DOCUMENT_STAFF,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
       },
       {
         id: 'user-2',
+        username: 'ops.duplicate',
         email: 'ops1@example.com',
         full_name: 'Ops Duplicate',
+        roles: [
+          {
+            role: UserRole.GENERAL_STAFF,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: { id: 'unit-1', name: 'Unit One' },
+          },
+        ],
       },
       {
         id: 'user-3',
+        username: 'ops.finance',
         email: 'ops2@example.com',
-        full_name: 'Ops Two',
+        full_name: 'Ops Finance',
+        roles: [
+          {
+            role: UserRole.FINANCE_STAFF,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
+      },
+      {
+        id: 'user-4',
+        username: 'ops.hod',
+        email: 'ops3@example.com',
+        full_name: 'Ops Head',
+        roles: [
+          {
+            role: UserRole.HEAD_OF_DEPARTMENT,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
       },
     ]);
+    prismaMock.project.count
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(6)
+      .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(9)
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(11);
 
-    const result = await sendDailySummaryEmailsToOpsUsers();
+    const result = await sendDailySummaryEmailsToOpsUsers(reportDate);
 
     expect(result).toEqual({ recipientCount: 2 });
     expect(prismaMock.user.findMany).toHaveBeenCalledWith(
@@ -239,6 +293,25 @@ describe('notification-email.service', () => {
       })
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const documentPayload = getSentPayload(fetchMock, 0);
+    expect(documentPayload.to).toEqual(['ops1@example.com']);
+    expect(documentPayload.subject).toBe(
+      'สรุปงานในระบบ NexusProcure ประจำวันที่ 29 ส.ค. 2569'
+    );
+    expect(documentPayload.text).toContain('เรียน คุณOps Document');
+    expect(documentPayload.text).toContain('สถานะโครงการทั้งหมด');
+    expect(documentPayload.text).toContain('งานที่เพิ่มใหม่ทั้งสิ้น 1 โครงการ');
+    expect(documentPayload.text).toContain('งานคงค้างทั้งสิ้น 7 โครงการ');
+    expect(documentPayload.text).toContain('https://nexus-procure.com');
+
+    const financePayload = getSentPayload(fetchMock, 1);
+    expect(financePayload.to).toEqual(['ops2@example.com']);
+    expect(financePayload.text).toContain('เรียน คุณOps Finance');
+    expect(financePayload.text).toContain('สถานะโครงการที่ท่านรับผิดชอบ');
+    expect(financePayload.text).toContain('งานที่แล้วเสร็จทั้งสิ้น 7 โครงการ');
+    expect(financePayload.text).toContain('งานคงค้างทั้งสิ้น 27 โครงการ');
+    expect(financePayload.text).toContain('งานเร่งด่วนทั้งสิ้น 11 โครงการ');
   });
 
   it('marks queued delivery as sent when Resend accepts it', async () => {
@@ -276,3 +349,4 @@ describe('notification-email.service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+

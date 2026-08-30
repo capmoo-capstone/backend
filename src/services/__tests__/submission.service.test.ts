@@ -9,6 +9,7 @@ import { BadRequestError, NotFoundError } from '../../utils/errors';
 import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock, prismaMock } from '../../test/prisma-mock';
 import { generatePresignedDownloadUrl } from '../storage.service';
+import { sendVendorPoRequestEmailForProject } from '../notification/notification-email.service';
 import {
   approveSubmission,
   createStaffSubmissionsProject,
@@ -30,12 +31,23 @@ vi.mock('../storage.service', () => ({
   ),
 }));
 
+vi.mock('../notification/notification-email.service', () => ({
+  sendVendorPoRequestEmailForProject: vi.fn().mockResolvedValue({
+    projectId: 'project-1',
+    poNumber: 'PO-1',
+    recipientEmail: 'vendor@example.com',
+  }),
+}));
+
 vi.mock('../notification/notification-realtime.service', () => ({
   publishNotificationRealtimeEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockedSyncProjectPhases = vi.mocked(syncProjectPhases);
 const mockedDownloadUrl = vi.mocked(generatePresignedDownloadUrl);
+const mockedSendVendorPoRequestEmailForProject = vi.mocked(
+  sendVendorPoRequestEmailForProject
+);
 
 const user = {
   id: 'user-1',
@@ -60,7 +72,13 @@ const staffSubmissionDto = (overrides = {}) =>
 
 describe('submission.service', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
+    mockedSendVendorPoRequestEmailForProject.mockResolvedValue({
+      projectId: 'project-1',
+      poNumber: 'PO-1',
+      recipientEmail: 'vendor@example.com',
+    });
   });
 
   it('getProjectSubmissions groups procurement and contract submissions and signs document URLs', async () => {
@@ -564,6 +582,73 @@ describe('submission.service', () => {
         required_signature: true,
       } as any)
     ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('approveSubmission sends the vendor PO request email when the vendor-notification step completes', async () => {
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 3,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+      completed_at: new Date('2026-06-01T00:00:00.000Z'),
+      completed_by: user.id,
+    });
+
+    const result = await approveSubmission(user, {
+      id: 'submission-1',
+      required_signature: false,
+    } as any);
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(mockedSendVendorPoRequestEmailForProject).toHaveBeenCalledWith('project-1');
+  });
+
+  it('approveSubmission does not send the vendor PO request email for other completed steps', async () => {
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+      completed_at: new Date('2026-06-01T00:00:00.000Z'),
+      completed_by: user.id,
+    });
+
+    await approveSubmission(user, {
+      id: 'submission-1',
+      required_signature: false,
+    } as any);
+
+    expect(mockedSendVendorPoRequestEmailForProject).not.toHaveBeenCalled();
   });
 
   it('proposeSubmission moves waiting-proposal submissions to waiting signature', async () => {

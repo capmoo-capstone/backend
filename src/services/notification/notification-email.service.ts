@@ -7,6 +7,13 @@ import { activeUserWhere } from '../../utils/active-state';
 import { formatBangkokDate } from '../../utils/date';
 import { OPS_DEPT_ID } from '../../utils/constant';
 import { BadRequestError, NotFoundError } from '../../utils/errors';
+import {
+  buildDailySummaryAudienceText,
+  buildDailySummaryEmailContent,
+  getDailySummaryCountsForRole,
+  resolveDailySummaryRole,
+} from './daily-summary-email.service';
+import { AuthPayload, AuthRoleDetail } from '../../types/auth.type';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const COMPANY_NAME = 'NexusProcure';
@@ -21,6 +28,13 @@ type ResendEmailPayload = {
 type EmailRecipient = {
   email: string;
   fullName: string;
+};
+
+type DailySummaryRecipient = EmailRecipient & {
+  id: string;
+  role: NonNullable<ReturnType<typeof resolveDailySummaryRole>>;
+  audienceText: string;
+  auth: AuthPayload;
 };
 
 export interface ContractCommitteeReminderEmailInput {
@@ -157,6 +171,80 @@ const dedupeRecipientsByEmail = <T extends { email: string }>(
     seen.add(key);
     return true;
   });
+};
+
+const mapAuthRoles = (
+  roles: Array<{
+    role: AuthRoleDetail['role'];
+    department: { id: string; name: string };
+    unit: { id: string; name: string } | null;
+  }>
+): AuthRoleDetail[] =>
+  roles.map((role) => ({
+    role: role.role,
+    dept_id: role.department.id,
+    dept_name: role.department.name,
+    unit_id: role.unit?.id || null,
+    unit_name: role.unit?.name || null,
+  }));
+
+const buildDailySummaryAuthPayload = (user: {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string | null;
+  roles: Array<{
+    role: AuthRoleDetail['role'];
+    department: { id: string; name: string };
+    unit: { id: string; name: string } | null;
+  }>;
+}): AuthPayload => ({
+  token: '',
+  id: user.id,
+  username: user.username,
+  full_name: user.full_name,
+  email: user.email,
+  roles: mapAuthRoles(user.roles),
+  is_delegated: false,
+  delegated_by: [],
+});
+
+const resolveDailySummaryRecipient = (user: {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string | null;
+  roles: Array<{
+    role: AuthRoleDetail['role'];
+    department: { id: string; name: string };
+    unit: { id: string; name: string } | null;
+  }>;
+}): DailySummaryRecipient | null => {
+  if (!user.email) {
+    return null;
+  }
+
+  const auth = buildDailySummaryAuthPayload(user);
+  const role = resolveDailySummaryRole(auth);
+
+  if (!role) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.full_name,
+    role,
+    audienceText: buildDailySummaryAudienceText({
+      role,
+      unitNames: auth.roles
+        .filter((entry) => entry.role === role)
+        .map((entry) => entry.unit_name ?? '')
+        .filter(Boolean),
+    }),
+    auth,
+  };
 };
 
 export const buildContractCommitteeReminderEmail = (
@@ -301,23 +389,33 @@ export const sendContractCommitteeReminderEmail = async (
   });
 };
 
-export const sendDailySummaryEmail = async (recipient: EmailRecipient) => {
+export const sendDailySummaryEmail = async (
+  recipient: DailySummaryRecipient,
+  reportDate: Date = new Date()
+) => {
+  const counts = await getDailySummaryCountsForRole(
+    recipient.auth,
+    recipient.role,
+    reportDate
+  );
+  const content = buildDailySummaryEmailContent({
+    fullName: recipient.fullName,
+    audienceText: recipient.audienceText,
+    counts,
+    reportDate,
+    appPublicUrl: getAppPublicUrl(),
+  });
+
   await sendPlainTextEmail({
     to: recipient.email,
-    subject: `สวัสดีตอนเช้าจาก ${COMPANY_NAME}!`,
-    text: [
-      `สวัสดีตอนเช้าครับ/ค่ะ คุณ ${recipient.fullName}`,
-      '',
-      'ขอให้วันนี้เป็นวันที่ดีและเริ่มต้นการทำงานอย่างมีความสุขครับ/ค่ะ',
-      '',
-      'ด้วยความปรารถนาดี',
-      '',
-      `ทีมงาน ${COMPANY_NAME}`,
-    ].join('\n'),
+    subject: content.subject,
+    text: content.text,
   });
 };
 
-export const sendDailySummaryEmailsToOpsUsers = async () => {
+export const sendDailySummaryEmailsToOpsUsers = async (
+  reportDate: Date = new Date()
+) => {
   const users = await prisma.user.findMany({
     where: {
       ...activeUserWhere(),
@@ -330,27 +428,41 @@ export const sendDailySummaryEmailsToOpsUsers = async () => {
     },
     select: {
       id: true,
+      username: true,
       email: true,
       full_name: true,
+      roles: {
+        where: {
+          dept_id: OPS_DEPT_ID,
+        },
+        select: {
+          role: true,
+          department: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          unit: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
     },
   });
 
   const recipients = dedupeRecipientsByEmail(
-    users.flatMap((user) =>
-      user.email
-        ? [
-            {
-              id: user.id,
-              email: user.email,
-              fullName: user.full_name,
-            },
-          ]
-        : []
-    )
+    users.flatMap((user) => {
+      const recipient = resolveDailySummaryRecipient(user);
+      return recipient ? [recipient] : [];
+    })
   );
 
   for (const recipient of recipients) {
-    await sendDailySummaryEmail(recipient);
+    await sendDailySummaryEmail(recipient, reportDate);
   }
 
   return {

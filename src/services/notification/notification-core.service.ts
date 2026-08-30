@@ -13,7 +13,10 @@ import { prisma } from '../../config/prisma';
 import { OPS_DEPT_ID } from '../../utils/constant';
 import { nowUtc, toBangkokParts } from '../../utils/date';
 import { NotFoundError } from '../../utils/errors';
-import { activeDelegationWhere, activeUserWhere } from '../../utils/active-state';
+import {
+  activeDelegationWhere,
+  activeUserWhere,
+} from '../../utils/active-state';
 import type {
   NotificationKind,
   NotificationListItemResponse,
