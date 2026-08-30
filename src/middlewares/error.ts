@@ -12,7 +12,7 @@ type ErrorResponse = {
 const includeErrorDetails = () => process.env.NODE_ENV !== 'production';
 
 const logServerError = (err: unknown, req: Request, context: string) => {
-  console.error(`[${context}] ${req.method} ${req.originalUrl}`, err);
+  console.error('[%s] %s %s', context, req.method, req.originalUrl, err);
 };
 
 const getPrismaErrorResponse = (err: unknown): ErrorResponse | null => {
