@@ -41,6 +41,7 @@ type PendingReminderDelivery = {
   recipientEmail: string;
   subject: string;
   body: string;
+  htmlBody: string;
 };
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -393,6 +394,7 @@ export const sendContractCommitteeReminders = async () => {
           dedupeKey,
           subject: recipientContent.subject,
           body: recipientContent.text,
+          htmlBody: recipientContent.html,
         });
 
         if (!reservedDelivery) {
@@ -405,6 +407,7 @@ export const sendContractCommitteeReminders = async () => {
           recipientEmail: recipient.email,
           subject: recipientContent.subject,
           body: recipientContent.text,
+          htmlBody: recipientContent.html,
         });
       }
     });
@@ -415,6 +418,7 @@ export const sendContractCommitteeReminders = async () => {
         channel: NotificationChannel.EMAIL_IMMEDIATE,
         subject: pendingDelivery.subject,
         body: pendingDelivery.body,
+        htmlBody: pendingDelivery.htmlBody,
         recipientEmail: pendingDelivery.recipientEmail,
       });
 

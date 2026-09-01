@@ -1,4 +1,4 @@
-﻿import { NotificationChannel, NotificationDeliveryStatus } from '@prisma/client';
+import { NotificationChannel, NotificationDeliveryStatus } from '@prisma/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { notificationEmailTransport } from '../notification/notification-email.service';

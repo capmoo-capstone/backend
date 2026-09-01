@@ -340,7 +340,7 @@ export const buildContractCommitteeReminderEmail = (
   const subject = `แจ้งเตือนกำหนดตรวจรับอีก ${input.remainingDays} วัน - ${input.projectTitle}`;
   const greeting = input.recipientName?.trim()
     ? `เรียนคุณ ${input.recipientName.trim()},`
-    : 'เรียนกรรมการตรวจรับ,';
+    : 'เรียนคุณ กรรมการตรวจรับ,';
   const inspectionDateLabel = formatBangkokDate(input.inspectionDate);
 
   return withBusinessEmailClosing({
