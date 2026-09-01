@@ -14,15 +14,20 @@ import {
   resolveDailySummaryRole,
 } from './daily-summary-email.service';
 import { AuthPayload, AuthRoleDetail } from '../../types/auth.type';
+import {
+  BusinessEmailContent,
+  escapeHtml,
+  withBusinessEmailClosing,
+} from './business-email-content';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const COMPANY_NAME = 'NexusProcure';
 
 type ResendEmailPayload = {
   from: string;
   to: string[];
   subject: string;
   text: string;
+  html?: string;
 };
 
 type EmailRecipient = {
@@ -51,6 +56,7 @@ export interface EmailDeliveryDraft {
   channel: NotificationChannel;
   subject: string;
   body: string;
+  htmlBody?: string;
   dedupeKey?: string | null;
   recipientEmail?: string | null;
 }
@@ -69,7 +75,6 @@ const getResendConfig = () => ({
   apiKey: process.env.RESEND_API_KEY?.trim() || '',
   from: process.env.RESEND_FROM?.trim() || '',
   appPublicUrl: process.env.APP_PUBLIC_URL?.trim() || '',
-
   vendorAppPublicUrl: process.env.VENDOR_APP_PUBLIC_URL?.trim() || '',
 });
 
@@ -127,10 +132,11 @@ const sendResendEmail = async (payload: ResendEmailPayload) => {
   throw new Error(message);
 };
 
-const sendPlainTextEmail = async (payload: {
+const sendEmail = async (payload: {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }) => {
   const { apiKey, from } = getResendConfig();
   if (!apiKey) {
@@ -151,12 +157,93 @@ const sendPlainTextEmail = async (payload: {
     to: [recipient],
     subject: payload.subject,
     text: payload.text,
+    ...(payload.html ? { html: payload.html } : {}),
+  });
+};
+
+const sendBusinessEmail = async (
+  recipientEmail: string,
+  content: BusinessEmailContent
+) => {
+  await sendEmail({
+    to: recipientEmail,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
   });
 };
 
 const formatPersonGreeting = (fullName: string) => `สวัสดีคุณ ${fullName},`;
 
-const formatCompanyClosing = () => `ขอแสดงความนับถือ\n\nทีมงาน ${COMPANY_NAME}`;
+const buildRegistrationPendingEmailContent = (
+  recipient: EmailRecipient
+): BusinessEmailContent =>
+  withBusinessEmailClosing({
+    subject: 'แจ้งสถานะการลงทะเบียน - อยู่ระหว่างรอการอนุมัติ',
+    text: [
+      formatPersonGreeting(recipient.fullName),
+      '',
+      'ขอบคุณสำหรับการลงทะเบียน ระบบได้รับข้อมูลของคุณเรียบร้อยแล้ว',
+      '',
+      'ขณะนี้อยู่ระหว่างการตรวจสอบโดยผู้ดูแลระบบ (Admin) เมื่อบัญชีของคุณได้รับการอนุมัติเรียบร้อยแล้ว ระบบจะส่งอีเมลแจ้งให้ทราบอีกครั้ง',
+    ].join('\n'),
+    html: [
+      `<p>สวัสดีคุณ ${escapeHtml(recipient.fullName)},</p>`,
+      '<p>ขอบคุณสำหรับการลงทะเบียน ระบบได้รับข้อมูลของคุณเรียบร้อยแล้ว</p>',
+      '<p>ขณะนี้อยู่ระหว่างการตรวจสอบโดยผู้ดูแลระบบ (Admin) เมื่อบัญชีของคุณได้รับการอนุมัติเรียบร้อยแล้ว ระบบจะส่งอีเมลแจ้งให้ทราบอีกครั้ง</p>',
+    ].join('\n'),
+  });
+
+const buildRegistrationApprovedEmailContent = (
+  recipient: EmailRecipient
+): BusinessEmailContent => {
+  const loginUrl = buildLoginUrl();
+
+  return withBusinessEmailClosing({
+    subject: 'บัญชีของคุณได้รับการอนุมัติแล้ว - เข้าสู่ระบบได้ทันที',
+    text: [
+      formatPersonGreeting(recipient.fullName),
+      '',
+      'ยินดีด้วย! บัญชีของคุณได้รับการอนุมัติจากผู้ดูแลระบบเรียบร้อยแล้ว',
+      '',
+      'คุณสามารถเข้าสู่ระบบเพื่อเริ่มใช้งานได้ผ่านลิงก์ด้านล่างนี้:',
+      loginUrl,
+    ].join('\n'),
+    html: [
+      `<p>สวัสดีคุณ ${escapeHtml(recipient.fullName)},</p>`,
+      '<p>ยินดีด้วย! บัญชีของคุณได้รับการอนุมัติจากผู้ดูแลระบบเรียบร้อยแล้ว</p>',
+      `<p>คุณสามารถเข้าสู่ระบบเพื่อเริ่มใช้งานได้ผ่านลิงก์ด้านล่างนี้:<br /><a href="${escapeHtml(loginUrl)}">${escapeHtml(loginUrl)}</a></p>`,
+    ].join('\n'),
+  });
+};
+
+const buildVendorPoRequestEmailContent = (input: {
+  vendorName?: string | null;
+  poNumber: string;
+}): BusinessEmailContent => {
+  const vendorLabel = input.vendorName?.trim() || 'บริษัทคู่ค้า';
+  const vendorFormUrl = buildVendorFormUrl();
+
+  return withBusinessEmailClosing({
+    subject: `รบกวนส่งเอกสารแนบสำหรับใบสั่งซื้อ PO #${input.poNumber}`,
+    text: [
+      `เรียน ${vendorLabel},`,
+      '',
+      `ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${input.poNumber} ของท่าน`,
+      '',
+      'รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:',
+      vendorFormUrl,
+      '',
+      `หมายเหตุ: โปรดระบุหมายเลข PO #${input.poNumber} ทุกครั้งในการส่งเอกสาร`,
+    ].join('\n'),
+    html: [
+      `<p>เรียน ${escapeHtml(vendorLabel)},</p>`,
+      `<p>ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${escapeHtml(input.poNumber)} ของท่าน</p>`,
+      `<p>รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:<br /><a href="${escapeHtml(vendorFormUrl)}">${escapeHtml(vendorFormUrl)}</a></p>`,
+      `<p>หมายเหตุ: โปรดระบุหมายเลข PO #${escapeHtml(input.poNumber)} ทุกครั้งในการส่งเอกสาร</p>`,
+    ].join('\n'),
+  });
+};
 
 const dedupeRecipientsByEmail = <T extends { email: string }>(
   recipients: T[]
@@ -249,32 +336,35 @@ const resolveDailySummaryRecipient = (user: {
 
 export const buildContractCommitteeReminderEmail = (
   input: ContractCommitteeReminderEmailInput
-) => {
+): BusinessEmailContent => {
   const subject = `แจ้งเตือนกำหนดตรวจรับอีก ${input.remainingDays} วัน - ${input.projectTitle}`;
   const greeting = input.recipientName?.trim()
     ? `เรียนคุณ ${input.recipientName.trim()},`
     : 'เรียนกรรมการตรวจรับ,';
   const inspectionDateLabel = formatBangkokDate(input.inspectionDate);
-  const text = [
-    greeting,
-    '',
-    `ขอแจ้งเตือนกำหนดตรวจรับสำหรับโครงการ ${input.projectTitle}`,
-    `วันที่ตรวจรับ: ${inspectionDateLabel}`,
-    `เหลือเวลาอีก ${input.remainingDays} วัน`,
-    '',
-    'กรุณาเตรียมการตรวจรับและดำเนินการตามขั้นตอนที่เกี่ยวข้องให้เรียบร้อย',
-    '',
-    formatCompanyClosing(),
-  ].join('\n');
 
-  return {
+  return withBusinessEmailClosing({
     subject,
-    text,
-  };
+    text: [
+      greeting,
+      '',
+      `ขอแจ้งเตือนกำหนดตรวจรับสำหรับโครงการ ${input.projectTitle}`,
+      `วันที่ตรวจรับ: ${inspectionDateLabel}`,
+      `เหลือเวลาอีก ${input.remainingDays} วัน`,
+      '',
+      'กรุณาเตรียมการตรวจรับและดำเนินการตามขั้นตอนที่เกี่ยวข้องให้เรียบร้อย',
+    ].join('\n'),
+    html: [
+      `<p>${escapeHtml(greeting)}</p>`,
+      `<p>ขอแจ้งเตือนกำหนดตรวจรับสำหรับโครงการ ${escapeHtml(input.projectTitle)}</p>`,
+      `<p>วันที่ตรวจรับ: ${escapeHtml(inspectionDateLabel)}<br />เหลือเวลาอีก <strong>${input.remainingDays}</strong> วัน</p>`,
+      '<p>กรุณาเตรียมการตรวจรับและดำเนินการตามขั้นตอนที่เกี่ยวข้องให้เรียบร้อย</p>',
+    ].join('\n'),
+  });
 };
 
 export const sendHelloTestEmail = async (to?: string | null) => {
-  await sendPlainTextEmail({
+  await sendEmail({
     to: to?.trim() || '',
     subject: 'NexusProcure test email',
     text: 'hello test email',
@@ -284,38 +374,19 @@ export const sendHelloTestEmail = async (to?: string | null) => {
 export const sendRegistrationPendingEmail = async (
   recipient: EmailRecipient
 ) => {
-  await sendPlainTextEmail({
-    to: recipient.email,
-    subject: 'แจ้งสถานะการลงทะเบียน – อยู่ระหว่างรอการอนุมัติ',
-    text: [
-      formatPersonGreeting(recipient.fullName),
-      '',
-      'ขอบคุณสำหรับการลงทะเบียน ระบบได้รับข้อมูลของคุณเรียบร้อยแล้ว',
-      '',
-      'ขณะนี้อยู่ระหว่างการตรวจสอบโดยผู้ดูแลระบบ (Admin) เมื่อบัญชีของคุณได้รับการอนุมัติเรียบร้อยแล้ว ระบบจะส่งอีเมลแจ้งให้ทราบอีกครั้ง',
-      '',
-      formatCompanyClosing(),
-    ].join('\n'),
-  });
+  await sendBusinessEmail(
+    recipient.email,
+    buildRegistrationPendingEmailContent(recipient)
+  );
 };
 
 export const sendRegistrationApprovedEmail = async (
   recipient: EmailRecipient
 ) => {
-  await sendPlainTextEmail({
-    to: recipient.email,
-    subject: 'บัญชีของคุณได้รับการอนุมัติแล้ว – เข้าสู่ระบบได้ทันที',
-    text: [
-      formatPersonGreeting(recipient.fullName),
-      '',
-      'ยินดีด้วย! บัญชีของคุณได้รับการอนุมัติจากผู้ดูแลระบบเรียบร้อยแล้ว',
-      '',
-      'คุณสามารถเข้าสู่ระบบเพื่อเริ่มใช้งานได้ผ่านลิงก์ด้านล่างนี้:',
-      buildLoginUrl(),
-      '',
-      formatCompanyClosing(),
-    ].join('\n'),
-  });
+  await sendBusinessEmail(
+    recipient.email,
+    buildRegistrationApprovedEmailContent(recipient)
+  );
 };
 
 export const sendVendorPoRequestEmail = async (input: {
@@ -323,23 +394,13 @@ export const sendVendorPoRequestEmail = async (input: {
   vendorName?: string | null;
   poNumber: string;
 }) => {
-  const vendorLabel = input.vendorName?.trim() || 'บริษัทคู่ค้า';
-  await sendPlainTextEmail({
-    to: input.vendorEmail,
-    subject: `รบกวนส่งเอกสารแนบสำหรับใบสั่งซื้อ PO #${input.poNumber}`,
-    text: [
-      `เรียน ${vendorLabel},`,
-      '',
-      `ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${input.poNumber} ของท่าน`,
-      '',
-      'รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:',
-      buildVendorFormUrl(),
-      '',
-      `หมายเหตุ: โปรดระบุหมายเลข PO #${input.poNumber} ทุกครั้งในการส่งเอกสาร`,
-      '',
-      formatCompanyClosing(),
-    ].join('\n'),
-  });
+  await sendBusinessEmail(
+    input.vendorEmail,
+    buildVendorPoRequestEmailContent({
+      vendorName: input.vendorName,
+      poNumber: input.poNumber,
+    })
+  );
 };
 
 export const sendVendorPoRequestEmailForProject = async (projectId: string) => {
@@ -382,11 +443,7 @@ export const sendContractCommitteeReminderEmail = async (
   input: ContractCommitteeReminderEmailInput
 ) => {
   const content = buildContractCommitteeReminderEmail(input);
-  await sendPlainTextEmail({
-    to: input.recipientEmail,
-    subject: content.subject,
-    text: content.text,
-  });
+  await sendBusinessEmail(input.recipientEmail, content);
 };
 
 export const sendDailySummaryEmail = async (
@@ -406,11 +463,7 @@ export const sendDailySummaryEmail = async (
     appPublicUrl: getAppPublicUrl(),
   });
 
-  await sendPlainTextEmail({
-    to: recipient.email,
-    subject: content.subject,
-    text: content.text,
-  });
+  await sendBusinessEmail(recipient.email, content);
 };
 
 export const sendDailySummaryEmailsToOpsUsers = async (
@@ -482,10 +535,11 @@ class ResendNotificationEmailTransport implements NotificationEmailTransport {
     }
 
     try {
-      await sendPlainTextEmail({
+      await sendEmail({
         to: recipient,
         subject: draft.subject,
         text: draft.body,
+        html: draft.htmlBody,
       });
 
       return {
