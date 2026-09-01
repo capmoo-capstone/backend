@@ -12,6 +12,9 @@ import {
   sendVendorPoRequestEmailForProject,
 } from '../notification/notification-email.service';
 
+const FOOTER_NOTICE =
+  '(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)';
+
 const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>, callIndex = 0) => {
   const [, options] = fetchMock.mock.calls[callIndex] as [
     string,
@@ -22,7 +25,20 @@ const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>, callIndex = 0) => {
     to: string[];
     subject: string;
     text: string;
+    html?: string;
   };
+};
+
+const expectBusinessFooter = (payload: { text: string; html?: string }) => {
+  expect(payload.text).toContain('ขอแสดงความนับถือ');
+  expect(payload.text).toContain('NexusProcure');
+  expect(payload.text).toContain('Connect • Fast • Transparent');
+  expect(payload.text).toContain(FOOTER_NOTICE);
+  expect(payload.html).toContain('<strong>NexusProcure</strong>');
+  expect(payload.html).toContain('Connect • Fast • Transparent');
+  expect(payload.html).toContain(
+    '<em>(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)</em>'
+  );
 };
 
 describe('notification-email.service', () => {
@@ -112,6 +128,10 @@ describe('notification-email.service', () => {
     expect(payload.to).toEqual(['somchai@example.com']);
     expect(payload.text).toContain('https://nexus-procure.com/login');
     expect(payload.text).toContain('Somchai Test');
+    expect(payload.html).toContain(
+      '<a href="https://nexus-procure.com/login">'
+    );
+    expectBusinessFooter(payload);
   });
 
   it('renders the pending registration email', async () => {
@@ -127,6 +147,8 @@ describe('notification-email.service', () => {
     expect(payload.subject.length).toBeGreaterThan(0);
     expect(payload.to).toEqual(['somying@example.com']);
     expect(payload.text).toContain('Somying Test');
+    expect(payload.html).toContain('Somying Test');
+    expectBusinessFooter(payload);
   });
 
   it('renders the contract committee reminder email with inspection date and remaining days', () => {
@@ -143,6 +165,8 @@ describe('notification-email.service', () => {
     expect(content.text).toContain('Committee Member');
     expect(content.text).toContain('2026-08-31');
     expect(content.text).toContain('5');
+    expect(content.html).toContain('<strong>5</strong>');
+    expectBusinessFooter(content);
   });
 
   it('sends the contract committee reminder email through Resend', async () => {
@@ -162,6 +186,8 @@ describe('notification-email.service', () => {
     expect(payload.subject).toContain('5');
     expect(payload.subject).toContain('Project Alpha');
     expect(payload.text).toContain('Committee Member');
+    expect(payload.html).toContain('Committee Member');
+    expectBusinessFooter(payload);
   });
 
   it('sends the vendor PO email from project data and includes the vendor form URL', async () => {
@@ -190,6 +216,10 @@ describe('notification-email.service', () => {
     );
     expect(payload.text).toContain('PO #PO-1234');
     expect(payload.text).toContain('Vendor Co., Ltd.');
+    expect(payload.html).toContain(
+      '<a href="https://vendor.nexus-procure.com/vendor-form">'
+    );
+    expectBusinessFooter(payload);
   });
 
   it('fails clearly when the vendor email is missing from the project', async () => {
@@ -304,6 +334,8 @@ describe('notification-email.service', () => {
     expect(documentPayload.text).toContain('งานที่เพิ่มใหม่ทั้งสิ้น 1 โครงการ');
     expect(documentPayload.text).toContain('งานคงค้างทั้งสิ้น 7 โครงการ');
     expect(documentPayload.text).toContain('https://nexus-procure.com');
+    expect(documentPayload.html).toContain('<strong>Ops Document</strong>');
+    expectBusinessFooter(documentPayload);
 
     const financePayload = getSentPayload(fetchMock, 1);
     expect(financePayload.to).toEqual(['ops2@example.com']);
@@ -312,6 +344,8 @@ describe('notification-email.service', () => {
     expect(financePayload.text).toContain('งานที่แล้วเสร็จทั้งสิ้น 7 โครงการ');
     expect(financePayload.text).toContain('งานคงค้างทั้งสิ้น 27 โครงการ');
     expect(financePayload.text).toContain('งานเร่งด่วนทั้งสิ้น 11 โครงการ');
+    expect(financePayload.html).toContain('<strong>Ops Finance</strong>');
+    expectBusinessFooter(financePayload);
   });
 
   it('marks queued delivery as sent when Resend accepts it', async () => {
@@ -324,11 +358,13 @@ describe('notification-email.service', () => {
       subject: 'Subject',
       body: 'Body',
       recipientEmail: 'person@example.com',
+      htmlBody: '<p>Body</p>',
     });
 
     expect(result.status).toBe(NotificationDeliveryStatus.SENT);
     expect(result.sentAt).toBeInstanceOf(Date);
     expect(result.errorMessage).toBeNull();
+    expect(getSentPayload(fetchMock).html).toBe('<p>Body</p>');
   });
 
   it('skips queued delivery when the recipient email is missing', async () => {
@@ -349,4 +385,3 @@ describe('notification-email.service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
-

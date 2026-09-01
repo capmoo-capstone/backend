@@ -10,6 +10,11 @@ import {
 import { AuthPayload } from '../../types/auth.type';
 import { OwnProjectTab } from '../../types/project.type';
 import { bangkokDayEndUtc, bangkokDayStartUtc } from '../../utils/date';
+import {
+  BusinessEmailContent,
+  escapeHtml,
+  withBusinessEmailClosing,
+} from './business-email-content';
 
 const DAILY_SUMMARY_ROLE_PRIORITY = [
   UserRole.HEAD_OF_UNIT,
@@ -124,30 +129,38 @@ export const buildDailySummaryAudienceText = (input: {
 
 export const buildDailySummaryEmailContent = (
   input: DailySummaryEmailContentInput
-) => {
+): BusinessEmailContent => {
   const thaiDate = formatThaiBuddhistDate(input.reportDate);
+  const subject = `สรุปงานในระบบ NexusProcure ประจำวันที่ ${thaiDate}`;
+  const text = [
+    `เรียน คุณ${input.fullName}`,
+    '',
+    `ระบบ NexusProcure ขอส่งรายงานสรุป${input.audienceText} ประจำวันที่ ${thaiDate} ณ เวลา 10:00 น. มีรายละเอียดดังนี้`,
+    '',
+    `- งานที่เพิ่มใหม่ทั้งสิ้น ${input.counts.new_count} โครงการ`,
+    `- งานที่แล้วเสร็จทั้งสิ้น ${input.counts.completed_count} โครงการ`,
+    `- งานคงค้างทั้งสิ้น ${input.counts.pending_count} โครงการ`,
+    `- งานเร่งด่วนทั้งสิ้น ${input.counts.urgent_count} โครงการ`,
+    '',
+    `ท่านสามารถเข้าสู่ระบบเพื่อดูรายละเอียดโครงการทั้งหมดได้ที่ ${input.appPublicUrl}`,
+  ].join('\n');
+  const html = [
+    `<p>เรียน คุณ<strong>${escapeHtml(input.fullName)}</strong></p>`,
+    `<p>ระบบ NexusProcure ขอส่งรายงานสรุป${escapeHtml(input.audienceText)} ประจำวันที่ <strong>${escapeHtml(thaiDate)}</strong> ณ เวลา 10:00 น. มีรายละเอียดดังนี้</p>`,
+    '<ul>',
+    `  <li>งานที่เพิ่มใหม่ทั้งสิ้น <strong>${input.counts.new_count}</strong> โครงการ</li>`,
+    `  <li>งานที่แล้วเสร็จทั้งสิ้น <strong>${input.counts.completed_count}</strong> โครงการ</li>`,
+    `  <li>งานคงค้างทั้งสิ้น <strong>${input.counts.pending_count}</strong> โครงการ</li>`,
+    `  <li>งานเร่งด่วนทั้งสิ้น <strong>${input.counts.urgent_count}</strong> โครงการ</li>`,
+    '</ul>',
+    `<p>ท่านสามารถเข้าสู่ระบบเพื่อดูรายละเอียดโครงการทั้งหมดได้ที่ <a href="${escapeHtml(input.appPublicUrl)}">${escapeHtml(input.appPublicUrl)}</a></p>`,
+  ].join('\n');
 
-  return {
-    subject: `สรุปงานในระบบ NexusProcure ประจำวันที่ ${thaiDate}`,
-    text: [
-      `เรียน คุณ${input.fullName}`,
-      '',
-      `ระบบ NexusProcure ขอส่งรายงาน${input.audienceText} ประจำวันที่ ${thaiDate} ณ เวลา 10:00 น. มีรายละเอียดดังนี้`,
-      '',
-      `- งานที่เพิ่มใหม่ทั้งสิ้น ${input.counts.new_count} โครงการ`,
-      `- งานที่แล้วเสร็จทั้งสิ้น ${input.counts.completed_count} โครงการ`,
-      `- งานคงค้างทั้งสิ้น ${input.counts.pending_count} โครงการ`,
-      `- งานเร่งด่วนทั้งสิ้น ${input.counts.urgent_count} โครงการ`,
-      '',
-      `ท่านสามารถเข้าสู่ระบบเพื่อดูรายละเอียดโครงการทั้งหมดได้ที่ ${input.appPublicUrl}`,
-      '',
-      'ขอแสดงความนับถือ',
-      'NexusProcure',
-      'Connect • Fast • Transparent',
-      '',
-      '(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)',
-    ].join('\n'),
-  };
+  return withBusinessEmailClosing({
+    subject,
+    text,
+    html,
+  });
 };
 
 export const getDailySummaryCountsForRole = async (
