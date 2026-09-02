@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { protectCron } from './cron-auth';
 
 const invoke = (authorization?: string) => {
@@ -7,8 +7,15 @@ const invoke = (authorization?: string) => {
   return next;
 };
 
-afterEach(() => {
+const originalCronSecret = process.env.CRON_SECRET;
+
+beforeEach(() => {
   process.env.CRON_SECRET = 'unit-test-cron-secret';
+});
+
+afterEach(() => {
+  if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+  else process.env.CRON_SECRET = originalCronSecret;
 });
 
 describe('protectCron', () => {

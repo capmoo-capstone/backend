@@ -115,7 +115,7 @@ export const startNotificationDeadlineWorker = (
   return new Worker(
     DEADLINE_NOTIFICATION_QUEUE_NAME,
     async (job) => {
-      await processor(job.data as NotificationDeadlineJob);
+      await processor(job.data);
     },
     {
       connection,

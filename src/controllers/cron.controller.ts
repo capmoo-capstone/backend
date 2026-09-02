@@ -18,6 +18,8 @@ const sendScheduled = async (
   job: 'daily-summary-email' | 'contract-committee-reminders',
   res: Response
 ) => {
+  // #swagger.tags = ['Cron']
+  // #swagger.security = [{ bearerAuth: [] }]
   const lock = await runWithCronLock(job, () =>
     triggerScheduledCronTask({ kind: job })
   );
@@ -42,6 +44,8 @@ export const processDeadlineNotifications = async (
   _req: Request,
   res: Response
 ) => {
+  // #swagger.tags = ['Cron']
+  // #swagger.security = [{ bearerAuth: [] }]
   const lock = await runWithCronLock(
     'process-deadlines',
     triggerDeadlineReminderScan
@@ -62,6 +66,8 @@ export const processDeadlineNotifications = async (
 };
 
 export const sendTestEmail = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Cron']
+  // #swagger.security = [{ bearerAuth: [] }]
   const to =
     typeof req.query.to === 'string' && req.query.to.trim().length > 0
       ? req.query.to.trim()
@@ -76,6 +82,8 @@ export const sendTestEmail = async (req: Request, res: Response) => {
 };
 
 export const sendVendorPoEmail = async (req: Request, res: Response) => {
+  // #swagger.tags = ['Cron']
+  // #swagger.security = [{ bearerAuth: [] }]
   const { projectId } = SendVendorPoEmailSchema.parse(req.body);
   const result = await sendVendorPoRequestEmailForProject(projectId);
 

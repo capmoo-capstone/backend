@@ -61,9 +61,9 @@ export const startScheduledCronTaskWorker = (
   if (!connection) return null;
 
   const { Worker } = loadBullMq();
-  return new Worker(
+  return new Worker<ScheduledCronTaskJob>(
     SCHEDULED_CRON_QUEUE_NAME,
     async (job) => processor(job.data),
     { connection, prefix: runtimeConfig.redisPrefix }
-  ) as WorkerInstance<ScheduledCronTaskJob>;
+  );
 };

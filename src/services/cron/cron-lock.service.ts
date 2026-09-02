@@ -84,12 +84,10 @@ const reserve = async <T>(
 
     return { acquired: true as const, value: await task() };
   } catch {
-    if (acquired && releaseOnFailure) {
-      await withTimeout(client.eval(RELEASE_SCRIPT, 1, key, owner)).catch(
-        () => undefined
-      );
-    }
-
+    // SET may succeed after the local timeout; owner-scoped release is safe.
+    await withTimeout(client.eval(RELEASE_SCRIPT, 1, key, owner)).catch(
+      () => undefined
+    );
     throw new ServiceUnavailableError('Cron queue is unavailable');
   } finally {
     if (acquired && !releaseOnFailure) {

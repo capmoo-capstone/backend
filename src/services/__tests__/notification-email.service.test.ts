@@ -5,7 +5,7 @@ import {
   buildContractCommitteeReminderEmail,
   notificationEmailTransport,
   sendContractCommitteeReminderEmail,
-  sendDailySummaryEmailsToOpsUsers,
+  sendDailySummaryEmailsToSuperAdmins,
   sendHelloTestEmail,
   sendRegistrationApprovedEmail,
   sendRegistrationPendingEmail,
@@ -322,7 +322,7 @@ describe('notification-email.service', () => {
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(11);
 
-    const result = await sendDailySummaryEmailsToOpsUsers(reportDate);
+    const result = await sendDailySummaryEmailsToSuperAdmins(reportDate);
 
     expect(result).toEqual({ recipientCount: 2 });
     expect(prismaMock.user.findMany).toHaveBeenCalledWith(
@@ -425,7 +425,7 @@ describe('notification-email.service', () => {
       .mockResolvedValueOnce(4)
       .mockResolvedValueOnce(5);
 
-    const result = await sendDailySummaryEmailsToOpsUsers(
+    const result = await sendDailySummaryEmailsToSuperAdmins(
       new Date('2026-08-29T03:00:00.000Z')
     );
 

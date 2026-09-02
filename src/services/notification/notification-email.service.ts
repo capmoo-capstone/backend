@@ -469,7 +469,7 @@ export const sendDailySummaryEmail = async (
   await sendBusinessEmail(recipient.email, content);
 };
 
-export const sendDailySummaryEmailsToOpsUsers = async (
+export const sendDailySummaryEmailsToSuperAdmins = async (
   reportDate: Date = new Date()
 ) => {
   const users = await prisma.user.findMany({
