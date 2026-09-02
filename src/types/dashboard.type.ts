@@ -96,7 +96,6 @@ export interface UnitGroupExecutiveSummaryResponse {
   range: { from: Date; to: Date };
   longestProcurementMethod: ProcurementType | null;
   avgDurationDays: DashboardMetricComparison;
-  onTimeCompletionPercentage: DashboardMetricComparison;
   workloadVsDurationTimeline: WorkloadVsDurationPoint[];
 }
 
@@ -106,18 +105,11 @@ export interface UnitGroupProcurementMetricsResponse {
     total: number;
     byProcurementType: Array<{ type: ProcurementType; count: number }>;
   };
-  delayedProjects: {
-    total: number;
-    byProcurementType: Array<{ type: ProcurementType; count: number }>;
-  };
 }
 
 export interface ProcurementMethodDetailItem {
   procurementType: ProcurementType;
-  delayedCount: number;
   totalCount: number;
-  delayedPercentage: number;
-  comparisonTrend: DashboardTrend;
   statusDistribution: Array<{
     status: ProjectStatus | 'NOT_STARTED';
     count: number;
@@ -142,6 +134,7 @@ export interface TopDelayedProjectItem {
   projectId: string;
   title: string;
   procurementType: ProcurementType;
+  workflowType: UnitResponsibleType;
   totalDays: number;
   stageBreakdownDays: {
     assignmentDays: number;

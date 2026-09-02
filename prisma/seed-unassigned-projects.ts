@@ -6,8 +6,8 @@ import {
 } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../src/config/prisma';
-import { DEFAULT_PHASE } from '../src/lib/constant';
-import { nowUtc, toBangkokParts } from '../src/lib/date';
+import { DEFAULT_PHASE } from '../src/utils/constant';
+import { nowUtc, toBangkokParts } from '../src/utils/date';
 import { departmentsAndUnitsData } from './seed-departments';
 
 const DAY_MS = 24 * 60 * 60 * 1000;

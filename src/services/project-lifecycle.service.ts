@@ -9,7 +9,6 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { CONTRACT_UNIT_ID } from '../utils/constant';
 import { nowUtc } from '../utils/date';
 import { BadRequestError, NotFoundError } from '../utils/errors';
 import { isHeadOfSupplyDept, isHeadOfSupplyUnit } from '../utils/permissions';
@@ -499,6 +498,7 @@ export const completeProcurementPhase = async (
         : ProjectStatus.UNASSIGNED,
       contract_started_at: hasContractAssignee ? transitionAt : undefined,
       responsible_unit_id: data.contract_unit_id,
+      contract_unit_id: data.contract_unit_id,
       assignee_contract: data.assignee_contract
         ? { connect: { id: data.assignee_contract } }
         : undefined,

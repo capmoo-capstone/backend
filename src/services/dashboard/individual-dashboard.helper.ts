@@ -19,7 +19,13 @@ import {
 import { fetchAndFormatUserDetails } from '../auth.service';
 import { getOwnProjects, getOwnProjectsTotal } from '../project-query.service';
 import { resolveTargetUnitId } from './dashboard.helper';
-import { getUnitProcurementTypes } from './kpi-dashboard.helper';
+
+type CompletedPhase = {
+  workflowType: UnitResponsibleType;
+  startedAt: Date;
+  completedAt: Date;
+  assigneeIds: string[];
+};
 
 export const getIndividualStaffTodo = async (
   page: number,
@@ -79,7 +85,7 @@ export const getIndividualStaffDashboard = async (
 
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
-    select: { id: true, type: true },
+    select: { id: true },
   });
   if (!unit) {
     throw new NotFoundError('Unit not found');
@@ -104,55 +110,73 @@ export const getIndividualStaffDashboard = async (
     throw new NotFoundError('Staff user not found in this unit');
   }
 
-  const procurementTypes = await getUnitProcurementTypes(unitId);
-  let procurementMethodMetrics: {
-    total: number;
-    byProcurementType: Array<{ type: ProcurementType; count: number }>;
-  } | null = null;
-  // 1. Donut Chart Breakdown (procurementMethodMetrics)
-  if (procurementTypes.length !== 0) {
-    const staffProjects = await prisma.project.findMany({
-      where: {
-        responsible_unit_id: unitId,
-        OR: [
-          { assignee_procurement: { some: { id: staffUser.id } } },
-          { assignee_contract: { some: { id: staffUser.id } } },
-        ],
-      },
-      select: {
-        procurement_type: true,
-      },
-    });
-
-    const staffTypeCounts = new Map<ProcurementType, number>();
-    for (const p of staffProjects) {
-      const current = staffTypeCounts.get(p.procurement_type) ?? 0;
-      staffTypeCounts.set(p.procurement_type, current + 1);
-    }
-
-    const byProcurementType = procurementTypes.map((type) => ({
-      type,
-      count: staffTypeCounts.get(type) ?? 0,
-    }));
-
-    const total = staffProjects.length;
-
-    procurementMethodMetrics = {
-      total,
-      byProcurementType,
-    };
-  }
-
-  // 2. Two-Phase Duration Comparison (durationComparison)
-  const completedProjects = await prisma.project.findMany({
+  const staffProjects = await prisma.project.findMany({
     where: {
-      responsible_unit_id: unitId,
       OR: [
         {
+          procurement_unit_id: unitId,
+          assignee_procurement: { some: { id: staffUser.id } },
+        },
+        {
+          contract_unit_id: unitId,
+          assignee_contract: { some: { id: staffUser.id } },
+        },
+      ],
+    },
+    select: {
+      procurement_type: true,
+      procurement_unit_id: true,
+      contract_unit_id: true,
+      assignee_procurement: { select: { id: true } },
+      assignee_contract: { select: { id: true } },
+    },
+  });
+
+  const staffTypeCounts = new Map<ProcurementType, number>();
+  for (const project of staffProjects) {
+    if (
+      project.procurement_unit_id === unitId &&
+      project.assignee_procurement.some(
+        (assignee) => assignee.id === staffUser.id
+      )
+    ) {
+      staffTypeCounts.set(
+        project.procurement_type,
+        (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
+      );
+    }
+    if (
+      project.contract_unit_id === unitId &&
+      project.assignee_contract.some((assignee) => assignee.id === staffUser.id)
+    ) {
+      staffTypeCounts.set(
+        project.procurement_type,
+        (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
+      );
+    }
+  }
+
+  const procurementMethodMetrics = {
+    total: [...staffTypeCounts.values()].reduce(
+      (total, count) => total + count,
+      0
+    ),
+    byProcurementType: Object.values(ProcurementType).map((type) => ({
+      type,
+      count: staffTypeCounts.get(type) ?? 0,
+    })),
+  };
+
+  const completedProjects = await prisma.project.findMany({
+    where: {
+      OR: [
+        {
+          procurement_unit_id: unitId,
           procurement_started_at: { not: null },
           procurement_completed_at: { not: null },
         },
         {
+          contract_unit_id: unitId,
           contract_started_at: { not: null },
           contract_completed_at: { not: null },
         },
@@ -160,75 +184,44 @@ export const getIndividualStaffDashboard = async (
     },
     select: {
       procurement_type: true,
+      procurement_unit_id: true,
+      contract_unit_id: true,
       procurement_started_at: true,
       procurement_completed_at: true,
       contract_started_at: true,
       contract_completed_at: true,
-      assignee_procurement: {
-        select: {
-          id: true,
-          roles: {
-            where: { unit_id: unitId },
-            select: { unit_id: true },
-          },
-        },
-      },
-      assignee_contract: {
-        select: {
-          id: true,
-          roles: {
-            where: { unit_id: unitId },
-            select: { unit_id: true },
-          },
-        },
-      },
+      assignee_procurement: { select: { id: true } },
+      assignee_contract: { select: { id: true } },
     },
   });
-
-  type CompletedPhase = {
-    workflowType: UnitResponsibleType;
-    startedAt: Date;
-    completedAt: Date;
-    assigneeIds: string[];
-  };
-
-  const hasUnitAssignee = (
-    assignees?: Array<{ roles?: Array<{ unit_id: string | null }> }>
-  ): boolean => {
-    if (assignees === undefined) return true;
-    if (assignees.length === 0) return false;
-    return assignees.some(
-      (assignee) =>
-        assignee.roles === undefined ||
-        assignee.roles.some((role) => role.unit_id !== null)
-    );
-  };
 
   const completedPhases: CompletedPhase[] = [];
   for (const project of completedProjects) {
     if (
+      project.procurement_unit_id === unitId &&
       project.procurement_started_at &&
-      project.procurement_completed_at &&
-      hasUnitAssignee(project.assignee_procurement)
+      project.procurement_completed_at
     ) {
       completedPhases.push({
-        workflowType: project.procurement_type,
+        workflowType: project.procurement_type as UnitResponsibleType,
         startedAt: project.procurement_started_at,
         completedAt: project.procurement_completed_at,
-        assigneeIds: project.assignee_procurement.map((a) => a.id),
+        assigneeIds: project.assignee_procurement.map(
+          (assignee) => assignee.id
+        ),
       });
     }
 
     if (
+      project.contract_unit_id === unitId &&
       project.contract_started_at &&
-      project.contract_completed_at &&
-      hasUnitAssignee(project.assignee_contract)
+      project.contract_completed_at
     ) {
       completedPhases.push({
         workflowType: UnitResponsibleType.CONTRACT,
         startedAt: project.contract_started_at,
         completedAt: project.contract_completed_at,
-        assigneeIds: project.assignee_contract.map((a) => a.id),
+        assigneeIds: project.assignee_contract.map((assignee) => assignee.id),
       });
     }
   }
@@ -240,54 +233,51 @@ export const getIndividualStaffDashboard = async (
     }))
   );
 
-  const durationComparison: DurationComparisonItem[] = unit.type.map((type) => {
-    const typePhases = completedPhases.filter(
-      (phase) => phase.workflowType === type
+  const workflowTypes = new Set(
+    completedPhases.map((phase) => phase.workflowType)
+  );
+  const averageDurationDays = (phases: CompletedPhase[]) => {
+    if (phases.length === 0) return 0;
+    const total = phases.reduce(
+      (sum, phase) =>
+        sum +
+        countBangkokWorkingDays(
+          phase.startedAt,
+          phase.completedAt,
+          holidayIndex
+        ),
+      0
     );
-    const staffPhases = typePhases.filter((phase) =>
-      phase.assigneeIds.includes(staffUser.id)
-    );
+    return Number((total / phases.length).toFixed(1));
+  };
 
-    let staffTotalDays = 0;
-    for (const phase of staffPhases) {
-      staffTotalDays += countBangkokWorkingDays(
-        phase.startedAt,
-        phase.completedAt,
-        holidayIndex
+  const durationComparison: DurationComparisonItem[] = Object.values(
+    UnitResponsibleType
+  )
+    .filter((workflowType) => workflowTypes.has(workflowType))
+    .map((workflowType) => {
+      const typePhases = completedPhases.filter(
+        (phase) => phase.workflowType === workflowType
       );
-    }
-    const staffAvgDurationDays =
-      staffPhases.length > 0
-        ? Number((staffTotalDays / staffPhases.length).toFixed(1))
-        : 0;
-
-    let unitTotalDays = 0;
-    for (const phase of typePhases) {
-      unitTotalDays += countBangkokWorkingDays(
-        phase.startedAt,
-        phase.completedAt,
-        holidayIndex
+      const staffPhases = typePhases.filter((phase) =>
+        phase.assigneeIds.includes(staffUser.id)
       );
-    }
-    const unitAvgDurationDays =
-      typePhases.length > 0
-        ? Number((unitTotalDays / typePhases.length).toFixed(1))
-        : 0;
+      const staffAvgDurationDays = averageDurationDays(staffPhases);
+      const unitAvgDurationDays = averageDurationDays(typePhases);
+      const comparison =
+        staffAvgDurationDays > unitAvgDurationDays
+          ? 'worse'
+          : staffAvgDurationDays < unitAvgDurationDays
+            ? 'better'
+            : 'same';
 
-    let comparison: 'better' | 'worse' | 'same' = 'same';
-    if (staffAvgDurationDays > unitAvgDurationDays) {
-      comparison = 'worse';
-    } else if (staffAvgDurationDays < unitAvgDurationDays) {
-      comparison = 'better';
-    }
-
-    return {
-      workflowType: type,
-      staffAvgDurationDays,
-      unitAvgDurationDays,
-      comparison,
-    };
-  });
+      return {
+        workflowType,
+        staffAvgDurationDays,
+        unitAvgDurationDays,
+        comparison,
+      };
+    });
 
   return {
     unitId,
