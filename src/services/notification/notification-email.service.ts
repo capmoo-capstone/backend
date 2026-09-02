@@ -1,6 +1,7 @@
 import {
   NotificationChannel,
   NotificationDeliveryStatus,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../utils/active-state';
@@ -312,7 +313,9 @@ const resolveDailySummaryRecipient = (user: {
   }
 
   const auth = buildDailySummaryAuthPayload(user);
-  const role = resolveDailySummaryRole(auth);
+  const role = user.roles.some((entry) => entry.role === UserRole.SUPER_ADMIN)
+    ? UserRole.DOCUMENT_STAFF
+    : resolveDailySummaryRole(auth);
 
   if (!role) {
     return null;
@@ -475,7 +478,7 @@ export const sendDailySummaryEmailsToOpsUsers = async (
       email: { not: null },
       roles: {
         some: {
-          dept_id: OPS_DEPT_ID,
+          role: UserRole.SUPER_ADMIN,
         },
       },
     },
@@ -485,9 +488,6 @@ export const sendDailySummaryEmailsToOpsUsers = async (
       email: true,
       full_name: true,
       roles: {
-        where: {
-          dept_id: OPS_DEPT_ID,
-        },
         select: {
           role: true,
           department: {

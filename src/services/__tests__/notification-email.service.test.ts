@@ -316,7 +316,7 @@ describe('notification-email.service', () => {
           email: { not: null },
           roles: {
             some: {
-              dept_id: 'DEPT-SUP-OPS',
+              role: UserRole.SUPER_ADMIN,
             },
           },
         }),
@@ -384,4 +384,45 @@ describe('notification-email.service', () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+  it('sends the daily summary only to super administrators', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 'super-admin-1',
+        username: 'super.admin',
+        email: 'super@example.com',
+        full_name: 'Super Admin',
+        roles: [
+          {
+            role: UserRole.SUPER_ADMIN,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
+      },
+    ]);
+    prismaMock.project.count
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(5);
+
+    const result = await sendDailySummaryEmailsToOpsUsers(
+      new Date('2026-08-29T03:00:00.000Z')
+    );
+
+    expect(result).toEqual({ recipientCount: 1 });
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          roles: { some: { role: UserRole.SUPER_ADMIN } },
+        }),
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getSentPayload(fetchMock, 0).to).toEqual(['super@example.com']);
+  });
+
 });
