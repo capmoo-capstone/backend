@@ -217,6 +217,7 @@ const reserveReminderDelivery = async (input: {
   dedupeKey: string;
   subject: string;
   body: string;
+  htmlBody: string;
 }) => {
   const existing = await input.tx.notificationDelivery.findFirst({
     where: {
@@ -394,6 +395,7 @@ export const sendContractCommitteeReminders = async () => {
           dedupeKey,
           subject: recipientContent.subject,
           body: recipientContent.text,
+          htmlBody: recipientContent.html,
         });
 
         if (!reservedDelivery) {

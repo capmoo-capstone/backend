@@ -1,138 +1,94 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { runWithCronLock, triggerDeadlineReminderScan, triggerScheduledCronTask } = vi.hoisted(() => ({
+  runWithCronLock: vi.fn(),
+  triggerDeadlineReminderScan: vi.fn(),
+  triggerScheduledCronTask: vi.fn(),
+}));
+
+vi.mock('../services/cron/cron-lock.service', () => ({ runWithCronLock }));
+vi.mock('../services/cron/cron-task.service', () => ({
+  triggerDeadlineReminderScan,
+  triggerScheduledCronTask,
+}));
+
 import {
   processDeadlineNotifications,
   sendContractCommitteeReminderEmail,
   sendDailySummaryEmail,
-  sendTestEmail,
-  sendVendorPoEmail,
 } from './cron.controller';
-import * as CronTaskService from '../services/cron/cron-task.service';
-import * as NotificationEmailService from '../services/notification/notification-email.service';
 
-describe('processDeadlineNotifications', () => {
-  it('enqueues the deadline sync task and returns a success response', async () => {
-    const syncSpy = vi
-      .spyOn(CronTaskService, 'triggerDeadlineReminderScan')
-      .mockResolvedValue({
-        message: 'Deadline notification sync enqueued',
-      });
+const response = () => {
+  const json = vi.fn();
+  return { json, status: vi.fn().mockReturnValue({ json }) };
+};
 
-    const json = vi.fn();
-    const status = vi.fn().mockReturnValue({ json });
+beforeEach(() => {
+  vi.clearAllMocks();
+  runWithCronLock.mockImplementation(async (_job, task) => ({
+    acquired: true,
+    value: await task(),
+  }));
+  triggerDeadlineReminderScan.mockResolvedValue({
+    message: 'Deadline notification sync enqueued',
+  });
+  triggerScheduledCronTask.mockImplementation(async ({ kind }) => ({
+    message: `${kind} job enqueued`,
+    queued: true,
+    skipped: false,
+  }));
+});
 
-    await processDeadlineNotifications({} as any, { status } as any);
+describe('cron controller', () => {
+  it('enqueues deadline work instead of executing it inline', async () => {
+    const res = response();
+    await processDeadlineNotifications({} as any, res as any);
 
-    expect(syncSpy).toHaveBeenCalledOnce();
-    expect(status).toHaveBeenCalledWith(200);
-    expect(json).toHaveBeenCalledWith({
+    expect(runWithCronLock).toHaveBeenCalledWith(
+      'process-deadlines',
+      triggerDeadlineReminderScan
+    );
+    expect(res.json).toHaveBeenCalledWith({
       status: 'success',
       message: 'Deadline notification sync enqueued',
     });
   });
-});
 
-describe('sendTestEmail', () => {
-  it('sends a test email to the explicit query recipient', async () => {
-    const sendSpy = vi
-      .spyOn(NotificationEmailService, 'sendHelloTestEmail')
-      .mockResolvedValue(undefined);
+  it('reports an active lock as a successful skip', async () => {
+    runWithCronLock.mockResolvedValue({ acquired: false });
+    const res = response();
 
-    const json = vi.fn();
-    const status = vi.fn().mockReturnValue({ json });
+    await sendDailySummaryEmail({} as any, res as any);
 
-    await sendTestEmail(
-      { query: { to: 'person@example.com' } } as any,
-      { status } as any
-    );
-
-    expect(sendSpy).toHaveBeenCalledWith('person@example.com');
-    expect(status).toHaveBeenCalledWith(200);
-    expect(json).toHaveBeenCalledWith({
+    expect(triggerScheduledCronTask).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
       status: 'success',
-      message: 'Test email sent',
-      to: 'person@example.com',
+      message: 'daily-summary-email is already being queued',
+      skipped: true,
     });
   });
-});
 
-describe('sendVendorPoEmail', () => {
-  it('sends the vendor PO email for the requested project', async () => {
-    const sendSpy = vi
-      .spyOn(NotificationEmailService, 'sendVendorPoRequestEmailForProject')
-      .mockResolvedValue({
-        projectId: 'project-1',
-        poNumber: 'PO-001',
-        recipientEmail: 'vendor@example.com',
-      });
+  it('enqueues the daily summary work', async () => {
+    const res = response();
+    await sendDailySummaryEmail({} as any, res as any);
 
-    const json = vi.fn();
-    const status = vi.fn().mockReturnValue({ json });
-
-    await sendVendorPoEmail(
-      { body: { projectId: 'project-1' } } as any,
-      { status } as any
-    );
-
-    expect(sendSpy).toHaveBeenCalledWith('project-1');
-    expect(status).toHaveBeenCalledWith(200);
-    expect(json).toHaveBeenCalledWith({
-      status: 'success',
-      message: 'Vendor PO email sent',
-      projectId: 'project-1',
-      poNumber: 'PO-001',
-      to: 'vendor@example.com',
+    expect(triggerScheduledCronTask).toHaveBeenCalledWith({
+      kind: 'daily-summary-email',
     });
-  });
-});
-
-describe('sendDailySummaryEmail', () => {
-  it('enqueues the daily summary job and returns the queue state', async () => {
-    const sendSpy = vi
-      .spyOn(CronTaskService, 'triggerScheduledCronTask')
-      .mockResolvedValue({
-        message: 'daily-summary-email job enqueued',
-        queued: true,
-        skipped: false,
-      });
-
-    const json = vi.fn();
-    const status = vi.fn().mockReturnValue({ json });
-
-    await sendDailySummaryEmail({} as any, { status } as any);
-
-    expect(sendSpy).toHaveBeenCalledOnce();
-    expect(status).toHaveBeenCalledWith(200);
-    expect(json).toHaveBeenCalledWith({
+    expect(res.json).toHaveBeenCalledWith({
       status: 'success',
       message: 'daily-summary-email job enqueued',
       queued: true,
       skipped: false,
     });
   });
-});
 
-describe('sendContractCommitteeReminderEmail', () => {
-  it('enqueues the contract committee reminder job and returns the queue state', async () => {
-    const sendSpy = vi
-      .spyOn(CronTaskService, 'triggerScheduledCronTask')
-      .mockResolvedValue({
-        message: 'contract-committee-reminders job enqueued',
-        queued: true,
-        skipped: false,
-      });
+  it('enqueues the committee reminder work', async () => {
+    const res = response();
+    await sendContractCommitteeReminderEmail({} as any, res as any);
 
-    const json = vi.fn();
-    const status = vi.fn().mockReturnValue({ json });
-
-    await sendContractCommitteeReminderEmail({} as any, { status } as any);
-
-    expect(sendSpy).toHaveBeenCalledOnce();
-    expect(status).toHaveBeenCalledWith(200);
-    expect(json).toHaveBeenCalledWith({
-      status: 'success',
-      message: 'contract-committee-reminders job enqueued',
-      queued: true,
-      skipped: false,
+    expect(triggerScheduledCronTask).toHaveBeenCalledWith({
+      kind: 'contract-committee-reminders',
     });
   });
 });

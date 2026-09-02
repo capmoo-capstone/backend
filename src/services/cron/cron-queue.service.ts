@@ -5,6 +5,7 @@ import {
   QueueInstance,
   WorkerInstance,
 } from '../queue/bullmq-runtime.service';
+import { ServiceUnavailableError } from '../../utils/errors';
 
 export type ScheduledCronTaskJob =
   | { kind: 'daily-summary-email' }
@@ -12,8 +13,15 @@ export type ScheduledCronTaskJob =
 
 export const SCHEDULED_CRON_QUEUE_NAME = 'system:scheduled-cron';
 
-
 let cronQueue: QueueInstance<ScheduledCronTaskJob> | null = null;
+
+export const getScheduleWindow = (now = new Date()) =>
+  now.toISOString().slice(0, 10);
+
+export const scheduledCronJobId = (
+  job: ScheduledCronTaskJob,
+  window = getScheduleWindow()
+) => `scheduled-${job.kind}-${window}`;
 
 export const getScheduledCronQueue = () => {
   const connection = getQueueConnection();
@@ -28,12 +36,19 @@ export const getScheduledCronQueue = () => {
   return cronQueue;
 };
 
-export const enqueueScheduledCronTask = async (job: ScheduledCronTaskJob) => {
+export const enqueueScheduledCronTask = async (
+  job: ScheduledCronTaskJob,
+  window = getScheduleWindow()
+) => {
   const queue = getScheduledCronQueue();
-  if (!queue) return null;
+  if (!queue) {
+    throw new ServiceUnavailableError('Cron queue is unavailable');
+  }
 
   return queue.add(job.kind, job, {
-    jobId: `scheduled-${job.kind}-${new Date().toISOString().slice(0, 10)}`,
+    jobId: scheduledCronJobId(job, window),
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5_000 },
     removeOnComplete: 1000,
     removeOnFail: 1000,
   });
@@ -46,15 +61,9 @@ export const startScheduledCronTaskWorker = (
   if (!connection) return null;
 
   const { Worker } = loadBullMq();
-
   return new Worker(
     SCHEDULED_CRON_QUEUE_NAME,
-    async (job) => {
-      await processor(job.data);
-    },
-    {
-      connection,
-      prefix: runtimeConfig.redisPrefix,
-    }
+    async (job) => processor(job.data),
+    { connection, prefix: runtimeConfig.redisPrefix }
   ) as WorkerInstance<ScheduledCronTaskJob>;
 };

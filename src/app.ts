@@ -1,4 +1,4 @@
-﻿import './config/env';
+import './config/env';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import express from 'express';
@@ -8,7 +8,6 @@ import swaggerDocument from '../swagger-output.json';
 import { bangkokDateResponse } from './middlewares/date-response';
 import { errorHandler } from './middlewares/error';
 import apiV1Routes from './routes/index';
-import { logRuntimeEvent } from './utils/runtime-log';
 
 const NODE_ENV = process.env.NODE_ENV || 'local';
 const PORT = process.env.PORT || 3000;
@@ -30,14 +29,14 @@ app.use(
 );
 
 const allowedOrigins = [
-  'http://localhost:5173',
-  `http://localhost:${PORT}`,
-  'https://www.nexus-procure.com',
-  'https://nexus-procure.com',
-  'https://vendor.nexus-procure.com',
-  'https://nexus-procure.pages.dev',
-  'https://dev.nexus-procure.pages.dev',
-  'https://nexus-procure-vendors-portal.pages.dev',
+  'http://localhost:5173', // Vite local dev
+  `http://localhost:${PORT}`, // Express local dev
+  'https://www.nexus-procure.com', // VPS production frontend
+  'https://nexus-procure.com', // VPS production frontend
+  'https://vendor.nexus-procure.com', // VPS production vendor portal
+  'https://nexus-procure.pages.dev', // Cloudflare Pages production
+  'https://dev.nexus-procure.pages.dev', // Cloudflare Pages development
+  'https://nexus-procure-vendors-portal.pages.dev', // Cloudflare Pages production for vendor portal
 ];
 
 const corsOptions = {
@@ -60,10 +59,11 @@ const corsOptions = {
 app.options('/{*path}', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false })); // CU Portal sends SAMLResponse to the ACS as an HTML form POST.
 app.use(cookieParser());
 app.use(bangkokDateResponse);
 
+// Import API v1 routes
 app.get('/', (_req, res) => {
   res.status(200).send('Welcome to the API');
 });
@@ -133,12 +133,10 @@ app.use(
 
 app.use(errorHandler);
 
+// Only listen locally — Vercel handles the server itself
 if (NODE_ENV === 'local' || NODE_ENV === 'production') {
   app.listen(PORT, () => {
-    logRuntimeEvent('backend', 'startup', {
-      port: Number(PORT),
-      nodeEnv: NODE_ENV,
-    });
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
   });
 }
 

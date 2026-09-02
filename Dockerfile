@@ -33,4 +33,4 @@ COPY --from=builder /app/swagger-output.json ./swagger-output.json
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start:api"]
+CMD ["node", "dist/src/app.js"]

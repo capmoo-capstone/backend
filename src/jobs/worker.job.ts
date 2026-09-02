@@ -1,4 +1,4 @@
-﻿import '../config/env';
+import '../config/env';
 import { processDeadlineQueueJob } from '../services/notification/notification-query.service';
 import {
   DEADLINE_NOTIFICATION_QUEUE_NAME,
@@ -14,54 +14,30 @@ import {
   WorkerInstance,
   WorkerJob,
 } from '../services/queue/bullmq-runtime.service';
-import { logRuntimeError, logRuntimeEvent } from '../utils/runtime-log';
 
-const attachWorkerObservers = <T>(
-  queueName: string,
-  worker: WorkerInstance<T>
-) => {
-  worker.on('ready', () => {
-    logRuntimeEvent('worker', 'connected-to-redis', { queueName });
-  });
-
-  worker.on('active', (job) => {
-    const activeJob = job as WorkerJob<T> | undefined;
-    logRuntimeEvent('worker', 'job-started', {
-      queueName,
-      jobId: activeJob?.id ?? null,
-      jobName: activeJob?.name ?? null,
-    });
-  });
-
-  worker.on('completed', (job) => {
-    const completedJob = job as WorkerJob<T> | undefined;
-    logRuntimeEvent('worker', 'job-completed', {
-      queueName,
-      jobId: completedJob?.id ?? null,
-      jobName: completedJob?.name ?? null,
-    });
-  });
+const observeWorker = <T>(queueName: string, worker: WorkerInstance<T>) => {
+  worker.on('ready', () => console.info('BullMQ worker connected', { queueName }));
 
   worker.on('failed', (job, error) => {
     const failedJob = job as WorkerJob<T> | undefined;
-    logRuntimeError('worker', 'job-failed', error, {
+    console.error('BullMQ job failed', {
       queueName,
       jobId: failedJob?.id ?? null,
       jobName: failedJob?.name ?? null,
+      error: error instanceof Error ? error.message : String(error),
     });
   });
 
   worker.on('error', (error) => {
-    logRuntimeError('worker', 'worker-error', error, { queueName });
+    console.error('BullMQ worker error', {
+      queueName,
+      error: error instanceof Error ? error.message : String(error),
+    });
   });
 };
 
 const run = async () => {
   assertRedisConfigured('worker');
-
-  logRuntimeEvent('worker', 'startup', {
-    queues: [DEADLINE_NOTIFICATION_QUEUE_NAME, SCHEDULED_CRON_QUEUE_NAME],
-  });
 
   const notificationWorker =
     startNotificationDeadlineWorker(processDeadlineQueueJob);
@@ -73,21 +49,17 @@ const run = async () => {
     throw new Error('Worker failed to start queue consumers');
   }
 
-  attachWorkerObservers(
+  observeWorker(
     DEADLINE_NOTIFICATION_QUEUE_NAME,
     notificationWorker as WorkerInstance<unknown>
   );
-  attachWorkerObservers(
+  observeWorker(
     SCHEDULED_CRON_QUEUE_NAME,
     scheduledCronWorker as WorkerInstance<unknown>
   );
-
-  logRuntimeEvent('worker', 'startup-complete', {
-    queues: [DEADLINE_NOTIFICATION_QUEUE_NAME, SCHEDULED_CRON_QUEUE_NAME],
-  });
 };
 
 run().catch((error) => {
-  logRuntimeError('worker', 'startup-failed', error);
+  console.error('BullMQ worker startup failed', error);
   process.exitCode = 1;
 });

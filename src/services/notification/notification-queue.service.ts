@@ -1,4 +1,4 @@
-﻿import { runtimeConfig } from '../../config/runtime';
+import { runtimeConfig } from '../../config/runtime';
 import {
   getQueueConnection,
   loadBullMq,
@@ -115,13 +115,13 @@ export const startNotificationDeadlineWorker = (
   return new Worker(
     DEADLINE_NOTIFICATION_QUEUE_NAME,
     async (job) => {
-      await processor(job.data);
+      await processor(job.data as NotificationDeadlineJob);
     },
     {
       connection,
       prefix: runtimeConfig.redisPrefix,
     }
-  ) as WorkerInstance<NotificationDeadlineJob>;
+  );
 };
 
 export const registerNotificationQueueSchedules = async () => {
@@ -133,34 +133,16 @@ export const registerNotificationQueueSchedules = async () => {
     repeat: { every: runtimeConfig.deadlineWorkerRepeatMs },
     removeOnComplete: 1000,
   } as Record<string, unknown>);
-
   await queue.add('outbox-flush', { kind: 'outbox-flush' }, {
     jobId: 'notification-outbox-flush-repeat',
     repeat: { every: runtimeConfig.outboxWorkerRepeatMs },
     removeOnComplete: 1000,
   } as Record<string, unknown>);
-
   await queue.add('cleanup', { kind: 'cleanup' }, {
     jobId: 'notification-cleanup-repeat',
     repeat: { every: runtimeConfig.notificationCleanupRepeatMs },
     removeOnComplete: 1000,
   } as Record<string, unknown>);
 
-  return [
-    {
-      queueName: DEADLINE_NOTIFICATION_QUEUE_NAME,
-      jobName: 'scan',
-      schedule: `every ${runtimeConfig.deadlineWorkerRepeatMs}ms`,
-    },
-    {
-      queueName: DEADLINE_NOTIFICATION_QUEUE_NAME,
-      jobName: 'outbox-flush',
-      schedule: `every ${runtimeConfig.outboxWorkerRepeatMs}ms`,
-    },
-    {
-      queueName: DEADLINE_NOTIFICATION_QUEUE_NAME,
-      jobName: 'cleanup',
-      schedule: `every ${runtimeConfig.notificationCleanupRepeatMs}ms`,
-    },
-  ];
+  return ['scan', 'outbox-flush', 'cleanup'];
 };

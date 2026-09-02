@@ -19,10 +19,13 @@ export const runtimeConfig = {
     true
   ),
   cronSecret: process.env.CRON_SECRET?.trim() || '',
-  cronLockNamespace: process.env.CRON_LOCK_NAMESPACE?.trim() || (process.env.VERCEL_ENV === 'production' ? 'production' : process.env.VERCEL_ENV?.trim() || (process.env.NODE_ENV === 'production' ? 'production' : 'local')),
-  cronLockTtlMs: parseNumber(process.env.CRON_LOCK_TTL_MS, 10 * 60_000),
-  cronWindowTtlMs: parseNumber(process.env.CRON_WINDOW_TTL_MS, 36 * 60 * 60_000),
-  cronRequestTimeoutMs: parseNumber(process.env.CRON_REQUEST_TIMEOUT_MS, 60_000),
+  cronLockNamespace:
+    process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production'
+      ? 'production'
+      : process.env.VERCEL_ENV?.trim() || 'local',
+  cronLockTtlMs: 10 * 60_000,
+  cronWindowTtlMs: 36 * 60 * 60_000,
+  cronRequestTimeoutMs: 60_000,
   realtimeEnabled: parseBoolean(
     process.env.NOTIFICATIONS_REALTIME_ENABLED,
     Boolean(process.env.REDIS_URL)

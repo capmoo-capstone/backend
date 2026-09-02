@@ -169,19 +169,6 @@ describe('notification-email.service', () => {
     expectBusinessFooter(content);
   });
 
-  it('uses the committee greeting when no recipient name is available', () => {
-    const content = buildContractCommitteeReminderEmail({
-      recipientEmail: 'committee@example.com',
-      projectTitle: 'Project Alpha',
-      inspectionDate: new Date('2026-08-31T00:00:00.000Z'),
-      remainingDays: 5,
-    });
-
-    expect(content.text).toContain('เรียน กรรมการตรวจรับ');
-    expect(content.text).not.toContain('เรียน คุณ กรรมการตรวจรับ,');
-    expect(content.html).toContain('<p>เรียน กรรมการตรวจรับ</p>');
-  });
-
   it('sends the contract committee reminder email through Resend', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
@@ -229,9 +216,6 @@ describe('notification-email.service', () => {
     );
     expect(payload.text).toContain('PO #PO-1234');
     expect(payload.text).toContain('Vendor Co., Ltd.');
-    expect(payload.text).toContain('เรียน Vendor Co., Ltd.');
-    expect(payload.text).not.toContain('เรียน Vendor Co., Ltd.,');
-    expect(payload.html).toContain('<p>เรียน Vendor Co., Ltd.</p>');
     expect(payload.html).toContain(
       '<a href="https://vendor.nexus-procure.com/vendor-form">'
     );

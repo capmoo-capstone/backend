@@ -117,9 +117,6 @@ Swagger UI: `http://localhost:3000/api-docs`.
 | Command                  | Description                                                      |
 | ------------------------ | ---------------------------------------------------------------- |
 | `npm run dev`            | Generate Swagger docs + start dev server                         |
-| `npm run start:api`      | Start the compiled HTTP API process                              |
-| `npm run start:worker`   | Start the compiled BullMQ worker process                         |
-| `npm run start:scheduler`| Start the compiled VPS scheduler process                         |
 | `npm run swagger`        | Regenerate `swagger-output.json`                                 |
 | `npm run migrate`        | Run Prisma migrations                                            |
 | `npm run migrate:reset`  | Reset and re-run all migrations                                  |
@@ -317,34 +314,9 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 
 ### Cron — `/cron`
 
-| Method | Path                                 | Description                                                              |
-| ------ | ------------------------------------ | ------------------------------------------------------------------------ |
-| GET    | `/process-deadlines`                 | Enqueue deadline notification sync (Protected by `CRON_SECRET` bearer token) |
-| GET    | `/send-contract-committee-reminders` | Enqueue contract committee reminder processing (Protected by `CRON_SECRET` bearer token) |
-| GET    | `/send-daily-summary-email`          | Enqueue daily summary email processing (Protected by `CRON_SECRET` bearer token) |
-
----
-
-## VPS Worker And Scheduler Deployment
-
-- Production Docker Compose should run three backend processes from the same image:
-  - `nexus_backend`: HTTP API
-  - `nexus_worker`: BullMQ consumers
-  - `nexus_scheduler`: notification queue repeat registration and startup queue priming
-- Vercel Cron and VPS systemd timers both trigger the three UTC schedules. They share Redis production keys, so only one schedule window is enqueued; the BullMQ worker performs the asynchronous work.
-- UTC schedules are 00:00 deadlines (07:00 Bangkok), 00:30 committee reminders (07:30 Bangkok), and 03:00 Monday-Friday daily summary (10:00 Bangkok).
-- Verification commands:
-
-```bash
-docker ps
-docker logs -f nexus_worker
-docker logs -f nexus_scheduler
-curl -i https://api.nexus-procure.com/api/v1/cron/process-deadlines -H "Authorization: Bearer <CRON_SECRET>"
-```
-
-- Expected log sequence after a healthy deployment:
-  - scheduler emits `startup`, `schedule-registered`, and `job-enqueued`
-  - worker emits `connected-to-redis`, then `job-started` and `job-completed`
+| Method | Path                 | Description                                                              |
+| ------ | -------------------- | ------------------------------------------------------------------------ |
+| GET    | `/process-deadlines` | Process deadline notifications (Protected by `CRON_SECRET` bearer token) |
 
 ---
 
