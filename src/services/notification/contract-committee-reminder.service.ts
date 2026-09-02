@@ -394,7 +394,6 @@ export const sendContractCommitteeReminders = async () => {
           dedupeKey,
           subject: recipientContent.subject,
           body: recipientContent.text,
-          htmlBody: recipientContent.html,
         });
 
         if (!reservedDelivery) {

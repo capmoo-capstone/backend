@@ -1,4 +1,4 @@
-# ---- Build stage ----
+﻿# ---- Build stage ----
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -33,4 +33,4 @@ COPY --from=builder /app/swagger-output.json ./swagger-output.json
 
 EXPOSE 3000
 
-CMD ["node", "dist/src/app.js"]
+CMD ["npm", "run", "start:api"]

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import {
   processDeadlineNotifications,
   sendContractCommitteeReminderEmail,
@@ -6,15 +6,16 @@ import {
   sendTestEmail,
   sendVendorPoEmail,
 } from './cron.controller';
-import * as NotificationService from '../services/notification/notification.service';
-import * as ContractCommitteeReminderService from '../services/notification/contract-committee-reminder.service';
+import * as CronTaskService from '../services/cron/cron-task.service';
 import * as NotificationEmailService from '../services/notification/notification-email.service';
 
 describe('processDeadlineNotifications', () => {
-  it('runs the existing deadline sync and returns a success response', async () => {
+  it('enqueues the deadline sync task and returns a success response', async () => {
     const syncSpy = vi
-      .spyOn(NotificationService, 'enqueueDeadlineReminderScan')
-      .mockResolvedValue(undefined);
+      .spyOn(CronTaskService, 'triggerDeadlineReminderScan')
+      .mockResolvedValue({
+        message: 'Deadline notification sync enqueued',
+      });
 
     const json = vi.fn();
     const status = vi.fn().mockReturnValue({ json });
@@ -25,7 +26,7 @@ describe('processDeadlineNotifications', () => {
     expect(status).toHaveBeenCalledWith(200);
     expect(json).toHaveBeenCalledWith({
       status: 'success',
-      message: 'Deadline notification sync completed',
+      message: 'Deadline notification sync enqueued',
     });
   });
 });
@@ -85,10 +86,14 @@ describe('sendVendorPoEmail', () => {
 });
 
 describe('sendDailySummaryEmail', () => {
-  it('sends weekday good-morning emails to ops users and returns the recipient count', async () => {
+  it('enqueues the daily summary job and returns the queue state', async () => {
     const sendSpy = vi
-      .spyOn(NotificationEmailService, 'sendDailySummaryEmailsToOpsUsers')
-      .mockResolvedValue({ recipientCount: 2 });
+      .spyOn(CronTaskService, 'triggerScheduledCronTask')
+      .mockResolvedValue({
+        message: 'daily-summary-email job enqueued',
+        queued: true,
+        skipped: false,
+      });
 
     const json = vi.fn();
     const status = vi.fn().mockReturnValue({ json });
@@ -99,23 +104,21 @@ describe('sendDailySummaryEmail', () => {
     expect(status).toHaveBeenCalledWith(200);
     expect(json).toHaveBeenCalledWith({
       status: 'success',
-      message: 'Daily summary emails sent',
-      recipientCount: 2,
+      message: 'daily-summary-email job enqueued',
+      queued: true,
+      skipped: false,
     });
   });
 });
 
 describe('sendContractCommitteeReminderEmail', () => {
-  it('runs the contract committee reminder scan and returns delivery counts', async () => {
+  it('enqueues the contract committee reminder job and returns the queue state', async () => {
     const sendSpy = vi
-      .spyOn(
-        ContractCommitteeReminderService,
-        'sendContractCommitteeReminders'
-      )
+      .spyOn(CronTaskService, 'triggerScheduledCronTask')
       .mockResolvedValue({
-        matchedSubmissionCount: 1,
-        recipientCount: 2,
-        deliveryCount: 2,
+        message: 'contract-committee-reminders job enqueued',
+        queued: true,
+        skipped: false,
       });
 
     const json = vi.fn();
@@ -127,10 +130,9 @@ describe('sendContractCommitteeReminderEmail', () => {
     expect(status).toHaveBeenCalledWith(200);
     expect(json).toHaveBeenCalledWith({
       status: 'success',
-      message: 'Contract committee reminder emails sent',
-      matchedSubmissionCount: 1,
-      recipientCount: 2,
-      deliveryCount: 2,
+      message: 'contract-committee-reminders job enqueued',
+      queued: true,
+      skipped: false,
     });
   });
 });

@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule NexusProcure cron job (%i)
+
+[Timer]
+OnCalendar=*-*-* 00:00:00 UTC
+Persistent=true
+RandomizedDelaySec=30
+Unit=nexus-procure-cron@%i.service
+
+[Install]
+WantedBy=timers.target

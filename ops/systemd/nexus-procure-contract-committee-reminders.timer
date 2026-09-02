@@ -1,0 +1,11 @@
+[Unit]
+Description=Run NexusProcure contract committee reminders
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=true
+RandomizedDelaySec=30
+Unit=nexus-procure-cron@send-contract-committee-reminders.service
+
+[Install]
+WantedBy=timers.target

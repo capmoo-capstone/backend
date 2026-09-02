@@ -1,6 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { runtimeConfig } from '../../config/runtime';
-import { isRedisConfigured } from '../../config/runtime';
+﻿import { runtimeConfig } from '../../config/runtime';
+import {
+  getQueueConnection,
+  loadBullMq,
+  QueueInstance,
+  WorkerInstance,
+} from '../queue/bullmq-runtime.service';
 
 export type NotificationDeadlineJob =
   | { kind: 'scan' }
@@ -26,64 +30,11 @@ export type NotificationDeadlineJob =
 export const DEADLINE_NOTIFICATION_QUEUE_NAME =
   'notifications:deadline-reminders';
 
-type QueueInstance<T> = {
-  add(
-    name: string,
-    data: T,
-    options?: Record<string, unknown>
-  ): Promise<unknown>;
-  close(): Promise<void>;
-};
-
-type WorkerInstance = {
-  on(event: string, listener: (...args: unknown[]) => void): WorkerInstance;
-  close(): Promise<void>;
-};
-
-const loadBullMq = () => {
-  const runtimeRequire = eval('require') as NodeRequire;
-  return runtimeRequire('bullmq') as {
-    Queue: new (
-      name: string,
-      options?: Record<string, unknown>
-    ) => QueueInstance<NotificationDeadlineJob>;
-    Worker: new (
-      name: string,
-      processor: (job: {
-        name: string;
-        data: NotificationDeadlineJob;
-      }) => Promise<unknown>,
-      options?: Record<string, unknown>
-    ) => WorkerInstance;
-  };
-};
-
-const getRedisTlsOptions = () => {
-  if (!runtimeConfig.redisUrl.startsWith('rediss://')) return undefined;
-
-  return {
-    ca: runtimeConfig.redisTlsCaPath
-      ? readFileSync(runtimeConfig.redisTlsCaPath, 'utf8')
-      : undefined,
-    servername: runtimeConfig.redisTlsServername || undefined,
-    rejectUnauthorized: runtimeConfig.redisTlsRejectUnauthorized,
-  };
-};
-
-const getQueueConnection = () => {
-  if (!runtimeConfig.redisUrl) return null;
-  return {
-    url: runtimeConfig.redisUrl,
-    tls: getRedisTlsOptions(),
-    maxRetriesPerRequest: null,
-  };
-};
-
 let deadlineQueue: QueueInstance<NotificationDeadlineJob> | null = null;
 
 export const getDeadlineQueue = () => {
   const connection = getQueueConnection();
-  if (!connection || !isRedisConfigured()) return null;
+  if (!connection) return null;
 
   const { Queue } = loadBullMq();
   deadlineQueue ??= new Queue(DEADLINE_NOTIFICATION_QUEUE_NAME, {
@@ -157,7 +108,7 @@ export const startNotificationDeadlineWorker = (
   processor: (job: NotificationDeadlineJob) => Promise<void>
 ) => {
   const connection = getQueueConnection();
-  if (!connection || !isRedisConfigured()) return null;
+  if (!connection) return null;
 
   const { Worker } = loadBullMq();
 
@@ -170,5 +121,46 @@ export const startNotificationDeadlineWorker = (
       connection,
       prefix: runtimeConfig.redisPrefix,
     }
-  );
+  ) as WorkerInstance<NotificationDeadlineJob>;
+};
+
+export const registerNotificationQueueSchedules = async () => {
+  const queue = getDeadlineQueue();
+  if (!queue) return [];
+
+  await queue.add('scan', { kind: 'scan' }, {
+    jobId: 'deadline-scan-repeat',
+    repeat: { every: runtimeConfig.deadlineWorkerRepeatMs },
+    removeOnComplete: 1000,
+  } as Record<string, unknown>);
+
+  await queue.add('outbox-flush', { kind: 'outbox-flush' }, {
+    jobId: 'notification-outbox-flush-repeat',
+    repeat: { every: runtimeConfig.outboxWorkerRepeatMs },
+    removeOnComplete: 1000,
+  } as Record<string, unknown>);
+
+  await queue.add('cleanup', { kind: 'cleanup' }, {
+    jobId: 'notification-cleanup-repeat',
+    repeat: { every: runtimeConfig.notificationCleanupRepeatMs },
+    removeOnComplete: 1000,
+  } as Record<string, unknown>);
+
+  return [
+    {
+      queueName: DEADLINE_NOTIFICATION_QUEUE_NAME,
+      jobName: 'scan',
+      schedule: `every ${runtimeConfig.deadlineWorkerRepeatMs}ms`,
+    },
+    {
+      queueName: DEADLINE_NOTIFICATION_QUEUE_NAME,
+      jobName: 'outbox-flush',
+      schedule: `every ${runtimeConfig.outboxWorkerRepeatMs}ms`,
+    },
+    {
+      queueName: DEADLINE_NOTIFICATION_QUEUE_NAME,
+      jobName: 'cleanup',
+      schedule: `every ${runtimeConfig.notificationCleanupRepeatMs}ms`,
+    },
+  ];
 };

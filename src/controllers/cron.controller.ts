@@ -1,88 +1,20 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import * as NotificationService from '../services/notification/notification.service';
-import { sendContractCommitteeReminders } from '../services/notification/contract-committee-reminder.service';
-import {
-  sendDailySummaryEmailsToOpsUsers,
-  sendHelloTestEmail,
-  sendVendorPoRequestEmailForProject,
-} from '../services/notification/notification-email.service';
-
-const SendVendorPoEmailSchema = z.object({
-  projectId: z.string().trim().min(1, 'projectId is required'),
-});
-
-export const processDeadlineNotifications = async (
-  _req: Request,
-  res: Response
-) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  await NotificationService.enqueueDeadlineReminderScan();
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Deadline notification sync completed',
-  });
+import { runWithCronLock } from '../services/cron/cron-lock.service';
+import { triggerDeadlineReminderScan, triggerScheduledCronTask } from '../services/cron/cron-task.service';
+import { sendHelloTestEmail, sendVendorPoRequestEmailForProject } from '../services/notification/notification-email.service';
+const SendVendorPoEmailSchema = z.object({ projectId: z.string().trim().min(1, 'projectId is required') });
+const sendScheduled = async (job: 'daily-summary-email' | 'contract-committee-reminders', res: Response) => {
+  const lock = await runWithCronLock(job, () => triggerScheduledCronTask({ kind: job }));
+  if (!lock.acquired) return res.status(200).json({ status: 'success', message: `${job} is already being queued`, skipped: true });
+  return res.status(200).json({ status: 'success', message: lock.value.message, queued: lock.value.queued, skipped: lock.value.skipped });
 };
-
-export const sendTestEmail = async (req: Request, res: Response) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const to =
-    typeof req.query.to === 'string' && req.query.to.trim().length > 0
-      ? req.query.to.trim()
-      : undefined;
-
-  await sendHelloTestEmail(to);
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Test email sent',
-    to: to ?? null,
-  });
+export const processDeadlineNotifications = async (_req: Request, res: Response) => {
+  const result = await runWithCronLock('process-deadlines', triggerDeadlineReminderScan);
+  if (!result.acquired) return res.status(200).json({ status: 'success', message: 'Deadline notification sync already running', skipped: true });
+  return res.status(200).json({ status: 'success', message: result.value.message });
 };
-
-export const sendVendorPoEmail = async (req: Request, res: Response) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const { projectId } = SendVendorPoEmailSchema.parse(req.body);
-  const result = await sendVendorPoRequestEmailForProject(projectId);
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Vendor PO email sent',
-    projectId: result.projectId,
-    poNumber: result.poNumber,
-    to: result.recipientEmail,
-  });
-};
-
-export const sendDailySummaryEmail = async (_req: Request, res: Response) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const result = await sendDailySummaryEmailsToOpsUsers();
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Daily summary emails sent',
-    recipientCount: result.recipientCount,
-  });
-};
-
-export const sendContractCommitteeReminderEmail = async (
-  _req: Request,
-  res: Response
-) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const result = await sendContractCommitteeReminders();
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Contract committee reminder emails sent',
-    matchedSubmissionCount: result.matchedSubmissionCount,
-    recipientCount: result.recipientCount,
-    deliveryCount: result.deliveryCount,
-  });
-};
+export const sendTestEmail = async (req: Request, res: Response) => { const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to.trim() : undefined; await sendHelloTestEmail(to); return res.status(200).json({ status: 'success', message: 'Test email sent', to: to ?? null }); };
+export const sendVendorPoEmail = async (req: Request, res: Response) => { const { projectId } = SendVendorPoEmailSchema.parse(req.body); const result = await sendVendorPoRequestEmailForProject(projectId); return res.status(200).json({ status: 'success', message: 'Vendor PO email sent', projectId: result.projectId, poNumber: result.poNumber, to: result.recipientEmail }); };
+export const sendDailySummaryEmail = async (_req: Request, res: Response) => sendScheduled('daily-summary-email', res);
+export const sendContractCommitteeReminderEmail = async (_req: Request, res: Response) => sendScheduled('contract-committee-reminders', res);
