@@ -145,6 +145,7 @@ describe('contract-committee-reminder.service', () => {
         userId: 'staff-1',
         channel: NotificationChannel.EMAIL_IMMEDIATE,
         recipientEmail: 'staff@example.com',
+        htmlBody: expect.stringContaining('<p>'),
       })
     );
     expect(notificationEmailTransport.queue).toHaveBeenCalledWith(

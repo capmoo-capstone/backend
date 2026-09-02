@@ -1,10 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/v1/cron/send-contract-committee-reminders",
-      "schedule": "30 0 * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/api-docs/(.*)",

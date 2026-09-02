@@ -1,11 +1,11 @@
 import {
   NotificationChannel,
   NotificationDeliveryStatus,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../utils/active-state';
 import { formatBangkokDate } from '../../utils/date';
-import { OPS_DEPT_ID } from '../../utils/constant';
 import { BadRequestError, NotFoundError } from '../../utils/errors';
 import {
   buildDailySummaryAudienceText,
@@ -34,6 +34,9 @@ type EmailRecipient = {
   email: string;
   fullName: string;
 };
+
+const isAllowedEmail = (email: string, allowedEmails?: ReadonlySet<string>) =>
+  !allowedEmails || allowedEmails.has(email.trim().toLowerCase());
 
 type DailySummaryRecipient = EmailRecipient & {
   id: string;
@@ -227,7 +230,7 @@ const buildVendorPoRequestEmailContent = (input: {
   return withBusinessEmailClosing({
     subject: `รบกวนส่งเอกสารแนบสำหรับใบสั่งซื้อ PO #${input.poNumber}`,
     text: [
-      `เรียน ${vendorLabel},`,
+      `เรียน ${vendorLabel}`,
       '',
       `ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${input.poNumber} ของท่าน`,
       '',
@@ -237,7 +240,7 @@ const buildVendorPoRequestEmailContent = (input: {
       `หมายเหตุ: โปรดระบุหมายเลข PO #${input.poNumber} ทุกครั้งในการส่งเอกสาร`,
     ].join('\n'),
     html: [
-      `<p>เรียน ${escapeHtml(vendorLabel)},</p>`,
+      `<p>เรียน ${escapeHtml(vendorLabel)}</p>`,
       `<p>ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${escapeHtml(input.poNumber)} ของท่าน</p>`,
       `<p>รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:<br /><a href="${escapeHtml(vendorFormUrl)}">${escapeHtml(vendorFormUrl)}</a></p>`,
       `<p>หมายเหตุ: โปรดระบุหมายเลข PO #${escapeHtml(input.poNumber)} ทุกครั้งในการส่งเอกสาร</p>`,
@@ -312,7 +315,9 @@ const resolveDailySummaryRecipient = (user: {
   }
 
   const auth = buildDailySummaryAuthPayload(user);
-  const role = resolveDailySummaryRole(auth);
+  const role = user.roles.some((entry) => entry.role === UserRole.SUPER_ADMIN)
+    ? UserRole.DOCUMENT_STAFF
+    : resolveDailySummaryRole(auth);
 
   if (!role) {
     return null;
@@ -340,7 +345,7 @@ export const buildContractCommitteeReminderEmail = (
   const subject = `แจ้งเตือนกำหนดตรวจรับอีก ${input.remainingDays} วัน - ${input.projectTitle}`;
   const greeting = input.recipientName?.trim()
     ? `เรียนคุณ ${input.recipientName.trim()},`
-    : 'เรียนกรรมการตรวจรับ,';
+    : 'เรียน กรรมการตรวจรับ';
   const inspectionDateLabel = formatBangkokDate(input.inspectionDate);
 
   return withBusinessEmailClosing({
@@ -466,8 +471,9 @@ export const sendDailySummaryEmail = async (
   await sendBusinessEmail(recipient.email, content);
 };
 
-export const sendDailySummaryEmailsToOpsUsers = async (
-  reportDate: Date = new Date()
+export const sendDailySummaryEmailsToSuperAdmins = async (
+  reportDate: Date = new Date(),
+  allowedEmails?: ReadonlySet<string>
 ) => {
   const users = await prisma.user.findMany({
     where: {
@@ -475,7 +481,7 @@ export const sendDailySummaryEmailsToOpsUsers = async (
       email: { not: null },
       roles: {
         some: {
-          dept_id: OPS_DEPT_ID,
+          role: UserRole.SUPER_ADMIN,
         },
       },
     },
@@ -485,9 +491,6 @@ export const sendDailySummaryEmailsToOpsUsers = async (
       email: true,
       full_name: true,
       roles: {
-        where: {
-          dept_id: OPS_DEPT_ID,
-        },
         select: {
           role: true,
           department: {
@@ -510,7 +513,9 @@ export const sendDailySummaryEmailsToOpsUsers = async (
   const recipients = dedupeRecipientsByEmail(
     users.flatMap((user) => {
       const recipient = resolveDailySummaryRecipient(user);
-      return recipient ? [recipient] : [];
+      return recipient && isAllowedEmail(recipient.email, allowedEmails)
+        ? [recipient]
+        : [];
     })
   );
 

@@ -41,6 +41,7 @@ type PendingReminderDelivery = {
   recipientEmail: string;
   subject: string;
   body: string;
+  htmlBody: string;
 };
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
@@ -216,6 +217,7 @@ const reserveReminderDelivery = async (input: {
   dedupeKey: string;
   subject: string;
   body: string;
+  htmlBody: string;
 }) => {
   const existing = await input.tx.notificationDelivery.findFirst({
     where: {
@@ -258,7 +260,9 @@ const reserveReminderDelivery = async (input: {
   }
 };
 
-export const sendContractCommitteeReminders = async () => {
+export const sendContractCommitteeReminders = async (options?: {
+  allowedEmails?: ReadonlySet<string>;
+}) => {
   const submissions = await prisma.projectSubmission.findMany({
     where: {
       workflow_type: UnitResponsibleType.CONTRACT,
@@ -360,7 +364,11 @@ export const sendContractCommitteeReminders = async () => {
       committeeEmails,
       assignees: submission.project.assignee_contract,
       fallbackUserId: submission.project.created_by,
-    });
+    }).filter(
+      (recipient) =>
+        !options?.allowedEmails ||
+        options.allowedEmails.has(normalizeEmail(recipient.email))
+    );
     if (recipients.length === 0) {
       continue;
     }
@@ -393,6 +401,7 @@ export const sendContractCommitteeReminders = async () => {
           dedupeKey,
           subject: recipientContent.subject,
           body: recipientContent.text,
+          htmlBody: recipientContent.html,
         });
 
         if (!reservedDelivery) {
@@ -405,6 +414,7 @@ export const sendContractCommitteeReminders = async () => {
           recipientEmail: recipient.email,
           subject: recipientContent.subject,
           body: recipientContent.text,
+          htmlBody: recipientContent.html,
         });
       }
     });
@@ -415,6 +425,7 @@ export const sendContractCommitteeReminders = async () => {
         channel: NotificationChannel.EMAIL_IMMEDIATE,
         subject: pendingDelivery.subject,
         body: pendingDelivery.body,
+        htmlBody: pendingDelivery.htmlBody,
         recipientEmail: pendingDelivery.recipientEmail,
       });
 

@@ -267,7 +267,7 @@ export const buildOwnProjectRoleScopes = async (
     }
   }
 
-  if (hasSupplyRole(user, UserRole.DOCUMENT_STAFF)) {
+  if (isSuperAdmin(user) || hasSupplyRole(user, UserRole.DOCUMENT_STAFF)) {
     scopes.push({ role: UserRole.DOCUMENT_STAFF, where: {} });
   }
 

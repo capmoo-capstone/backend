@@ -1,0 +1,11 @@
+[Unit]
+Description=Run NexusProcure deadline processing
+
+[Timer]
+OnCalendar=*-*-* 00:00:00 UTC
+Persistent=true
+RandomizedDelaySec=30
+Unit=nexus-procure-cron@process-deadlines.service
+
+[Install]
+WantedBy=timers.target

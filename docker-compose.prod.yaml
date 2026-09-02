@@ -38,6 +38,77 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
       R2_BUCKET_NAME: ${R2_BUCKET_NAME}
       CRON_SECRET: ${CRON_SECRET}
+      CRON_EXECUTION_MODE: ${CRON_EXECUTION_MODE}
+      REDIS_URL: ${REDIS_URL}
+      REDIS_TLS_CA_PATH: ${REDIS_TLS_CA_PATH:-/app/certs/redis-ca.crt}
+      REDIS_TLS_REJECT_UNAUTHORIZED: ${REDIS_TLS_REJECT_UNAUTHORIZED}
+      NOTIFICATIONS_REALTIME_ENABLED: ${NOTIFICATIONS_REALTIME_ENABLED}
+      REDIS_TLS_SERVERNAME: ${REDIS_TLS_SERVERNAME}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
+      VENDOR_APP_PUBLIC_URL: ${VENDOR_APP_PUBLIC_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  notification-worker:
+    image: ghcr.io/capmoo-capstone/nexus-procure-backend:latest
+    container_name: nexus_notification_worker
+    command: ['npm', 'run', 'start:worker']
+    restart: unless-stopped
+    volumes:
+      - ./certs:/app/certs
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      SAML_SP_ENTITY_ID: ${SAML_SP_ENTITY_ID}
+      SAML_SP_ACS_URL: ${SAML_SP_ACS_URL}
+      SAML_IDP_METADATA_URL: ${SAML_IDP_METADATA_URL}
+      SAML_IDP_ENTITY_ID: ${SAML_IDP_ENTITY_ID}
+      SAML_FRONTEND_REDIRECT_URL: ${SAML_FRONTEND_REDIRECT_URL}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+      CRON_SECRET: ${CRON_SECRET}
+      CRON_EXECUTION_MODE: ${CRON_EXECUTION_MODE}
+      REDIS_URL: ${REDIS_URL}
+      REDIS_TLS_CA_PATH: ${REDIS_TLS_CA_PATH:-/app/certs/redis-ca.crt}
+      REDIS_TLS_REJECT_UNAUTHORIZED: ${REDIS_TLS_REJECT_UNAUTHORIZED}
+      NOTIFICATIONS_REALTIME_ENABLED: ${NOTIFICATIONS_REALTIME_ENABLED}
+      REDIS_TLS_SERVERNAME: ${REDIS_TLS_SERVERNAME}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL}
+      VENDOR_APP_PUBLIC_URL: ${VENDOR_APP_PUBLIC_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    image: ghcr.io/capmoo-capstone/nexus-procure-backend:latest
+    container_name: nexus_scheduler
+    command: ['npm', 'run', 'start:scheduler']
+    restart: unless-stopped
+    volumes:
+      - ./certs:/app/certs
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      SAML_SP_ENTITY_ID: ${SAML_SP_ENTITY_ID}
+      SAML_SP_ACS_URL: ${SAML_SP_ACS_URL}
+      SAML_IDP_METADATA_URL: ${SAML_IDP_METADATA_URL}
+      SAML_IDP_ENTITY_ID: ${SAML_IDP_ENTITY_ID}
+      SAML_FRONTEND_REDIRECT_URL: ${SAML_FRONTEND_REDIRECT_URL}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME}
+      CRON_SECRET: ${CRON_SECRET}
+      CRON_EXECUTION_MODE: ${CRON_EXECUTION_MODE}
       REDIS_URL: ${REDIS_URL}
       REDIS_TLS_CA_PATH: ${REDIS_TLS_CA_PATH:-/app/certs/redis-ca.crt}
       REDIS_TLS_REJECT_UNAUTHORIZED: ${REDIS_TLS_REJECT_UNAUTHORIZED}

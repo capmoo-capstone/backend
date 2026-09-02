@@ -7,6 +7,8 @@
     "swagger": "tsx swagger.ts",
     "build": "npx tsx swagger.ts && tsc",
     "start": "node --env-file=.env dist/app.js",
+    "start:worker": "node dist/src/jobs/worker.job.js",
+    "start:scheduler": "node dist/src/jobs/scheduler.job.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
