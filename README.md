@@ -330,8 +330,9 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 - Production Docker Compose should run three backend processes from the same image:
   - `nexus_backend`: HTTP API
   - `nexus_worker`: BullMQ consumers
-  - `nexus_scheduler`: repeat job registration and startup queue priming
-- Production scheduling is owned by the VPS containers. `vercel.json` no longer defines production crons for this backend.
+  - `nexus_scheduler`: notification queue repeat registration and startup queue priming
+- Vercel Cron and VPS systemd timers both trigger the three UTC schedules. They share Redis production keys, so only one schedule window is enqueued; the BullMQ worker performs the asynchronous work.
+- UTC schedules are 00:00 deadlines (07:00 Bangkok), 00:30 committee reminders (07:30 Bangkok), and 03:00 Monday-Friday daily summary (10:00 Bangkok).
 - Verification commands:
 
 ```bash

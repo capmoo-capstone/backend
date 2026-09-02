@@ -78,6 +78,10 @@ const sharedOptionalSchema = z.object({
 const apiEnvSchema = sharedOptionalSchema.extend({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 characters'),
+  ...(process.env.NODE_ENV === 'production'
+    ? { REDIS_URL: z.string().min(1, 'REDIS_URL is required in production') }
+    : {}),
 });
 
 const workerEnvSchema = sharedOptionalSchema.extend({

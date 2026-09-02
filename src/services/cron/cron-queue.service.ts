@@ -12,11 +12,6 @@ export type ScheduledCronTaskJob =
 
 export const SCHEDULED_CRON_QUEUE_NAME = 'system:scheduled-cron';
 
-type ScheduledJobDefinition = {
-  queueName: string;
-  jobName: string;
-  schedule: string;
-};
 
 let cronQueue: QueueInstance<ScheduledCronTaskJob> | null = null;
 
@@ -42,50 +37,6 @@ export const enqueueScheduledCronTask = async (job: ScheduledCronTaskJob) => {
     removeOnComplete: 1000,
     removeOnFail: 1000,
   });
-};
-
-export const registerScheduledCronTasks = async () => {
-  const queue = getScheduledCronQueue();
-  if (!queue) return [];
-
-  await queue.add(
-    'contract-committee-reminders',
-    { kind: 'contract-committee-reminders' },
-    {
-      jobId: 'contract-committee-reminders-repeat',
-      repeat: {
-        pattern: runtimeConfig.contractCommitteeReminderCron,
-        tz: runtimeConfig.schedulerTimezone,
-      },
-      removeOnComplete: 1000,
-    } as Record<string, unknown>
-  );
-
-  await queue.add(
-    'daily-summary-email',
-    { kind: 'daily-summary-email' },
-    {
-      jobId: 'daily-summary-email-repeat',
-      repeat: {
-        pattern: runtimeConfig.dailySummaryEmailCron,
-        tz: runtimeConfig.schedulerTimezone,
-      },
-      removeOnComplete: 1000,
-    } as Record<string, unknown>
-  );
-
-  return [
-    {
-      queueName: SCHEDULED_CRON_QUEUE_NAME,
-      jobName: 'contract-committee-reminders',
-      schedule: `${runtimeConfig.contractCommitteeReminderCron} (${runtimeConfig.schedulerTimezone})`,
-    },
-    {
-      queueName: SCHEDULED_CRON_QUEUE_NAME,
-      jobName: 'daily-summary-email',
-      schedule: `${runtimeConfig.dailySummaryEmailCron} (${runtimeConfig.schedulerTimezone})`,
-    },
-  ] satisfies ScheduledJobDefinition[];
 };
 
 export const startScheduledCronTaskWorker = (

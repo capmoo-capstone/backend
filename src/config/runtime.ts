@@ -44,11 +44,6 @@ export const runtimeConfig = {
     30_000
   ),
   notificationCleanupRepeatMs: 24 * 60 * 60_000,
-  contractCommitteeReminderCron:
-    process.env.CONTRACT_COMMITTEE_REMINDER_CRON?.trim() || '30 0 * * *',
-  dailySummaryEmailCron:
-    process.env.DAILY_SUMMARY_EMAIL_CRON?.trim() || '0 3 * * 1-5',
-  schedulerTimezone: process.env.SCHEDULER_TIMEZONE?.trim() || 'UTC',
 };
 
 export const isRedisConfigured = () => Boolean(runtimeConfig.redisUrl);
