@@ -228,7 +228,7 @@ const buildVendorPoRequestEmailContent = (input: {
   return withBusinessEmailClosing({
     subject: `รบกวนส่งเอกสารแนบสำหรับใบสั่งซื้อ PO #${input.poNumber}`,
     text: [
-      `เรียน ${vendorLabel},`,
+      `เรียน ${vendorLabel}`,
       '',
       `ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${input.poNumber} ของท่าน`,
       '',
@@ -238,7 +238,7 @@ const buildVendorPoRequestEmailContent = (input: {
       `หมายเหตุ: โปรดระบุหมายเลข PO #${input.poNumber} ทุกครั้งในการส่งเอกสาร`,
     ].join('\n'),
     html: [
-      `<p>เรียน ${escapeHtml(vendorLabel)},</p>`,
+      `<p>เรียน ${escapeHtml(vendorLabel)}</p>`,
       `<p>ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${escapeHtml(input.poNumber)} ของท่าน</p>`,
       `<p>รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:<br /><a href="${escapeHtml(vendorFormUrl)}">${escapeHtml(vendorFormUrl)}</a></p>`,
       `<p>หมายเหตุ: โปรดระบุหมายเลข PO #${escapeHtml(input.poNumber)} ทุกครั้งในการส่งเอกสาร</p>`,
@@ -343,7 +343,7 @@ export const buildContractCommitteeReminderEmail = (
   const subject = `แจ้งเตือนกำหนดตรวจรับอีก ${input.remainingDays} วัน - ${input.projectTitle}`;
   const greeting = input.recipientName?.trim()
     ? `เรียนคุณ ${input.recipientName.trim()},`
-    : 'เรียนกรรมการตรวจรับ,';
+    : 'เรียน กรรมการตรวจรับ';
   const inspectionDateLabel = formatBangkokDate(input.inspectionDate);
 
   return withBusinessEmailClosing({
