@@ -3,7 +3,6 @@ import {
   getQueueConnection,
   loadBullMq,
   QueueInstance,
-  WorkerInstance,
 } from '../queue/bullmq-runtime.service';
 
 export type NotificationDeadlineJob =

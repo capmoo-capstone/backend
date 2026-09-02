@@ -317,6 +317,16 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 | Method | Path                 | Description                                                              |
 | ------ | -------------------- | ------------------------------------------------------------------------ |
 | GET    | `/process-deadlines` | Process deadline notifications (Protected by `CRON_SECRET` bearer token) |
+| GET    | `/send-contract-committee-reminders` | Send contract committee reminders (Protected by `CRON_SECRET` bearer token) |
+| GET    | `/send-daily-summary-email` | Send Super Admin daily summaries (Protected by `CRON_SECRET` bearer token) |
+
+### Cron deployment modes
+
+Production cron runs only on the VPS: systemd calls the local API, the API queues BullMQ work in Redis, and the notification worker consumes it. Set `CRON_EXECUTION_MODE=queue` and configure `REDIS_URL`, the Redis TLS settings, and `CRON_SECRET` in `.env.production`. The VPS runs these UTC timers: deadlines at 00:00 (07:00 Bangkok), committee reminders at 00:30 (07:30 Bangkok), and daily summaries at 03:00 Monday-Friday (10:00 Bangkok).
+
+Vercel preview/development has no Redis and is scheduled only by .github/workflows/cron-preview.yml; Vercel Cron does not run preview deployments. Set CRON_EXECUTION_MODE=direct, a development-only CRON_SECRET, and CRON_EMAIL_ALLOWLIST to comma-separated test recipient addresses. If it is empty, committee and daily-summary email delivery is safely skipped. Never provide VPS production Redis credentials or production cron credentials to the Vercel development deployment.
+
+GitHub Actions uses a non-cancelling concurrency group, so scheduled and manual workflow runs do not overlap. Direct mode intentionally has no durable execution history: a repeated HTTP request or a retry after an interrupted run can execute again. Keep the email allow-list narrow and inspect GitHub Actions logs for failures.
 
 ---
 

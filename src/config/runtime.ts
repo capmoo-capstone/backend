@@ -9,7 +9,23 @@ const parseNumber = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const parseCronExecutionMode = (value: string | undefined) => {
+  if (value === 'queue' || value === 'direct') return value;
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) return 'queue';
+  throw new Error('CRON_EXECUTION_MODE must be either queue or direct');
+};
+
+const parseEmailAllowlist = (value: string | undefined) =>
+  new Set(
+    (value || '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
 export const runtimeConfig = {
+  cronExecutionMode: parseCronExecutionMode(process.env.CRON_EXECUTION_MODE),
+  cronEmailAllowlist: parseEmailAllowlist(process.env.CRON_EMAIL_ALLOWLIST),
   redisUrl: process.env.REDIS_URL?.trim() || '',
   redisPrefix: process.env.REDIS_PREFIX?.trim() || 'nexus-procure',
   redisTlsCaPath: process.env.REDIS_TLS_CA_PATH?.trim() || '',

@@ -65,7 +65,16 @@ const reserve = async <T>(
   task: () => Promise<T>,
   releaseOnFailure: boolean
 ) => {
-  const client = getClient();
+  let client: ReturnType<typeof getClient>;
+  try {
+    client = getClient();
+  } catch (error) {
+    console.error('Cron Redis client initialization failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new ServiceUnavailableError('Cron queue is unavailable');
+  }
+
   if (!client) {
     if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
       return { acquired: true as const, value: await task() };

@@ -6,7 +6,6 @@ import {
 import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../utils/active-state';
 import { formatBangkokDate } from '../../utils/date';
-import { OPS_DEPT_ID } from '../../utils/constant';
 import { BadRequestError, NotFoundError } from '../../utils/errors';
 import {
   buildDailySummaryAudienceText,
@@ -35,6 +34,9 @@ type EmailRecipient = {
   email: string;
   fullName: string;
 };
+
+const isAllowedEmail = (email: string, allowedEmails?: ReadonlySet<string>) =>
+  !allowedEmails || allowedEmails.has(email.trim().toLowerCase());
 
 type DailySummaryRecipient = EmailRecipient & {
   id: string;
@@ -470,7 +472,8 @@ export const sendDailySummaryEmail = async (
 };
 
 export const sendDailySummaryEmailsToSuperAdmins = async (
-  reportDate: Date = new Date()
+  reportDate: Date = new Date(),
+  allowedEmails?: ReadonlySet<string>
 ) => {
   const users = await prisma.user.findMany({
     where: {
@@ -510,7 +513,9 @@ export const sendDailySummaryEmailsToSuperAdmins = async (
   const recipients = dedupeRecipientsByEmail(
     users.flatMap((user) => {
       const recipient = resolveDailySummaryRecipient(user);
-      return recipient ? [recipient] : [];
+      return recipient && isAllowedEmail(recipient.email, allowedEmails)
+        ? [recipient]
+        : [];
     })
   );
 

@@ -440,5 +440,74 @@ describe('notification-email.service', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(getSentPayload(fetchMock, 0).to).toEqual(['super@example.com']);
   });
+  it('filters daily summaries to a normalized direct-mode allow-list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 'super-admin-1',
+        username: 'super.admin',
+        email: 'Allowed@Example.com',
+        full_name: 'Super Admin',
+        roles: [
+          {
+            role: UserRole.SUPER_ADMIN,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
+      },
+      {
+        id: 'super-admin-2',
+        username: 'other.admin',
+        email: 'other@example.com',
+        full_name: 'Other Admin',
+        roles: [
+          {
+            role: UserRole.SUPER_ADMIN,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
+      },
+    ]);
+    prismaMock.project.count.mockResolvedValue(0);
 
+    const result = await sendDailySummaryEmailsToSuperAdmins(
+      new Date('2026-08-29T03:00:00.000Z'),
+      new Set(['allowed@example.com'])
+    );
+
+    expect(result).toEqual({ recipientCount: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getSentPayload(fetchMock).to).toEqual(['Allowed@Example.com']);
+  });
+
+  it('does not deliver daily summaries when no recipient is allow-listed', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 'super-admin-1',
+        username: 'super.admin',
+        email: 'super@example.com',
+        full_name: 'Super Admin',
+        roles: [
+          {
+            role: UserRole.SUPER_ADMIN,
+            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
+            unit: null,
+          },
+        ],
+      },
+    ]);
+
+    const result = await sendDailySummaryEmailsToSuperAdmins(
+      new Date('2026-08-29T03:00:00.000Z'),
+      new Set()
+    );
+
+    expect(result).toEqual({ recipientCount: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

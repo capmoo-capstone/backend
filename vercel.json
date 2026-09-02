@@ -1,12 +1,4 @@
 {
-  "crons": [
-    { "path": "/api/v1/cron/process-deadlines", "schedule": "0 0 * * *" },
-    {
-      "path": "/api/v1/cron/send-contract-committee-reminders",
-      "schedule": "30 0 * * *"
-    },
-    { "path": "/api/v1/cron/send-daily-summary-email", "schedule": "0 3 * * 1-5" }
-  ],
   "headers": [
     {
       "source": "/api-docs/(.*)",

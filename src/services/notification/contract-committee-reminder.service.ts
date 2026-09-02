@@ -260,7 +260,9 @@ const reserveReminderDelivery = async (input: {
   }
 };
 
-export const sendContractCommitteeReminders = async () => {
+export const sendContractCommitteeReminders = async (options?: {
+  allowedEmails?: ReadonlySet<string>;
+}) => {
   const submissions = await prisma.projectSubmission.findMany({
     where: {
       workflow_type: UnitResponsibleType.CONTRACT,
@@ -362,7 +364,11 @@ export const sendContractCommitteeReminders = async () => {
       committeeEmails,
       assignees: submission.project.assignee_contract,
       fallbackUserId: submission.project.created_by,
-    });
+    }).filter(
+      (recipient) =>
+        !options?.allowedEmails ||
+        options.allowedEmails.has(normalizeEmail(recipient.email))
+    );
     if (recipients.length === 0) {
       continue;
     }

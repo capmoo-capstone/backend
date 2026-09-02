@@ -51,6 +51,8 @@ describe('cron controller', () => {
     expect(res.json).toHaveBeenCalledWith({
       status: 'success',
       message: 'Deadline notification sync enqueued',
+      queued: true,
+      skipped: false,
     });
   });
 

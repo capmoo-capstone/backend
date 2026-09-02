@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isRedisConfigured, runtimeConfig } from '../../config/runtime';
+import { ServiceUnavailableError } from '../../utils/errors';
 
 export type QueueInstance<T> = {
   add(
@@ -56,11 +57,19 @@ const getRedisTlsOptions = () => {
 export const getQueueConnection = () => {
   if (!runtimeConfig.redisUrl) return null;
 
-  return {
-    url: runtimeConfig.redisUrl,
-    tls: getRedisTlsOptions(),
-    maxRetriesPerRequest: null,
-  };
+  try {
+    return {
+      url: runtimeConfig.redisUrl,
+      tls: getRedisTlsOptions(),
+      maxRetriesPerRequest: null,
+      connectTimeout: runtimeConfig.cronRequestTimeoutMs,
+    };
+  } catch (error) {
+    console.error('Redis queue connection configuration failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new ServiceUnavailableError('Redis queue is unavailable');
+  }
 };
 
 export const assertRedisConfigured = (processRole: string) => {
