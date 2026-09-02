@@ -423,20 +423,6 @@ export const getUnitGroupExecutiveSummary = async (
   const prevAvgDuration = calcAvgDuration(previousPhases);
   const avgDurationComparison = toComparison(currAvgDuration, prevAvgDuration);
 
-  // On-time completion %
-  const calcOnTimePct = (phases: CompletedDashboardPhase[]) => {
-    if (phases.length === 0) return 100;
-    const onTime = phases.filter((phase) => {
-      if (!phase.expectedApprovalDate) return true;
-      return phase.completedAt <= phase.expectedApprovalDate;
-    });
-    return Math.round((onTime.length / phases.length) * 100);
-  };
-
-  const currOnTime = calcOnTimePct(currentPhases);
-  const prevOnTime = calcOnTimePct(previousPhases);
-  const onTimeComparison = toComparison(currOnTime, prevOnTime);
-
   // Workload vs Duration timeline
   const startParts = toBangkokParts(range.from);
   const endParts = toBangkokParts(range.to);
@@ -483,7 +469,6 @@ export const getUnitGroupExecutiveSummary = async (
     range,
     longestProcurementMethod: longestMethod,
     avgDurationDays: avgDurationComparison,
-    onTimeCompletionPercentage: onTimeComparison,
     workloadVsDurationTimeline: timelinePoints,
   };
 };
@@ -494,77 +479,28 @@ export const getUnitGroupProcurementMetrics = async (
 ): Promise<UnitGroupProcurementMetricsResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
   const range = { from: query.dateFrom, to: query.dateTo };
-  const now = nowUtc();
-  const today = fromBangkokDate(
-    toBangkokParts(now).year,
-    toBangkokParts(now).month,
-    toBangkokParts(now).day
-  );
-
   const types = Object.values(ProcurementType);
   const procurementOwnedWhere: Prisma.ProjectWhereInput = {
     procurement_unit_id: unitId,
   };
 
-  const delayedWhere: Prisma.ProjectWhereInput = {
-    status: { not: ProjectStatus.CANCELLED },
-    expected_approval_date: { not: null },
-    OR: [
-      {
-        procurement_completed_at: { not: null },
-        expected_approval_date: {
-          lt: prisma.project.fields.procurement_completed_at,
-        },
-      },
-      {
-        procurement_completed_at: null,
-        expected_approval_date: { lt: today },
-      },
-    ],
-  };
-
-  const [byTotalType, byDelayedType] = await Promise.all([
-    prisma.$transaction(
-      types.map((type) =>
-        prisma.project.count({
-          where: projectRangeWhere(
-            { ...procurementOwnedWhere, procurement_type: type },
-            range
-          ),
-        })
-      )
-    ),
-    prisma.$transaction(
-      types.map((type) =>
-        prisma.project.count({
-          where: {
-            AND: [
-              projectRangeWhere(
-                { ...procurementOwnedWhere, procurement_type: type },
-                range
-              ),
-              delayedWhere,
-            ],
-          },
-        })
-      )
-    ),
-  ]);
+  const byTotalType = await prisma.$transaction(
+    types.map((type) =>
+      prisma.project.count({
+        where: projectRangeWhere(
+          { ...procurementOwnedWhere, procurement_type: type },
+          range
+        ),
+      })
+    )
+  )
 
   const totalByProcurementType = types.map((type, index) => ({
     type,
     count: byTotalType[index],
   }));
-  const delayedByProcurementType = types.map((type, index) => ({
-    type,
-    count: byDelayedType[index],
-  }));
 
   const total = totalByProcurementType.reduce(
-    (sum, item) => sum + item.count,
-    0
-  );
-  const delayedTotal = delayedByProcurementType.reduce(
     (sum, item) => sum + item.count,
     0
   );
@@ -575,10 +511,6 @@ export const getUnitGroupProcurementMetrics = async (
       total,
       byProcurementType: totalByProcurementType,
     },
-    delayedProjects: {
-      total: delayedTotal,
-      byProcurementType: delayedByProcurementType,
-    },
   };
 };
 
@@ -588,13 +520,6 @@ export const getUnitGroupProcurementDetails = async (
 ): Promise<UnitGroupProcurementDetailsResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
   const range = { from: query.dateFrom, to: query.dateTo };
-  const previousRange = getPreviousRange(range, query.mode);
-  const now = nowUtc();
-  const today = fromBangkokDate(
-    toBangkokParts(now).year,
-    toBangkokParts(now).month,
-    toBangkokParts(now).day
-  );
 
   const types = Object.values(ProcurementType);
   const procurementOwnedWhere: Prisma.ProjectWhereInput = {
@@ -602,70 +527,79 @@ export const getUnitGroupProcurementDetails = async (
   };
 
   const baseWhere = projectRangeWhere(procurementOwnedWhere, range);
-  const previousWhere = projectRangeWhere(procurementOwnedWhere, previousRange);
 
-  const [projects, previousProjects] = await Promise.all([
-    prisma.project.findMany({
-      where: baseWhere,
-      select: {
-        id: true,
-        procurement_type: true,
-        procurement_unit_id: true,
-        contract_unit_id: true,
-        status: true,
-        expected_approval_date: true,
-        created_at: true,
-        updated_at: true,
-        procurement_started_at: true,
-        procurement_completed_at: true,
-        contract_started_at: true,
-        contract_completed_at: true,
-      },
-    }),
-    prisma.project.findMany({
-      where: previousWhere,
-      select: {
-        procurement_type: true,
-        status: true,
-        expected_approval_date: true,
-        procurement_started_at: true,
-        procurement_completed_at: true,
-      },
-    }),
-  ]);
+  const projects = await prisma.project.findMany({
+    where: baseWhere,
+    select: {
+      id: true,
+      procurement_type: true,
+      procurement_unit_id: true,
+      contract_unit_id: true,
+      status: true,
+      expected_approval_date: true,
+      created_at: true,
+      updated_at: true,
+      procurement_started_at: true,
+      procurement_completed_at: true,
+      contract_started_at: true,
+      contract_completed_at: true,
+    },
+  })
 
-  const completedPhaseRanges = projects.flatMap((project) => {
-    const ranges: Array<{ from: Date; to: Date }> = [];
-    if (project.procurement_started_at && project.procurement_completed_at) {
-      ranges.push({
-        from: project.procurement_started_at,
-        to: project.procurement_completed_at,
+  const completedProcurementPhaseRanges: Array<{
+    type: ProcurementType;
+    from: Date;
+    to: Date;
+  }> = [];
+  const completedContractPhaseRanges: Array<{
+    type: ProcurementType;
+    from: Date;
+    to: Date;
+  }> = [];
+
+  for (const project of projects) {
+    if (
+      isPhaseCompleted(
+        project.procurement_started_at,
+        project.procurement_completed_at
+      )
+    ) {
+      completedProcurementPhaseRanges.push({
+        type: project.procurement_type,
+        from: project.procurement_started_at!,
+        to: project.procurement_completed_at!,
       });
     }
     if (
       project.contract_unit_id === unitId &&
-      project.contract_started_at &&
-      project.contract_completed_at
+      isPhaseCompleted(
+        project.contract_started_at,
+        project.contract_completed_at
+      )
     ) {
-      ranges.push({
-        from: project.contract_started_at,
-        to: project.contract_completed_at,
+      completedContractPhaseRanges.push({
+        type: project.procurement_type,
+        from: project.contract_started_at!,
+        to: project.contract_completed_at!,
       });
     }
-    return ranges;
-  });
+  }
+
   const holidayIndex =
-    await getBangkokWorkingDayHolidayIndex(completedPhaseRanges);
+    await getBangkokWorkingDayHolidayIndex([
+      ...completedProcurementPhaseRanges,
+      ...completedContractPhaseRanges,
+    ]);
   const averagePhaseDuration = (
-    phases: Array<{ startedAt: Date; completedAt: Date }>
+    phases: Array<{ type: ProcurementType; from: Date; to: Date }>
   ): number => {
     if (phases.length === 0) return 0;
     const total = phases.reduce(
       (sum, phase) =>
         sum +
         countBangkokWorkingDays(
-          phase.startedAt,
-          phase.completedAt,
+          phase.from,
+          phase.to,
           holidayIndex
         ),
       0
@@ -675,61 +609,15 @@ export const getUnitGroupProcurementDetails = async (
 
   const methods: ProcurementMethodDetailItem[] = [];
 
-  const isDelayed = (project: {
-    status: ProjectStatus;
-    expected_approval_date: Date | null;
-    procurement_started_at: Date | null;
-    procurement_completed_at: Date | null;
-  }): boolean =>
-    project.status !== ProjectStatus.CANCELLED &&
-    project.expected_approval_date !== null &&
-    (project.expected_approval_date < today ||
-      project.expected_approval_date < project.procurement_completed_at);
-
-  const delayedPercentage = (
-    methodProjects: Array<{
-      status: ProjectStatus;
-      expected_approval_date: Date | null;
-      procurement_started_at: Date | null;
-      procurement_completed_at: Date | null;
-    }>
-  ): number =>
-    methodProjects.length === 0
-      ? 0
-      : Math.round(
-          (methodProjects.filter(isDelayed).length / methodProjects.length) *
-            100
-        );
-
   for (const type of types) {
     const typeProjects = projects.filter((p) => p.procurement_type === type);
     const totalCount = typeProjects.length;
-    const delayedCount = typeProjects.filter(isDelayed).length;
-    const currentDelayedPercentage = delayedPercentage(typeProjects);
-    const previousDelayedPercentage = delayedPercentage(
-      previousProjects.filter((project) => project.procurement_type === type)
+
+    const procurementPhases = completedProcurementPhaseRanges.filter((project) =>
+      project.type === type
     );
-    const procurementPhases = typeProjects.flatMap((project) =>
-      project.procurement_started_at && project.procurement_completed_at
-        ? [
-            {
-              startedAt: project.procurement_started_at,
-              completedAt: project.procurement_completed_at,
-            },
-          ]
-        : []
-    );
-    const contractPhases = typeProjects.flatMap((project) =>
-      project.contract_started_at &&
-      project.contract_completed_at &&
-      project.contract_unit_id === unitId
-        ? [
-            {
-              startedAt: project.contract_started_at,
-              completedAt: project.contract_completed_at,
-            },
-          ]
-        : []
+    const contractPhases = completedContractPhaseRanges.filter((project) =>
+      project.type === type
     );
 
     // Status counts
@@ -773,13 +661,7 @@ export const getUnitGroupProcurementDetails = async (
 
     methods.push({
       procurementType: type,
-      delayedCount,
       totalCount,
-      delayedPercentage: currentDelayedPercentage,
-      comparisonTrend: toComparison(
-        currentDelayedPercentage,
-        previousDelayedPercentage
-      ).trend,
       statusDistribution,
       avgPhaseDurationDays: {
         procurementPhaseDays: averagePhaseDuration(procurementPhases),

@@ -2,9 +2,9 @@
 -- current responsible unit. This migration is intentionally not applied by
 -- this change; it is for the deployment migration run.
 
--- ALTER TABLE "projects"
---   ADD COLUMN "procurement_unit_id" TEXT,
---   ADD COLUMN "contract_unit_id" TEXT;
+ALTER TABLE "projects"
+  ADD COLUMN "procurement_unit_id" TEXT,
+  ADD COLUMN "contract_unit_id" TEXT;
 
 -- Projects still in procurement have not moved to another unit, so the
 -- current owner is also the procurement owner.

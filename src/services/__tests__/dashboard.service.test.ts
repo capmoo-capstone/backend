@@ -374,7 +374,6 @@ describe('dashboard.service', () => {
       expect(result.unitId).toBe('unit-proc');
       expect(result.longestProcurementMethod).toBe(ProcurementType.LT100K);
       expect(result.avgDurationDays.current).toBe(5);
-      expect(result.onTimeCompletionPercentage.current).toBe(0);
       expect(result.workloadVsDurationTimeline.length).toBeGreaterThan(0);
       expect(
         result.workloadVsDurationTimeline.find(
@@ -385,12 +384,6 @@ describe('dashboard.service', () => {
 
     it('returns procurement metrics donut distributions', async () => {
       prismaMock.project.count
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(0)
@@ -410,24 +403,11 @@ describe('dashboard.service', () => {
 
       expect(result.unitId).toBe('unit-proc');
       expect(result.totalProjects.total).toBe(1);
-      expect(result.delayedProjects.total).toBe(1);
-      expect(prismaMock.project.count.mock.calls[6][0].where).toMatchObject({
+      expect(prismaMock.project.count.mock.calls[0][0].where).toMatchObject({
         AND: expect.arrayContaining([
           expect.objectContaining({
-            status: { not: ProjectStatus.CANCELLED },
-            expected_approval_date: { not: null },
-            OR: [
-              {
-                procurement_completed_at: { not: null },
-                expected_approval_date: {
-                  lt: prismaMock.project.fields.procurement_completed_at,
-                },
-              },
-              {
-                procurement_completed_at: null,
-                expected_approval_date: { lt: expect.any(Date) },
-              },
-            ],
+            procurement_unit_id: 'unit-proc',
+            procurement_type: ProcurementType.LT100K,
           }),
         ]),
       });
@@ -482,7 +462,6 @@ describe('dashboard.service', () => {
         procurementPhaseDays: 4,
         contractPhaseDays: 4,
       });
-      expect(result.methods[0].comparisonTrend).toBe('same');
     });
 
     it('returns top delayed projects stage breakdown', async () => {
