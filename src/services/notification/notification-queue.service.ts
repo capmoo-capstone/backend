@@ -112,7 +112,7 @@ export const startNotificationDeadlineWorker = (
 
   const { Worker } = loadBullMq();
 
-  return new Worker(
+  return new Worker<NotificationDeadlineJob>(
     DEADLINE_NOTIFICATION_QUEUE_NAME,
     async (job) => {
       await processor(job.data);
