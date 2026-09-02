@@ -178,7 +178,7 @@ describe('notification-email.service', () => {
     });
 
     expect(content.text).toContain('เรียน กรรมการตรวจรับ');
-    expect(content.text).not.toContain('เรียน คุณ กรรมการตรวจรับ,');
+    expect(content.text).not.toContain('เรียน กรรมการตรวจรับ,');
     expect(content.html).toContain('<p>เรียน กรรมการตรวจรับ</p>');
   });
 
