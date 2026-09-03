@@ -591,6 +591,53 @@ describe('dashboard.service', () => {
       });
     });
 
+    it('counts assignmentDays from procurement_completed_at when contract_started_at is null in contract unit', async () => {
+      prismaMock.holiday.findMany.mockResolvedValue([]);
+      prismaMock.project.findMany.mockResolvedValueOnce([
+        {
+          id: 'p-contract-unassigned',
+          title: 'Unassigned Contract Project',
+          procurement_type: ProcurementType.LT100K,
+          procurement_unit_id: 'unit-other',
+          contract_unit_id: 'unit-contract',
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
+          contract_started_at: null,
+          contract_completed_at: null,
+          submissions: [],
+          project_histories: [],
+        },
+      ]);
+
+      const result = await DashboardService.getUnitGroupTopDelayedProjects(
+        {
+          ...staffUser,
+          roles: [
+            {
+              role: UserRole.GENERAL_STAFF,
+              dept_id: 'dept-1',
+              dept_name: 'Dept',
+              unit_id: 'unit-contract',
+              unit_name: 'Contract Unit',
+            },
+          ],
+        },
+        {
+          unitId: 'unit-contract',
+          procurementType: ProcurementType.LT100K,
+          mode: 'month',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        }
+      );
+
+      expect(result.projects).toHaveLength(1);
+      const project = result.projects[0];
+      expect(project.stageBreakdownDays.contractDays).toBe(0);
+      expect(project.stageBreakdownDays.assignmentDays).toBe(project.totalDays);
+    });
+
     it('aggregates completed phase durations for all current unit staff', async () => {
       prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc' });
       prismaMock.user.findMany.mockResolvedValue([

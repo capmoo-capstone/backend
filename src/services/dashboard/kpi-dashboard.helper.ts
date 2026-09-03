@@ -820,6 +820,18 @@ export const getUnitGroupTopDelayedProjects = async (
       const closedHistoryAt = p.project_histories?.[0]?.changed_at;
       const projectClosed =
         p.status === ProjectStatus.CLOSED ? closedHistoryAt! : today;
+        
+      const totalDays = countBangkokWorkingDays(
+        procurementComplete,
+        p.contract_completed_at ? contractEnd : projectClosed,
+        holidayIndex
+      );
+
+      const assignmentDays = countBangkokWorkingDays(
+        procurementComplete,
+        contractStart,
+        holidayIndex
+      );
 
       const contractRange = {
         from: bangkokDayStartUtc(contractStart),
@@ -832,11 +844,6 @@ export const getUnitGroupTopDelayedProjects = async (
         contractRange
       );
 
-      const totalDays = countBangkokWorkingDays(
-        procurementComplete,
-        p.contract_completed_at ? contractEnd : projectClosed,
-        holidayIndex
-      );
       const contractStageDays = countBangkokWorkingDays(
         contractRange.from,
         contractRange.to,
@@ -848,13 +855,6 @@ export const getUnitGroupTopDelayedProjects = async (
         : 0;
 
       const contractWorkingDays = Math.max(0, contractStageDays - approvalDays);
-      const assignmentDays = p.contract_started_at
-        ? countBangkokWorkingDays(
-            procurementComplete,
-            p.contract_started_at,
-            holidayIndex
-          )
-        : 0;
 
       items.push({
         projectId: p.id,
