@@ -11,6 +11,7 @@ import {
 } from '../utils/active-state';
 import {
   BadRequestError,
+  ForbiddenError,
   SSO_FAILURE_CODES,
   SsoAuthenticationError,
   UnauthorizedError,
@@ -122,6 +123,7 @@ export const fetchAndFormatUserDetails = async (
       username: user.username,
       full_name: user.full_name,
       email: user.email,
+      daily_email: user.daily_email,
       register_type: user.register_type,
     },
     authData: {
@@ -129,9 +131,37 @@ export const fetchAndFormatUserDetails = async (
       roles: finalRoles,
       is_delegated: isDelegated,
       delegated_by: delegatedBy,
+      daily_email: user.daily_email,
     },
     cacheExpiresAt: getNextDelegationBoundary(user.delegations_received, now),
   };
+};
+
+export const updateDailyEmail = async (
+  user: AuthPayload,
+  dailyEmail: boolean
+): Promise<{ daily_email: boolean }> => {
+  const isEligible = user.roles.some(
+    (role) =>
+      role.dept_id === OPS_DEPT_ID &&
+      [
+        'HEAD_OF_UNIT',
+        'DOCUMENT_STAFF',
+        'FINANCE_STAFF',
+        'GENERAL_STAFF',
+      ].includes(role.role)
+  );
+  if (!isEligible)
+    throw new ForbiddenError(
+      'Daily email is only available to supported Supply Operations users'
+    );
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { daily_email: dailyEmail },
+    select: { daily_email: true },
+  });
+  clearUserAuthCache(user.id);
+  return updated;
 };
 
 export const login = async (

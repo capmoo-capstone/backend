@@ -238,6 +238,7 @@ model User {
   created_at      DateTime       @default(now())
   role_updated_at DateTime       @default(now())
   last_login_at   DateTime?
+  daily_email     Boolean        @default(false)
 
   roles UserOrganizationRole[]
 

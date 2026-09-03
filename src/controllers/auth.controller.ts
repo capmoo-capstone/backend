@@ -11,6 +11,7 @@ import {
   ListRegistrationRequestsQuerySchema,
 } from '../schemas/registration.schema';
 import * as RegistrationService from '../services/registration.service';
+import { UpdateDailyEmailSchema } from '../schemas/user.schema';
 import {
   createSamlLoginUrl,
   getSamlFrontendRedirectUrl,
@@ -131,6 +132,18 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
   res.status(200).json(payload);
+};
+
+export const updateDailyEmail = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  const payload = UpdateDailyEmailSchema.parse(req.body);
+  const data = await AuthService.updateDailyEmail(
+    req.user!,
+    payload.daily_email
+  );
+  res.status(200).json(data);
 };
 
 export const login = async (req: Request, res: Response) => {

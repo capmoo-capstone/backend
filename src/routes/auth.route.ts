@@ -31,6 +31,7 @@ router.patch(
 );
 router.post('/login', authLimiter, controller.login);
 router.get('/me', protect, controller.getMe);
+router.patch('/me/daily-email', protect, controller.updateDailyEmail);
 router.patch('/logout', protect, controller.logout);
 
 export default router;
