@@ -9,7 +9,7 @@ vi.mock('../services/notification/notification-query.service', () => ({
 }));
 
 vi.mock('../services/notification/notification-queue.service', () => ({
-  DEADLINE_NOTIFICATION_QUEUE_NAME: 'notifications:deadline-reminders',
+  DEADLINE_NOTIFICATION_QUEUE_NAME: 'notifications-deadline-reminders',
   startNotificationDeadlineWorker,
 }));
 
@@ -18,7 +18,7 @@ vi.mock('../services/cron/cron-task.service', () => ({
 }));
 
 vi.mock('../services/cron/cron-queue.service', () => ({
-  SCHEDULED_CRON_QUEUE_NAME: 'system:scheduled-cron',
+  SCHEDULED_CRON_QUEUE_NAME: 'system-scheduled-cron',
   startScheduledCronTaskWorker,
 }));
 

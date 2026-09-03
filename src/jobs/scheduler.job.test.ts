@@ -7,7 +7,7 @@ const enqueueNotificationCleanup = vi.fn();
 const assertRedisConfigured = vi.fn();
 
 vi.mock('../services/notification/notification-queue.service', () => ({
-  DEADLINE_NOTIFICATION_QUEUE_NAME: 'notifications:deadline-reminders',
+  DEADLINE_NOTIFICATION_QUEUE_NAME: 'notifications-deadline-reminders',
   registerNotificationQueueSchedules,
   enqueueDeadlineScan,
   enqueueNotificationOutboxFlush,
