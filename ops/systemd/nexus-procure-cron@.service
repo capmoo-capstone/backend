@@ -1,0 +1,10 @@
+[Unit]
+Description=NexusProcure cron job (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/nexus-procure/.env.production
+ExecStart=/opt/nexus-procure/ops/systemd/nexus-procure-cron.sh %i
+TimeoutStartSec=90s

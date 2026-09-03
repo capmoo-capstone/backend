@@ -1,0 +1,32 @@
+name: Run Vercel Development Cron Jobs
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+    - cron: '30 0 * * *'
+    - cron: '0 3 * * 1-5'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: vercel-development-cron
+  cancel-in-progress: false
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    env:
+      PREVIEW_URL: ${{ secrets.VERCEL_PREVIEW_CRON_URL }}
+      CRON_SECRET: ${{ secrets.VERCEL_PREVIEW_CRON_SECRET }}
+    steps:
+      - run: test -n "$PREVIEW_URL" && test -n "$CRON_SECRET"
+      - if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 0 * * *'
+        run: >-
+          curl --fail-with-body --show-error --silent --max-time 60 --retry 2 --retry-all-errors --retry-delay 5 -H "Authorization: Bearer $CRON_SECRET" "$PREVIEW_URL/api/v1/cron/process-deadlines"
+      - if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 0 * * *'
+        run: >-
+          curl --fail-with-body --show-error --silent --max-time 60 --retry 2 --retry-all-errors --retry-delay 5 -H "Authorization: Bearer $CRON_SECRET" "$PREVIEW_URL/api/v1/cron/send-contract-committee-reminders"
+      - if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 * * 1-5'
+        run: >-
+          curl --fail-with-body --show-error --silent --max-time 60 --retry 2 --retry-all-errors --retry-delay 5 -H "Authorization: Bearer $CRON_SECRET" "$PREVIEW_URL/api/v1/cron/send-daily-summary-email"

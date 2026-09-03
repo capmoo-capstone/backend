@@ -25,12 +25,14 @@ export interface FetchAndFormatUserDetailsResponse {
     username: string;
     full_name: string;
     email: string | null;
+    daily_email?: boolean;
     register_type: RegisterType[];
   };
   authData: {
     roles: AuthRoleDetail[];
     is_delegated: boolean;
     delegated_by: DelegatedByUser[];
+    daily_email?: boolean;
   };
   cacheExpiresAt: Date | null;
 }
@@ -41,6 +43,7 @@ export interface AuthPayload {
   username: string;
   full_name: string;
   email?: string | null;
+  daily_email?: boolean;
   user_type?: RegisterType[];
   roles: AuthRoleDetail[];
   is_delegated: boolean;

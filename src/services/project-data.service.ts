@@ -185,6 +185,7 @@ export const createProject = async (
         status: ProjectStatus.UNASSIGNED,
         current_workflow_type: data.procurement_type,
         responsible_unit_id: unitType.get(data.procurement_type),
+        procurement_unit_id: unitType.get(data.procurement_type),
         receive_no: receiveNumber,
         created_by: user.id,
       },
@@ -252,6 +253,7 @@ export const importProjects = async (
           status: ProjectStatus.UNASSIGNED,
           current_workflow_type: d.procurement_type,
           responsible_unit_id: unitType.get(d.procurement_type)!,
+          procurement_unit_id: unitType.get(d.procurement_type)!,
           receive_no: receiveNumbers[i],
           created_by: user.id,
         };

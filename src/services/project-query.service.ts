@@ -471,39 +471,24 @@ export const getUnassignedProjectsByUnit = async (
     .map((r) => r.unit_id)
     .filter((id): id is string => Boolean(id));
 
-  if (!isHeadOfSupplyDept(user) && !isSuperAdmin(user)) {
-    if (userUnitIds.length > 0) {
-      if (!userUnitIds.includes(unitId)) {
-        throw new ForbiddenError(
-          'You do not have permission to access this unit'
-        );
-      }
-    } else {
-      throw new ForbiddenError(
-        'You do not have permission to access this unit'
-      );
-    }
+  if (
+    !isSuperAdmin(user) &&
+    !isHeadOfSupplyDept(user) &&
+    !userUnitIds.includes(unitId)
+  ) {
+    throw new ForbiddenError(
+      'You do not have permission to access this unit'
+    );
   }
 
-  const unit = await prisma.unit.findUnique({
-    where: {
-      id: unitId,
-    },
-    select: { type: true },
-  });
-  if (!unit) {
-    throw new NotFoundError('Unit not found');
-  }
-  const where: any = {
-    status: { in: [ProjectStatus.UNASSIGNED] },
-    current_workflow_type: {
-      in: unit.type,
-    },
+  const where: Prisma.ProjectWhereInput = {
+    status: ProjectStatus.UNASSIGNED,
+    responsible_unit_id: unitId,
   };
 
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
-      where: where,
+      where,
       orderBy: [{ status: 'asc' }, { receive_no: 'desc' }],
       select: {
         id: true,

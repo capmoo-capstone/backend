@@ -16,6 +16,8 @@ import {
 
 const OPS_DEPT_ID = 'DEPT-SUP-OPS';
 const REPORT_DATE = new Date('2026-08-29T03:00:00.000Z');
+const FOOTER_NOTICE =
+  '(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)';
 
 const buildUser = (roles: AuthPayload['roles']): AuthPayload => ({
   token: '',
@@ -266,15 +268,27 @@ describe('daily-summary-email.service', () => {
         urgent_count: 2,
       },
       reportDate: REPORT_DATE,
-      appPublicUrl: 'https://nexus-procure.com',
+      appPublicUrl: 'https://www.nexus-procure.com',
     });
 
     expect(content.subject).toBe(
       'สรุปงานในระบบ NexusProcure ประจำวันที่ 29 ส.ค. 2569'
     );
     expect(content.text).toContain('เรียน คุณฌามา วจนชัย');
-    expect(content.text).toContain('สถานะโครงการที่ท่านรับผิดชอบ');
-    expect(content.text).toContain('งานที่เพิ่มใหม่ทั้งสิ้น 1 โครงการ');
-    expect(content.text).toContain('https://nexus-procure.com');
+    expect(content.text).toContain(
+      'ระบบ NexusProcure ขอส่งรายงานสรุปสถานะโครงการที่ท่านรับผิดชอบ ประจำวันที่ 29 ส.ค. 2569 ณ เวลา 10:00 น. มีรายละเอียดดังนี้'
+    );
+    expect(content.text).toContain('- งานที่เพิ่มใหม่ทั้งสิ้น 1 โครงการ');
+    expect(content.text).toContain('https://www.nexus-procure.com');
+    expect(content.text).toContain('ขอแสดงความนับถือ');
+    expect(content.text).toContain('NexusProcure');
+    expect(content.text).toContain(FOOTER_NOTICE);
+    expect(content.html).toContain('<strong>ฌามา วจนชัย</strong>');
+    expect(content.html).toContain('<strong>29 ส.ค. 2569</strong>');
+    expect(content.html).toContain(
+      '<a href="https://www.nexus-procure.com">https://www.nexus-procure.com</a>'
+    );
+    expect(content.html).toContain('<strong>NexusProcure</strong>');
+    expect(content.html).toContain('<em>(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)</em>');
   });
 });

@@ -252,9 +252,6 @@ describe('project-query.service', () => {
   });
 
   it('getUnassignedProjectsByUnit allows head-of-department users to query any unit', async () => {
-    prismaMock.unit.findUnique.mockResolvedValue({
-      type: [UnitResponsibleType.LT100K],
-    });
     prismaMock.project.findMany.mockResolvedValue([projectRow]);
     prismaMock.project.count.mockResolvedValue(1);
 
@@ -262,8 +259,8 @@ describe('project-query.service', () => {
 
     expect(result.total).toBe(1);
     expect(prismaMock.project.findMany.mock.calls[0][0].where).toMatchObject({
-      status: { in: [ProjectStatus.UNASSIGNED] },
-      current_workflow_type: { in: [UnitResponsibleType.LT100K] },
+      status: ProjectStatus.UNASSIGNED,
+      responsible_unit_id: PROC1_UNIT_ID,
     });
   });
 

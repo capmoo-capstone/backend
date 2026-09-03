@@ -1,9 +1,16 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import * as NotificationService from '../services/notification/notification.service';
-import { sendContractCommitteeReminders } from '../services/notification/contract-committee-reminder.service';
+import { runtimeConfig } from '../config/runtime';
+import { runWithCronLock } from '../services/cron/cron-lock.service';
 import {
-  sendDailySummaryEmailsToOpsUsers,
+  triggerDeadlineReminderScan,
+  triggerScheduledCronTask,
+} from '../services/cron/cron-task.service';
+import {
+  DirectCronJob,
+  runDirectCronTask,
+} from '../services/cron/direct-cron.service';
+import {
   sendHelloTestEmail,
   sendVendorPoRequestEmailForProject,
 } from '../services/notification/notification-email.service';
@@ -12,19 +19,53 @@ const SendVendorPoEmailSchema = z.object({
   projectId: z.string().trim().min(1, 'projectId is required'),
 });
 
-export const processDeadlineNotifications = async (
-  _req: Request,
+const sendCronResponse = async (
+  job: DirectCronJob,
+  queueTask: () => Promise<{
+    message: string;
+    queued?: boolean;
+    skipped?: boolean;
+  }>,
   res: Response
 ) => {
   // #swagger.tags = ['Cron']
   // #swagger.security = [{ bearerAuth: [] }]
-  await NotificationService.enqueueDeadlineReminderScan();
+  if (runtimeConfig.cronExecutionMode === 'direct') {
+    const result = await runDirectCronTask(job);
+    return res.status(200).json({
+      status: 'success',
+      message: result.message,
+      direct: true,
+      skipped: result.skipped,
+    });
+  }
 
-  res.status(200).json({
+  const lock = await runWithCronLock(job, queueTask);
+  if (!lock.acquired) {
+    return res.status(200).json({
+      status: 'success',
+      message: `${job} is already being queued`,
+      skipped: true,
+    });
+  }
+
+  return res.status(200).json({
     status: 'success',
-    message: 'Deadline notification sync completed',
+    message: lock.value.message,
+    queued: lock.value.queued ?? true,
+    skipped: lock.value.skipped ?? false,
   });
 };
+
+export const processDeadlineNotifications = async (
+  _req: Request,
+  res: Response
+) =>
+  sendCronResponse(
+    'process-deadlines',
+    triggerDeadlineReminderScan,
+    res
+  );
 
 export const sendTestEmail = async (req: Request, res: Response) => {
   // #swagger.tags = ['Cron']
@@ -35,8 +76,7 @@ export const sendTestEmail = async (req: Request, res: Response) => {
       : undefined;
 
   await sendHelloTestEmail(to);
-
-  res.status(200).json({
+  return res.status(200).json({
     status: 'success',
     message: 'Test email sent',
     to: to ?? null,
@@ -49,7 +89,7 @@ export const sendVendorPoEmail = async (req: Request, res: Response) => {
   const { projectId } = SendVendorPoEmailSchema.parse(req.body);
   const result = await sendVendorPoRequestEmailForProject(projectId);
 
-  res.status(200).json({
+  return res.status(200).json({
     status: 'success',
     message: 'Vendor PO email sent',
     projectId: result.projectId,
@@ -58,31 +98,19 @@ export const sendVendorPoEmail = async (req: Request, res: Response) => {
   });
 };
 
-export const sendDailySummaryEmail = async (_req: Request, res: Response) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const result = await sendDailySummaryEmailsToOpsUsers();
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Daily summary emails sent',
-    recipientCount: result.recipientCount,
-  });
-};
+export const sendDailySummaryEmail = async (_req: Request, res: Response) =>
+  sendCronResponse(
+    'daily-summary-email',
+    () => triggerScheduledCronTask({ kind: 'daily-summary-email' }),
+    res
+  );
 
 export const sendContractCommitteeReminderEmail = async (
   _req: Request,
   res: Response
-) => {
-  // #swagger.tags = ['Cron']
-  // #swagger.security = [{ bearerAuth: [] }]
-  const result = await sendContractCommitteeReminders();
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Contract committee reminder emails sent',
-    matchedSubmissionCount: result.matchedSubmissionCount,
-    recipientCount: result.recipientCount,
-    deliveryCount: result.deliveryCount,
-  });
-};
+) =>
+  sendCronResponse(
+    'contract-committee-reminders',
+    () => triggerScheduledCronTask({ kind: 'contract-committee-reminders' }),
+    res
+  );

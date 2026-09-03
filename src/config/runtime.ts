@@ -9,7 +9,23 @@ const parseNumber = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const parseCronExecutionMode = (value: string | undefined) => {
+  if (value === 'queue' || value === 'direct') return value;
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) return 'queue';
+  throw new Error('CRON_EXECUTION_MODE must be either queue or direct');
+};
+
+const parseEmailAllowlist = (value: string | undefined) =>
+  new Set(
+    (value || '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
 export const runtimeConfig = {
+  cronExecutionMode: parseCronExecutionMode(process.env.CRON_EXECUTION_MODE),
+  cronEmailAllowlist: parseEmailAllowlist(process.env.CRON_EMAIL_ALLOWLIST),
   redisUrl: process.env.REDIS_URL?.trim() || '',
   redisPrefix: process.env.REDIS_PREFIX?.trim() || 'nexus-procure',
   redisTlsCaPath: process.env.REDIS_TLS_CA_PATH?.trim() || '',
@@ -19,6 +35,13 @@ export const runtimeConfig = {
     true
   ),
   cronSecret: process.env.CRON_SECRET?.trim() || '',
+  cronLockNamespace:
+    process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production'
+      ? 'production'
+      : process.env.VERCEL_ENV?.trim() || 'local',
+  cronLockTtlMs: 10 * 60_000,
+  cronWindowTtlMs: 36 * 60 * 60_000,
+  cronRequestTimeoutMs: 60_000,
   realtimeEnabled: parseBoolean(
     process.env.NOTIFICATIONS_REALTIME_ENABLED,
     Boolean(process.env.REDIS_URL)

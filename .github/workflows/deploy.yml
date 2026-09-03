@@ -61,13 +61,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy docker-compose.prod.yaml to VPS
+      - name: Copy deployment and systemd files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: 'docker-compose.prod.yaml'
+          source: 'docker-compose.prod.yaml,ops/systemd'
           target: '/opt/nexus-procure'
 
       - name: Deploy via SSH
@@ -88,6 +88,15 @@ jobs:
             # Log in to ghcr.io
             echo ${{ secrets.GHCR_TOKEN }} | \
               docker login ghcr.io -u ${{ secrets.VPS_USER }} --password-stdin
+
+            sudo install -m 0755 ops/systemd/nexus-procure-cron.sh /opt/nexus-procure/ops/systemd/nexus-procure-cron.sh
+            sudo install -m 0644 ops/systemd/nexus-procure-cron@.service /etc/systemd/system/nexus-procure-cron@.service
+            sudo install -m 0644 ops/systemd/nexus-procure-process-deadlines.timer /etc/systemd/system/
+            sudo install -m 0644 ops/systemd/nexus-procure-contract-committee-reminders.timer /etc/systemd/system/
+            sudo install -m 0644 ops/systemd/nexus-procure-daily-summary-email.timer /etc/systemd/system/
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now nexus-procure-process-deadlines.timer nexus-procure-contract-committee-reminders.timer nexus-procure-daily-summary-email.timer
+            sudo systemctl is-active nexus-procure-process-deadlines.timer nexus-procure-contract-committee-reminders.timer nexus-procure-daily-summary-email.timer
 
             # Pull the latest image
             docker compose -f docker-compose.prod.yaml --env-file .env.production pull

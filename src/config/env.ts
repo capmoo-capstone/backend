@@ -4,6 +4,7 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 characters'),
+  CRON_EXECUTION_MODE: z.enum(['queue', 'direct']),
   R2_ACCOUNT_ID: z.string().min(1, 'R2_ACCOUNT_ID is required'),
   R2_ACCESS_KEY_ID: z.string().min(1, 'R2_ACCESS_KEY_ID is required'),
   R2_SECRET_ACCESS_KEY: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),

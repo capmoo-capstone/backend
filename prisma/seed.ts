@@ -13,7 +13,7 @@ import {
 } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../src/config/prisma';
-import { nowUtc, toBangkokParts } from '../src/lib/date';
+import { nowUtc, toBangkokParts } from '../src/utils/date';
 import { departmentsAndUnitsData } from './seed-departments';
 import { seedHolidays } from './seed-holidays';
 

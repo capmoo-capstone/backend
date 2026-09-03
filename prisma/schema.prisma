@@ -215,9 +215,11 @@ model Unit {
   budget_code String?
   type        UnitResponsibleType[]
 
-  organization_roles   UserOrganizationRole[]
-  requesting_projects  Project[]              @relation("RequestingUnit")
-  responsible_projects Project[]              @relation("ResponsibleUnit")
+  organization_roles         UserOrganizationRole[]
+  requesting_projects        Project[]              @relation("RequestingUnit")
+  responsible_projects       Project[]              @relation("ResponsibleUnit")
+  procurement_phase_projects Project[]              @relation("ProcurementPhaseUnit")
+  contract_phase_projects    Project[]              @relation("ContractPhaseUnit")
 
   department  Department   @relation(fields: [dept_id], references: [id], onDelete: Restrict)
   budgetPlans BudgetPlan[]
@@ -236,6 +238,7 @@ model User {
   created_at      DateTime       @default(now())
   role_updated_at DateTime       @default(now())
   last_login_at   DateTime?
+  daily_email     Boolean        @default(false)
 
   roles UserOrganizationRole[]
 
@@ -360,6 +363,8 @@ model Project {
   procurement_type         ProcurementType
   current_workflow_type    UnitResponsibleType
   responsible_unit_id      String
+  procurement_unit_id      String?
+  contract_unit_id         String?
   requesting_dept_id       String
   requesting_unit_id       String?
   is_urgent                UrgentType          @default(NORMAL)
@@ -388,6 +393,8 @@ model Project {
   requesting_dept  Department             @relation(fields: [requesting_dept_id], references: [id], onDelete: Restrict)
   requesting_unit  Unit?                  @relation("RequestingUnit", fields: [requesting_unit_id], references: [id], onDelete: SetNull)
   responsible_unit Unit?                  @relation("ResponsibleUnit", fields: [responsible_unit_id], references: [id], onDelete: Restrict)
+  procurement_unit Unit?                  @relation("ProcurementPhaseUnit", fields: [procurement_unit_id], references: [id], onDelete: Restrict)
+  contract_unit    Unit?                  @relation("ContractPhaseUnit", fields: [contract_unit_id], references: [id], onDelete: Restrict)
   contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id], onDelete: SetNull)
 
   assignee_procurement   User[]                 @relation("ProcurementProjects")
@@ -404,6 +411,8 @@ model Project {
   @@index([status, current_workflow_type])
   @@index([requesting_dept_id])
   @@index([responsible_unit_id])
+  @@index([procurement_unit_id, created_at])
+  @@index([contract_unit_id, created_at])
   @@index([created_at])
   @@index([procurement_completed_at])
   @@index([contract_completed_at])
