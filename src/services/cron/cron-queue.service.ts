@@ -11,7 +11,7 @@ export type ScheduledCronTaskJob =
   | { kind: 'daily-summary-email' }
   | { kind: 'contract-committee-reminders' };
 
-export const SCHEDULED_CRON_QUEUE_NAME = 'system:scheduled-cron';
+export const SCHEDULED_CRON_QUEUE_NAME = 'system-scheduled-cron';
 
 let cronQueue: QueueInstance<ScheduledCronTaskJob> | null = null;
 

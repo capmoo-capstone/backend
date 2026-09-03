@@ -27,7 +27,7 @@ export type NotificationDeadlineJob =
     };
 
 export const DEADLINE_NOTIFICATION_QUEUE_NAME =
-  'notifications:deadline-reminders';
+  'notifications-deadline-reminders';
 
 let deadlineQueue: QueueInstance<NotificationDeadlineJob> | null = null;
 
