@@ -7,6 +7,8 @@ on:
     - cron: '0 3 * * 1-5'
   workflow_dispatch:
 
+permissions: {}
+
 concurrency:
   group: vercel-development-cron
   cancel-in-progress: false
