@@ -2,7 +2,7 @@ import { runtimeConfig } from '../../config/runtime';
 import { ServiceUnavailableError } from '../../utils/errors';
 import { syncDeadlineNotificationsForAllUsers } from '../notification/notification-query.service';
 import { sendContractCommitteeReminders } from '../notification/contract-committee-reminder.service';
-import { sendDailySummaryEmailsToSuperAdmins } from '../notification/notification-email.service';
+import { sendDailySummaryEmailsToOptedInUsers } from '../notification/notification-email.service';
 
 export type DirectCronJob =
   | 'process-deadlines'
@@ -26,7 +26,7 @@ const runDirectWork = async (job: DirectCronJob) => {
         allowedEmails: runtimeConfig.cronEmailAllowlist,
       });
     case 'daily-summary-email':
-      return sendDailySummaryEmailsToSuperAdmins(
+      return sendDailySummaryEmailsToOptedInUsers(
         new Date(),
         runtimeConfig.cronEmailAllowlist
       );

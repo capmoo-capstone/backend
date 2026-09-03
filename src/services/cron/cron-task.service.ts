@@ -1,7 +1,7 @@
 import { ServiceUnavailableError } from '../../utils/errors';
 import { enqueueDeadlineScan } from '../notification/notification-queue.service';
 import { sendContractCommitteeReminders } from '../notification/contract-committee-reminder.service';
-import { sendDailySummaryEmailsToSuperAdmins } from '../notification/notification-email.service';
+import { sendDailySummaryEmailsToOptedInUsers } from '../notification/notification-email.service';
 import {
   enqueueScheduledCronTask,
   getScheduleWindow,
@@ -36,7 +36,7 @@ export const triggerScheduledCronTask = async (job: ScheduledCronTaskJob) => {
 export const runScheduledCronTask = async (job: ScheduledCronTaskJob) => {
   switch (job.kind) {
     case 'daily-summary-email':
-      return sendDailySummaryEmailsToSuperAdmins();
+      return sendDailySummaryEmailsToOptedInUsers();
     case 'contract-committee-reminders':
       return sendContractCommitteeReminders();
   }

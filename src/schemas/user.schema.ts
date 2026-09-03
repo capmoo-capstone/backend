@@ -57,6 +57,10 @@ export const CreateUserSchema = z
     return true;
   });
 
+export const UpdateDailyEmailSchema = z.object({
+  daily_email: z.boolean(),
+});
+
 export const ListUsersQuerySchema = z
   .object({
     search: z.string().trim().optional(),
@@ -153,6 +157,7 @@ export const RemoveRoleSchema = z
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type UpdateDailyEmailDto = z.infer<typeof UpdateDailyEmailSchema>;
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;
 export type UpdateSupplyRoleDto = z.infer<typeof UpdateSupplyRoleSchema>;
 export type AddRoleDto = z.infer<typeof AddRoleSchema>;

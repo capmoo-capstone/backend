@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   syncDeadlineNotificationsForAllUsers,
   sendContractCommitteeReminders,
-  sendDailySummaryEmailsToSuperAdmins,
+  sendDailySummaryEmailsToOptedInUsers,
 } = vi.hoisted(() => ({
   syncDeadlineNotificationsForAllUsers: vi.fn(),
   sendContractCommitteeReminders: vi.fn(),
-  sendDailySummaryEmailsToSuperAdmins: vi.fn(),
+  sendDailySummaryEmailsToOptedInUsers: vi.fn(),
 }));
 
 const { runtimeConfig } = vi.hoisted(() => ({
@@ -24,7 +24,7 @@ vi.mock('../notification/contract-committee-reminder.service', () => ({
   sendContractCommitteeReminders,
 }));
 vi.mock('../notification/notification-email.service', () => ({
-  sendDailySummaryEmailsToSuperAdmins,
+  sendDailySummaryEmailsToOptedInUsers,
 }));
 
 import { runDirectCronTask } from './direct-cron.service';
@@ -35,7 +35,7 @@ describe('direct cron execution', () => {
     runtimeConfig.cronEmailAllowlist = new Set(['allowed@example.com']);
     syncDeadlineNotificationsForAllUsers.mockResolvedValue(undefined);
     sendContractCommitteeReminders.mockResolvedValue({});
-    sendDailySummaryEmailsToSuperAdmins.mockResolvedValue({});
+    sendDailySummaryEmailsToOptedInUsers.mockResolvedValue({});
   });
 
   it('executes deadline work without Redis or BullMQ', async () => {
@@ -59,14 +59,17 @@ describe('direct cron execution', () => {
     runtimeConfig.cronEmailAllowlist = new Set();
 
     await expect(runDirectCronTask('daily-summary-email')).resolves.toEqual({
-      message: 'daily-summary-email skipped because CRON_EMAIL_ALLOWLIST is empty',
+      message:
+        'daily-summary-email skipped because CRON_EMAIL_ALLOWLIST is empty',
       skipped: true,
     });
-    expect(sendDailySummaryEmailsToSuperAdmins).not.toHaveBeenCalled();
+    expect(sendDailySummaryEmailsToOptedInUsers).not.toHaveBeenCalled();
   });
 
   it('converts direct execution failures to retryable errors', async () => {
-    sendContractCommitteeReminders.mockRejectedValue(new Error('provider down'));
+    sendContractCommitteeReminders.mockRejectedValue(
+      new Error('provider down')
+    );
 
     await expect(
       runDirectCronTask('contract-committee-reminders')

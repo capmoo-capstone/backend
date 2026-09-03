@@ -5,7 +5,7 @@ import {
   buildContractCommitteeReminderEmail,
   notificationEmailTransport,
   sendContractCommitteeReminderEmail,
-  sendDailySummaryEmailsToSuperAdmins,
+  sendDailySummaryEmailsToOptedInUsers,
   sendHelloTestEmail,
   sendRegistrationApprovedEmail,
   sendRegistrationPendingEmail,
@@ -322,17 +322,26 @@ describe('notification-email.service', () => {
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(11);
 
-    const result = await sendDailySummaryEmailsToSuperAdmins(reportDate);
+    const result = await sendDailySummaryEmailsToOptedInUsers(reportDate);
 
     expect(result).toEqual({ recipientCount: 2 });
     expect(prismaMock.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           is_active: true,
+          daily_email: true,
           email: { not: null },
           roles: {
             some: {
-              role: UserRole.SUPER_ADMIN,
+              dept_id: 'DEPT-SUP-OPS',
+              role: {
+                in: [
+                  UserRole.HEAD_OF_UNIT,
+                  UserRole.DOCUMENT_STAFF,
+                  UserRole.FINANCE_STAFF,
+                  UserRole.GENERAL_STAFF,
+                ],
+              },
             },
           },
         }),
@@ -400,7 +409,7 @@ describe('notification-email.service', () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
-  it('sends the daily summary only to super administrators', async () => {
+  it('sends the daily summary only to opted-in supported users', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
     prismaMock.user.findMany.mockResolvedValue([
@@ -411,7 +420,7 @@ describe('notification-email.service', () => {
         full_name: 'Super Admin',
         roles: [
           {
-            role: UserRole.SUPER_ADMIN,
+            role: UserRole.DOCUMENT_STAFF,
             department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
             unit: null,
           },
@@ -425,7 +434,7 @@ describe('notification-email.service', () => {
       .mockResolvedValueOnce(4)
       .mockResolvedValueOnce(5);
 
-    const result = await sendDailySummaryEmailsToSuperAdmins(
+    const result = await sendDailySummaryEmailsToOptedInUsers(
       new Date('2026-08-29T03:00:00.000Z')
     );
 
@@ -433,7 +442,19 @@ describe('notification-email.service', () => {
     expect(prismaMock.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          roles: { some: { role: UserRole.SUPER_ADMIN } },
+          roles: {
+            some: {
+              dept_id: 'DEPT-SUP-OPS',
+              role: {
+                in: [
+                  UserRole.HEAD_OF_UNIT,
+                  UserRole.DOCUMENT_STAFF,
+                  UserRole.FINANCE_STAFF,
+                  UserRole.GENERAL_STAFF,
+                ],
+              },
+            },
+          },
         }),
       })
     );
@@ -451,7 +472,7 @@ describe('notification-email.service', () => {
         full_name: 'Super Admin',
         roles: [
           {
-            role: UserRole.SUPER_ADMIN,
+            role: UserRole.DOCUMENT_STAFF,
             department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
             unit: null,
           },
@@ -464,7 +485,7 @@ describe('notification-email.service', () => {
         full_name: 'Other Admin',
         roles: [
           {
-            role: UserRole.SUPER_ADMIN,
+            role: UserRole.DOCUMENT_STAFF,
             department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
             unit: null,
           },
@@ -473,7 +494,7 @@ describe('notification-email.service', () => {
     ]);
     prismaMock.project.count.mockResolvedValue(0);
 
-    const result = await sendDailySummaryEmailsToSuperAdmins(
+    const result = await sendDailySummaryEmailsToOptedInUsers(
       new Date('2026-08-29T03:00:00.000Z'),
       new Set(['allowed@example.com'])
     );
@@ -494,7 +515,7 @@ describe('notification-email.service', () => {
         full_name: 'Super Admin',
         roles: [
           {
-            role: UserRole.SUPER_ADMIN,
+            role: UserRole.DOCUMENT_STAFF,
             department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
             unit: null,
           },
@@ -502,7 +523,7 @@ describe('notification-email.service', () => {
       },
     ]);
 
-    const result = await sendDailySummaryEmailsToSuperAdmins(
+    const result = await sendDailySummaryEmailsToOptedInUsers(
       new Date('2026-08-29T03:00:00.000Z'),
       new Set()
     );

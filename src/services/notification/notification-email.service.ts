@@ -5,6 +5,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../utils/active-state';
+import { OPS_DEPT_ID } from '../../utils/constant';
 import { formatBangkokDate } from '../../utils/date';
 import { BadRequestError, NotFoundError } from '../../utils/errors';
 import {
@@ -294,7 +295,9 @@ const buildDailySummaryAuthPayload = (user: {
   username: user.username,
   full_name: user.full_name,
   email: user.email,
-  roles: mapAuthRoles(user.roles),
+  roles: mapAuthRoles(
+    user.roles.filter((role) => role.department.id === OPS_DEPT_ID)
+  ),
   is_delegated: false,
   delegated_by: [],
 });
@@ -315,9 +318,7 @@ const resolveDailySummaryRecipient = (user: {
   }
 
   const auth = buildDailySummaryAuthPayload(user);
-  const role = user.roles.some((entry) => entry.role === UserRole.SUPER_ADMIN)
-    ? UserRole.DOCUMENT_STAFF
-    : resolveDailySummaryRole(auth);
+  const role = resolveDailySummaryRole(auth);
 
   if (!role) {
     return null;
@@ -471,17 +472,26 @@ export const sendDailySummaryEmail = async (
   await sendBusinessEmail(recipient.email, content);
 };
 
-export const sendDailySummaryEmailsToSuperAdmins = async (
+export const sendDailySummaryEmailsToOptedInUsers = async (
   reportDate: Date = new Date(),
   allowedEmails?: ReadonlySet<string>
 ) => {
   const users = await prisma.user.findMany({
     where: {
       ...activeUserWhere(),
+      daily_email: true,
       email: { not: null },
       roles: {
         some: {
-          role: UserRole.SUPER_ADMIN,
+          dept_id: OPS_DEPT_ID,
+          role: {
+            in: [
+              UserRole.HEAD_OF_UNIT,
+              UserRole.DOCUMENT_STAFF,
+              UserRole.FINANCE_STAFF,
+              UserRole.GENERAL_STAFF,
+            ],
+          },
         },
       },
     },
