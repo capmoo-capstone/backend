@@ -150,7 +150,7 @@ describe('daily-summary-email.service', () => {
       JSON.stringify(arg.where)
     );
     expect(whereJson).toHaveLength(6);
-    expect(whereJson[0]).toContain('responsible_unit_id');
+    expect(whereJson[0]).toContain('current_workflow_type');
     expect(whereJson[2]).toContain('WAITING_APPROVAL');
     expect(whereJson[3]).toContain('WAITING_CANCEL');
     expect(whereJson[4]).toContain('NOT_STARTED');

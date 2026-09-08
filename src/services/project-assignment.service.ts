@@ -471,11 +471,6 @@ export const returnProject = async (
       select: {
         status: true,
         current_workflow_type: true,
-        _count: {
-          select: {
-            submissions: true,
-          },
-        },
       },
     });
     if (!project) {
@@ -484,7 +479,15 @@ export const returnProject = async (
     if (project.status !== ProjectStatus.IN_PROGRESS) {
       throw new BadRequestError('Only IN_PROGRESS projects can be returned');
     }
-    if (project._count.submissions > 0) {
+
+    const currentWorkflowSubmissionsCount = await tx.projectSubmission.count({
+      where: {
+        project_id: projectId,
+        workflow_type: project.current_workflow_type,
+      },
+    });
+
+    if (currentWorkflowSubmissionsCount > 0) {
       throw new BadRequestError(
         'Cannot return project with existing submissions'
       );

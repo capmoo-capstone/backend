@@ -294,6 +294,9 @@ describe('dashboard.service', () => {
       budget_year: 2569,
       unit: { dept_id: { in: ['dept-1'] } },
     });
+    // Verify inProgressPlans count does not filter project by created_at range
+    const inProgressPlanWhere = prismaMock.budgetPlan.count.mock.calls[2][0].where;
+    expect(inProgressPlanWhere?.project).not.toHaveProperty('created_at');
   });
 
   it('uses global project and budget visibility for DEPT-REG general staff', async () => {

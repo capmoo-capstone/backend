@@ -323,12 +323,12 @@ describe('project-assignment.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it('returnProject removes the assignee and syncs phases when there are no submissions', async () => {
+  it('returnProject removes the assignee and syncs phases when there are no submissions in current workflow', async () => {
     txMock.project.findUnique.mockResolvedValue({
       status: ProjectStatus.IN_PROGRESS,
-      current_workflow_type: UnitResponsibleType.LT100K,
-      _count: { submissions: 0 },
+      current_workflow_type: UnitResponsibleType.CONTRACT,
     });
+    txMock.projectSubmission.count.mockResolvedValue(0);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
       status: ProjectStatus.UNASSIGNED,
@@ -337,10 +337,28 @@ describe('project-assignment.service', () => {
     const result = await returnProject(user, 'project-1');
 
     expect(result.status).toBe(ProjectStatus.UNASSIGNED);
+    expect(txMock.projectSubmission.count).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.CONTRACT,
+      },
+    });
     expect(mockedSyncProjectPhases).toHaveBeenCalledWith(
       txMock,
-      UnitResponsibleType.LT100K,
+      UnitResponsibleType.CONTRACT,
       'project-1'
+    );
+  });
+
+  it('returnProject throws error when submissions exist in current workflow', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+    txMock.projectSubmission.count.mockResolvedValue(1);
+
+    await expect(returnProject(user, 'project-1')).rejects.toBeInstanceOf(
+      BadRequestError
     );
   });
 });

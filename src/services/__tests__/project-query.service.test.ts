@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CONTRACT_UNIT_ID,
   OPS_DEPT_ID,
   PROC1_UNIT_ID,
   REGISTRATION_DEPT_ID,
@@ -455,6 +456,37 @@ describe('project-query.service', () => {
       );
     });
 
+    it('filters head of contract unit waiting_approval across all CONTRACT projects', async () => {
+      const headContractUser = {
+        id: 'head-contract-1',
+        is_delegated: false,
+        delegated_by: [],
+        roles: [
+          {
+            role: UserRole.HEAD_OF_UNIT,
+            dept_id: OPS_DEPT_ID,
+            unit_id: CONTRACT_UNIT_ID,
+          },
+        ],
+      } as any;
+
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: CONTRACT_UNIT_ID, type: [UnitResponsibleType.CONTRACT] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(headContractUser, 1, 10, {
+        tab: OwnProjectTab.WAITING_APPROVAL,
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        `"current_workflow_type":"${UnitResponsibleType.CONTRACT}"`
+      );
+      expect(ownProjectWhereJson()).not.toContain(
+        `"responsible_unit_id":"${CONTRACT_UNIT_ID}"`
+      );
+    });
+
     it('filters head-of-unit waiting_cancel by project status', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
@@ -693,6 +725,24 @@ describe('project-query.service', () => {
 
       expect(ownProjectWhereJson()).toContain('"procurement_completed_at"');
       expect(ownProjectWhereJson()).toContain('"contract_completed_at"');
+    });
+
+    it('includes procurement completed projects forwarded to CONTRACT in completed tab for procurement staff', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(staffUser, 1, 10, {
+        tab: OwnProjectTab.COMPLETED,
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        '"assignee_procurement":{"some":{"id":"staff-1"}}'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"procurement_completed_at":{"not":null}'
+      );
     });
 
     it('applies search query filter on receive_no, title, and assignees', async () => {
