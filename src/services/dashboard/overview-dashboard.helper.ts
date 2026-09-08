@@ -339,7 +339,6 @@ const getPlanSummary = async (
   }
 
   const budgetYear = currentFiscalYear(range.from);
-  const rangeWhere = projectRangeWhere(visibilityWhere, range);
   const baseBudgetWhere = buildBudgetPlanWhere(user, budgetYear, deptId);
 
   const [
@@ -357,7 +356,7 @@ const getPlanSummary = async (
     prisma.budgetPlan.aggregate({
       where: {
         ...baseBudgetWhere,
-        project: andWhere(rangeWhere, {
+        project: andWhere(visibilityWhere, {
           status: { not: ProjectStatus.CANCELLED },
         }),
       },
@@ -371,14 +370,14 @@ const getPlanSummary = async (
         ...baseBudgetWhere,
         OR: [
           { project_id: null },
-          { project: { status: ProjectStatus.CANCELLED } },
+          { project: andWhere(visibilityWhere, { status: ProjectStatus.CANCELLED }) },
         ],
       },
     }),
     prisma.budgetPlan.count({
       where: {
         ...baseBudgetWhere,
-        project: andWhere(rangeWhere, {
+        project: andWhere(visibilityWhere, {
           status: { in: ACTIVE_PLAN_PROJECT_STATUSES },
         }),
       },
@@ -386,7 +385,7 @@ const getPlanSummary = async (
     prisma.budgetPlan.count({
       where: {
         ...baseBudgetWhere,
-        project: andWhere(rangeWhere, { status: ProjectStatus.CLOSED }),
+        project: andWhere(visibilityWhere, { status: ProjectStatus.CLOSED }),
       },
     }),
   ]);
