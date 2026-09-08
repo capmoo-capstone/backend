@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CONTRACT_UNIT_ID,
   OPS_DEPT_ID,
   PROC1_UNIT_ID,
   REGISTRATION_DEPT_ID,
@@ -452,6 +453,37 @@ describe('project-query.service', () => {
       );
       expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.IN_PROGRESS}"`
+      );
+    });
+
+    it('filters head of contract unit waiting_approval across all CONTRACT projects', async () => {
+      const headContractUser = {
+        id: 'head-contract-1',
+        is_delegated: false,
+        delegated_by: [],
+        roles: [
+          {
+            role: UserRole.HEAD_OF_UNIT,
+            dept_id: OPS_DEPT_ID,
+            unit_id: CONTRACT_UNIT_ID,
+          },
+        ],
+      } as any;
+
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: CONTRACT_UNIT_ID, type: [UnitResponsibleType.CONTRACT] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(headContractUser, 1, 10, {
+        tab: OwnProjectTab.WAITING_APPROVAL,
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        `"current_workflow_type":"${UnitResponsibleType.CONTRACT}"`
+      );
+      expect(ownProjectWhereJson()).not.toContain(
+        `"responsible_unit_id":"${CONTRACT_UNIT_ID}"`
       );
     });
 

@@ -198,14 +198,29 @@ const buildGeneralStaffScope = (
 const buildHeadOfUnitScope = (
   units: UnitScope[]
 ): Prisma.ProjectWhereInput | null => {
-  const clauses = units
-    .filter((unit) => unit.type.length > 0)
-    .map((unit) =>
-      andWhere(
-        { responsible_unit_id: unit.id },
-        { current_workflow_type: { in: unit.type } }
-      )
+  const clauses: Prisma.ProjectWhereInput[] = [];
+
+  for (const unit of units) {
+    if (unit.type.length === 0) continue;
+
+    const hasContract = unit.type.includes(UnitResponsibleType.CONTRACT);
+    const nonContractTypes = unit.type.filter(
+      (t) => t !== UnitResponsibleType.CONTRACT
     );
+
+    if (nonContractTypes.length > 0) {
+      clauses.push(
+        andWhere(
+          { responsible_unit_id: unit.id },
+          { current_workflow_type: { in: nonContractTypes } }
+        )
+      );
+    }
+
+    if (hasContract) {
+      clauses.push({ current_workflow_type: UnitResponsibleType.CONTRACT });
+    }
+  }
 
   return clauses.length > 0 ? orWhere(clauses) : null;
 };
