@@ -743,6 +743,9 @@ describe('project-query.service', () => {
       expect(ownProjectWhereJson()).toContain(
         '"procurement_completed_at":{"not":null}'
       );
+      expect(ownProjectWhereJson()).toContain(
+        '"current_workflow_type":"CONTRACT"'
+      );
     });
 
     it('applies search query filter on receive_no, title, and assignees', async () => {

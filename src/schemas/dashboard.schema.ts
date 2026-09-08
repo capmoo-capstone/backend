@@ -152,10 +152,23 @@ export const UnitGroupStaffPerformanceQuerySchema = z
     }
   });
 
-export const IndividualDashboardQuerySchema = z.object({
-  unitId: z.string(),
-  targetUserId: z.string(),
-});
+export const IndividualDashboardQuerySchema = z
+  .object({
+    unitId: z.string(),
+    targetUserId: z.string(),
+    mode: DashboardModeEnum.optional(),
+    dateFrom: DateFromSchema.optional(),
+    dateTo: DateToSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dateFrom && value.dateTo && value.dateFrom > value.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
 
 export const IndividualTodoQuerySchema = z.object({
   targetUserId: z.string(),
@@ -164,9 +177,21 @@ export const IndividualTodoQuerySchema = z.object({
   dateTo: BangkokDateTimeSchema.optional(),
 });
 
-export const IndividualTodoTotalQuerySchema = z.object({
-  targetUserId: z.string(),
-});
+export const IndividualTodoTotalQuerySchema = z
+  .object({
+    targetUserId: z.string(),
+    dateFrom: BangkokDateTimeSchema.optional(),
+    dateTo: BangkokDateTimeSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dateFrom && value.dateTo && value.dateFrom > value.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
 
 export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<

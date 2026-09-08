@@ -12,6 +12,7 @@ import {
   GetInstallmentsQuerySchema,
   GetNewContractNumberSchema,
   GetOwnProjectsQuerySchema,
+  GetOwnProjectsTotalQuerySchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditInstallmentSchema,
@@ -157,7 +158,8 @@ export const getOwnProjectsTotal = async (
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const totals = await ProjectQueryService.getOwnProjectsTotal(payload);
+  const query = GetOwnProjectsTotalQuerySchema.parse(req.query);
+  const totals = await ProjectQueryService.getOwnProjectsTotal(payload, query);
   res.status(200).json(totals);
 };
 

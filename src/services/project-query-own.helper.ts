@@ -12,6 +12,7 @@ import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../utils/constant';
 import { isHeadOfSupplyDept, isSuperAdmin } from '../utils/permissions';
 import {
   GetOwnProjectsQuery,
+  GetOwnProjectsTotalQuery,
 } from '../schemas/project.schema';
 import { OwnProjectTab } from '../types/project.type';
 import { bangkokDayEndUtc, bangkokDayStartUtc } from '../utils/date';
@@ -207,7 +208,15 @@ const buildGeneralStaffCompletedWhere = (
       orWhere([
         { procurement_completed_at: { not: null } },
         { status: ProjectStatus.CLOSED },
-      ])
+      ]),
+      {
+        NOT: {
+          current_workflow_type: UnitResponsibleType.CONTRACT,
+          assignee_contract: { some: { id: user.id } },
+          contract_completed_at: null,
+          status: { not: ProjectStatus.CLOSED },
+        },
+      }
     ),
     andWhere(
       { assignee_contract: { some: { id: user.id } } },
@@ -640,10 +649,15 @@ const resolveOwnProjectStatus = (
     const isProcurementAssignee = (
       project.assignee_procurement as Array<{ id: string }> | undefined
     )?.some((a) => a.id === user.id);
+    const isContractAssignee = (
+      project.assignee_contract as Array<{ id: string }> | undefined
+    )?.some((a) => a.id === user.id);
+
     if (
       isProcurementAssignee &&
       project.procurement_completed_at &&
-      project.current_workflow_type === UnitResponsibleType.CONTRACT
+      project.current_workflow_type === UnitResponsibleType.CONTRACT &&
+      !isContractAssignee
     ) {
       return 'COMPLETED';
     }
@@ -786,7 +800,8 @@ const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
 };
 
 export const getOwnProjectsTotal = async (
-  user: AuthPayload
+  user: AuthPayload,
+  query?: GetOwnProjectsTotalQuery
 ): Promise<Record<string, number>> => {
   const tabs = getApplicableTabs(user);
   if (tabs.length === 0) {
@@ -796,7 +811,11 @@ export const getOwnProjectsTotal = async (
   const whereEntries = await Promise.all(
     tabs.map(async (tab) => ({
       tab,
-      where: await ownProjectWhereClause(user, { tab }),
+      where: await ownProjectWhereClause(user, {
+        tab,
+        dateFrom: query?.dateFrom,
+        dateTo: query?.dateTo,
+      }),
     }))
   );
 
