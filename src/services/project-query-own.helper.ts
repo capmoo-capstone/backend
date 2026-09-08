@@ -12,6 +12,7 @@ import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../utils/constant';
 import { isHeadOfSupplyDept, isSuperAdmin } from '../utils/permissions';
 import {
   GetOwnProjectsQuery,
+  GetOwnProjectsTotalQuery,
 } from '../schemas/project.schema';
 import { OwnProjectTab } from '../types/project.type';
 import { bangkokDayEndUtc, bangkokDayStartUtc } from '../utils/date';
@@ -799,7 +800,8 @@ const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
 };
 
 export const getOwnProjectsTotal = async (
-  user: AuthPayload
+  user: AuthPayload,
+  query?: GetOwnProjectsTotalQuery
 ): Promise<Record<string, number>> => {
   const tabs = getApplicableTabs(user);
   if (tabs.length === 0) {
@@ -809,7 +811,11 @@ export const getOwnProjectsTotal = async (
   const whereEntries = await Promise.all(
     tabs.map(async (tab) => ({
       tab,
-      where: await ownProjectWhereClause(user, { tab }),
+      where: await ownProjectWhereClause(user, {
+        tab,
+        dateFrom: query?.dateFrom,
+        dateTo: query?.dateTo,
+      }),
     }))
   );
 

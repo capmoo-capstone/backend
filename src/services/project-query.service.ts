@@ -31,6 +31,7 @@ import {
 import { hasOrganizationWideReadAccess } from '../utils/access-policy';
 import {
   GetOwnProjectsQuery,
+  GetOwnProjectsTotalQuery,
   ProjectFilterQuery,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
@@ -762,9 +763,10 @@ export const getOwnProjects = async (
 };
 
 export const getOwnProjectsTotal = async (
-  user: AuthPayload
+  user: AuthPayload,
+  query?: GetOwnProjectsTotalQuery
 ): Promise<Record<string, number>> => {
-  return getOwnProjectsTotalFromHelper(user);
+  return getOwnProjectsTotalFromHelper(user, query);
 };
 
 const aggregateByStaff = (

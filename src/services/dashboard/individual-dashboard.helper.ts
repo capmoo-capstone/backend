@@ -1,4 +1,5 @@
 import {
+  Prisma,
   ProcurementType,
   ProjectStatus,
   UnitResponsibleType,
@@ -29,6 +30,26 @@ type CompletedPhase = {
   startedAt: Date;
   completedAt: Date;
   assigneeIds: string[];
+};
+
+const isCompletedInRange = (
+  startedAt: Date | null | undefined,
+  completedAt: Date | null | undefined,
+  range?: { from: Date; to: Date }
+): boolean => {
+  if (!startedAt || !completedAt) return false;
+  if (!range) return true;
+  return completedAt >= range.from && completedAt <= range.to;
+};
+
+const isInProgressInRange = (
+  startedAt: Date | null | undefined,
+  completedAt: Date | null | undefined,
+  range?: { from: Date; to: Date }
+): boolean => {
+  if (!startedAt) return false;
+  if (!range) return !completedAt;
+  return startedAt <= range.to && (!completedAt || completedAt > range.to);
 };
 
 export const getIndividualStaffTodo = async (
@@ -78,7 +99,10 @@ export const getIndividualStaffTodoTotal = async (
     ...target.authData,
   };
 
-  return getOwnProjectsTotal(targetUser);
+  return getOwnProjectsTotal(targetUser, {
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+  });
 };
 
 export const getIndividualStaffDashboard = async (
@@ -114,24 +138,35 @@ export const getIndividualStaffDashboard = async (
     throw new NotFoundError('Staff user not found in this unit');
   }
 
+  const dateFrom = query.dateFrom;
+  const dateTo = query.dateTo;
+  const range = dateFrom && dateTo ? { from: dateFrom, to: dateTo } : undefined;
+
+  const procurementPhaseFilter: Prisma.ProjectWhereInput = {
+    procurement_unit_id: unitId,
+    assignee_procurement: { some: { id: staffUser.id } },
+    ...(dateTo ? { procurement_started_at: { lte: dateTo } } : {}),
+  };
+
+  const contractPhaseFilter: Prisma.ProjectWhereInput = {
+    contract_unit_id: unitId,
+    assignee_contract: { some: { id: staffUser.id } },
+    ...(dateTo ? { contract_started_at: { lte: dateTo } } : {}),
+  };
+
   const staffProjects = await prisma.project.findMany({
     where: {
       status: { not: ProjectStatus.CANCELLED },
-      OR: [
-        {
-          procurement_unit_id: unitId,
-          assignee_procurement: { some: { id: staffUser.id } },
-        },
-        {
-          contract_unit_id: unitId,
-          assignee_contract: { some: { id: staffUser.id } },
-        },
-      ],
+      OR: [procurementPhaseFilter, contractPhaseFilter],
     },
     select: {
       procurement_type: true,
       procurement_unit_id: true,
       contract_unit_id: true,
+      procurement_started_at: true,
+      procurement_completed_at: true,
+      contract_started_at: true,
+      contract_completed_at: true,
       assignee_procurement: { select: { id: true } },
       assignee_contract: { select: { id: true } },
     },
@@ -145,19 +180,43 @@ export const getIndividualStaffDashboard = async (
         (assignee) => assignee.id === staffUser.id
       )
     ) {
-      staffTypeCounts.set(
-        project.procurement_type,
-        (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
+      const isCompleted = isCompletedInRange(
+        project.procurement_started_at,
+        project.procurement_completed_at,
+        range
       );
+      const isInProgress = isInProgressInRange(
+        project.procurement_started_at,
+        project.procurement_completed_at,
+        range
+      );
+      if (!range || isCompleted || isInProgress) {
+        staffTypeCounts.set(
+          project.procurement_type,
+          (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
+        );
+      }
     }
     if (
       project.contract_unit_id === unitId &&
       project.assignee_contract.some((assignee) => assignee.id === staffUser.id)
     ) {
-      staffTypeCounts.set(
-        project.procurement_type,
-        (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
+      const isCompleted = isCompletedInRange(
+        project.contract_started_at,
+        project.contract_completed_at,
+        range
       );
+      const isInProgress = isInProgressInRange(
+        project.contract_started_at,
+        project.contract_completed_at,
+        range
+      );
+      if (!range || isCompleted || isInProgress) {
+        staffTypeCounts.set(
+          project.procurement_type,
+          (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
+        );
+      }
     }
   }
 
@@ -179,12 +238,16 @@ export const getIndividualStaffDashboard = async (
         {
           procurement_unit_id: unitId,
           procurement_started_at: { not: null },
-          procurement_completed_at: { not: null },
+          procurement_completed_at: range
+            ? { gte: range.from, lte: range.to }
+            : { not: null },
         },
         {
           contract_unit_id: unitId,
           contract_started_at: { not: null },
-          contract_completed_at: { not: null },
+          contract_completed_at: range
+            ? { gte: range.from, lte: range.to }
+            : { not: null },
         },
       ],
     },

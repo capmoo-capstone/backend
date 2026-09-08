@@ -1112,6 +1112,70 @@ describe('dashboard.service', () => {
           ])
         );
       });
+
+      it('applies date range filtering in getIndividualStaffDashboard', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+          dept_id: OPS_DEPT_ID,
+          name: 'Procurement Unit',
+          type: [UnitResponsibleType.LT100K],
+        } as any);
+
+        prismaMock.user.findFirst.mockResolvedValue({
+          id: 'staff-1',
+          full_name: 'Somchai Jaidee',
+        } as any);
+
+        prismaMock.holiday.findMany.mockResolvedValue([]);
+
+        prismaMock.project.findMany
+          .mockResolvedValueOnce([
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_unit_id: 'unit-proc',
+              contract_unit_id: null,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-05T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-1' }],
+              assignee_contract: [],
+            },
+          ] as any)
+          .mockResolvedValueOnce([
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_unit_id: 'unit-proc',
+              contract_unit_id: null,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-05T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-1' }],
+              assignee_contract: [],
+            },
+          ] as any);
+
+        const result = await DashboardService.getIndividualStaffDashboard(
+          supplyUser,
+          {
+            unitId: 'unit-proc',
+            targetUserId: 'staff-1',
+            mode: 'month',
+            dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+            dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          }
+        );
+
+        expect(result.procurementMethodMetrics.total).toBe(1);
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              status: { not: ProjectStatus.CANCELLED },
+            }),
+          })
+        );
+      });
     });
   });
 });

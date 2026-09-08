@@ -16,6 +16,11 @@ export const GetOwnProjectsQuerySchema = z.object({
   dateTo: BangkokDateTimeSchema.optional(),
 });
 
+export const GetOwnProjectsTotalQuerySchema = z.object({
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
+});
+
 export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
@@ -184,4 +189,7 @@ export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
 export type GetOwnProjectsQuery = z.infer<typeof GetOwnProjectsQuerySchema>;
+export type GetOwnProjectsTotalQuery = z.infer<
+  typeof GetOwnProjectsTotalQuerySchema
+>;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;
