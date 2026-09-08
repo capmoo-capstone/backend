@@ -55,6 +55,8 @@ jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: build-and-push
 
     steps:
@@ -96,7 +98,8 @@ jobs:
             sudo install -m 0644 ops/systemd/nexus-procure-daily-summary-email.timer /etc/systemd/system/
             sudo systemctl daemon-reload
             sudo systemctl enable --now nexus-procure-process-deadlines.timer nexus-procure-contract-committee-reminders.timer nexus-procure-daily-summary-email.timer
-            sudo systemctl is-active nexus-procure-process-deadlines.timer nexus-procure-contract-committee-reminders.timer nexus-procure-daily-summary-email.timer
+            sudo systemctl is-active nexus-procure-process-deadlines.timer nexus-procure-contract-committee-reminders.timer nexus-procure-daily-summary-email.timer
+
 
             # Pull the latest image
             docker compose -f docker-compose.prod.yaml --env-file .env.production pull
