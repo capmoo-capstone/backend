@@ -145,13 +145,11 @@ export const getIndividualStaffDashboard = async (
   const procurementPhaseFilter: Prisma.ProjectWhereInput = {
     procurement_unit_id: unitId,
     assignee_procurement: { some: { id: staffUser.id } },
-    ...(dateTo ? { procurement_started_at: { lte: dateTo } } : {}),
   };
 
   const contractPhaseFilter: Prisma.ProjectWhereInput = {
     contract_unit_id: unitId,
     assignee_contract: { some: { id: staffUser.id } },
-    ...(dateTo ? { contract_started_at: { lte: dateTo } } : {}),
   };
 
   const staffProjects = await prisma.project.findMany({
@@ -172,62 +170,13 @@ export const getIndividualStaffDashboard = async (
     },
   });
 
-  const staffTypeCounts = new Map<ProcurementType, number>();
-  for (const project of staffProjects) {
-    if (
-      project.procurement_unit_id === unitId &&
-      project.assignee_procurement.some(
-        (assignee) => assignee.id === staffUser.id
-      )
-    ) {
-      const isCompleted = isCompletedInRange(
-        project.procurement_started_at,
-        project.procurement_completed_at,
-        range
-      );
-      const isInProgress = isInProgressInRange(
-        project.procurement_started_at,
-        project.procurement_completed_at,
-        range
-      );
-      if (!range || isCompleted || isInProgress) {
-        staffTypeCounts.set(
-          project.procurement_type,
-          (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
-        );
-      }
-    }
-    if (
-      project.contract_unit_id === unitId &&
-      project.assignee_contract.some((assignee) => assignee.id === staffUser.id)
-    ) {
-      const isCompleted = isCompletedInRange(
-        project.contract_started_at,
-        project.contract_completed_at,
-        range
-      );
-      const isInProgress = isInProgressInRange(
-        project.contract_started_at,
-        project.contract_completed_at,
-        range
-      );
-      if (!range || isCompleted || isInProgress) {
-        staffTypeCounts.set(
-          project.procurement_type,
-          (staffTypeCounts.get(project.procurement_type) ?? 0) + 1
-        );
-      }
-    }
-  }
-
   const procurementMethodMetrics = {
-    total: [...staffTypeCounts.values()].reduce(
-      (total, count) => total + count,
-      0
-    ),
+    total: staffProjects.length,
     byProcurementType: Object.values(ProcurementType).map((type) => ({
       type,
-      count: staffTypeCounts.get(type) ?? 0,
+      count: staffProjects.filter(
+        (project) => project.procurement_type === type
+      ).length,
     })),
   };
 
