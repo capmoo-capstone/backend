@@ -30,6 +30,7 @@ export type OwnProjectRole = OwnRole;
 type RoleScope = {
   role: OwnRole;
   where: Prisma.ProjectWhereInput;
+  completedWhere?: Prisma.ProjectWhereInput;
 };
 
 export type OwnProjectRoleScope = RoleScope;
@@ -66,6 +67,8 @@ const PROJECT_SELECT = {
   budget: true,
   procurement_type: true,
   current_workflow_type: true,
+  procurement_completed_at: true,
+  contract_completed_at: true,
   assignee_procurement: { select: { id: true, full_name: true } },
   assignee_contract: { select: { id: true, full_name: true } },
   is_urgent: true,
@@ -195,6 +198,26 @@ const buildGeneralStaffScope = (
   return clauses.length > 0 ? orWhere(clauses) : null;
 };
 
+const buildGeneralStaffCompletedWhere = (
+  user: AuthPayload
+): Prisma.ProjectWhereInput =>
+  orWhere([
+    andWhere(
+      { assignee_procurement: { some: { id: user.id } } },
+      orWhere([
+        { procurement_completed_at: { not: null } },
+        { status: ProjectStatus.CLOSED },
+      ])
+    ),
+    andWhere(
+      { assignee_contract: { some: { id: user.id } } },
+      orWhere([
+        { contract_completed_at: { not: null } },
+        { status: ProjectStatus.CLOSED },
+      ])
+    ),
+  ]);
+
 const buildHeadOfUnitScope = (
   units: UnitScope[]
 ): Prisma.ProjectWhereInput | null => {
@@ -269,7 +292,11 @@ export const buildOwnProjectRoleScopes = async (
       roleUnits.get(UserRole.GENERAL_STAFF) ?? []
     );
     if (generalScope) {
-      scopes.push({ role: UserRole.GENERAL_STAFF, where: generalScope });
+      scopes.push({
+        role: UserRole.GENERAL_STAFF,
+        where: generalScope,
+        completedWhere: buildGeneralStaffCompletedWhere(user),
+      });
     }
   }
 
@@ -375,13 +402,16 @@ export const buildOwnProjectRoleTabWhere = (
       );
     }
     if (tab === 'completed') {
-      return andWhere(
-        scope.where,
-        orWhere([
-          { status: ProjectStatus.CLOSED },
-          { procurement_completed_at: { not: null } },
-          { contract_completed_at: { not: null } },
-        ])
+      return (
+        scope.completedWhere ??
+        andWhere(
+          scope.where,
+          orWhere([
+            { status: ProjectStatus.CLOSED },
+            { procurement_completed_at: { not: null } },
+            { contract_completed_at: { not: null } },
+          ])
+        )
       );
     }
   }
@@ -600,6 +630,19 @@ const resolveOwnProjectStatus = (
   ) as Record<string, { status?: ProjectPhaseStatus }> | undefined;
 
   if (roles.includes(UserRole.GENERAL_STAFF)) {
+    if (project.status === ProjectStatus.CLOSED) {
+      return 'COMPLETED';
+    }
+    const isProcurementAssignee = (
+      project.assignee_procurement as Array<{ id: string }> | undefined
+    )?.some((a) => a.id === user.id);
+    if (
+      isProcurementAssignee &&
+      project.procurement_completed_at &&
+      project.current_workflow_type === UnitResponsibleType.CONTRACT
+    ) {
+      return 'COMPLETED';
+    }
     if (project.status === ProjectStatus.WAITING_ACCEPT) {
       return 'WAITING_ACCEPT';
     }
@@ -691,20 +734,27 @@ export const getOwnProjects = async (
     prisma.project.count({ where: whereClause }),
   ]);
 
-  const data = projects.map((project) => ({
-    title: project.title,
-    id: project.id,
-    status: resolveOwnProjectStatus(project, user, tab),
-    receive_no: project.receive_no,
-    procurement_type: project.procurement_type,
-    expected_approval_date: project.expected_approval_date,
-    requesting_dept: project.requesting_dept,
-    requesting_unit: project.requesting_unit,
-    assignee:
-      project.current_workflow_type === UnitResponsibleType.CONTRACT
-        ? project.assignee_contract
-        : project.assignee_procurement,
-  }));
+  const data = projects.map((project) => {
+    const isProcurementAssignee = (
+      project.assignee_procurement as Array<{ id: string }> | undefined
+    )?.some((a) => a.id === user.id);
+
+    return {
+      title: project.title,
+      id: project.id,
+      status: resolveOwnProjectStatus(project, user, tab),
+      receive_no: project.receive_no,
+      procurement_type: project.procurement_type,
+      expected_approval_date: project.expected_approval_date,
+      requesting_dept: project.requesting_dept,
+      requesting_unit: project.requesting_unit,
+      assignee:
+        project.current_workflow_type === UnitResponsibleType.CONTRACT &&
+        !(isProcurementAssignee && tab === 'completed')
+          ? project.assignee_contract
+          : project.assignee_procurement,
+    };
+  });
 
   return {
     total,

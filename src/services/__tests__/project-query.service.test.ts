@@ -727,6 +727,24 @@ describe('project-query.service', () => {
       expect(ownProjectWhereJson()).toContain('"contract_completed_at"');
     });
 
+    it('includes procurement completed projects forwarded to CONTRACT in completed tab for procurement staff', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(staffUser, 1, 10, {
+        tab: OwnProjectTab.COMPLETED,
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        '"assignee_procurement":{"some":{"id":"staff-1"}}'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"procurement_completed_at":{"not":null}'
+      );
+    });
+
     it('applies search query filter on receive_no, title, and assignees', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
