@@ -286,8 +286,42 @@ describe('project-query.service', () => {
     );
   });
 
-  describe('getOwnProjects role tabs', () => {
+  it('getAssignedProjects allows proc head to see projects even if current_workflow_type is CONTRACT and shows proc assignee', async () => {
+    prismaMock.unit.findMany.mockResolvedValue([
+      { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+    ]);
+    const contractPhaseProject = {
+      ...projectRow,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      procurement_unit_id: PROC1_UNIT_ID,
+      contract_unit_id: 'CONTRACT_UNIT_ID',
+      assignee_procurement: [{ id: 'staff-1', full_name: 'Proc Staff' }],
+      assignee_contract: [{ id: 'staff-2', full_name: 'Contract Staff' }],
+    };
+    prismaMock.project.findMany.mockResolvedValue([contractPhaseProject]);
+    prismaMock.project.count.mockResolvedValue(1);
 
+    const result = await getAssignedProjects(
+      headUnitUser,
+      new Date('2026-06-01')
+    );
+
+    expect((result.data[0] as any).assignee).toEqual([
+      { id: 'staff-2', full_name: 'Contract Staff' },
+    ]);
+    expect(prismaMock.project.findMany.mock.calls[0][0].where.AND).toEqual(
+      expect.arrayContaining([
+        {
+          OR: [
+            { responsible_unit_id: { in: [PROC1_UNIT_ID] } },
+            { procurement_unit_id: { in: [PROC1_UNIT_ID] } },
+          ],
+        },
+      ])
+    );
+  });
+
+  describe('getOwnProjects role tabs', () => {
     it('combines general staff tab conditions on the all tab', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
@@ -333,7 +367,9 @@ describe('project-query.service', () => {
           ...projectRow,
           current_workflow_type: UnitResponsibleType.CONTRACT,
           assignee_procurement: [{ id: 'staff-1', full_name: 'Staff One' }],
-          assignee_contract: [{ id: 'contract-staff-1', full_name: 'Contract Staff' }],
+          assignee_contract: [
+            { id: 'contract-staff-1', full_name: 'Contract Staff' },
+          ],
         },
       ]);
       prismaMock.project.count.mockResolvedValue(1);

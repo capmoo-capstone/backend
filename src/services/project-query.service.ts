@@ -477,9 +477,7 @@ export const getUnassignedProjectsByUnit = async (
     !isHeadOfSupplyDept(user) &&
     !userUnitIds.includes(unitId)
   ) {
-    throw new ForbiddenError(
-      'You do not have permission to access this unit'
-    );
+    throw new ForbiddenError('You do not have permission to access this unit');
   }
 
   const where: Prisma.ProjectWhereInput = {
@@ -598,16 +596,31 @@ export const getAssignedProjects = async (
             in: unitIds,
           },
         },
-        select: { type: true },
+        select: { id: true, type: true },
       });
       if (unit.length === 0) {
         throw new NotFoundError('Unit not found');
       }
 
+      const unitTypes = unit.flatMap((u) => u.type);
+      const isContractHead = unitTypes.includes(UnitResponsibleType.CONTRACT);
+      const isProcHead = unitTypes.some(
+        (t) => t !== UnitResponsibleType.CONTRACT
+      );
+
+      const unitConditions: Prisma.ProjectWhereInput[] = [
+        { responsible_unit_id: { in: unitIds } },
+      ];
+
+      if (isProcHead) {
+        unitConditions.push({ procurement_unit_id: { in: unitIds } });
+      }
+      if (isContractHead) {
+        unitConditions.push({ contract_unit_id: { in: unitIds } });
+      }
+
       where.AND.push({
-        current_workflow_type: {
-          in: unit.flatMap((u) => u.type),
-        },
+        OR: unitConditions,
       });
     } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
       where.AND.push({
@@ -628,6 +641,8 @@ export const getAssignedProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        procurement_unit_id: true,
+        contract_unit_id: true,
         requesting_dept: {
           select: {
             id: true,
