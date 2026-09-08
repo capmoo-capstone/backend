@@ -610,6 +610,10 @@ const resolveOwnProjectStatus = (
     current_workflow_type: UnitResponsibleType;
     procurement_progress?: unknown;
     contract_progress?: unknown;
+    procurement_completed_at?: Date | null;
+    contract_completed_at?: Date | null;
+    assignee_procurement?: Array<{ id: string }>;
+    assignee_contract?: Array<{ id: string }>;
     project_installments?: Array<{ status: ProjectInstallmentStatus }>;
   },
   user: AuthPayload,
