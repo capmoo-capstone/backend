@@ -1,4 +1,8 @@
-import { ProcurementType, UnitResponsibleType } from '@prisma/client';
+import {
+  ProcurementType,
+  ProjectStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { NotFoundError } from '../../utils/errors';
 import {
@@ -112,6 +116,7 @@ export const getIndividualStaffDashboard = async (
 
   const staffProjects = await prisma.project.findMany({
     where: {
+      status: { not: ProjectStatus.CANCELLED },
       OR: [
         {
           procurement_unit_id: unitId,
@@ -169,6 +174,7 @@ export const getIndividualStaffDashboard = async (
 
   const completedProjects = await prisma.project.findMany({
     where: {
+      status: { not: ProjectStatus.CANCELLED },
       OR: [
         {
           procurement_unit_id: unitId,
