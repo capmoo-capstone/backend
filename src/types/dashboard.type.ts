@@ -139,9 +139,7 @@ export interface TopDelayedProjectItem {
   stageBreakdownDays: {
     assignmentDays: number;
     procurementDays: number;
-    contractDays: number;
     approvalDays: number;
-    financeDays: number;
   };
 }
 

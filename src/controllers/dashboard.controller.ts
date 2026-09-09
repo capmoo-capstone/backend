@@ -101,9 +101,7 @@ export const getUnitGroupTopDelayedProjects = async (
         stageBreakdownDays: {
           assignmentDays: 2,
           procurementDays: 8,
-          contractDays: 0,
-          approvalDays: 2,
-          financeDays: 0
+          approvalDays: 2
         }
       }]
     }

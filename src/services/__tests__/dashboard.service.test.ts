@@ -538,18 +538,14 @@ describe('dashboard.service', () => {
         stageBreakdownDays: {
           assignmentDays: 22,
           procurementDays: 0,
-          contractDays: 0,
           approvalDays: 2,
-          financeDays: 0,
         },
       });
       const project = result.projects[0];
       expect(
         project.stageBreakdownDays.assignmentDays +
           project.stageBreakdownDays.procurementDays +
-          project.stageBreakdownDays.contractDays +
-          project.stageBreakdownDays.approvalDays +
-          project.stageBreakdownDays.financeDays
+          project.stageBreakdownDays.approvalDays
       ).toBe(project.totalDays);
     });
 
@@ -561,12 +557,9 @@ describe('dashboard.service', () => {
           title: 'Waiting for contract',
           procurement_type: ProcurementType.LT100K,
           procurement_unit_id: 'unit-proc',
-          contract_unit_id: 'unit-other',
           created_at: new Date('2026-07-01T00:00:00.000Z'),
           procurement_started_at: new Date('2026-07-02T00:00:00.000Z'),
           procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
-          contract_started_at: null,
-          contract_completed_at: null,
           submissions: [],
         },
       ]);
@@ -587,47 +580,31 @@ describe('dashboard.service', () => {
         stageBreakdownDays: {
           assignmentDays: 1,
           procurementDays: 2,
-          contractDays: 0,
           approvalDays: 0,
-          financeDays: 0,
         },
       });
     });
 
-    it('counts assignmentDays from procurement_completed_at when contract_started_at is null in contract unit', async () => {
+    it('queries top delayed projects for procurement_unit_id only', async () => {
       prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany.mockResolvedValueOnce([
         {
-          id: 'p-contract-unassigned',
-          title: 'Unassigned Contract Project',
+          id: 'p-proc-delayed',
+          title: 'Procurement Delayed Project',
           procurement_type: ProcurementType.LT100K,
-          procurement_unit_id: 'unit-other',
-          contract_unit_id: 'unit-contract',
+          procurement_unit_id: 'unit-proc',
+          status: ProjectStatus.IN_PROGRESS,
           created_at: new Date('2026-07-01T00:00:00.000Z'),
-          procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
-          procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
-          contract_started_at: null,
-          contract_completed_at: null,
+          procurement_started_at: new Date('2026-07-03T00:00:00.000Z'),
+          procurement_completed_at: null,
           submissions: [],
-          project_histories: [],
         },
       ]);
 
       const result = await DashboardService.getUnitGroupTopDelayedProjects(
+        staffUser,
         {
-          ...staffUser,
-          roles: [
-            {
-              role: UserRole.GENERAL_STAFF,
-              dept_id: 'dept-1',
-              dept_name: 'Dept',
-              unit_id: 'unit-contract',
-              unit_name: 'Contract Unit',
-            },
-          ],
-        },
-        {
-          unitId: 'unit-contract',
+          unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
           mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
@@ -635,10 +612,16 @@ describe('dashboard.service', () => {
         }
       );
 
+      expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            procurement_unit_id: 'unit-proc',
+            status: { not: ProjectStatus.CANCELLED },
+          }),
+        })
+      );
       expect(result.projects).toHaveLength(1);
-      const project = result.projects[0];
-      expect(project.stageBreakdownDays.contractDays).toBe(0);
-      expect(project.stageBreakdownDays.assignmentDays).toBe(project.totalDays);
+      expect(result.projects[0].projectId).toBe('p-proc-delayed');
     });
 
     it('aggregates completed phase durations for all current unit staff', async () => {
