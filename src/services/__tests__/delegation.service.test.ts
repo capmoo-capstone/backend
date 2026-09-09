@@ -1,5 +1,5 @@
 import { UserRole } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPS_DEPT_ID } from '../../utils/constant';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import * as NotificationRealtimeService from '../notification/notification-realtime.service';
@@ -23,6 +23,10 @@ describe('delegation.service', () => {
     vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
     mockedGetUserById.mockReset();
     mockedGetUserById.mockResolvedValue({ id: 'user-1' } as any);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('addDelegation creates a delegation and updates role_updated_at', async () => {
