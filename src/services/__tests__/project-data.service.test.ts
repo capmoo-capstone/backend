@@ -1,4 +1,8 @@
-import { AppError, BadRequestError, NotFoundError } from '../../utils/errors';
+import {
+  BadRequestError,
+  NotFoundError,
+  BatchOperationError,
+} from '../../utils/errors';
 import {
   ProcurementType,
   ProjectStatus,
@@ -203,48 +207,110 @@ describe('project-data.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it('rejects duplicate PR numbers inside one import request', async () => {
-    await expect(
-      importProjects(user, [
+  it('rejects duplicate PR numbers inside one import request with Batch Operation Error', async () => {
+    mockResponsibleUnit();
+    try {
+      await importProjects(user, [
         createProjectDto({ pr_no: 'PR-DUP', less_no: 'L1' }),
         createProjectDto({ pr_no: 'PR-DUP', less_no: 'L2' }),
-      ])
-    ).rejects.toBeInstanceOf(BadRequestError);
+      ]);
+      expect.fail('Expected importProjects to throw BatchOperationError');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BatchOperationError);
+      expect(err.statusCode).toBe(400);
+      expect(err.message).toBe('Batch Operation Error');
+      expect(err.error).toEqual([
+        { code: 'DUPLICATE_PR_NO', id: ['PR-DUP'] },
+      ]);
+    }
   });
 
-  it('rejects duplicate PO numbers inside one import request', async () => {
-    await expect(
-      importProjects(user, [
-        createProjectDto({ po_no: 'PO-DUP' }),
-        createProjectDto({ po_no: 'PO-DUP' }),
-      ])
-    ).rejects.toBeInstanceOf(BadRequestError);
+  it('rejects duplicate PO numbers inside one import request with Batch Operation Error', async () => {
+    mockResponsibleUnit();
+    try {
+      await importProjects(user, [
+        createProjectDto({ pr_no: 'PR-PO-1', less_no: 'L-PO-1', po_no: 'PO-DUP' }),
+        createProjectDto({ pr_no: 'PR-PO-2', less_no: 'L-PO-2', po_no: 'PO-DUP' }),
+      ]);
+      expect.fail('Expected importProjects to throw BatchOperationError');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BatchOperationError);
+      expect(err.statusCode).toBe(400);
+      expect(err.message).toBe('Batch Operation Error');
+      expect(err.error).toEqual([
+        { code: 'DUPLICATE_PO_NO', id: ['PO-DUP'] },
+      ]);
+    }
+  });
+
+  it('aggregates multiple batch errors (duplicate PRs, duplicate POs, missing unit) in importProjects', async () => {
+    txMock.unit.findMany.mockResolvedValue([]);
+    try {
+      await importProjects(user, [
+        createProjectDto({ title: 'Project A', pr_no: 'PR-DUP-1', po_no: 'PO-DUP-1' }),
+        createProjectDto({ title: 'Project B', pr_no: 'PR-DUP-1', po_no: 'PO-DUP-1' }),
+      ]);
+      expect.fail('Expected importProjects to throw BatchOperationError');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BatchOperationError);
+      expect(err.statusCode).toBe(400);
+      expect(err.message).toBe('Batch Operation Error');
+      expect(err.error).toEqual(
+        expect.arrayContaining([
+          { code: 'RESPONSIBLE_UNIT_NOT_FOUND', id: ['Project A', 'Project B'] },
+          { code: 'DUPLICATE_PR_NO', id: ['PR-DUP-1'] },
+          { code: 'DUPLICATE_PO_NO', id: ['PO-DUP-1'] },
+        ])
+      );
+    }
   });
 
   it('rejects an existing PR or LESS conflict from the database', async () => {
-    txMock.project.findFirst.mockResolvedValue({
-      id: 'existing-project',
-      pr_no: 'PR-1',
-      less_no: null,
-      po_no: null,
-    });
+    txMock.project.findMany.mockResolvedValue([
+      {
+        id: 'existing-project',
+        pr_no: 'PR-1',
+        less_no: null,
+        po_no: null,
+        migo_103_no: null,
+        migo_105_no: null,
+      },
+    ]);
 
-    await expect(
-      createProject(user, createProjectDto())
-    ).rejects.toBeInstanceOf(AppError);
+    try {
+      await createProject(user, createProjectDto());
+      expect.fail('Expected createProject to throw BatchOperationError');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BatchOperationError);
+      expect(err.statusCode).toBe(400);
+      expect(err.error).toEqual([
+        { code: 'DUPLICATE_PR_NO', id: ['PR-1'] },
+      ]);
+    }
   });
 
   it('rejects an existing PO conflict from the database', async () => {
-    txMock.project.findFirst.mockResolvedValue({
-      id: 'existing-project',
-      pr_no: null,
-      less_no: null,
-      po_no: 'PO-1',
-    });
+    txMock.project.findMany.mockResolvedValue([
+      {
+        id: 'existing-project',
+        pr_no: null,
+        less_no: null,
+        po_no: 'PO-1',
+        migo_103_no: null,
+        migo_105_no: null,
+      },
+    ]);
 
-    await expect(
-      createProject(user, createProjectDto({ po_no: 'PO-1' }))
-    ).rejects.toThrow('Duplicate PO number: PO-1');
+    try {
+      await createProject(user, createProjectDto({ po_no: 'PO-1' }));
+      expect.fail('Expected createProject to throw BatchOperationError');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BatchOperationError);
+      expect(err.statusCode).toBe(400);
+      expect(err.error).toEqual([
+        { code: 'DUPLICATE_PO_NO', id: ['PO-1'] },
+      ]);
+    }
   });
 
   it('rejects missing budget plans before creating the project', async () => {

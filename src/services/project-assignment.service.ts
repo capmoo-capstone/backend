@@ -4,7 +4,13 @@ import {
   ProjectActionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError, BadRequestError } from '../utils/errors';
+import {
+  NotFoundError,
+  BadRequestError,
+  BatchErrorEntry,
+  groupBatchErrors,
+  BatchOperationError,
+} from '../utils/errors';
 import { syncProjectPhases } from '../utils/phase-status';
 import { AuthPayload } from '../types/auth.type';
 import { PersistedNotificationResult } from '../types/notification.type';
@@ -69,27 +75,63 @@ export const assignProjectsToUser = async (
     const projectMap = new Map(projects.map((p) => [p.id, p]));
     const assigneeMap = new Map(assignees.map((a) => [a.id, a]));
 
-    const updatePromises = [];
-    const historyPromises = [];
-    const notificationPromises: Promise<PersistedNotificationResult[]>[] = [];
+    const errors: BatchErrorEntry[] = [];
 
     for (const item of data) {
       const { id, userId: assigneeId } = item;
       const project = projectMap.get(id);
       const assignee = assigneeMap.get(assigneeId);
 
-      if (!project) throw new NotFoundError(`Project ${id} not found`);
-      if (!assignee)
-        throw new NotFoundError(`Assignee ${assigneeId} not found`);
+      if (!project) {
+        errors.push({
+          code: 'PROJECT_NOT_FOUND',
+          id,
+        });
+        continue;
+      }
+      if (!assignee) {
+        errors.push({
+          code: 'ASSIGNEE_NOT_FOUND',
+          id,
+        });
+        continue;
+      }
       if (project.status !== ProjectStatus.UNASSIGNED) {
-        throw new BadRequestError(`Project ${id} is not unassigned`);
+        errors.push({
+          code: 'PROJECT_NOT_UNASSIGNED',
+          id,
+        });
+        continue;
       }
 
       const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
       if ((project as any)[assigneeField].length > 0) {
-        throw new BadRequestError(`Project ${id} is already assigned`);
+        errors.push({
+          code: 'ALREADY_ASSIGNED',
+          id,
+        });
+        continue;
       }
+    }
+
+    if (errors.length > 0) {
+      throw new BatchOperationError(
+        'Batch Operation Error',
+        groupBatchErrors(errors),
+        400
+      );
+    }
+
+    const updatePromises = [];
+    const historyPromises = [];
+    const notificationPromises: Promise<PersistedNotificationResult[]>[] = [];
+
+    for (const item of data) {
+      const { id, userId: assigneeId } = item;
+      const project = projectMap.get(id)!;
+      const assignee = assigneeMap.get(assigneeId)!;
+      const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
       const shouldStartProcurement =
         project.current_workflow_type !== UnitResponsibleType.CONTRACT &&

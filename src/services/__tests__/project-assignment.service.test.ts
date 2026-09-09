@@ -1,6 +1,6 @@
 import { ProjectStatus, UnitResponsibleType } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError } from '../../utils/errors';
+import { BadRequestError, BatchOperationError } from '../../utils/errors';
 import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock } from '../../test/prisma-mock';
 import {
@@ -360,5 +360,88 @@ describe('project-assignment.service', () => {
     await expect(returnProject(user, 'project-1')).rejects.toBeInstanceOf(
       BadRequestError
     );
+  });
+
+  it('assignProjectsToUser aggregates all project errors and rolls back without mutations', async () => {
+    txMock.project.findMany.mockResolvedValue([
+      {
+        id: 'proj-valid',
+        status: ProjectStatus.UNASSIGNED,
+        current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_started_at: null,
+        contract_started_at: null,
+        assignee_procurement: [],
+        assignee_contract: [],
+      },
+      {
+        id: 'proj-not-unassigned',
+        status: ProjectStatus.IN_PROGRESS,
+        current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_started_at: null,
+        contract_started_at: null,
+        assignee_procurement: [],
+        assignee_contract: [],
+      },
+      {
+        id: 'proj-bad-user',
+        status: ProjectStatus.UNASSIGNED,
+        current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_started_at: null,
+        contract_started_at: null,
+        assignee_procurement: [],
+        assignee_contract: [],
+      },
+      {
+        id: 'proj-already-assigned',
+        status: ProjectStatus.UNASSIGNED,
+        current_workflow_type: UnitResponsibleType.LT100K,
+        procurement_started_at: null,
+        contract_started_at: null,
+        assignee_procurement: [{ id: 'staff-old' }],
+        assignee_contract: [],
+      },
+    ]);
+    txMock.user.findMany.mockResolvedValue([
+      { id: 'staff-valid', full_name: 'Staff Valid' },
+    ]);
+
+    try {
+      await assignProjectsToUser(user, [
+        { id: 'proj-valid', userId: 'staff-valid' },
+        { id: 'proj-not-found-1', userId: 'staff-valid' },
+        { id: 'proj-not-found-2', userId: 'staff-valid' },
+        { id: 'proj-bad-user', userId: 'staff-nonexistent' },
+        { id: 'proj-not-unassigned', userId: 'staff-valid' },
+        { id: 'proj-already-assigned', userId: 'staff-valid' },
+      ] as any);
+      expect.fail('Expected assignProjectsToUser to throw BatchOperationError');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BatchOperationError);
+      expect(err.statusCode).toBe(400);
+      expect(err.message).toBe('Batch Operation Error');
+      expect(err.error).toEqual(
+        expect.arrayContaining([
+          {
+            code: 'PROJECT_NOT_FOUND',
+            id: ['proj-not-found-1', 'proj-not-found-2'],
+          },
+          {
+            code: 'ASSIGNEE_NOT_FOUND',
+            id: ['proj-bad-user'],
+          },
+          {
+            code: 'PROJECT_NOT_UNASSIGNED',
+            id: ['proj-not-unassigned'],
+          },
+          {
+            code: 'ALREADY_ASSIGNED',
+            id: ['proj-already-assigned'],
+          },
+        ])
+      );
+      expect(txMock.project.update).not.toHaveBeenCalled();
+      expect(txMock.projectHistory.create).not.toHaveBeenCalled();
+      expect(txMock.notification.create).not.toHaveBeenCalled();
+    }
   });
 });
