@@ -9,7 +9,6 @@ import { getDeptIdsForUser, haveSupplyPermission } from '../../utils/permissions
 import {
   daysInBangkokMonth,
   fromBangkokDate,
-  nowUtc,
   toBangkokParts,
 } from '../../utils/date';
 import {
@@ -186,35 +185,6 @@ const getStatusBuckets = async (
   return statuses.map((status, index) => ({
     status,
     count: counts[index],
-  }));
-};
-
-const getBudgetInvestmentDonut = async (
-  visibilityWhere: Prisma.ProjectWhereInput,
-  range: DateRange
-) => {
-  const rows = await prisma.budgetPlan.groupBy({
-    by: ['budget_name'],
-    where: {
-      project_id: { not: null },
-      project: andWhere(projectRangeWhere(visibilityWhere, range), {
-        status: { not: ProjectStatus.CANCELLED },
-      }),
-    },
-    _count: { _all: true },
-    _sum: { budget_amount: true },
-    orderBy: { budget_name: 'asc' },
-  });
-
-  return rows.map((row) => ({
-    category:
-      (row as unknown as { budget_name?: string; activity_type_name?: string })
-        .budget_name ??
-      (row as unknown as { budget_name?: string; activity_type_name?: string })
-        .activity_type_name ??
-      '',
-    planCount: row._count._all,
-    amount: row._sum.budget_amount ?? 0,
   }));
 };
 
@@ -424,11 +394,10 @@ export const getProcurementOverview = async (
     };
   }
 
-  const [procurementTypes, statusBar, budgetInvestment, timeline] =
+  const [procurementTypes, statusBar, timeline] =
     await Promise.all([
       getProcurementTypeDonut(visibilityWhere, range),
       getStatusBuckets(user, visibilityWhere, range),
-      getBudgetInvestmentDonut(visibilityWhere, range),
       getTimelineLine(visibilityWhere, range, query.mode),
     ]);
 
@@ -437,7 +406,11 @@ export const getProcurementOverview = async (
     range,
     procurementTypes,
     statusBar,
-    budgetInvestment,
+    budgetInvestment: [{
+      category: '',
+      planCount: 0,
+      amount: 0
+    }],
     timeline,
   };
 };

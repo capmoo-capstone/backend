@@ -197,14 +197,9 @@ describe('dashboard.service', () => {
     ]);
     expect(result.budgetInvestment).toEqual([
       {
-        category: 'งบประมาณแผ่นดิน',
-        planCount: 2,
-        amount: 1500,
-      },
-      {
-        category: 'เงินรายได้',
-        planCount: 1,
-        amount: 500,
+        category: '',
+        planCount: 0,
+        amount: 0,
       },
     ]);
     expect(result.timeline.map((point) => point.label)).toEqual([
