@@ -31,6 +31,12 @@ import {
   VendorPoEmailData,
   VendorPoEmailPreview,
 } from './templates/vendor-po-email.template';
+import {
+  renderVendorRequestEditEmailContent,
+  renderVendorRequestEditEmailPreview,
+  VendorRequestEditEmailData,
+  VendorRequestEditEmailPreview,
+} from './templates/vendor-request-edit-email.template';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -370,8 +376,18 @@ export const sendRegistrationApprovedEmail = async (
 export const getVendorEmailPreviewForProject = async (
   projectId: string,
   user?: AuthPayload,
-  query?: { poNumber?: string; vendorName?: string }
-): Promise<VendorPoEmailPreview & { recipientEmail: string }> => {
+  query?: {
+    poNumber?: string;
+    vendorName?: string;
+    templateId?: 'VENDOR_PO_REQUEST' | 'VENDOR_REQUEST_EDIT';
+    installmentNo?: number;
+    reason?: string;
+  }
+): Promise<
+  (VendorPoEmailPreview | VendorRequestEditEmailPreview) & {
+    recipientEmail: string;
+  }
+> => {
   if (user) {
     const projectScope = projectReadWhere(user);
     const hasAccess =
@@ -404,10 +420,18 @@ export const getVendorEmailPreviewForProject = async (
     query?.vendorName?.trim() || project.vendor_name?.trim() || '';
   const recipientEmail = project.vendor_email?.trim() || '';
 
-  const preview = renderVendorPoEmailPreview({
-    poNumber: resolvedPo,
-    vendorName: resolvedName,
-  });
+  const preview =
+    query?.templateId === 'VENDOR_REQUEST_EDIT'
+      ? renderVendorRequestEditEmailPreview({
+          poNumber: resolvedPo,
+          vendorName: resolvedName,
+          installmentNo: query.installmentNo,
+          reason: query.reason,
+        })
+      : renderVendorPoEmailPreview({
+          poNumber: resolvedPo,
+          vendorName: resolvedName,
+        });
 
   return {
     ...preview,
@@ -419,8 +443,11 @@ export const sendVendorEmailForProject = async (
   projectId: string,
   input: {
     recipient: string;
-    templateId: 'VENDOR_PO_REQUEST';
-    data: VendorPoEmailData;
+    templateId: 'VENDOR_PO_REQUEST' | 'VENDOR_REQUEST_EDIT';
+    data: VendorPoEmailData & {
+      installmentNo?: number | null;
+      reason?: string | null;
+    };
   },
   user?: AuthPayload
 ) => {
@@ -446,7 +473,10 @@ export const sendVendorEmailForProject = async (
     throw new NotFoundError('Project not found');
   }
 
-  const content = renderVendorPoEmailContent(input.data);
+  const content =
+    input.templateId === 'VENDOR_REQUEST_EDIT'
+      ? renderVendorRequestEditEmailContent(input.data)
+      : renderVendorPoEmailContent(input.data);
 
   await sendBusinessEmail(input.recipient, content);
 
