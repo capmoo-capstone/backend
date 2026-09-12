@@ -41,41 +41,13 @@ import {
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
 } from './notification/notification.service';
-import { sendVendorPoRequestEmailForProject } from './notification/notification-email.service';
+
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
 import { Capability, assertCapability } from '../utils/access-policy';
 import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
 import { isHeadOfSupplyUnit } from '../utils/permissions';
-
-const VENDOR_PO_EMAIL_STEP_ORDERS = new Map<UnitResponsibleType, number>([
-  [UnitResponsibleType.MT500K, 5],
-  [UnitResponsibleType.EBIDDING, 9],
-  [UnitResponsibleType.SELECTION, 6],
-  [UnitResponsibleType.LT500K, 3],
-  [UnitResponsibleType.LT100K, 3],
-  [UnitResponsibleType.INTERNAL, 3],
-]);
-
-const shouldSendVendorPoEmailForSubmission = (input: {
-  workflowType: UnitResponsibleType;
-  stepOrder: number;
-  status: SubmissionStatus;
-}) =>
-  input.status === SubmissionStatus.COMPLETED &&
-  VENDOR_PO_EMAIL_STEP_ORDERS.get(input.workflowType) === input.stepOrder;
-
-const safeSendVendorPoEmail = async (projectId: string) => {
-  try {
-    await sendVendorPoRequestEmailForProject(projectId);
-  } catch (error) {
-    console.error(
-      'Vendor PO request email failed:',
-      error instanceof Error ? error.message : 'Unknown email error'
-    );
-  }
-};
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -524,7 +496,7 @@ export const createStaffSubmissionsProject = async (
       workflow_type: data.workflow_type,
       installment_no: installmentNo,
     });
-    
+
     let nextStatus: SubmissionStatus = data.required_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
@@ -729,7 +701,7 @@ export const approveSubmission = async (
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
-      select: { status: true, submitted_by: true },
+      select: { status: true, submitted_by: true, meta_data: true },
     });
 
     if (!submission) {
@@ -780,19 +752,11 @@ export const approveSubmission = async (
           submitter_id: submission.submitted_by,
           step_order: updated.step_order,
         });
+
     return { updated, notificationResults };
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
-  if (
-    shouldSendVendorPoEmailForSubmission({
-      workflowType: transactionResult.updated.workflow_type,
-      stepOrder: transactionResult.updated.step_order,
-      status: transactionResult.updated.status,
-    })
-  ) {
-    await safeSendVendorPoEmail(transactionResult.updated.project_id);
-  }
 
   return transactionResult.updated;
 };
@@ -931,16 +895,6 @@ export const signAndCompleteSubmission = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
-  if (
-    shouldSendVendorPoEmailForSubmission({
-      workflowType: transactionResult.updated.workflow_type,
-      stepOrder: transactionResult.updated.step_order,
-      status: transactionResult.updated.status,
-    })
-  ) {
-    await safeSendVendorPoEmail(transactionResult.updated.project_id);
-  }
 
   return transactionResult.updated;
 };
-

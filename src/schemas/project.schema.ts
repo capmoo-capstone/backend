@@ -193,3 +193,34 @@ export type GetOwnProjectsTotalQuery = z.infer<
   typeof GetOwnProjectsTotalQuerySchema
 >;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;
+
+export const VendorPoEmailDataSchema = z.object({
+  poNumber: z.string().trim().min(1, 'PO number is required'),
+  vendorName: z.string().trim().optional().nullable(),
+  additionalMessage: z.string().trim().optional().nullable(),
+});
+export type VendorPoEmailDataDto = z.infer<typeof VendorPoEmailDataSchema>;
+
+export const SendVendorEmailSchema = z.object({
+  recipient: z.string().trim().email('Invalid vendor email address'),
+  templateId: z.literal('VENDOR_PO_REQUEST').default('VENDOR_PO_REQUEST'),
+  data: VendorPoEmailDataSchema,
+});
+export type SendVendorEmailDto = z.infer<typeof SendVendorEmailSchema>;
+
+export const VendorEmailPreviewQuerySchema = z.object({
+  poNumber: z.string().trim().optional(),
+  vendorName: z.string().trim().optional(),
+});
+export type VendorEmailPreviewQueryDto = z.infer<
+  typeof VendorEmailPreviewQuerySchema
+>;
+
+export const CronSendVendorPoEmailSchema = z.object({
+  projectId: z.string().trim().min(1, 'projectId is required'),
+  recipient: z.string().trim().email('Invalid email address'),
+  data: VendorPoEmailDataSchema,
+});
+export type CronSendVendorPoEmailDto = z.infer<
+  typeof CronSendVendorPoEmailSchema
+>;

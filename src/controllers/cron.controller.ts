@@ -12,12 +12,9 @@ import {
 } from '../services/cron/direct-cron.service';
 import {
   sendHelloTestEmail,
-  sendVendorPoRequestEmailForProject,
+  sendVendorEmailForProject,
 } from '../services/notification/notification-email.service';
-
-const SendVendorPoEmailSchema = z.object({
-  projectId: z.string().trim().min(1, 'projectId is required'),
-});
+import { CronSendVendorPoEmailSchema } from '../schemas/project.schema';
 
 const sendCronResponse = async (
   job: DirectCronJob,
@@ -60,12 +57,7 @@ const sendCronResponse = async (
 export const processDeadlineNotifications = async (
   _req: Request,
   res: Response
-) =>
-  sendCronResponse(
-    'process-deadlines',
-    triggerDeadlineReminderScan,
-    res
-  );
+) => sendCronResponse('process-deadlines', triggerDeadlineReminderScan, res);
 
 export const sendTestEmail = async (req: Request, res: Response) => {
   // #swagger.tags = ['Cron']
@@ -86,14 +78,19 @@ export const sendTestEmail = async (req: Request, res: Response) => {
 export const sendVendorPoEmail = async (req: Request, res: Response) => {
   // #swagger.tags = ['Cron']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { projectId } = SendVendorPoEmailSchema.parse(req.body);
-  const result = await sendVendorPoRequestEmailForProject(projectId);
+  const { projectId, recipient, data } = CronSendVendorPoEmailSchema.parse(
+    req.body
+  );
+  const result = await sendVendorEmailForProject(projectId, {
+    recipient,
+    templateId: 'VENDOR_PO_REQUEST',
+    data,
+  });
 
   return res.status(200).json({
     status: 'success',
-    message: 'Vendor PO email sent',
+    message: 'Vendor email sent',
     projectId: result.projectId,
-    poNumber: result.poNumber,
     to: result.recipientEmail,
   });
 };

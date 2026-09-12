@@ -104,6 +104,12 @@ router.patch(
 // ── Single project ────────────────────────────────────────────────────────────
 router.get('/:id/history', controller.getProjectHistory);
 router.get('/:id/document-summary', controller.getDocumentSummary);
+router.get('/:id/vendor-email-preview', controller.getVendorEmailPreview);
+router.post(
+  '/:id/send-vendor-email',
+  requireCapability(Capability.SUBMISSION_CREATE),
+  controller.sendVendorEmail
+);
 router.get('/:id', controller.getById);
 
 router.patch(
