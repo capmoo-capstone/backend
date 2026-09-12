@@ -55,6 +55,7 @@ export interface ProjectDetailResponse {
   actual_cost: Decimal | null;
   status: ProjectStatus;
   installment_rounds: number;
+  installment_amounts?: Record<string, number> | null;
   procurement_progress: ProjectPhaseProgress;
   contract_progress: ProjectPhaseProgress;
   budget_plans: Array<{

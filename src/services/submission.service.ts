@@ -145,13 +145,15 @@ type ProjectForUpdate = Pick<
   | 'vendor_email'
   | 'contract_no_id'
   | 'installment_rounds'
+  | 'installment_amounts'
 >;
 
 const updateProjectForSubmission = async (
   tx: Prisma.TransactionClient,
   project: ProjectForUpdate,
   meta_data: any[],
-  userId: string
+  userId: string,
+  installmentNo?: number | null
 ) => {
   const dataToUpdate = {};
   meta_data.forEach((item) => {
@@ -171,23 +173,55 @@ const updateProjectForSubmission = async (
     await assertInstallmentRoundsCanBeUpdated(tx, project.id);
   }
 
-  const oldValue = {};
-  Object.keys(validated.data).forEach((key) => {
-    oldValue[key] = project[key];
+  const { installment_amount, ...directProjectData } = validated.data;
+  const projectUpdateData: Prisma.ProjectUpdateInput = { ...directProjectData };
+  const historyNewValue: Record<string, any> = { ...directProjectData };
+  const historyOldValue: Record<string, any> = {};
+
+  Object.keys(directProjectData).forEach((key) => {
+    historyOldValue[key] = project[key];
   });
 
-  await tx.project.update({
-    where: { id: project.id },
-    data: validated.data,
-  });
+  if (installment_amount !== undefined) {
+    if (!installmentNo) {
+      throw new BadRequestError(
+        'Installment number is required to update installment amount'
+      );
+    }
+    if (installmentNo > project.installment_rounds) {
+      throw new BadRequestError(
+        `Installment number must be between 1 and ${project.installment_rounds}`
+      );
+    }
+    const currentAmounts =
+      project.installment_amounts &&
+      typeof project.installment_amounts === 'object' &&
+      !Array.isArray(project.installment_amounts)
+        ? { ...(project.installment_amounts as Record<string, number>) }
+        : {};
+    const updatedAmounts = {
+      ...currentAmounts,
+      [installmentNo.toString()]: installment_amount,
+    };
+    projectUpdateData.installment_amounts = updatedAmounts;
+    historyOldValue.installment_amounts = project.installment_amounts;
+    historyNewValue.installment_amounts = updatedAmounts;
+  }
 
-  await createProjectHistoryAndAuditEvent(tx, {
-    projectId: project.id,
-    action: ProjectActionType.INFORMATION_UPDATE,
-    oldValue,
-    newValue: validated.data,
-    changedBy: userId,
-  });
+  if (Object.keys(projectUpdateData).length > 0) {
+    await tx.project.update({
+      where: { id: project.id },
+      data: projectUpdateData,
+    });
+
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId: project.id,
+      action: ProjectActionType.INFORMATION_UPDATE,
+      oldValue: historyOldValue,
+      newValue: historyNewValue,
+      changedBy: userId,
+    });
+  }
 };
 
 export const getProjectSubmissions = async (
@@ -458,6 +492,7 @@ export const createStaffSubmissionsProject = async (
         less_no: true,
         contract_no_id: true,
         installment_rounds: true,
+        installment_amounts: true,
         migo_103_no: true,
         migo_105_no: true,
         asset_code: true,
@@ -484,6 +519,11 @@ export const createStaffSubmissionsProject = async (
     }
     const validatedMeta =
       UpdateProjectForSubmissionSchema.safeParse(metaDataMap);
+    if (!validatedMeta.success && data.required_updating) {
+      throw new BadRequestError(
+        'Meta data contains invalid fields for project update'
+      );
+    }
     if (validatedMeta.success) {
       if (
         validatedMeta.data.pr_no ||
@@ -509,6 +549,14 @@ export const createStaffSubmissionsProject = async (
       if (validatedMeta.data.installment_rounds !== undefined) {
         await assertInstallmentRoundsCanBeUpdated(tx, project.id);
       }
+      if (
+        validatedMeta.data.installment_amount !== undefined &&
+        !data.installment_no
+      ) {
+        throw new BadRequestError(
+          'Installment number is required to update installment amount'
+        );
+      }
     }
 
     const installmentNo = validateInstallmentNo(
@@ -524,7 +572,7 @@ export const createStaffSubmissionsProject = async (
       workflow_type: data.workflow_type,
       installment_no: installmentNo,
     });
-    
+
     let nextStatus: SubmissionStatus = data.required_approval
       ? SubmissionStatus.WAITING_APPROVAL
       : SubmissionStatus.COMPLETED;
@@ -576,7 +624,13 @@ export const createStaffSubmissionsProject = async (
     );
 
     if (nextStatus === SubmissionStatus.COMPLETED && data.required_updating) {
-      await updateProjectForSubmission(tx, project, data.meta_data, user.id);
+      await updateProjectForSubmission(
+        tx,
+        project,
+        data.meta_data,
+        user.id,
+        installmentNo
+      );
     }
     let notificationResults: PersistedNotificationResult[] = [];
     if (nextStatus === SubmissionStatus.WAITING_APPROVAL) {
@@ -850,7 +904,12 @@ export const signAndCompleteSubmission = async (
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
-      select: { status: true, submitted_by: true, meta_data: true },
+      select: {
+        status: true,
+        submitted_by: true,
+        meta_data: true,
+        installment_no: true,
+      },
     });
 
     if (!submission) {
@@ -911,6 +970,7 @@ export const signAndCompleteSubmission = async (
           vendor_name: true,
           vendor_email: true,
           installment_rounds: true,
+          installment_amounts: true,
           current_workflow_type: true,
         },
       });
@@ -918,7 +978,8 @@ export const signAndCompleteSubmission = async (
         tx,
         project,
         submission.meta_data,
-        user.id
+        user.id,
+        submission.installment_no
       );
     }
     const notificationResults = await notifyWorkflowStepApproved(tx, {
@@ -943,4 +1004,3 @@ export const signAndCompleteSubmission = async (
 
   return transactionResult.updated;
 };
-

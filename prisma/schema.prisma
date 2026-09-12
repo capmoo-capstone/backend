@@ -370,6 +370,7 @@ model Project {
   is_urgent                UrgentType          @default(NORMAL)
   expected_approval_date   DateTime?
   installment_rounds       Int                 @default(1)
+  installment_amounts      Json?               @default("{}")
   procurement_started_at   DateTime?
   procurement_completed_at DateTime?
   contract_started_at      DateTime?

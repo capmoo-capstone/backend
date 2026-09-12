@@ -834,6 +834,168 @@ describe('submission.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
+  it('updates installment_amounts map when staff submission contains installment_amount', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      actual_cost: null,
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      installment_rounds: 3,
+      installment_amounts: { '1': 10000 },
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 1,
+      submission_round: 1,
+      installment_no: 2,
+      status: SubmissionStatus.COMPLETED,
+      staff_remark: null,
+    });
+
+    await createStaffSubmissionsProject(
+      user,
+      staffSubmissionDto({
+        workflow_type: UnitResponsibleType.CONTRACT,
+        installment_no: 2,
+        required_approval: false,
+        required_updating: true,
+        meta_data: [{ field_key: 'installment_amount', value: 25000 }],
+      })
+    );
+
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: {
+        installment_amounts: {
+          '1': 10000,
+          '2': 25000,
+        },
+      },
+    });
+  });
+
+  it('rejects staff submission when installment_amount is supplied without installment_no', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      actual_cost: null,
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      installment_rounds: 1,
+      installment_amounts: {},
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+    });
+
+    await expect(
+      createStaffSubmissionsProject(
+        user,
+        staffSubmissionDto({
+          workflow_type: UnitResponsibleType.LT100K,
+          required_approval: false,
+          required_updating: true,
+          meta_data: [{ field_key: 'installment_amount', value: 5000 }],
+        })
+      )
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('rejects staff submission when installment_amount is negative', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      actual_cost: null,
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      installment_rounds: 2,
+      installment_amounts: {},
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+    });
+
+    await expect(
+      createStaffSubmissionsProject(
+        user,
+        staffSubmissionDto({
+          workflow_type: UnitResponsibleType.CONTRACT,
+          installment_no: 1,
+          required_approval: false,
+          required_updating: true,
+          meta_data: [{ field_key: 'installment_amount', value: -100 }],
+        })
+      )
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('signAndCompleteSubmission updates installment_amounts when completing submission with required_updating', async () => {
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      id: 'submission-1',
+      status: SubmissionStatus.WAITING_SIGNATURE,
+      submitted_by: 'submitter-1',
+      installment_no: 1,
+      meta_data: [{ field_key: 'installment_amount', value: 50000 }],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 1,
+      submission_round: 1,
+      installment_no: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+      installment_rounds: 2,
+      installment_amounts: {},
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+
+    await signAndCompleteSubmission(user, {
+      id: 'submission-1',
+      required_updating: true,
+    } as any);
+
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: {
+        installment_amounts: {
+          '1': 50000,
+        },
+      },
+    });
+  });
+
   it('rejectSubmission stores the comment, syncs phases, and notifies the submitter', async () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',

@@ -393,6 +393,9 @@ export const getById = async (
       actual_cost: projectData.actual_cost,
       status: projectData.status,
       installment_rounds: projectData.installment_rounds,
+      installment_amounts:
+        (projectData.installment_amounts as Record<string, number> | null) ??
+        null,
       procurement_progress:
         projectData.procurement_progress as unknown as ProjectPhaseProgress,
       contract_progress:
