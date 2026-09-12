@@ -98,6 +98,7 @@ export const UpdateProjectForSubmissionSchema = z.object({
 export const RejectSubmissionSchema = z.object({
   id: z.uuid(),
   comment: z.string(),
+  required_staff_approval: z.boolean().optional(),
 });
 
 export type CreateStaffSubmissionDto = z.infer<

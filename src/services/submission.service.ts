@@ -10,7 +10,11 @@ import {
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
-import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/errors';
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from '../utils/errors';
 import { syncProjectPhases } from '../utils/phase-status';
 import {
   ApproveSubmissionDto,
@@ -746,6 +750,15 @@ export const rejectSubmission = async (
   data: RejectSubmissionDto
 ): Promise<RejectedSubmissionResponse> => {
   assertCapability(user, Capability.SUBMISSION_APPROVE);
+
+  if (
+    !data.required_staff_approval &&
+    !hasRole(user, UserRole.HEAD_OF_UNIT) &&
+    !isSuperAdmin(user)
+  ) {
+    throw new ForbiddenError('General staff cannot approve this submission');
+  }
+
   const transactionResult = await prisma.$transaction(async (tx) => {
     const updated = await tx.projectSubmission.update({
       where: { id: data.id },
