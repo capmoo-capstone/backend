@@ -217,6 +217,7 @@ describe('project-query.service', () => {
       procurement_progress: {},
       contract_progress: {},
       installment_rounds: 1,
+      installment_amounts: { '1': 10000 },
       budget_plans: [],
       less_no: null,
       pr_no: 'PR-1',
@@ -241,6 +242,7 @@ describe('project-query.service', () => {
 
     expect(result).toMatchObject({
       id: 'project-1',
+      installment_amounts: { '1': 10000 },
       requester: {
         dept_id: 'dept-1',
         unit_id: 'unit-1',
