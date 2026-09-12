@@ -198,12 +198,16 @@ export const VendorPoEmailDataSchema = z.object({
   poNumber: z.string().trim().min(1, 'PO number is required'),
   vendorName: z.string().trim().optional().nullable(),
   additionalMessage: z.string().trim().optional().nullable(),
+  installmentNo: z.coerce.number().int().min(1).optional().nullable(),
+  reason: z.string().trim().optional().nullable(),
 });
 export type VendorPoEmailDataDto = z.infer<typeof VendorPoEmailDataSchema>;
 
 export const SendVendorEmailSchema = z.object({
   recipient: z.string().trim().email('Invalid vendor email address'),
-  templateId: z.literal('VENDOR_PO_REQUEST').default('VENDOR_PO_REQUEST'),
+  templateId: z
+    .enum(['VENDOR_PO_REQUEST', 'VENDOR_REQUEST_EDIT'])
+    .default('VENDOR_PO_REQUEST'),
   data: VendorPoEmailDataSchema,
 });
 export type SendVendorEmailDto = z.infer<typeof SendVendorEmailSchema>;
@@ -211,6 +215,9 @@ export type SendVendorEmailDto = z.infer<typeof SendVendorEmailSchema>;
 export const VendorEmailPreviewQuerySchema = z.object({
   poNumber: z.string().trim().optional(),
   vendorName: z.string().trim().optional(),
+  templateId: z.enum(['VENDOR_PO_REQUEST', 'VENDOR_REQUEST_EDIT']).optional(),
+  installmentNo: z.coerce.number().int().min(1).optional(),
+  reason: z.string().trim().optional(),
 });
 export type VendorEmailPreviewQueryDto = z.infer<
   typeof VendorEmailPreviewQuerySchema

@@ -65,7 +65,7 @@ const getSubmissionRound = async (
   data: GetSubmissionRoundDto
 ) => {
   const installmentKey = data.installment_no ?? 'none';
-  const lockKey = `${data.project_id}:${data.workflow_type}:${installmentKey}:${data.step_order}:${data.type}`;
+  const lockKey = `${data.project_id}:${data.workflow_type}:${installmentKey}:${data.step_order}`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
   const lastSubmission = await tx.projectSubmission
@@ -75,7 +75,6 @@ const getSubmissionRound = async (
         step_order: data.step_order,
         workflow_type: data.workflow_type,
         installment_no: data.installment_no ?? null,
-        submission_type: data.type,
       },
       orderBy: { submission_round: 'desc' },
       select: { submission_round: true },
@@ -240,7 +239,10 @@ export const getProjectSubmissions = async (
   const formattedSubmissions = await Promise.all(
     submissionData.map(async (submission) => ({
       ...submission,
-      submitted_by: submission.submitter?.full_name ?? null,
+      submitted_by:
+        submission.submission_type === SubmissionType.VENDOR
+          ? 'ผู้ค้า'
+          : (submission.submitter?.full_name ?? null),
       approved_by: submission.approver?.full_name ?? null,
       proposing_by: submission.proposer?.full_name ?? null,
       completed_by: submission.completer?.full_name ?? null,
@@ -676,7 +678,7 @@ export const createVendorSubmissionsProject = async (
         installment_no: installmentNo,
         submission_round,
         submission_type: SubmissionType.VENDOR,
-        status: SubmissionStatus.COMPLETED,
+        status: SubmissionStatus.WAITING_APPROVAL,
         po_no: data.po_no,
         meta_data: [{ field_key: 'installment_no', value: installmentNo }],
         documents: {
