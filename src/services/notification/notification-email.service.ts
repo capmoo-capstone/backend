@@ -7,7 +7,12 @@ import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../utils/active-state';
 import { OPS_DEPT_ID } from '../../utils/constant';
 import { formatBangkokDate } from '../../utils/date';
-import { BadRequestError, NotFoundError } from '../../utils/errors';
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../utils/errors';
+import { projectReadWhere } from '../../utils/project-scope';
 import {
   buildDailySummaryAudienceText,
   buildDailySummaryEmailContent,
@@ -20,6 +25,12 @@ import {
   escapeHtml,
   withBusinessEmailClosing,
 } from './business-email-content';
+import {
+  renderVendorPoEmailContent,
+  renderVendorPoEmailPreview,
+  VendorPoEmailData,
+  VendorPoEmailPreview,
+} from './templates/vendor-po-email.template';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -79,7 +90,6 @@ const getResendConfig = () => ({
   apiKey: process.env.RESEND_API_KEY?.trim() || '',
   from: process.env.RESEND_FROM?.trim() || '',
   appPublicUrl: process.env.APP_PUBLIC_URL?.trim() || '',
-  vendorAppPublicUrl: process.env.VENDOR_APP_PUBLIC_URL?.trim() || '',
 });
 
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
@@ -94,17 +104,7 @@ const getAppPublicUrl = () => {
   return normalizeUrl(appPublicUrl);
 };
 
-const getVendorAppPublicUrl = () => {
-  const { vendorAppPublicUrl } = getResendConfig();
-  if (!vendorAppPublicUrl) {
-    throw new Error('VENDOR_APP_PUBLIC_URL is not configured');
-  }
-
-  return normalizeUrl(vendorAppPublicUrl);
-};
-
 const buildLoginUrl = () => `${getAppPublicUrl()}/login`;
-const buildVendorFormUrl = () => `${getVendorAppPublicUrl()}/vendor-form`;
 
 const sendResendEmail = async (payload: ResendEmailPayload) => {
   const { apiKey } = getResendConfig();
@@ -217,34 +217,6 @@ const buildRegistrationApprovedEmailContent = (
       `<p>สวัสดีคุณ ${escapeHtml(recipient.fullName)},</p>`,
       '<p>ยินดีด้วย! บัญชีของคุณได้รับการอนุมัติจากผู้ดูแลระบบเรียบร้อยแล้ว</p>',
       `<p>คุณสามารถเข้าสู่ระบบเพื่อเริ่มใช้งานได้ผ่านลิงก์ด้านล่างนี้:<br /><a href="${escapeHtml(loginUrl)}">${escapeHtml(loginUrl)}</a></p>`,
-    ].join('\n'),
-  });
-};
-
-const buildVendorPoRequestEmailContent = (input: {
-  vendorName?: string | null;
-  poNumber: string;
-}): BusinessEmailContent => {
-  const vendorLabel = input.vendorName?.trim() || 'บริษัทคู่ค้า';
-  const vendorFormUrl = buildVendorFormUrl();
-
-  return withBusinessEmailClosing({
-    subject: `รบกวนส่งเอกสารแนบสำหรับใบสั่งซื้อ PO #${input.poNumber}`,
-    text: [
-      `เรียน ${vendorLabel}`,
-      '',
-      `ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${input.poNumber} ของท่าน`,
-      '',
-      'รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:',
-      vendorFormUrl,
-      '',
-      `หมายเหตุ: โปรดระบุหมายเลข PO #${input.poNumber} ทุกครั้งในการส่งเอกสาร`,
-    ].join('\n'),
-    html: [
-      `<p>เรียน ${escapeHtml(vendorLabel)}</p>`,
-      `<p>ขอแจ้งรายละเอียดใบสั่งซื้อหมายเลข PO #${escapeHtml(input.poNumber)} ของท่าน</p>`,
-      `<p>รบกวนทำการแนบไฟล์เอกสารที่เกี่ยวข้องผ่านแบบฟอร์มสำหรับ Vendor ได้ที่ลิงก์นี้:<br /><a href="${escapeHtml(vendorFormUrl)}">${escapeHtml(vendorFormUrl)}</a></p>`,
-      `<p>หมายเหตุ: โปรดระบุหมายเลข PO #${escapeHtml(input.poNumber)} ทุกครั้งในการส่งเอกสาร</p>`,
     ].join('\n'),
   });
 };
@@ -395,21 +367,24 @@ export const sendRegistrationApprovedEmail = async (
   );
 };
 
-export const sendVendorPoRequestEmail = async (input: {
-  vendorEmail: string;
-  vendorName?: string | null;
-  poNumber: string;
-}) => {
-  await sendBusinessEmail(
-    input.vendorEmail,
-    buildVendorPoRequestEmailContent({
-      vendorName: input.vendorName,
-      poNumber: input.poNumber,
-    })
-  );
-};
+export const getVendorEmailPreviewForProject = async (
+  projectId: string,
+  user?: AuthPayload,
+  query?: { poNumber?: string; vendorName?: string }
+): Promise<VendorPoEmailPreview & { recipientEmail: string }> => {
+  if (user) {
+    const projectScope = projectReadWhere(user);
+    const hasAccess =
+      Object.keys(projectScope).length === 0 ||
+      (await prisma.project.count({
+        where: { AND: [{ id: projectId }, projectScope] },
+      })) > 0;
 
-export const sendVendorPoRequestEmailForProject = async (projectId: string) => {
+    if (!hasAccess) {
+      throw new ForbiddenError('You do not have access to this project');
+    }
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
@@ -424,24 +399,61 @@ export const sendVendorPoRequestEmailForProject = async (projectId: string) => {
     throw new NotFoundError('Project not found');
   }
 
-  if (!project.po_no) {
-    throw new BadRequestError('Project PO number is missing');
-  }
+  const resolvedPo = query?.poNumber?.trim() || project.po_no?.trim() || '';
+  const resolvedName =
+    query?.vendorName?.trim() || project.vendor_name?.trim() || '';
+  const recipientEmail = project.vendor_email?.trim() || '';
 
-  if (!project.vendor_email) {
-    throw new BadRequestError('Project vendor email is missing');
-  }
-
-  await sendVendorPoRequestEmail({
-    vendorEmail: project.vendor_email,
-    vendorName: project.vendor_name,
-    poNumber: project.po_no,
+  const preview = renderVendorPoEmailPreview({
+    poNumber: resolvedPo,
+    vendorName: resolvedName,
   });
 
   return {
+    ...preview,
+    recipientEmail,
+  };
+};
+
+export const sendVendorEmailForProject = async (
+  projectId: string,
+  input: {
+    recipient: string;
+    templateId: 'VENDOR_PO_REQUEST';
+    data: VendorPoEmailData;
+  },
+  user?: AuthPayload
+) => {
+  if (user) {
+    const projectScope = projectReadWhere(user);
+    const hasAccess =
+      Object.keys(projectScope).length === 0 ||
+      (await prisma.project.count({
+        where: { AND: [{ id: projectId }, projectScope] },
+      })) > 0;
+
+    if (!hasAccess) {
+      throw new ForbiddenError('You do not have access to this project');
+    }
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true },
+  });
+
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+
+  const content = renderVendorPoEmailContent(input.data);
+
+  await sendBusinessEmail(input.recipient, content);
+
+  return {
     projectId: project.id,
-    poNumber: project.po_no,
-    recipientEmail: project.vendor_email,
+    recipientEmail: input.recipient,
+    subject: content.subject,
   };
 };
 

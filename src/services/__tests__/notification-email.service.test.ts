@@ -7,9 +7,10 @@ import {
   sendContractCommitteeReminderEmail,
   sendDailySummaryEmailsToOptedInUsers,
   sendHelloTestEmail,
+  getVendorEmailPreviewForProject,
   sendRegistrationApprovedEmail,
   sendRegistrationPendingEmail,
-  sendVendorPoRequestEmailForProject,
+  sendVendorEmailForProject,
 } from '../notification/notification-email.service';
 
 const FOOTER_NOTICE =
@@ -203,52 +204,103 @@ describe('notification-email.service', () => {
     expectBusinessFooter(payload);
   });
 
-  it('sends the vendor PO email from project data and includes the vendor form URL', async () => {
+  it('returns vendor email preview with locked body, subject, and form URL', async () => {
+    prismaMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      po_no: 'PO-999',
+      vendor_email: 'vendor@example.com',
+      vendor_name: 'บริษัท ซัพพลาย จำกัด',
+    } as any);
+
+    const preview = await getVendorEmailPreviewForProject('project-1');
+
+    expect(preview.subject).toBe(
+      'ส่งใบแจ้งหนี้/ใบส่งของ/ใบวางบิล สำหรับใบสั่งซื้อหมายเลข PO-999'
+    );
+    expect(preview.lockedBody).toContain('เรียน บริษัท ซัพพลาย จำกัด');
+    expect(preview.lockedBody).toContain(
+      'ฝ่ายการพัสดุ สำนักบริหารการเงิน การบัญชี และการพัสดุ จุฬาลงกรณ์มหาวิทยาลัย'
+    );
+    expect(preview.lockedBody).toContain('https://vendor.nexus-procure.com');
+    expect(preview.recipientEmail).toBe('vendor@example.com');
+  });
+
+  it('throws ForbiddenError when user does not have scope access for preview', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    const mockUser: any = {
+      id: 'unauthorized-user',
+      roles: [
+        { role: 'GENERAL_STAFF', dept_id: 'other-dept', unit_id: 'other-unit' },
+      ],
+    };
+
+    await expect(
+      getVendorEmailPreviewForProject('project-1', mockUser)
+    ).rejects.toThrow('You do not have access to this project');
+  });
+
+  it('throws ForbiddenError when user does not have scope access for sending vendor email', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    const mockUser: any = {
+      id: 'unauthorized-user',
+      roles: [
+        { role: 'GENERAL_STAFF', dept_id: 'other-dept', unit_id: 'other-unit' },
+      ],
+    };
+
+    await expect(
+      sendVendorEmailForProject(
+        'project-1',
+        {
+          recipient: 'vendor@example.com',
+          templateId: 'VENDOR_PO_REQUEST',
+          data: { poNumber: 'PO-999' },
+        },
+        mockUser
+      )
+    ).rejects.toThrow('You do not have access to this project');
+  });
+
+  it('sends vendor email using centralized template with structured data', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
     prismaMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
-      po_no: 'PO-1234',
-      vendor_email: 'vendor@example.com',
-      vendor_name: 'Vendor Co., Ltd.',
-    });
+    } as any);
 
-    const result = await sendVendorPoRequestEmailForProject('project-1');
+    const result = await sendVendorEmailForProject('project-1', {
+      recipient: 'vendor-contact@example.com',
+      templateId: 'VENDOR_PO_REQUEST',
+      data: {
+        poNumber: 'PO-999',
+        vendorName: 'คุณสมบัติ',
+        additionalMessage: 'กรุณาติดต่อเจ้าหน้าที่ 02-123-4567',
+      },
+    });
 
     expect(result).toEqual({
       projectId: 'project-1',
-      poNumber: 'PO-1234',
-      recipientEmail: 'vendor@example.com',
+      recipientEmail: 'vendor-contact@example.com',
+      subject: 'ส่งใบแจ้งหนี้/ใบส่งของ/ใบวางบิล สำหรับใบสั่งซื้อหมายเลข PO-999',
     });
 
     const payload = getSentPayload(fetchMock);
-    expect(payload.subject).toContain('PO #PO-1234');
-    expect(payload.to).toEqual(['vendor@example.com']);
+    expect(payload.subject).toBe(
+      'ส่งใบแจ้งหนี้/ใบส่งของ/ใบวางบิล สำหรับใบสั่งซื้อหมายเลข PO-999'
+    );
+    expect(payload.to).toEqual(['vendor-contact@example.com']);
+    expect(payload.text).toContain('เรียน คุณสมบัติ');
+    expect(payload.text).toContain('PO-999');
     expect(payload.text).toContain(
-      'https://vendor.nexus-procure.com/vendor-form'
+      'ฝ่ายการพัสดุ สำนักบริหารการเงิน การบัญชี และการพัสดุ จุฬาลงกรณ์มหาวิทยาลัย'
     );
-    expect(payload.text).toContain('PO #PO-1234');
-    expect(payload.text).toContain('Vendor Co., Ltd.');
-    expect(payload.text).toContain('เรียน Vendor Co., Ltd.');
-    expect(payload.text).not.toContain('เรียน Vendor Co., Ltd.,');
-    expect(payload.html).toContain('<p>เรียน Vendor Co., Ltd.</p>');
+    expect(payload.text).toContain('กรุณาติดต่อเจ้าหน้าที่ 02-123-4567');
+    expect(payload.html).toContain('<p>เรียน คุณสมบัติ</p>');
+    expect(payload.html).toContain('href="https://vendor.nexus-procure.com"');
+    expect(payload.html).toContain('<p>กรุณาติดต่อเจ้าหน้าที่ 02-123-4567</p>');
     expect(payload.html).toContain(
-      '<a href="https://vendor.nexus-procure.com/vendor-form">'
+      'ฝ่ายการพัสดุ สำนักบริหารการเงิน การบัญชี และการพัสดุ จุฬาลงกรณ์มหาวิทยาลัย'
     );
-    expectBusinessFooter(payload);
-  });
-
-  it('fails clearly when the vendor email is missing from the project', async () => {
-    prismaMock.project.findUnique.mockResolvedValue({
-      id: 'project-1',
-      po_no: 'PO-1234',
-      vendor_email: null,
-      vendor_name: 'Vendor Co., Ltd.',
-    });
-
-    await expect(
-      sendVendorPoRequestEmailForProject('project-1')
-    ).rejects.toThrow('Project vendor email is missing');
   });
 
   it('sends one daily summary email per resolved recipient with Thai content and deduplicated email addresses', async () => {

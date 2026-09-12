@@ -16,9 +16,11 @@ import {
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditInstallmentSchema,
+  SendVendorEmailSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
+  VendorEmailPreviewQuerySchema,
 } from '../schemas/project.schema';
 import * as AuditLogService from '../services/audit-log.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
@@ -27,6 +29,10 @@ import * as ProjectInstallmentService from '../services/project-installment.serv
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
 import * as ProjectQueryService from '../services/project-query.service';
 import { AuthenticatedRequest } from '../types/auth.type';
+import {
+  getVendorEmailPreviewForProject,
+  sendVendorEmailForProject,
+} from '../services/notification/notification-email.service';
 
 export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
@@ -555,4 +561,36 @@ export const getDocumentSummary = async (
   const payload = req.user!;
   const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
   res.status(200).json(data);
+};
+
+export const getVendorEmailPreview = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const projectId = req.params.id as string;
+  const query = VendorEmailPreviewQuerySchema.parse(req.query);
+  const preview = await getVendorEmailPreviewForProject(
+    projectId,
+    req.user!,
+    query
+  );
+  res.status(200).json(preview);
+};
+
+export const sendVendorEmail = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const projectId = req.params.id as string;
+  const validated = SendVendorEmailSchema.parse(req.body);
+  const result = await sendVendorEmailForProject(
+    projectId,
+    validated,
+    req.user!
+  );
+  res.status(200).json(result);
 };
