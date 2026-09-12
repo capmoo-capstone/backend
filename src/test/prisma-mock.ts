@@ -30,7 +30,6 @@ const MODEL_NAMES = [
   'notification',
   'notificationDelivery',
   'notificationOutbox',
-  'notificationReminder',
   'project',
   'projectCancellation',
   'projectContractNumber',
@@ -116,13 +115,6 @@ export const resetPrismaMock = () => {
   prismaMock.notificationOutbox.findMany.mockResolvedValue([]);
   prismaMock.notificationOutbox.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.notificationOutbox.update.mockResolvedValue(undefined);
-  prismaMock.notificationReminder.upsert.mockResolvedValue({
-    id: 'notification-reminder-1',
-    sent_at: null,
-    notification_id: null,
-    error_message: null,
-  });
-  prismaMock.notificationReminder.update.mockResolvedValue(undefined);
   txMock.notificationOutbox.create.mockResolvedValue(undefined);
   prismaMock.$transaction.mockImplementation(async (arg: any) => {
     if (Array.isArray(arg)) {

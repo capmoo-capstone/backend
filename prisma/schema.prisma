@@ -261,7 +261,6 @@ model User {
   delegation_cancellations UserDelegation[]       @relation("DelegationCanceller")
   notifications            Notification[]
   notification_deliveries  NotificationDelivery[]
-  notification_reminders   NotificationReminder[]
   notification_outbox      NotificationOutbox[]
 
   @@map("users")
@@ -406,7 +405,6 @@ model Project {
   submissions            ProjectSubmission[]
   budget_plans           BudgetPlan[]
   notifications          Notification[]
-  notification_reminders NotificationReminder[]
 
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
@@ -463,7 +461,6 @@ model Notification {
   project               Project?               @relation(fields: [project_id], references: [id], onDelete: Cascade)
   deliveries            NotificationDelivery[]
   outbox                NotificationOutbox[]
-  notificationReminders NotificationReminder[]
 
   @@unique([user_id, dedupe_key], map: "notifications_user_id_dedupe_key_key")
   @@index([user_id, is_read, created_at(sort: Desc)])
@@ -493,30 +490,6 @@ model NotificationDelivery {
   @@index([user_id, channel, status, created_at(sort: Desc)])
   @@index([notification_id])
   @@map("notification_deliveries")
-}
-
-model NotificationReminder {
-  id              String    @id @default(uuid())
-  user_id         String
-  project_id      String
-  notification_id String?
-  target_key      String
-  window_key      String
-  scheduled_for   DateTime
-  sent_at         DateTime?
-  error_message   String?
-  metadata        Json?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  project      Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  notification Notification? @relation(fields: [notification_id], references: [id], onDelete: SetNull)
-
-  @@unique([user_id, project_id, target_key, window_key, scheduled_for])
-  @@index([user_id, sent_at, scheduled_for(sort: Desc)])
-  @@index([project_id, target_key, scheduled_for(sort: Desc)])
-  @@map("notification_reminders")
 }
 
 model NotificationOutbox {
