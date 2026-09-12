@@ -2,6 +2,7 @@ import {
   Prisma,
   Project,
   ProjectActionType,
+  ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
@@ -703,6 +704,37 @@ export const createVendorSubmissionsProject = async (
   return transactionResult.submission;
 };
 
+const completeStep0ProjectTransition = async (
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  stepOrder: number,
+  user: AuthPayload
+) => {
+  if (stepOrder !== 0) return;
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: { status: true, procurement_started_at: true },
+  });
+  if (project && project.status === ProjectStatus.REVIEW_TOR) {
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: ProjectStatus.IN_PROGRESS,
+        ...(!project.procurement_started_at
+          ? { procurement_started_at: nowUtc() }
+          : {}),
+      },
+    });
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId,
+      action: ProjectActionType.STATUS_UPDATE,
+      oldValue: { status: ProjectStatus.REVIEW_TOR },
+      newValue: { status: ProjectStatus.IN_PROGRESS },
+      changedBy: user,
+    });
+  }
+};
+
 export const rejectSubmission = async (
   user: AuthPayload,
   data: RejectSubmissionDto
@@ -731,6 +763,21 @@ export const rejectSubmission = async (
         approved_at: true,
       },
     });
+
+    if (updated.step_order === 0) {
+      await tx.projectSubmission.create({
+        data: {
+          project_id: updated.project_id,
+          workflow_type: updated.workflow_type,
+          step_order: 0,
+          submission_round: updated.submission_round + 1,
+          submission_type: SubmissionType.STAFF,
+          status: SubmissionStatus.WAITING_APPROVAL,
+          submitted_by: user.id,
+        },
+      });
+    }
+
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     const notificationResults = await notifySubmissionRejected(tx, {
       project_id: updated.project_id,
@@ -793,6 +840,16 @@ export const approveSubmission = async (
         completed_by: data.required_signature ? false : true,
       },
     });
+
+    if (updated.status === SubmissionStatus.COMPLETED) {
+      await completeStep0ProjectTransition(
+        tx,
+        updated.project_id,
+        updated.step_order,
+        user
+      );
+    }
+
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     const notificationResults = data.required_signature
       ? await notifySignatureRequired(tx, {

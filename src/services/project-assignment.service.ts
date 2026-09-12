@@ -2,6 +2,8 @@ import {
   UnitResponsibleType,
   ProjectStatus,
   ProjectActionType,
+  SubmissionStatus,
+  SubmissionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import {
@@ -133,10 +135,6 @@ export const assignProjectsToUser = async (
       const assignee = assigneeMap.get(assigneeId)!;
       const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
-      const shouldStartProcurement =
-        project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
-        !project.procurement_started_at;
-
       const shouldStartContract =
         project.current_workflow_type === UnitResponsibleType.CONTRACT &&
         !project.contract_started_at;
@@ -151,9 +149,6 @@ export const assignProjectsToUser = async (
           data: {
             status: ProjectStatus.WAITING_ACCEPT,
             [assigneeField]: { connect: { id: assigneeId } },
-            ...(shouldStartProcurement
-              ? { procurement_started_at: nowUtc() }
-              : {}),
             ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
           },
           select: { id: true, status: true, [assigneeField]: true },
@@ -307,13 +302,14 @@ export const claimProject = async (
       throw new BadRequestError('This project cannot be claimed');
     }
 
-    const shouldStartProcurement =
-      project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
-      !project.procurement_started_at;
+    const isProcurement =
+      project.current_workflow_type !== UnitResponsibleType.CONTRACT;
+    const targetStatus = isProcurement
+      ? ProjectStatus.REVIEW_TOR
+      : ProjectStatus.IN_PROGRESS;
 
     const shouldStartContract =
-      project.current_workflow_type === UnitResponsibleType.CONTRACT &&
-      !project.contract_started_at;
+      !isProcurement && !project.contract_started_at;
 
     const updated = await tx.project.update({
       where: {
@@ -322,13 +318,26 @@ export const claimProject = async (
         [assigneeField]: { none: {} },
       },
       data: {
-        status: ProjectStatus.IN_PROGRESS,
+        status: targetStatus,
         [assigneeField]: { connect: { id: user.id } },
-        ...(shouldStartProcurement ? { procurement_started_at: nowUtc() } : {}),
         ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
+
+    if (isProcurement) {
+      await tx.projectSubmission.create({
+        data: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+          step_order: 0,
+          submission_round: 1,
+          submission_type: SubmissionType.STAFF,
+          status: SubmissionStatus.WAITING_APPROVAL,
+          submitted_by: user.id,
+        },
+      });
+    }
 
     await syncProjectPhases(tx, project.current_workflow_type, projectId);
 
@@ -370,6 +379,7 @@ export const acceptProjects = async (
 
     const updatePromises = [];
     const historyPromises = [];
+    const step0Promises = [];
 
     for (const project of projects) {
       const assigneeField = resolveAssigneeField(project.current_workflow_type);
@@ -386,13 +396,35 @@ export const acceptProjects = async (
         );
       }
 
+      const isProcurement =
+        project.current_workflow_type !== UnitResponsibleType.CONTRACT;
+      const targetStatus = isProcurement
+        ? ProjectStatus.REVIEW_TOR
+        : ProjectStatus.IN_PROGRESS;
+
       updatePromises.push(
         tx.project.update({
           where: { id: project.id, status: ProjectStatus.WAITING_ACCEPT },
-          data: { status: ProjectStatus.IN_PROGRESS },
+          data: { status: targetStatus },
           select: { id: true, status: true },
         })
       );
+
+      if (isProcurement) {
+        step0Promises.push(
+          tx.projectSubmission.create({
+            data: {
+              project_id: project.id,
+              workflow_type: project.current_workflow_type,
+              step_order: 0,
+              submission_round: 1,
+              submission_type: SubmissionType.STAFF,
+              status: SubmissionStatus.WAITING_APPROVAL,
+              submitted_by: user.id,
+            },
+          })
+        );
+      }
 
       historyPromises.push(
         syncProjectPhases(tx, project.current_workflow_type, project.id),
@@ -400,12 +432,13 @@ export const acceptProjects = async (
           projectId: project.id,
           action: ProjectActionType.STATUS_UPDATE,
           oldValue: { status: ProjectStatus.WAITING_ACCEPT },
-          newValue: { status: ProjectStatus.IN_PROGRESS },
+          newValue: { status: targetStatus },
           changedBy: user,
         })
       );
     }
 
+    await Promise.all(step0Promises);
     const updatedProjects = await Promise.all(updatePromises);
     await Promise.all(historyPromises);
 

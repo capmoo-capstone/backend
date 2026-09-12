@@ -1,5 +1,7 @@
 import {
   ProcurementType,
+  ProjectActionType,
+  ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
@@ -987,5 +989,112 @@ describe('submission.service', () => {
         }),
       })
     );
+  });
+
+  it('approveSubmission completes Step 0 and transitions project from REVIEW_TOR to IN_PROGRESS', async () => {
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'submitter-1',
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'WORKFLOW_STEP_APPROVED' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'submitter-1', _count: { _all: 1 } },
+    ]);
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      id: 'step-0-sub',
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+      meta_data: [],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'step-0-sub',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 0,
+      submission_round: 1,
+      installment_no: null,
+      status: SubmissionStatus.COMPLETED,
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.REVIEW_TOR,
+      procurement_started_at: null,
+    });
+
+    const result = await approveSubmission(user, {
+      id: 'step-0-sub',
+      required_signature: false,
+    });
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'project-1' },
+        data: expect.objectContaining({
+          status: ProjectStatus.IN_PROGRESS,
+          procurement_started_at: expect.any(Date),
+        }),
+      })
+    );
+    expect(txMock.projectHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          project_id: 'project-1',
+          action: ProjectActionType.STATUS_UPDATE,
+          old_value: { status: ProjectStatus.REVIEW_TOR },
+          new_value: { status: ProjectStatus.IN_PROGRESS },
+        }),
+      })
+    );
+  });
+
+  it('rejectSubmission on Step 0 marks current round REJECTED and auto-creates next round in WAITING_APPROVAL', async () => {
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'submitter-1',
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'SUBMISSION_REJECTED' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'submitter-1', _count: { _all: 1 } },
+    ]);
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      created_by: 'submitter-1',
+      creator: { id: 'submitter-1', full_name: 'Submitter', email: null },
+      assignee_procurement: [],
+      assignee_contract: [],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'step-0-sub',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 0,
+      submission_round: 1,
+      submitted_by: 'submitter-1',
+      status: SubmissionStatus.REJECTED,
+      comment: 'TOR specification is incomplete',
+    });
+
+    const result = await rejectSubmission(user, {
+      id: 'step-0-sub',
+      comment: 'TOR specification is incomplete',
+    } as any);
+
+    expect(result.status).toBe(SubmissionStatus.REJECTED);
+    expect(txMock.projectSubmission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.LT100K,
+        step_order: 0,
+        submission_round: 2,
+        submission_type: SubmissionType.STAFF,
+        status: SubmissionStatus.WAITING_APPROVAL,
+      }),
+    });
   });
 });

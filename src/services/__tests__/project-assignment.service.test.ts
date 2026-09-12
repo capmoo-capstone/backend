@@ -1,4 +1,8 @@
-import { ProjectStatus, UnitResponsibleType } from '@prisma/client';
+import {
+  ProjectStatus,
+  SubmissionStatus,
+  UnitResponsibleType,
+} from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestError, BatchOperationError } from '../../utils/errors';
 import { syncProjectPhases } from '../../utils/phase-status';
@@ -96,7 +100,6 @@ describe('project-assignment.service', () => {
         data: expect.objectContaining({
           status: ProjectStatus.WAITING_ACCEPT,
           assignee_procurement: { connect: { id: 'staff-2' } },
-          procurement_started_at: expect.any(Date),
         }),
       })
     );
@@ -114,35 +117,44 @@ describe('project-assignment.service', () => {
 
   it('changeAssignee replaces the waiting-accept assignee', async () => {
     txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
       status: ProjectStatus.WAITING_ACCEPT,
       current_workflow_type: UnitResponsibleType.LT100K,
-      assignee_procurement: [{ id: 'old-staff', full_name: 'Old Staff' }],
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [{ id: 'staff-1', full_name: 'Staff One' }],
       assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
     });
     txMock.user.findUnique.mockResolvedValue({
-      id: 'new-staff',
-      full_name: 'New Staff',
-    });
+      id: 'staff-2',
+      full_name: 'Staff Two',
+      is_active: true,
+    } as any);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
       status: ProjectStatus.WAITING_ACCEPT,
-      assignee_procurement: [{ id: 'new-staff' }],
+      assignee_procurement: [{ id: 'staff-2' }],
     });
 
     const result = await changeAssignee(user, {
       id: 'project-1',
-      userId: 'new-staff',
-    } as any);
+      userId: 'staff-2',
+    });
 
-    expect(result.status).toBe(ProjectStatus.WAITING_ACCEPT);
+    expect(result.id).toBe('project-1');
     expect(txMock.project.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: {
-          assignee_procurement: {
-            disconnect: { id: 'old-staff' },
-            connect: { id: 'new-staff' },
-          },
+        where: {
+          id: 'project-1',
         },
+        data: expect.objectContaining({
+          assignee_procurement: {
+            disconnect: { id: 'staff-1' },
+            connect: { id: 'staff-2' },
+          },
+        }),
       })
     );
   });
@@ -155,13 +167,22 @@ describe('project-assignment.service', () => {
     });
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
-      status: ProjectStatus.IN_PROGRESS,
+      status: ProjectStatus.REVIEW_TOR,
       assignee_procurement: [{ id: user.id }],
     });
 
     const result = await claimProject(user, 'project-1');
 
-    expect(result.status).toBe(ProjectStatus.IN_PROGRESS);
+    expect(result.status).toBe(ProjectStatus.REVIEW_TOR);
+    expect(txMock.projectSubmission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.LT100K,
+        step_order: 0,
+        submission_round: 1,
+        status: SubmissionStatus.WAITING_APPROVAL,
+      }),
+    });
     expect(mockedSyncProjectPhases).toHaveBeenCalledWith(
       txMock,
       UnitResponsibleType.LT100K,
@@ -170,7 +191,7 @@ describe('project-assignment.service', () => {
     expect(txMock.project.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          procurement_started_at: expect.any(Date),
+          status: ProjectStatus.REVIEW_TOR,
         }),
       })
     );
@@ -243,7 +264,7 @@ describe('project-assignment.service', () => {
     );
   });
 
-  it('acceptProjects moves waiting-accept projects to in progress and syncs each phase', async () => {
+  it('acceptProjects moves waiting-accept procurement projects to REVIEW_TOR and creates step 0 submission', async () => {
     txMock.project.findMany.mockResolvedValue([
       {
         id: 'project-1',
@@ -255,14 +276,23 @@ describe('project-assignment.service', () => {
     ]);
     txMock.project.update.mockResolvedValue({
       id: 'project-1',
-      status: ProjectStatus.IN_PROGRESS,
+      status: ProjectStatus.REVIEW_TOR,
     });
 
     const result = await acceptProjects(user, { id: ['project-1'] } as any);
 
     expect(result).toEqual([
-      { id: 'project-1', status: ProjectStatus.IN_PROGRESS },
+      { id: 'project-1', status: ProjectStatus.REVIEW_TOR },
     ]);
+    expect(txMock.projectSubmission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.LT100K,
+        step_order: 0,
+        submission_round: 1,
+        status: SubmissionStatus.WAITING_APPROVAL,
+      }),
+    });
     expect(mockedSyncProjectPhases).toHaveBeenCalledWith(
       txMock,
       UnitResponsibleType.LT100K,

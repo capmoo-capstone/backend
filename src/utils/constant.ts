@@ -29,12 +29,14 @@ export const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
 
 export const WORKLOAD_STATUSES = [
   ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
   ProjectStatus.IN_PROGRESS,
   ProjectStatus.WAITING_CANCEL,
   ProjectStatus.WAITING_CLOSE,
 ];
 
 export const IN_PROGRESS_STATUSES: ProjectStatus[] = [
+  ProjectStatus.REVIEW_TOR,
   ProjectStatus.IN_PROGRESS,
   ProjectStatus.WAITING_CANCEL,
   ProjectStatus.WAITING_CLOSE,
