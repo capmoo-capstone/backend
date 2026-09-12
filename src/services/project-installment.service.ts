@@ -269,6 +269,7 @@ export const getInstallments = async (
         installment_no: true,
         status: true,
         request_edit_reason: true,
+        created_at: true,
       },
     }),
     prisma.projectInstallment.count({ where }),
