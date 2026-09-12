@@ -13,6 +13,7 @@ import {
   GetNewContractNumberSchema,
   GetOwnProjectsQuerySchema,
   GetOwnProjectsTotalQuerySchema,
+  GetProjectSummaryQuerySchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditInstallmentSchema,
@@ -185,7 +186,8 @@ export const getSummary = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const summary = await ProjectQueryService.getSummaryCards(payload);
+  const query = GetProjectSummaryQuerySchema.parse(req.query);
+  const summary = await ProjectQueryService.getSummaryCards(payload, query);
   res.status(200).json(summary);
 };
 

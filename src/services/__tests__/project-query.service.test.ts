@@ -230,7 +230,9 @@ describe('project-query.service', () => {
 
     const findCall = prismaMock.project.findMany.mock.calls[0][0];
     const whereJson = JSON.stringify(findCall.where);
-    expect(whereJson).toContain('"contract_no":{"contract_no":{"contains":"CN-2569/001","mode":"insensitive"}}');
+    expect(whereJson).toContain(
+      '"contract_no":{"contract_no":{"contains":"CN-2569/001","mode":"insensitive"}}'
+    );
   });
 
   it('listProjects sorts by contract_no relation', async () => {
@@ -986,6 +988,77 @@ describe('project-query.service', () => {
       URGENT: 5,
     });
     expect(prismaMock.project.count.mock.calls[0][0]).toEqual({ where: {} });
+  });
+
+  it('getSummaryCards applies date range and deptId filters for supply user', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(6)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+
+    const dateFrom = new Date('2026-10-01T00:00:00.000Z');
+    const dateTo = new Date('2027-09-30T00:00:00.000Z');
+
+    const result = await getSummaryCards(supplyUser, {
+      dateFrom,
+      dateTo,
+      deptId: 'dept-99',
+    });
+
+    expect(result).toMatchObject({
+      role: 'SUPPLY',
+      total: 6,
+      UNASSIGNED: 1,
+      WAITING_ACCEPT: 1,
+    });
+
+    const firstCallWhere = prismaMock.project.count.mock.calls[0][0].where;
+    expect(firstCallWhere).toEqual({
+      AND: [
+        {
+          created_at: {
+            gte: expect.any(Date),
+            lte: expect.any(Date),
+          },
+        },
+        { requesting_dept_id: 'dept-99' },
+      ],
+    });
+  });
+
+  it('getSummaryCards scopes deptId correctly for external user', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    // When external user (dept-1) filters by allowed dept-1
+    await getSummaryCards(externalUser, { deptId: 'dept-1' });
+    expect(prismaMock.project.count.mock.calls[0][0].where).toEqual({
+      requesting_dept_id: 'dept-1',
+    });
+
+    prismaMock.project.count.mockClear();
+    prismaMock.project.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    // When external user (dept-1) filters by unauthorized dept-2
+    await getSummaryCards(externalUser, { deptId: 'dept-2' });
+    expect(prismaMock.project.count.mock.calls[0][0].where).toEqual({
+      id: { in: [] },
+    });
   });
 
   describe('getDocumentSummary', () => {

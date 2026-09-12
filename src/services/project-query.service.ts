@@ -32,6 +32,7 @@ import { hasOrganizationWideReadAccess } from '../utils/access-policy';
 import {
   GetOwnProjectsQuery,
   GetOwnProjectsTotalQuery,
+  GetProjectSummaryQuery,
   ProjectFilterQuery,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
@@ -935,10 +936,37 @@ export const getWorkload = async (
 };
 
 export const getSummaryCards = async (
-  user: AuthPayload
+  user: AuthPayload,
+  filters?: GetProjectSummaryQuery
 ): Promise<SummaryResponse> => {
   const isSupply = haveSupplyPermission(user);
+  const baseConditions: Prisma.ProjectWhereInput[] = [];
+
+  if (filters?.dateFrom || filters?.dateTo) {
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (filters?.dateFrom) {
+      dateFilter.gte = bangkokDayStartUtc(filters.dateFrom);
+    }
+    if (filters?.dateTo) {
+      dateFilter.lte = bangkokDayEndUtc(filters.dateTo);
+    }
+    baseConditions.push({ created_at: dateFilter });
+  }
+
+  const wrapWhere = (
+    extra?: Prisma.ProjectWhereInput
+  ): Prisma.ProjectWhereInput => {
+    const clauses = extra ? [...baseConditions, extra] : [...baseConditions];
+    if (clauses.length === 0) return {};
+    if (clauses.length === 1) return clauses[0];
+    return { AND: clauses };
+  };
+
   if (isSupply) {
+    if (filters?.deptId) {
+      baseConditions.push({ requesting_dept_id: filters.deptId });
+    }
+
     const [
       total,
       unassigned,
@@ -948,20 +976,28 @@ export const getSummaryCards = async (
       cancelled,
       urgent,
     ] = await prisma.$transaction([
-      prisma.project.count(),
-      prisma.project.count({ where: { status: ProjectStatus.UNASSIGNED } }),
-      prisma.project.count({ where: { status: ProjectStatus.WAITING_ACCEPT } }),
+      prisma.project.count({ where: wrapWhere() }),
       prisma.project.count({
-        where: {
+        where: wrapWhere({ status: ProjectStatus.UNASSIGNED }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({ status: ProjectStatus.WAITING_ACCEPT }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({
           status: {
             in: IN_PROGRESS_STATUSES,
           },
-        },
+        }),
       }),
-      prisma.project.count({ where: { status: ProjectStatus.CLOSED } }),
-      prisma.project.count({ where: { status: ProjectStatus.CANCELLED } }),
       prisma.project.count({
-        where: {
+        where: wrapWhere({ status: ProjectStatus.CLOSED }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({ status: ProjectStatus.CANCELLED }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({
           is_urgent: {
             in: [
               UrgentType.URGENT,
@@ -969,7 +1005,7 @@ export const getSummaryCards = async (
               UrgentType.SUPER_URGENT,
             ],
           },
-        },
+        }),
       }),
     ]);
 
@@ -986,17 +1022,28 @@ export const getSummaryCards = async (
   }
 
   const hasOrganizationWideRead = hasOrganizationWideReadAccess(user);
-  const deptIds = getDeptIdsForUser(user);
-  const baseWhere = hasOrganizationWideRead
-    ? {}
-    : { requesting_dept_id: { in: deptIds } };
+  if (hasOrganizationWideRead) {
+    if (filters?.deptId) {
+      baseConditions.push({ requesting_dept_id: filters.deptId });
+    }
+  } else {
+    const deptIds = getDeptIdsForUser(user);
+    if (filters?.deptId) {
+      if (deptIds.includes(filters.deptId)) {
+        baseConditions.push({ requesting_dept_id: filters.deptId });
+      } else {
+        baseConditions.push({ id: { in: [] } });
+      }
+    } else {
+      baseConditions.push({ requesting_dept_id: { in: deptIds } });
+    }
+  }
 
   const [total, not_started, in_progress, closed, cancelled, urgent] =
     await prisma.$transaction([
-      prisma.project.count({ where: baseWhere }),
+      prisma.project.count({ where: wrapWhere() }),
       prisma.project.count({
-        where: {
-          ...baseWhere,
+        where: wrapWhere({
           AND: [
             {
               status: {
@@ -1009,11 +1056,10 @@ export const getSummaryCards = async (
               },
             },
           ],
-        },
+        }),
       }),
       prisma.project.count({
-        where: {
-          ...baseWhere,
+        where: wrapWhere({
           OR: [
             {
               status: {
@@ -1034,17 +1080,16 @@ export const getSummaryCards = async (
               ],
             },
           ],
-        },
+        }),
       }),
       prisma.project.count({
-        where: { ...baseWhere, status: ProjectStatus.CLOSED },
+        where: wrapWhere({ status: ProjectStatus.CLOSED }),
       }),
       prisma.project.count({
-        where: { ...baseWhere, status: ProjectStatus.CANCELLED },
+        where: wrapWhere({ status: ProjectStatus.CANCELLED }),
       }),
       prisma.project.count({
-        where: {
-          ...baseWhere,
+        where: wrapWhere({
           is_urgent: {
             in: [
               UrgentType.URGENT,
@@ -1052,7 +1097,7 @@ export const getSummaryCards = async (
               UrgentType.SUPER_URGENT,
             ],
           },
-        },
+        }),
       }),
     ]);
 
