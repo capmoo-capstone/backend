@@ -21,6 +21,32 @@ export const GetOwnProjectsTotalQuerySchema = z.object({
   dateTo: BangkokDateTimeSchema.optional(),
 });
 
+const OptionalDate = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  BangkokDateTimeSchema.optional()
+);
+
+const OptionalDeptId = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().trim().optional()
+);
+
+export const GetProjectSummaryQuerySchema = z
+  .object({
+    dateFrom: OptionalDate,
+    dateTo: OptionalDate,
+    deptId: OptionalDeptId,
+  })
+  .superRefine((data, ctx) => {
+    if (data.dateFrom && data.dateTo && data.dateFrom > data.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
+
 export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
@@ -191,6 +217,9 @@ export type GetAssignedProjectsQuery = z.infer<
 export type GetOwnProjectsQuery = z.infer<typeof GetOwnProjectsQuerySchema>;
 export type GetOwnProjectsTotalQuery = z.infer<
   typeof GetOwnProjectsTotalQuerySchema
+>;
+export type GetProjectSummaryQuery = z.infer<
+  typeof GetProjectSummaryQuerySchema
 >;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;
 
