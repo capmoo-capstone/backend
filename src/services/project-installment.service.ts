@@ -24,6 +24,10 @@ import {
   GetInstallmentsQuery,
 } from '../schemas/project.schema';
 import {
+  PaginatedProjectInstallments,
+  ProjectInstallmentListItem,
+} from '../types/project.type';
+import {
   notifyFinanceExportReady,
   notifyFinanceRequestEdit,
   publishPersistedNotifications,
@@ -167,7 +171,7 @@ export const getInstallments = async (
   page: number,
   limit: number,
   filters?: GetInstallmentsQuery
-): Promise<PaginatedResponse<ProjectInstallment>> => {
+): Promise<PaginatedProjectInstallments> => {
   const where: Prisma.ProjectInstallmentWhereInput = {};
   const projectScope = projectReadWhere(user);
   if (Object.keys(projectScope).length > 0) {
@@ -298,7 +302,8 @@ export const getInstallments = async (
             id: true,
             receive_no: true,
             title: true,
-            budget: true,
+            actual_cost: true,
+            installment_amounts: true,
             procurement_type: true,
             assignee_contract: {
               select: { id: true, full_name: true },
@@ -317,12 +322,41 @@ export const getInstallments = async (
     prisma.projectInstallment.count({ where }),
   ]);
 
+  const mappedData: ProjectInstallmentListItem[] = exportData.map((item) => {
+    const rawAmounts = item.project?.installment_amounts;
+    let installmentAmount: number | null = null;
+    if (
+      rawAmounts &&
+      typeof rawAmounts === 'object' &&
+      !Array.isArray(rawAmounts)
+    ) {
+      const amountValue = (rawAmounts as Record<string, unknown>)[
+        item.installment_no.toString()
+      ];
+      if (typeof amountValue === 'number') {
+        installmentAmount = amountValue;
+      }
+    }
+
+    const { installment_amounts, ...projectWithoutAmounts } = item.project;
+
+    return {
+      id: item.id,
+      installment_no: item.installment_no,
+      installment_amount: installmentAmount,
+      status: item.status,
+      request_edit_reason: item.request_edit_reason,
+      created_at: item.created_at,
+      project: projectWithoutAmounts,
+    };
+  });
+
   return {
     total: count,
     page,
     pageSize: limit,
     totalPages: Math.ceil(count / limit),
-    data: exportData,
+    data: mappedData,
   };
 };
 

@@ -281,23 +281,64 @@ describe('project-finance.service', () => {
   });
 
   describe('getInstallments', () => {
-    it('should return a paginated response with export requests and total count', async () => {
-      const mockExports = [
+    it('should return a paginated response with actual_cost and mapped installment_amount', async () => {
+      const mockRawExports = [
         {
           id: '1',
-          project_id: 'p1',
           installment_no: 1,
           status: ProjectInstallmentStatus.WAITING_EXPORT,
+          request_edit_reason: null,
+          created_at: new Date('2026-09-01'),
+          project: {
+            id: 'p1',
+            receive_no: 'RC-001',
+            title: 'Project 1',
+            actual_cost: 95000,
+            installment_amounts: { '1': 45000, '2': 50000 },
+            procurement_type: 'SELECTION',
+            assignee_contract: [{ id: 'u1', full_name: 'Staff 1' }],
+            requesting_dept: { id: 'd1', name: 'Dept 1' },
+          },
         },
         {
           id: '2',
-          project_id: 'p2',
-          installment_no: 2,
+          installment_no: 1,
           status: ProjectInstallmentStatus.EXPORTED,
+          request_edit_reason: null,
+          created_at: new Date('2026-09-02'),
+          project: {
+            id: 'p2',
+            receive_no: 'RC-002',
+            title: 'Project 2',
+            actual_cost: 2000000,
+            installment_amounts: { '1': 300000, '2': 300000 },
+            procurement_type: 'SELECTION',
+            assignee_contract: [],
+            requesting_dept: { id: 'd2', name: 'Dept 2' },
+          },
         },
-      ] as ProjectInstallment[];
+        {
+          id: '3',
+          installment_no: 2,
+          status: ProjectInstallmentStatus.WAITING_EXPORT,
+          request_edit_reason: null,
+          created_at: new Date('2026-09-03'),
+          project: {
+            id: 'p2',
+            receive_no: 'RC-002',
+            title: 'Project 2',
+            actual_cost: 2000000,
+            installment_amounts: { '1': 300000, '2': 300000 },
+            procurement_type: 'SELECTION',
+            assignee_contract: [],
+            requesting_dept: { id: 'd2', name: 'Dept 2' },
+          },
+        },
+      ];
 
-      prismaMock.projectInstallment.findMany.mockResolvedValue(mockExports);
+      prismaMock.projectInstallment.findMany.mockResolvedValue(
+        mockRawExports as any
+      );
       prismaMock.projectInstallment.count.mockResolvedValue(10);
 
       const page = 2;
@@ -309,7 +350,59 @@ describe('project-finance.service', () => {
         page,
         pageSize: limit,
         totalPages: 5,
-        data: mockExports,
+        data: [
+          {
+            id: '1',
+            installment_no: 1,
+            installment_amount: 45000,
+            status: ProjectInstallmentStatus.WAITING_EXPORT,
+            request_edit_reason: null,
+            created_at: new Date('2026-09-01'),
+            project: {
+              id: 'p1',
+              receive_no: 'RC-001',
+              title: 'Project 1',
+              actual_cost: 95000,
+              procurement_type: 'SELECTION',
+              assignee_contract: [{ id: 'u1', full_name: 'Staff 1' }],
+              requesting_dept: { id: 'd1', name: 'Dept 1' },
+            },
+          },
+          {
+            id: '2',
+            installment_no: 1,
+            installment_amount: 300000,
+            status: ProjectInstallmentStatus.EXPORTED,
+            request_edit_reason: null,
+            created_at: new Date('2026-09-02'),
+            project: {
+              id: 'p2',
+              receive_no: 'RC-002',
+              title: 'Project 2',
+              actual_cost: 2000000,
+              procurement_type: 'SELECTION',
+              assignee_contract: [],
+              requesting_dept: { id: 'd2', name: 'Dept 2' },
+            },
+          },
+          {
+            id: '3',
+            installment_no: 2,
+            installment_amount: 300000,
+            status: ProjectInstallmentStatus.WAITING_EXPORT,
+            request_edit_reason: null,
+            created_at: new Date('2026-09-03'),
+            project: {
+              id: 'p2',
+              receive_no: 'RC-002',
+              title: 'Project 2',
+              actual_cost: 2000000,
+              procurement_type: 'SELECTION',
+              assignee_contract: [],
+              requesting_dept: { id: 'd2', name: 'Dept 2' },
+            },
+          },
+        ],
       });
 
       expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith({
