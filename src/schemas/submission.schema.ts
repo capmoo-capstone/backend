@@ -62,6 +62,7 @@ export const VendorSubmissionFilterQuerySchema = z
 export const ApproveSubmissionSchema = z.object({
   id: z.uuid(),
   required_signature: z.boolean(),
+  required_staff_approval: z.boolean().optional(),
 });
 
 export const CompleteSubmissionSchema = z.object({

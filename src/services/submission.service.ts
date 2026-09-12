@@ -6,10 +6,11 @@ import {
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
-import { BadRequestError, NotFoundError } from '../utils/errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/errors';
 import { syncProjectPhases } from '../utils/phase-status';
 import {
   ApproveSubmissionDto,
@@ -46,7 +47,12 @@ import {
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
-import { Capability, assertCapability } from '../utils/access-policy';
+import {
+  Capability,
+  assertCapability,
+  hasRole,
+  isSuperAdmin,
+} from '../utils/access-policy';
 import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
 import { isHeadOfSupplyUnit } from '../utils/permissions';
 
@@ -799,6 +805,15 @@ export const approveSubmission = async (
   data: ApproveSubmissionDto
 ): Promise<ApprovedSubmissionResponse> => {
   assertCapability(user, Capability.SUBMISSION_APPROVE);
+
+  if (
+    !data.required_staff_approval &&
+    !hasRole(user, UserRole.HEAD_OF_UNIT) &&
+    !isSuperAdmin(user)
+  ) {
+    throw new ForbiddenError('General staff cannot approve this submission');
+  }
+
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },

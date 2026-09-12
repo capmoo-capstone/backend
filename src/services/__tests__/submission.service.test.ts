@@ -5,9 +5,14 @@ import {
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
+  UserRole,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, NotFoundError } from '../../utils/errors';
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../utils/errors';
 import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock, prismaMock } from '../../test/prisma-mock';
 import { generatePresignedDownloadUrl } from '../storage.service';
@@ -567,6 +572,100 @@ describe('submission.service', () => {
         required_signature: true,
       } as any)
     ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('approveSubmission throws ForbiddenError when general staff attempts to approve without required_staff_approval', async () => {
+    const generalStaffUser = {
+      id: 'staff-1',
+      full_name: 'General Staff',
+      roles: [{ role: UserRole.GENERAL_STAFF, dept_id: 'DEPT-SUP-OPS' }],
+    } as any;
+
+    await expect(
+      approveSubmission(generalStaffUser, {
+        id: 'submission-1',
+        required_signature: false,
+        required_staff_approval: false,
+      })
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('approveSubmission allows general staff when required_staff_approval is true', async () => {
+    const generalStaffUser = {
+      id: 'staff-1',
+      full_name: 'General Staff',
+      roles: [{ role: UserRole.GENERAL_STAFF, dept_id: 'DEPT-SUP-OPS' }],
+    } as any;
+
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+      completed_by: generalStaffUser.id,
+    });
+
+    const result = await approveSubmission(generalStaffUser, {
+      id: 'submission-1',
+      required_signature: false,
+      required_staff_approval: true,
+    });
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+  });
+
+  it('approveSubmission allows head of unit when required_staff_approval is false', async () => {
+    const headOfUnitUser = {
+      id: 'head-1',
+      full_name: 'Head of Unit',
+      roles: [{ role: UserRole.HEAD_OF_UNIT, dept_id: 'DEPT-SUP-OPS' }],
+    } as any;
+
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+      completed_by: headOfUnitUser.id,
+    });
+
+    const result = await approveSubmission(headOfUnitUser, {
+      id: 'submission-1',
+      required_signature: false,
+      required_staff_approval: false,
+    });
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
   });
 
   it('proposeSubmission moves waiting-proposal submissions to waiting signature', async () => {
