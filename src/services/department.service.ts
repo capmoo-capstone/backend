@@ -21,6 +21,7 @@ export const listDepartments = async (
   const include: Prisma.DepartmentInclude = options.withUnit
     ? {
         units: {
+          orderBy: { name: 'asc' },
           select: {
             id: true,
             dept_id: true,

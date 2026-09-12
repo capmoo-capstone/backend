@@ -6,7 +6,7 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WORKFLOW_STEP_ORDERS } from '../../utils/constant';
+import { OPS_DEPT_ID, WORKFLOW_STEP_ORDERS } from '../../utils/constant';
 import { BadRequestError, NotFoundError } from '../../utils/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
@@ -356,6 +356,126 @@ describe('project-finance.service', () => {
       );
       expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
         where: expectedWhere,
+      });
+    });
+
+    it('should apply search filter for title, receive_no, and contract_no', async () => {
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(mockUser, 1, 10, {
+        search: 'CN-123',
+      });
+
+      const expectedWhere = {
+        AND: [
+          {
+            OR: [
+              {
+                project: {
+                  title: {
+                    contains: 'CN-123',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                project: {
+                  receive_no: {
+                    contains: 'CN-123',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                project: {
+                  contract_no: {
+                    contract_no: {
+                      contains: 'CN-123',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+        })
+      );
+    });
+
+    it('should filter by assignee (procurement or contract) when user is general staff only', async () => {
+      const generalStaffUser = {
+        id: 'staff-user-1',
+        email: 'staff@example.com',
+        full_name: 'General Staff',
+        roles: [{ role: 'GENERAL_STAFF', dept_id: 'd1' }],
+      } as unknown as AuthPayload;
+
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(generalStaffUser, 1, 10);
+
+      const expectedWhere = {
+        project: {
+          requesting_dept_id: { in: ['d1'] },
+        },
+        AND: [
+          {
+            project: {
+              OR: [
+                {
+                  assignee_procurement: {
+                    some: { id: generalStaffUser.id },
+                  },
+                },
+                {
+                  assignee_contract: {
+                    some: { id: generalStaffUser.id },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+        })
+      );
+      expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+    });
+
+    it('should not filter by assignee when user has FINANCE_STAFF role in supply department', async () => {
+      const financeUser = {
+        id: 'finance-user-1',
+        email: 'finance@example.com',
+        full_name: 'Finance Staff',
+        roles: [{ role: 'FINANCE_STAFF', dept_id: OPS_DEPT_ID }],
+      } as unknown as AuthPayload;
+
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(financeUser, 1, 10);
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {},
+        })
+      );
+      expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
+        where: {},
       });
     });
   });

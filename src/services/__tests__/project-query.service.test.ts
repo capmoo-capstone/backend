@@ -208,6 +208,47 @@ describe('project-query.service', () => {
     });
   });
 
+  it('listProjects searches by contract_no and flattens contract_no in response', async () => {
+    prismaMock.project.findMany.mockResolvedValue([
+      {
+        ...projectRow,
+        contract_no: { contract_no: 'CN-2569/001' },
+      },
+    ]);
+    prismaMock.project.count.mockResolvedValue(1);
+
+    const result = await listProjects(supplyUser, 1, 10, {
+      search: 'CN-2569/001',
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        contract_no: { contract_no: 'CN-2569/001' },
+      })
+    );
+
+    const findCall = prismaMock.project.findMany.mock.calls[0][0];
+    const whereJson = JSON.stringify(findCall.where);
+    expect(whereJson).toContain('"contract_no":{"contract_no":{"contains":"CN-2569/001","mode":"insensitive"}}');
+  });
+
+  it('listProjects sorts by contract_no relation', async () => {
+    prismaMock.project.findMany.mockResolvedValue([projectRow]);
+    prismaMock.project.count.mockResolvedValue(1);
+
+    await listProjects(supplyUser, 1, 10, {
+      sortBy: 'contract_no',
+      sortOrder: 'asc',
+    });
+
+    const findCall = prismaMock.project.findMany.mock.calls[0][0];
+    expect(findCall.orderBy).toEqual([
+      { contract_no: { contract_no: 'asc' } },
+      { receive_no: 'desc' },
+    ]);
+  });
+
   it('getById returns full project details for supply users', async () => {
     txMock.project.findUnique.mockResolvedValue({
       ...projectRow,
@@ -805,6 +846,7 @@ describe('project-query.service', () => {
       );
       expect(ownProjectWhereJson()).toContain('"assignee_procurement"');
       expect(ownProjectWhereJson()).toContain('"assignee_contract"');
+      expect(ownProjectWhereJson()).toContain('"contract_no"');
     });
 
     describe('getOwnProjectsTotal', () => {

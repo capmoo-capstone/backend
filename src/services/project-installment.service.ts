@@ -6,14 +6,16 @@ import {
   ProjectStatus,
   SubmissionStatus,
   UnitResponsibleType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AuthPayload } from '../types/auth.type';
 import { BadRequestError, NotFoundError } from '../utils/errors';
 import { ListResponse, PaginatedResponse } from '../types/common.type';
-import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
+import { OPS_DEPT_ID, WORKFLOW_STEP_ORDERS } from '../utils/constant';
 import { acquireProjectInstallmentLock } from '../utils/project-installment';
 import { Capability, assertCapability } from '../utils/access-policy';
+import { isSuperAdmin } from '../utils/permissions';
 import { projectReadWhere } from '../utils/project-scope';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import {
@@ -149,6 +151,17 @@ export const createInstallment = async (
   return transactionResult.exportRequest;
 };
 
+const isManagementOrFinanceRole = (user: AuthPayload): boolean => {
+  if (isSuperAdmin(user)) return true;
+  return user.roles.some(
+    (r) =>
+      r.dept_id === OPS_DEPT_ID &&
+      (r.role === UserRole.FINANCE_STAFF ||
+        r.role === UserRole.HEAD_OF_UNIT ||
+        r.role === UserRole.HEAD_OF_DEPARTMENT)
+  );
+};
+
 export const getInstallments = async (
   user: AuthPayload,
   page: number,
@@ -161,9 +174,28 @@ export const getInstallments = async (
     where.project = projectScope;
   }
 
-  if (filters) {
-    const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
+  const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
 
+  if (!isManagementOrFinanceRole(user)) {
+    conditions.push({
+      project: {
+        OR: [
+          {
+            assignee_procurement: {
+              some: { id: user.id },
+            },
+          },
+          {
+            assignee_contract: {
+              some: { id: user.id },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  if (filters) {
     if (filters.search?.trim()) {
       conditions.push({
         OR: [
@@ -180,6 +212,16 @@ export const getInstallments = async (
               receive_no: {
                 contains: filters.search.trim(),
                 mode: 'insensitive',
+              },
+            },
+          },
+          {
+            project: {
+              contract_no: {
+                contract_no: {
+                  contains: filters.search.trim(),
+                  mode: 'insensitive',
+                },
               },
             },
           },
@@ -237,10 +279,10 @@ export const getInstallments = async (
         },
       });
     }
+  }
 
-    if (conditions.length > 0) {
-      where.AND = conditions;
-    }
+  if (conditions.length > 0) {
+    where.AND = conditions;
   }
 
   const [exportData, count] = await Promise.all([

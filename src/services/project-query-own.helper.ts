@@ -81,6 +81,11 @@ const PROJECT_SELECT = {
       status: true,
     },
   },
+  contract_no: {
+    select: {
+      contract_no: true,
+    },
+  },
 } satisfies Prisma.ProjectSelect;
 
 export const OWN_PROJECT_ACTION_TABS: Record<OwnRole, OwnProjectTab[]> = {
@@ -524,6 +529,14 @@ const buildSearchFilter = (search?: string): Prisma.ProjectWhereInput => {
         },
       },
       {
+        contract_no: {
+          contract_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+      },
+      {
         title: {
           contains: searchTerm,
           mode: Prisma.QueryMode.insensitive,
@@ -762,6 +775,7 @@ export const getOwnProjects = async (
       id: project.id,
       status: resolveOwnProjectStatus(project, user, tab),
       receive_no: project.receive_no,
+      contract_no: project.contract_no?.contract_no ?? null,
       procurement_type: project.procurement_type,
       expected_approval_date: project.expected_approval_date,
       requesting_dept: project.requesting_dept,
