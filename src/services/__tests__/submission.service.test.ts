@@ -111,6 +111,10 @@ describe('submission.service', () => {
     const result = await getProjectSubmissions(user, 'project-1');
 
     expect(result.procurement[0]).toMatchObject({
+      step_order: 0,
+      step_status: 'NOT_STARTED',
+    });
+    expect(result.procurement[1]).toMatchObject({
       step_order: 1,
       step_status: SubmissionStatus.COMPLETED,
     });
@@ -120,7 +124,7 @@ describe('submission.service', () => {
       step_status: SubmissionStatus.WAITING_SIGNATURE,
     });
     expect(mockedDownloadUrl).toHaveBeenCalledWith('a.pdf');
-    expect(result.procurement[0].data[0].documents[0].download_url).toBe(
+    expect(result.procurement[1].data[0].documents[0].download_url).toBe(
       'https://files.test/a.pdf'
     );
   });

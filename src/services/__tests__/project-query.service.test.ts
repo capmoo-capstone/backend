@@ -1007,7 +1007,7 @@ describe('project-query.service', () => {
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
-      expect(result.procurement).toHaveLength(4);
+      expect(result.procurement).toHaveLength(5);
       expect(result.contract).toHaveLength(1);
       expect(result.contract[0]).toMatchObject({
         installment_no: 1,
@@ -1015,7 +1015,7 @@ describe('project-query.service', () => {
       });
 
       expect(result.procurement[0]).toMatchObject({
-        step_order: 1,
+        step_order: 0,
         step_status: 'NOT_STARTED',
         documents: [],
       });
@@ -1059,11 +1059,11 @@ describe('project-query.service', () => {
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
-      expect(result.procurement[0].step_status).toBe(
+      expect(result.procurement[1].step_status).toBe(
         SubmissionStatus.WAITING_APPROVAL
       );
-      expect(result.procurement[0].documents).toHaveLength(1);
-      expect(result.procurement[0].documents[0]).toMatchObject({
+      expect(result.procurement[1].documents).toHaveLength(1);
+      expect(result.procurement[1].documents[0]).toMatchObject({
         file_name: 'round1-completed.pdf',
         download_url: 'https://files.test/r1.pdf',
       });
@@ -1096,11 +1096,11 @@ describe('project-query.service', () => {
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
-      expect(result.procurement[0].step_status).toBe(
+      expect(result.procurement[1].step_status).toBe(
         SubmissionStatus.WAITING_APPROVAL
       );
-      expect(result.procurement[0].documents).toHaveLength(1);
-      expect(result.procurement[0].documents[0]).toMatchObject({
+      expect(result.procurement[1].documents).toHaveLength(1);
+      expect(result.procurement[1].documents[0]).toMatchObject({
         file_name: 'round1-latest.pdf',
         download_url: 'https://files.test/r1.pdf',
       });

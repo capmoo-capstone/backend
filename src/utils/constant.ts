@@ -18,13 +18,13 @@ export const CONTRACT_UNIT_ID = 'UNIT-CONT';
 export const SUPPLY_UNIT_ID = 'UNIT-FIN-SUP';
 
 export const WORKFLOW_STEP_ORDERS: Record<UnitResponsibleType, number[]> = {
-  [UnitResponsibleType.LT100K]: [1, 2, 3, 4],
-  [UnitResponsibleType.LT500K]: [1, 2, 3, 4],
-  [UnitResponsibleType.MT500K]: [1, 2, 3, 4, 5, 6],
-  [UnitResponsibleType.SELECTION]: [1, 2, 3, 4, 5, 6, 7],
-  [UnitResponsibleType.EBIDDING]: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  [UnitResponsibleType.LT100K]: [0, 1, 2, 3, 4],
+  [UnitResponsibleType.LT500K]: [0, 1, 2, 3, 4],
+  [UnitResponsibleType.MT500K]: [0, 1, 2, 3, 4, 5, 6],
+  [UnitResponsibleType.SELECTION]: [0, 1, 2, 3, 4, 5, 6, 7],
+  [UnitResponsibleType.EBIDDING]: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
   [UnitResponsibleType.CONTRACT]: [1, 2, 3, 4, 5],
-  [UnitResponsibleType.INTERNAL]: [1, 2, 3, 4],
+  [UnitResponsibleType.INTERNAL]: [0, 1, 2, 3, 4],
 };
 
 export const WORKLOAD_STATUSES = [
