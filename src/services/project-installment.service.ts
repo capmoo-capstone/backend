@@ -215,6 +215,16 @@ export const getInstallments = async (
               },
             },
           },
+          {
+            project: {
+              contract_no: {
+                contract_no: {
+                  contains: filters.search.trim(),
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
         ],
       });
     } else {

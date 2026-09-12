@@ -60,6 +60,7 @@ import { projectReadWhere } from '../utils/project-scope';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
+  'contract_no',
   'title',
   'created_at',
   'status',
@@ -98,6 +99,14 @@ const buildWhereClause = (
           receive_no: {
             contains: searchTerm,
             mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
+          contract_no: {
+            contract_no: {
+              contains: searchTerm,
+              mode: Prisma.QueryMode.insensitive,
+            },
           },
         },
         {
@@ -244,6 +253,21 @@ const buildOrderBy = (filters?: ProjectFilterQuery) => {
       ];
     }
 
+    if (filters.sortBy === 'contract_no') {
+      const sortOrder: Prisma.SortOrder = filters.sortOrder ?? 'desc';
+
+      return [
+        {
+          contract_no: {
+            contract_no: sortOrder,
+          },
+        },
+        {
+          receive_no: 'desc' as Prisma.SortOrder,
+        },
+      ];
+    }
+
     return [
       {
         [filters.sortBy]: filters.sortOrder ?? 'desc',
@@ -271,6 +295,7 @@ export const listProjects = async (
         requesting_unit: { select: { id: true, name: true } },
         assignee_procurement: { select: { id: true, full_name: true } },
         assignee_contract: { select: { id: true, full_name: true } },
+        contract_no: { select: { contract_no: true } },
       },
       skip,
       take: limit,

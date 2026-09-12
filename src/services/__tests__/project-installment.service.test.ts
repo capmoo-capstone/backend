@@ -359,6 +359,56 @@ describe('project-finance.service', () => {
       });
     });
 
+    it('should apply search filter for title, receive_no, and contract_no', async () => {
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(mockUser, 1, 10, {
+        search: 'CN-123',
+      });
+
+      const expectedWhere = {
+        AND: [
+          {
+            OR: [
+              {
+                project: {
+                  title: {
+                    contains: 'CN-123',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                project: {
+                  receive_no: {
+                    contains: 'CN-123',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                project: {
+                  contract_no: {
+                    contract_no: {
+                      contains: 'CN-123',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+        })
+      );
+    });
+
     it('should filter by assignee (procurement or contract) when user is general staff only', async () => {
       const generalStaffUser = {
         id: 'staff-user-1',
