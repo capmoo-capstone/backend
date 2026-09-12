@@ -242,7 +242,7 @@ export const getProjectSubmissions = async (
       submitted_by:
         submission.submission_type === SubmissionType.VENDOR
           ? 'ผู้ค้า'
-          : submission.submitter?.full_name ?? null,
+          : (submission.submitter?.full_name ?? null),
       approved_by: submission.approver?.full_name ?? null,
       proposing_by: submission.proposer?.full_name ?? null,
       completed_by: submission.completer?.full_name ?? null,
