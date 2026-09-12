@@ -108,7 +108,7 @@ export const listUnits = async (
       where,
       skip: skip,
       take: limit,
-      orderBy: { id: 'desc' },
+      orderBy: { name: 'asc' },
       include: includeRoles ? include : undefined,
     }),
     prisma.unit.count({ where }),
