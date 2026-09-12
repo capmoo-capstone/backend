@@ -676,7 +676,7 @@ export const createVendorSubmissionsProject = async (
         installment_no: installmentNo,
         submission_round,
         submission_type: SubmissionType.VENDOR,
-        status: SubmissionStatus.COMPLETED,
+        status: SubmissionStatus.WAITING_APPROVAL,
         po_no: data.po_no,
         meta_data: [{ field_key: 'installment_no', value: installmentNo }],
         documents: {

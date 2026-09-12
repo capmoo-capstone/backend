@@ -376,7 +376,7 @@ describe('submission.service', () => {
       step_order: 2,
       submission_round: 1,
       installment_no: 1,
-      status: SubmissionStatus.COMPLETED,
+      status: SubmissionStatus.WAITING_APPROVAL,
     });
 
     const result = await createVendorSubmissionsProject({
@@ -394,7 +394,7 @@ describe('submission.service', () => {
       ],
     });
 
-    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(result.status).toBe(SubmissionStatus.WAITING_APPROVAL);
     expect(txMock.$executeRaw).toHaveBeenCalledTimes(1);
     expect(mockedSyncProjectPhases).toHaveBeenCalledWith(
       txMock,
