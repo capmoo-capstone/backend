@@ -72,6 +72,7 @@ export interface OverviewBaseResponse {
     type: ProcurementType;
     count: number;
   }>;
+  costSummary: DashboardCostSummary;
 }
 
 export interface OverviewPageResponse extends OverviewBaseResponse {
@@ -80,7 +81,6 @@ export interface OverviewPageResponse extends OverviewBaseResponse {
 }
 
 export interface HomePageResponse extends OverviewBaseResponse {
-  costSummary: DashboardCostSummary;
   budgetPlanSummary: DashboardPlanSummary;
 }
 

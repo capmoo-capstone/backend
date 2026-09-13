@@ -167,7 +167,9 @@ describe('dashboard.service', () => {
   it('builds procurement overview buckets for fiscal Q1', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: 1000, actual_cost: 800 },
+    });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([
       {
         activity_type_name: 'งบประมาณแผ่นดิน',
@@ -192,6 +194,10 @@ describe('dashboard.service', () => {
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
     expect(result.range.to.toISOString()).toBe('2025-12-31T16:59:59.999Z');
     expect(result.procurementTypes).toHaveLength(6);
+    expect(result.costSummary).toEqual({
+      totalBudget: 1000,
+      totalActualCost: 800,
+    });
     expect(result.statusBar.map((point) => point.status)).toEqual([
       ProjectStatus.UNASSIGNED,
       ProjectStatus.WAITING_ACCEPT,
@@ -238,7 +244,9 @@ describe('dashboard.service', () => {
   it('uses external status buckets and unit visibility for procurement overview', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: null, actual_cost: null },
+    });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
 
     const result = (await getProcurementOverview(externalUser, {
@@ -248,6 +256,10 @@ describe('dashboard.service', () => {
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
     })) as OverviewPageResponse;
 
+    expect(result.costSummary).toEqual({
+      totalBudget: 0,
+      totalActualCost: 0,
+    });
     expect(result.statusBar.map((point) => point.status)).toEqual([
       'NOT_STARTED',
       ProjectStatus.IN_PROGRESS,

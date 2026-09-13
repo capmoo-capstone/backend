@@ -399,16 +399,19 @@ export const getProcurementOverview = async (
     };
   }
 
-  const [procurementTypes, statusBar, timeline] = await Promise.all([
-    getProcurementTypeDonut(visibilityWhere, range),
-    getStatusBuckets(user, visibilityWhere, range),
-    getTimelineLine(visibilityWhere, range, query.mode),
-  ]);
+  const [procurementTypes, costSummary, statusBar, timeline] =
+    await Promise.all([
+      getProcurementTypeDonut(visibilityWhere, range),
+      getCostSummary(visibilityWhere, range),
+      getStatusBuckets(user, visibilityWhere, range),
+      getTimelineLine(visibilityWhere, range, query.mode),
+    ]);
 
   return {
     mode: query.mode,
     range,
     procurementTypes,
+    costSummary,
     statusBar,
     timeline,
   };
