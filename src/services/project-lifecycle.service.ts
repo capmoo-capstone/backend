@@ -283,6 +283,11 @@ export const cancelProject = async (
     await createCancellationAudit(tx, user, cancelled, updated.status);
 
     if (isHead) {
+      await tx.budgetPlan.updateMany({
+        where: { project_id: data.id },
+        data: { project_id: null },
+      });
+
       await recordCancellationDecisionAudit(tx, {
         eventType: AuditEventType.PROJECT_CANCELLATION_APPROVED,
         before: {
@@ -349,6 +354,11 @@ export const approveCancellation = async (
       projectStatus,
       ProjectStatus.CANCELLED
     );
+
+    await tx.budgetPlan.updateMany({
+      where: { project_id: id },
+      data: { project_id: null },
+    });
 
     const approvedCancellation = await tx.projectCancellation.update({
       where: { id: cancellation.id },
