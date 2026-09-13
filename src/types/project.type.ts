@@ -27,6 +27,8 @@ export interface ProjectInstallmentListItem {
     title: string;
     actual_cost: Decimal;
     procurement_type: ProcurementType;
+    po_no: string;
+    vendor_name: string;
     assignee_contract: Array<{ id: string; full_name: string }>;
     requesting_dept: { id: string; name: string };
   };

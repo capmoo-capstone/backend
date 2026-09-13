@@ -305,6 +305,8 @@ export const getInstallments = async (
             actual_cost: true,
             installment_amounts: true,
             procurement_type: true,
+            po_no: true,
+            vendor_name: true,
             assignee_contract: {
               select: { id: true, full_name: true },
             },
