@@ -20,7 +20,7 @@ export interface ProjectInstallmentListItem {
   installment_amount: number;
   status: ProjectInstallmentStatus;
   request_edit_reason: string | null;
-  created_at: Date;
+  exported_at: Date | null;
   project: {
     id: string;
     receive_no: string;

@@ -288,7 +288,7 @@ describe('project-finance.service', () => {
           installment_no: 1,
           status: ProjectInstallmentStatus.WAITING_EXPORT,
           request_edit_reason: null,
-          created_at: new Date('2026-09-01'),
+          exported_at: new Date('2026-09-01'),
           project: {
             id: 'p1',
             receive_no: 'RC-001',
@@ -305,7 +305,7 @@ describe('project-finance.service', () => {
           installment_no: 1,
           status: ProjectInstallmentStatus.EXPORTED,
           request_edit_reason: null,
-          created_at: new Date('2026-09-02'),
+          exported_at: new Date('2026-09-02'),
           project: {
             id: 'p2',
             receive_no: 'RC-002',
@@ -322,7 +322,7 @@ describe('project-finance.service', () => {
           installment_no: 2,
           status: ProjectInstallmentStatus.WAITING_EXPORT,
           request_edit_reason: null,
-          created_at: new Date('2026-09-03'),
+          exported_at: new Date('2026-09-03'),
           project: {
             id: 'p2',
             receive_no: 'RC-002',
@@ -357,7 +357,7 @@ describe('project-finance.service', () => {
             installment_amount: 45000,
             status: ProjectInstallmentStatus.WAITING_EXPORT,
             request_edit_reason: null,
-            created_at: new Date('2026-09-01'),
+            exported_at: new Date('2026-09-01'),
             project: {
               id: 'p1',
               receive_no: 'RC-001',
@@ -374,7 +374,7 @@ describe('project-finance.service', () => {
             installment_amount: 300000,
             status: ProjectInstallmentStatus.EXPORTED,
             request_edit_reason: null,
-            created_at: new Date('2026-09-02'),
+            exported_at: new Date('2026-09-02'),
             project: {
               id: 'p2',
               receive_no: 'RC-002',
@@ -391,7 +391,7 @@ describe('project-finance.service', () => {
             installment_amount: 300000,
             status: ProjectInstallmentStatus.WAITING_EXPORT,
             request_edit_reason: null,
-            created_at: new Date('2026-09-03'),
+            exported_at: new Date('2026-09-03'),
             project: {
               id: 'p2',
               receive_no: 'RC-002',

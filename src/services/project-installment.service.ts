@@ -316,7 +316,7 @@ export const getInstallments = async (
         installment_no: true,
         status: true,
         request_edit_reason: true,
-        created_at: true,
+        exported_at: true,
       },
     }),
     prisma.projectInstallment.count({ where }),
@@ -346,7 +346,7 @@ export const getInstallments = async (
       installment_amount: installmentAmount,
       status: item.status,
       request_edit_reason: item.request_edit_reason,
-      created_at: item.created_at,
+      exported_at: item.exported_at,
       project: projectWithoutAmounts,
     };
   });
