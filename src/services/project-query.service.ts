@@ -163,11 +163,12 @@ const buildWhereClause = (
       procurement_type: { in: filters.procurementType },
     });
   }
+  const statusConditions: Prisma.ProjectWhereInput[] = [];
   if (filters?.status?.length) {
-    and.push({ status: { in: filters.status } });
+    statusConditions.push({ status: { in: filters.status } });
   }
   if (filters?.procurementStatus?.length) {
-    and.push({
+    statusConditions.push({
       AND: [
         {
           current_workflow_type: {
@@ -183,7 +184,7 @@ const buildWhereClause = (
     });
   }
   if (filters?.contractStatus?.length) {
-    and.push({
+    statusConditions.push({
       AND: [
         {
           current_workflow_type: UnitResponsibleType.CONTRACT,
@@ -194,6 +195,11 @@ const buildWhereClause = (
           },
         },
       ],
+    });
+  }
+  if (statusConditions.length > 0) {
+    and.push({
+      OR: statusConditions,
     });
   }
   if (filters?.urgentStatus?.length) {

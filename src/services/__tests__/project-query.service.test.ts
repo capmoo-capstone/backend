@@ -252,6 +252,40 @@ describe('project-query.service', () => {
     ]);
   });
 
+  it('listProjects combines status, procurementStatus, and contractStatus with OR', async () => {
+    prismaMock.project.findMany.mockResolvedValue([projectRow]);
+    prismaMock.project.count.mockResolvedValue(1);
+
+    await listProjects(supplyUser, 1, 10, {
+      status: [ProjectStatus.WAITING_ACCEPT],
+      procurementStatus: [ProjectStatus.IN_PROGRESS, ProjectStatus.REVIEW_TOR],
+      contractStatus: [ProjectStatus.IN_PROGRESS],
+    });
+
+    const findCall = prismaMock.project.findMany.mock.calls[0][0];
+    expect(findCall.where.AND).toContainEqual({
+      OR: [
+        { status: { in: [ProjectStatus.WAITING_ACCEPT] } },
+        {
+          AND: [
+            { current_workflow_type: { not: UnitResponsibleType.CONTRACT } },
+            {
+              status: {
+                in: [ProjectStatus.IN_PROGRESS, ProjectStatus.REVIEW_TOR],
+              },
+            },
+          ],
+        },
+        {
+          AND: [
+            { current_workflow_type: UnitResponsibleType.CONTRACT },
+            { status: { in: [ProjectStatus.IN_PROGRESS] } },
+          ],
+        },
+      ],
+    });
+  });
+
   describe('ProjectFilterQuerySchema status validation', () => {
     it('accepts valid statuses and throws on invalid statuses', () => {
       // Valid mainStatus
