@@ -11,7 +11,8 @@ import {
 import { AuthPayload } from '../../types/auth.type';
 import {
   PeriodicSummaryResponse,
-  ProcurementOverviewResponse,
+  OverviewPageResponse,
+  HomePageResponse,
   UnitGroupExecutiveSummaryResponse,
   UnitGroupProcurementDetailsResponse,
   UnitGroupProcurementMetricsResponse,
@@ -34,7 +35,7 @@ export const getPeriodicSummary = (
 export const getProcurementOverview = (
   user: AuthPayload,
   query: ProcurementOverviewQuery
-): Promise<ProcurementOverviewResponse> =>
+): Promise<OverviewPageResponse | HomePageResponse> =>
   overviewHelper.getProcurementOverview(user, query);
 
 export const getUnitGroupExecutiveSummary = (

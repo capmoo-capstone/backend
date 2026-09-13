@@ -14,6 +14,10 @@ import {
   getPeriodicSummary,
   getProcurementOverview,
 } from '../dashboard/dashboard.service';
+import {
+  HomePageResponse,
+  OverviewPageResponse,
+} from '../../types/dashboard.type';
 import { OwnProjectTab } from '../../types/project.type';
 
 const supplyUser: AuthPayload = {
@@ -177,13 +181,13 @@ describe('dashboard.service', () => {
       },
     ]);
 
-    const result = await getProcurementOverview(supplyUser, {
+    const result = (await getProcurementOverview(supplyUser, {
       page: 'dashboard',
       mode: 'quarter',
       deptId: OPS_DEPT_ID,
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2025-12-31T16:59:59.999Z'),
-    });
+    })) as OverviewPageResponse;
 
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
     expect(result.range.to.toISOString()).toBe('2025-12-31T16:59:59.999Z');
@@ -195,18 +199,40 @@ describe('dashboard.service', () => {
       ProjectStatus.CLOSED,
       ProjectStatus.CANCELLED,
     ]);
-    expect(result.budgetInvestment).toEqual([
-      {
-        category: '',
-        planCount: 0,
-        amount: 0,
-      },
-    ]);
     expect(result.timeline.map((point) => point.label)).toEqual([
       '2025-10',
       '2025-11',
       '2025-12',
     ]);
+  });
+
+  it('aggregates total budget and total actual cost for cost summary in procurement overview home page', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: 150000.5, actual_cost: 120000.25 },
+    });
+
+    const result = (await getProcurementOverview(supplyUser, {
+      page: 'home',
+      mode: 'fiscalYear',
+      dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+      dateTo: new Date('2026-09-30T16:59:59.999Z'),
+    })) as HomePageResponse;
+
+    expect(result.costSummary).toEqual({
+      totalBudget: 150000.5,
+      totalActualCost: 120000.25,
+    });
+    expect(prismaMock.project.aggregate).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        created_at: expect.any(Object),
+      }),
+      _sum: {
+        budget: true,
+        actual_cost: true,
+      },
+    });
   });
 
   it('uses external status buckets and unit visibility for procurement overview', async () => {
@@ -215,12 +241,12 @@ describe('dashboard.service', () => {
     prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
 
-    const result = await getProcurementOverview(externalUser, {
+    const result = (await getProcurementOverview(externalUser, {
       page: 'dashboard',
       mode: 'month',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
-    });
+    })) as OverviewPageResponse;
 
     expect(result.statusBar.map((point) => point.status)).toEqual([
       'NOT_STARTED',
@@ -243,13 +269,13 @@ describe('dashboard.service', () => {
     prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
 
-    const result = await getProcurementOverview(externalUser, {
+    const result = (await getProcurementOverview(externalUser, {
       page: 'home',
       mode: 'month',
       deptId: 'dept-1',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
-    });
+    })) as HomePageResponse;
 
     expect(result.budgetPlanSummary).toBeNull();
   });
@@ -268,13 +294,13 @@ describe('dashboard.service', () => {
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(2);
 
-    const result = await getProcurementOverview(externalUser, {
+    const result = (await getProcurementOverview(externalUser, {
       page: 'home',
       mode: 'fiscalYear',
       deptId: 'dept-1',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
-    });
+    })) as HomePageResponse;
 
     expect(result.budgetPlanSummary).toEqual({
       totalBudget: 50000,

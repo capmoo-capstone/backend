@@ -5,7 +5,10 @@ import {
   PROCUREMENT_WORKFLOW_TYPES,
 } from '../../utils/constant';
 import { hasOrganizationWideReadAccess } from '../../utils/access-policy';
-import { getDeptIdsForUser, haveSupplyPermission } from '../../utils/permissions';
+import {
+  getDeptIdsForUser,
+  haveSupplyPermission,
+} from '../../utils/permissions';
 import {
   daysInBangkokMonth,
   fromBangkokDate,
@@ -17,9 +20,11 @@ import {
 } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import {
+  DashboardCostSummary,
   DashboardStatusPoint,
   PeriodicSummaryResponse,
-  ProcurementOverviewResponse,
+  OverviewPageResponse,
+  HomePageResponse,
   ProcurementPlanSummary,
 } from '../../types/dashboard.type';
 import {
@@ -39,12 +44,6 @@ export const getPeriodicRanges = (
   const current = { from: query.dateFrom, to: query.dateTo };
   const previous = getPreviousRange(current, query.mode);
   return { current, previous };
-};
-export const getOverviewRange = (
-  query: ProcurementOverviewQuery
-): { range: DateRange } => {
-  const range = { from: query.dateFrom, to: query.dateTo };
-  return { range };
 };
 
 export const buildVisibilityWhere = (
@@ -340,7 +339,11 @@ const getPlanSummary = async (
         ...baseBudgetWhere,
         OR: [
           { project_id: null },
-          { project: andWhere(visibilityWhere, { status: ProjectStatus.CANCELLED }) },
+          {
+            project: andWhere(visibilityWhere, {
+              status: ProjectStatus.CANCELLED,
+            }),
+          },
         ],
       },
     }),
@@ -370,47 +373,65 @@ const getPlanSummary = async (
   };
 };
 
+const getCostSummary = async (
+  visibilityWhere: Prisma.ProjectWhereInput,
+  range: DateRange
+): Promise<DashboardCostSummary> => {
+  const aggr = await prisma.project.aggregate({
+    where: projectRangeWhere(visibilityWhere, range),
+    _sum: {
+      budget: true,
+      actual_cost: true,
+    },
+  });
+
+  return {
+    totalBudget: Number(aggr?._sum?.budget ?? 0),
+    totalActualCost: Number(aggr?._sum?.actual_cost ?? 0),
+  };
+};
+
 export const getProcurementOverview = async (
   user: AuthPayload,
   query: ProcurementOverviewQuery
-): Promise<ProcurementOverviewResponse> => {
-  const { range } = getOverviewRange(query);
+): Promise<OverviewPageResponse | HomePageResponse> => {
+  const range = {
+    from: query.dateFrom,
+    to: query.dateTo,
+  };
   const baseVisibilityWhere = buildVisibilityWhere(user);
   const visibilityWhere = query.deptId
     ? andWhere(baseVisibilityWhere, { requesting_dept_id: query.deptId })
     : baseVisibilityWhere;
 
   if (query.page === 'home') {
-    const [procurementTypes, budgetPlanSummary] = await Promise.all([
-      getProcurementTypeDonut(visibilityWhere, range),
-      getPlanSummary(user, visibilityWhere, range, query.mode, query.deptId),
-    ]);
+    const [procurementTypes, costSummary, budgetPlanSummary] =
+      await Promise.all([
+        getProcurementTypeDonut(visibilityWhere, range),
+        getCostSummary(visibilityWhere, range),
+        getPlanSummary(user, visibilityWhere, range, query.mode, query.deptId),
+      ]);
 
     return {
       mode: query.mode,
       range,
       procurementTypes,
+      costSummary,
       budgetPlanSummary,
     };
   }
 
-  const [procurementTypes, statusBar, timeline] =
-    await Promise.all([
-      getProcurementTypeDonut(visibilityWhere, range),
-      getStatusBuckets(user, visibilityWhere, range),
-      getTimelineLine(visibilityWhere, range, query.mode),
-    ]);
+  const [procurementTypes, statusBar, timeline] = await Promise.all([
+    getProcurementTypeDonut(visibilityWhere, range),
+    getStatusBuckets(user, visibilityWhere, range),
+    getTimelineLine(visibilityWhere, range, query.mode),
+  ]);
 
   return {
     mode: query.mode,
     range,
     procurementTypes,
     statusBar,
-    budgetInvestment: [{
-      category: '',
-      planCount: 0,
-      amount: 0
-    }],
     timeline,
   };
 };

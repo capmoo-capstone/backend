@@ -41,12 +41,6 @@ export interface DashboardStatusPoint {
   count: number;
 }
 
-export interface DashboardBudgetPoint {
-  category: string;
-  planCount: number;
-  amount: Decimal | number;
-}
-
 export interface DashboardTimelinePoint {
   label: string;
   from: Date;
@@ -64,7 +58,12 @@ export interface ProcurementPlanSummary {
   completedPlans: number;
 }
 
-export interface ProcurementOverviewResponse {
+export interface DashboardCostSummary {
+  totalBudget: number;
+  totalActualCost: number;
+}
+
+export interface OverviewBaseResponse {
   mode: DashboardMode;
   range: {
     from: Date;
@@ -74,10 +73,16 @@ export interface ProcurementOverviewResponse {
     type: ProcurementType;
     count: number;
   }>;
-  statusBar?: DashboardStatusPoint[];
-  budgetInvestment?: DashboardBudgetPoint[];
-  timeline?: DashboardTimelinePoint[];
-  budgetPlanSummary?: ProcurementPlanSummary | null;
+}
+
+export interface OverviewPageResponse extends OverviewBaseResponse {
+  statusBar: DashboardStatusPoint[];
+  timeline: DashboardTimelinePoint[];
+}
+
+export interface HomePageResponse extends OverviewBaseResponse {
+  costSummary: DashboardCostSummary;
+  budgetPlanSummary: ProcurementPlanSummary;
 }
 
 // --- Unit Group KPI Dashboard Types ---
