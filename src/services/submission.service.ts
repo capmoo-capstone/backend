@@ -558,17 +558,12 @@ export const createStaffSubmissionsProject = async (
       installment_no: installmentNo,
     });
 
-    let nextStatus: SubmissionStatus = data.required_approval
-      ? SubmissionStatus.WAITING_APPROVAL
-      : SubmissionStatus.COMPLETED;
-
-    if (isHeadOfSupplyUnit(user)) {
-      if (!data.required_signature) {
-        nextStatus = SubmissionStatus.WAITING_PROPOSAL;
-      } else {
-        nextStatus = SubmissionStatus.COMPLETED;
-      }
-    }
+    const nextStatus: SubmissionStatus =
+      data.required_approval && !isHeadOfSupplyUnit(user)
+        ? SubmissionStatus.WAITING_APPROVAL
+        : data.required_signature
+          ? SubmissionStatus.WAITING_PROPOSAL
+          : SubmissionStatus.COMPLETED;
 
     const submission = await tx.projectSubmission.create({
       data: {
@@ -624,7 +619,14 @@ export const createStaffSubmissionsProject = async (
         actor_id: user.id,
         step_order: submission.step_order,
       });
+    } else if (nextStatus === SubmissionStatus.WAITING_PROPOSAL) {
+      notificationResults = await notifySignatureRequired(tx, {
+        project_id: submission.project_id,
+        actor_id: user.id,
+        step_order: submission.step_order,
+      });
     }
+
     return { submission, notificationResults };
   });
 

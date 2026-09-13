@@ -26,6 +26,8 @@ import {
   rejectSubmission,
   signAndCompleteSubmission,
 } from '../submission.service';
+import { CreateStaffSubmissionSchema } from '../../schemas/submission.schema';
+import { OPS_DEPT_ID } from '../../utils/constant';
 
 vi.mock('../../utils/phase-status', () => ({
   syncProjectPhases: vi.fn().mockResolvedValue({ id: 'project-1' }),
@@ -288,6 +290,109 @@ describe('submission.service', () => {
       where: { id: 'project-1' },
       data: { actual_cost: 1250.5 },
     });
+  });
+
+  it('CreateStaffSubmissionSchema parses require_signature correctly', () => {
+    const rawWithRequireSig = {
+      project_id: '11111111-1111-4111-a111-111111111111',
+      type: SubmissionType.STAFF,
+      step_order: 1,
+      workflow_type: UnitResponsibleType.LT100K,
+      required_approval: true,
+      required_signature: true,
+      required_updating: false,
+    };
+    const parsed = CreateStaffSubmissionSchema.parse(rawWithRequireSig);
+    expect(parsed.required_signature).toBe(true);
+  });
+
+  it('createStaffSubmissionsProject creates WAITING_PROPOSAL for Head of Unit when require_signature is true', async () => {
+    const headOfUnitUser = {
+      id: 'hou-1',
+      full_name: 'Head of Unit',
+      roles: [
+        {
+          role: UserRole.HEAD_OF_UNIT,
+          dept_id: OPS_DEPT_ID,
+          unit_id: 'unit-1',
+        },
+      ],
+    } as any;
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.WAITING_PROPOSAL,
+    });
+    txMock.userOrganizationRole.findMany.mockResolvedValue([]);
+    txMock.userDelegation.findMany.mockResolvedValue([]);
+    txMock.user.findMany.mockResolvedValue([]);
+
+    const result = await createStaffSubmissionsProject(
+      headOfUnitUser,
+      staffSubmissionDto({
+        required_approval: true,
+        required_signature: true,
+      })
+    );
+
+    expect(result.status).toBe(SubmissionStatus.WAITING_PROPOSAL);
+    expect(txMock.projectSubmission.create.mock.calls[0][0].data.status).toBe(
+      SubmissionStatus.WAITING_PROPOSAL
+    );
+  });
+
+  it('createStaffSubmissionsProject creates COMPLETED for Head of Unit when require_signature is false', async () => {
+    const headOfUnitUser = {
+      id: 'hou-1',
+      full_name: 'Head of Unit',
+      roles: [
+        {
+          role: UserRole.HEAD_OF_UNIT,
+          dept_id: OPS_DEPT_ID,
+          unit_id: 'unit-1',
+        },
+      ],
+    } as any;
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+
+    const result = await createStaffSubmissionsProject(
+      headOfUnitUser,
+      staffSubmissionDto({
+        required_approval: true,
+        require_signature: false,
+      })
+    );
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(txMock.projectSubmission.create.mock.calls[0][0].data.status).toBe(
+      SubmissionStatus.COMPLETED
+    );
   });
 
   it('createStaffSubmissionsProject rejects workflow mismatches before creating a submission', async () => {
