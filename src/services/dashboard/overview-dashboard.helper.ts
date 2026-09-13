@@ -25,7 +25,7 @@ import {
   PeriodicSummaryResponse,
   OverviewPageResponse,
   HomePageResponse,
-  ProcurementPlanSummary,
+  DashboardPlanSummary,
 } from '../../types/dashboard.type';
 import {
   DateRange,
@@ -291,6 +291,7 @@ const buildBudgetPlanWhere = (
 const ACTIVE_PLAN_PROJECT_STATUSES: ProjectStatus[] = [
   ProjectStatus.UNASSIGNED,
   ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
   ProjectStatus.IN_PROGRESS,
   ProjectStatus.WAITING_CANCEL,
   ProjectStatus.WAITING_CLOSE,
@@ -300,19 +301,13 @@ const getPlanSummary = async (
   user: AuthPayload,
   visibilityWhere: Prisma.ProjectWhereInput,
   range: DateRange,
-  mode?: ProcurementOverviewQuery['mode'],
   deptId?: string
-): Promise<ProcurementPlanSummary | null> => {
-  if (mode !== 'fiscalYear') {
-    return null;
-  }
-
+): Promise<DashboardPlanSummary> => {
   const budgetYear = currentFiscalYear(range.from);
   const baseBudgetWhere = buildBudgetPlanWhere(user, budgetYear, deptId);
 
   const [
     totalBudgetAggr,
-    usedBudgetAggr,
     totalPlans,
     notStartedPlans,
     inProgressPlans,
@@ -322,29 +317,13 @@ const getPlanSummary = async (
       where: baseBudgetWhere,
       _sum: { budget_amount: true },
     }),
-    prisma.budgetPlan.aggregate({
-      where: {
-        ...baseBudgetWhere,
-        project: andWhere(visibilityWhere, {
-          status: { not: ProjectStatus.CANCELLED },
-        }),
-      },
-      _sum: { budget_amount: true },
-    }),
     prisma.budgetPlan.count({
       where: baseBudgetWhere,
     }),
     prisma.budgetPlan.count({
       where: {
         ...baseBudgetWhere,
-        OR: [
-          { project_id: null },
-          {
-            project: andWhere(visibilityWhere, {
-              status: ProjectStatus.CANCELLED,
-            }),
-          },
-        ],
+        project_id: null,
       },
     }),
     prisma.budgetPlan.count({
@@ -365,7 +344,6 @@ const getPlanSummary = async (
 
   return {
     totalBudget: Number(totalBudgetAggr?._sum?.budget_amount ?? 0),
-    usedBudget: Number(usedBudgetAggr?._sum?.budget_amount ?? 0),
     totalPlans: totalPlans ?? 0,
     notStartedPlans: notStartedPlans ?? 0,
     inProgressPlans: inProgressPlans ?? 0,
@@ -409,7 +387,7 @@ export const getProcurementOverview = async (
       await Promise.all([
         getProcurementTypeDonut(visibilityWhere, range),
         getCostSummary(visibilityWhere, range),
-        getPlanSummary(user, visibilityWhere, range, query.mode, query.deptId),
+        getPlanSummary(user, visibilityWhere, range, query.deptId),
       ]);
 
     return {

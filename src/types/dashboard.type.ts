@@ -49,9 +49,8 @@ export interface DashboardTimelinePoint {
   completed: number;
 }
 
-export interface ProcurementPlanSummary {
+export interface DashboardPlanSummary {
   totalBudget: number;
-  usedBudget: number;
   totalPlans: number;
   notStartedPlans: number;
   inProgressPlans: number;
@@ -82,7 +81,7 @@ export interface OverviewPageResponse extends OverviewBaseResponse {
 
 export interface HomePageResponse extends OverviewBaseResponse {
   costSummary: DashboardCostSummary;
-  budgetPlanSummary: ProcurementPlanSummary;
+  budgetPlanSummary: DashboardPlanSummary;
 }
 
 // --- Unit Group KPI Dashboard Types ---

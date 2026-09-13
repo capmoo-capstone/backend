@@ -263,31 +263,14 @@ describe('dashboard.service', () => {
     });
   });
 
-  it('returns null budgetPlanSummary when mode is not fiscalYear on home page', async () => {
-    prismaMock.project.count.mockResolvedValue(0);
-    prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
-    prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
-
-    const result = (await getProcurementOverview(externalUser, {
-      page: 'home',
-      mode: 'month',
-      deptId: 'dept-1',
-      dateFrom: new Date('2026-06-30T17:00:00.000Z'),
-      dateTo: new Date('2026-07-31T16:59:59.999Z'),
-    })) as HomePageResponse;
-
-    expect(result.budgetPlanSummary).toBeNull();
-  });
-
   it('queries budget plans by fiscal year when mode is fiscalYear on home page', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null, actual_cost: null } });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
-    prismaMock.budgetPlan.aggregate
-      .mockResolvedValueOnce({ _sum: { budget_amount: 50000 } })
-      .mockResolvedValueOnce({ _sum: { budget_amount: 30000 } });
+    prismaMock.budgetPlan.aggregate.mockResolvedValueOnce({
+      _sum: { budget_amount: 50000 },
+    });
     prismaMock.budgetPlan.count
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(3)
@@ -304,7 +287,6 @@ describe('dashboard.service', () => {
 
     expect(result.budgetPlanSummary).toEqual({
       totalBudget: 50000,
-      usedBudget: 30000,
       totalPlans: 10,
       notStartedPlans: 3,
       inProgressPlans: 5,
@@ -315,32 +297,95 @@ describe('dashboard.service', () => {
       budget_year: 2569,
       unit: { dept_id: { in: ['dept-1'] } },
     });
-    // Verify inProgressPlans count does not filter project by created_at range
-    const inProgressPlanWhere = prismaMock.budgetPlan.count.mock.calls[2][0].where;
+    // Verify totalPlans count
+    expect(prismaMock.budgetPlan.count.mock.calls[0][0].where).toEqual({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+    });
+    // Verify notStartedPlans count
+    expect(prismaMock.budgetPlan.count.mock.calls[1][0].where).toEqual({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+      project_id: null,
+    });
+    // Verify inProgressPlans count includes active statuses (including REVIEW_TOR) and does not filter project by created_at range
+    const inProgressPlanWhere =
+      prismaMock.budgetPlan.count.mock.calls[2][0].where;
+    expect(inProgressPlanWhere).toMatchObject({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+      project: {
+        AND: expect.arrayContaining([
+          { requesting_dept_id: { in: ['dept-1'] } },
+          {
+            status: {
+              in: [
+                ProjectStatus.UNASSIGNED,
+                ProjectStatus.WAITING_ACCEPT,
+                ProjectStatus.REVIEW_TOR,
+                ProjectStatus.IN_PROGRESS,
+                ProjectStatus.WAITING_CANCEL,
+                ProjectStatus.WAITING_CLOSE,
+              ],
+            },
+          },
+        ]),
+      },
+    });
     expect(inProgressPlanWhere?.project).not.toHaveProperty('created_at');
+
+    // Verify completedPlans count
+    const completedPlanWhere =
+      prismaMock.budgetPlan.count.mock.calls[3][0].where;
+    expect(completedPlanWhere).toMatchObject({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+      project: {
+        AND: expect.arrayContaining([
+          { requesting_dept_id: { in: ['dept-1'] } },
+          { status: ProjectStatus.CLOSED },
+        ]),
+      },
+    });
   });
 
   it('uses global project and budget visibility for DEPT-REG general staff', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.budgetPlan.aggregate
-      .mockResolvedValueOnce({ _sum: { budget_amount: 50000 } })
-      .mockResolvedValueOnce({ _sum: { budget_amount: 30000 } });
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null, actual_cost: null } });
+    prismaMock.budgetPlan.aggregate.mockResolvedValueOnce({
+      _sum: { budget_amount: 50000 },
+    });
     prismaMock.budgetPlan.count
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(2);
 
-    await getProcurementOverview(registrationGeneralStaff, {
+    const result = (await getProcurementOverview(registrationGeneralStaff, {
       page: 'home',
       mode: 'fiscalYear',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
+    })) as HomePageResponse;
+
+    expect(result.budgetPlanSummary).toEqual({
+      totalBudget: 50000,
+      totalPlans: 10,
+      notStartedPlans: 3,
+      inProgressPlans: 5,
+      completedPlans: 2,
     });
 
     expect(prismaMock.budgetPlan.aggregate.mock.calls[0][0].where).toEqual({
       budget_year: 2569,
+    });
+    expect(prismaMock.budgetPlan.count.mock.calls[0][0].where).toEqual({
+      budget_year: 2569,
+    });
+    expect(prismaMock.budgetPlan.count.mock.calls[1][0].where).toEqual({
+      budget_year: 2569,
+      project_id: null,
     });
     expect(prismaMock.project.count.mock.calls[0][0].where).not.toMatchObject({
       requesting_dept_id: expect.anything(),
