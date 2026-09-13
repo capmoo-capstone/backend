@@ -439,6 +439,9 @@ describe('project-query.service', () => {
       });
 
       expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.REVIEW_TOR}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.IN_PROGRESS}"`
       );
       expect(ownProjectWhereJson()).toContain(

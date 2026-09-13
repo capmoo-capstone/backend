@@ -1,5 +1,6 @@
 import {
   Prisma,
+  ProcurementType,
   ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
@@ -101,7 +102,10 @@ export const OWN_PROJECT_ACTION_TABS: Record<OwnRole, OwnProjectTab[]> = {
     OwnProjectTab.WAITING_OTHERS,
     OwnProjectTab.WAITING_CANCEL,
   ],
-  [UserRole.DOCUMENT_STAFF]: [OwnProjectTab.WAITING_PROPOSAL, OwnProjectTab.WAITING_SIGNATURE],
+  [UserRole.DOCUMENT_STAFF]: [
+    OwnProjectTab.WAITING_PROPOSAL,
+    OwnProjectTab.WAITING_SIGNATURE,
+  ],
   [UserRole.FINANCE_STAFF]: [
     OwnProjectTab.WAITING_FINANCE_EXPORT,
     OwnProjectTab.WAITING_EDIT,
@@ -362,30 +366,38 @@ export const buildOwnProjectRoleTabWhere = (
     if (tab === 'need_action') {
       return andWhere(
         scope.where,
-        { status: ProjectStatus.IN_PROGRESS },
         orWhere([
-          progressStatusWhere(scope.role, [ProjectPhaseStatus.IN_PROGRESS]),
           andWhere(
-            { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
-            progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
-            progressStatusWhere(UserRole.HEAD_OF_UNIT, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            progressStatusWhere(UserRole.DOCUMENT_STAFF, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            { project_installments: { none: {} } }
+            { status: ProjectStatus.REVIEW_TOR },
+            { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } }
           ),
           andWhere(
-            { current_workflow_type: UnitResponsibleType.CONTRACT },
-            progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
-            progressStatusWhere(UserRole.HEAD_OF_UNIT, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            progressStatusWhere(UserRole.DOCUMENT_STAFF, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            { contract_completed_at: null }
+            { status: ProjectStatus.IN_PROGRESS },
+            orWhere([
+              progressStatusWhere(scope.role, [ProjectPhaseStatus.IN_PROGRESS]),
+              andWhere(
+                { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
+                progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+                progressStatusWhere(UserRole.HEAD_OF_UNIT, [
+                  ProjectPhaseStatus.COMPLETED,
+                ]),
+                progressStatusWhere(UserRole.DOCUMENT_STAFF, [
+                  ProjectPhaseStatus.COMPLETED,
+                ]),
+                { project_installments: { none: {} } }
+              ),
+              andWhere(
+                { current_workflow_type: UnitResponsibleType.CONTRACT },
+                progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+                progressStatusWhere(UserRole.HEAD_OF_UNIT, [
+                  ProjectPhaseStatus.COMPLETED,
+                ]),
+                progressStatusWhere(UserRole.DOCUMENT_STAFF, [
+                  ProjectPhaseStatus.COMPLETED,
+                ]),
+                { contract_completed_at: null }
+              ),
+            ])
           ),
         ])
       );
@@ -676,6 +688,14 @@ const resolveOwnProjectStatus = (
     }
     if (project.status === ProjectStatus.WAITING_ACCEPT) {
       return 'WAITING_ACCEPT';
+    }
+    if (
+      project.status === ProjectStatus.REVIEW_TOR &&
+      PROCUREMENT_WORKFLOW_TYPES.includes(
+        project.current_workflow_type as ProcurementType
+      )
+    ) {
+      return 'NEED_ACTION';
     }
     const staffStatus = activeProgress?.[UserRole.GENERAL_STAFF]?.status;
     const headStatus = activeProgress?.[UserRole.HEAD_OF_UNIT]?.status;
