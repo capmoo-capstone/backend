@@ -160,11 +160,11 @@ const buildWhereClause = (
   }
   if (filters?.procurementType?.length) {
     and.push({
-      procurement_type: { in: filters.procurementType as ProcurementType[] },
+      procurement_type: { in: filters.procurementType },
     });
   }
   if (filters?.status?.length) {
-    and.push({ status: { in: filters.status as ProjectStatus[] } });
+    and.push({ status: { in: filters.status } });
   }
   if (filters?.procurementStatus?.length) {
     and.push({
@@ -176,7 +176,7 @@ const buildWhereClause = (
         },
         {
           status: {
-            in: filters.procurementStatus as ProjectStatus[],
+            in: filters.procurementStatus,
           },
         },
       ],
@@ -190,7 +190,7 @@ const buildWhereClause = (
         },
         {
           status: {
-            in: filters.contractStatus as ProjectStatus[],
+            in: filters.contractStatus,
           },
         },
       ],
@@ -205,27 +205,8 @@ const buildWhereClause = (
   if (filters?.departments?.length) {
     and.push({ requesting_dept_id: { in: filters.departments } });
   }
-  // ── Assignees (OR across both relations + myTasks shortcut) ───────────────
+  // ── Assignees (OR across both relations) ───────────────
   const assigneeIds = new Set<string>(filters?.assignees ?? []);
-  if (filters?.myTasks) {
-    if (isHeadOfSupplyDept(user)) {
-      and.push({
-        responsible_unit_id: {
-          in: [PROC1_UNIT_ID, PROC2_UNIT_ID, CONTRACT_UNIT_ID],
-        },
-      });
-    } else if (isHeadOfSupplyUnit(user)) {
-      const unitIds = user.roles
-        .filter((r) => r.role === UserRole.HEAD_OF_UNIT && r.unit_id)
-        .map((r) => r.unit_id as string);
-      if (unitIds.length > 0) {
-        and.push({ responsible_unit_id: { in: unitIds } });
-      }
-    }
-
-    assigneeIds.add(user.id);
-  }
-
   if (assigneeIds.size > 0) {
     const ids = [...assigneeIds];
     and.push({

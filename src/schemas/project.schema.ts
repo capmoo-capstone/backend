@@ -155,6 +155,22 @@ export const GetProjectsQueryByUnitSchema = z.object({
   unitId: z.string(),
 });
 
+const phaseStatus = [
+  ProjectStatus.UNASSIGNED,
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
+  ProjectStatus.IN_PROGRESS,
+] as const;
+
+const mainStatus = [
+  ProjectStatus.UNASSIGNED,
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.WAITING_CANCEL,
+  ProjectStatus.WAITING_CLOSE,
+  ProjectStatus.CANCELLED,
+  ProjectStatus.CLOSED,
+] as const;
+
 export const ProjectFilterQuerySchema = z
   .object({
     search: z.string().optional(),
@@ -163,14 +179,13 @@ export const ProjectFilterQuerySchema = z
     dateTo: BangkokDateTimeSchema.optional(),
     fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
-    status: z.array(z.enum(ProjectStatus)).optional(),
-    procurementStatus: z.array(z.enum(ProjectStatus)).optional(),
-    contractStatus: z.array(z.enum(ProjectStatus)).optional(),
+    status: z.array(z.enum(mainStatus)).optional(),
+    procurementStatus: z.array(z.enum(phaseStatus)).optional(),
+    contractStatus: z.array(z.enum(phaseStatus)).optional(),
     urgentStatus: z.array(z.enum(UrgentType)).optional(),
     assignees: z.array(z.string()).optional(),
     departments: z.array(z.string()).optional(),
     units: z.array(z.string()).optional(),
-    myTasks: z.boolean().optional(),
     sortBy: z.string().optional(),
     sortOrder: z.enum(['asc', 'desc']).optional(),
   })

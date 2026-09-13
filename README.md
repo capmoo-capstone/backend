@@ -494,7 +494,6 @@ Delegations are always for Supply Operations (`DEPT-SUP-OPS`). `HEAD_OF_UNIT` re
   urgentStatus?: UrgentType[]
   assignees?: string[]       // user IDs
   units?: string[]           // requesting_unit_id values
-  myTasks?: boolean          // scopes to caller's assignee / unit
   sortBy?: string            // receive_no | title | created_at | status | procurement_status | contract_status
   sortOrder?: 'asc' | 'desc'
 }

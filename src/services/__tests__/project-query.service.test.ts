@@ -29,6 +29,7 @@ import {
   getWorkload,
   listProjects,
 } from '../project-query.service';
+import { ProjectFilterQuerySchema } from '../../schemas/project.schema';
 
 vi.mock('../storage.service', () => ({
   generatePresignedDownloadUrl: vi.fn(
@@ -249,6 +250,56 @@ describe('project-query.service', () => {
       { contract_no: { contract_no: 'asc' } },
       { receive_no: 'desc' },
     ]);
+  });
+
+  describe('ProjectFilterQuerySchema status validation', () => {
+    it('accepts valid statuses and throws on invalid statuses', () => {
+      // Valid mainStatus
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          status: [ProjectStatus.UNASSIGNED, ProjectStatus.CLOSED],
+        })
+      ).not.toThrow();
+
+      // Invalid mainStatus (e.g. IN_PROGRESS or REVIEW_TOR is not in mainStatus)
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          status: [ProjectStatus.IN_PROGRESS],
+        })
+      ).toThrow();
+
+      // Valid phaseStatus for procurementStatus
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          procurementStatus: [
+            ProjectStatus.UNASSIGNED,
+            ProjectStatus.REVIEW_TOR,
+            ProjectStatus.IN_PROGRESS,
+          ],
+        })
+      ).not.toThrow();
+
+      // Invalid phaseStatus for procurementStatus (e.g. CLOSED or CANCELLED)
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          procurementStatus: [ProjectStatus.CLOSED],
+        })
+      ).toThrow();
+
+      // Valid phaseStatus for contractStatus
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          contractStatus: [ProjectStatus.IN_PROGRESS],
+        })
+      ).not.toThrow();
+
+      // Invalid phaseStatus for contractStatus (e.g. CANCELLED)
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          contractStatus: [ProjectStatus.CANCELLED],
+        })
+      ).toThrow();
+    });
   });
 
   it('getById returns full project details for supply users', async () => {
