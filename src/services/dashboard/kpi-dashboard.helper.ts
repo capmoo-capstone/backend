@@ -255,7 +255,6 @@ export const getUnitGroupStaffPerformance = async (
 
   return {
     unitId,
-    mode: query.mode,
     range,
     total,
     page: query.page,
@@ -271,7 +270,7 @@ export const getUnitGroupExecutiveSummary = async (
 ): Promise<UnitGroupExecutiveSummaryResponse> => {
   const unitId = resolveTargetUnitId(user, query.unitId);
   const range = { from: query.dateFrom, to: query.dateTo };
-  const previousRange = getPreviousRange(range, query.mode);
+  const previousRange = getPreviousRange(range);
 
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
@@ -465,7 +464,6 @@ export const getUnitGroupExecutiveSummary = async (
 
   return {
     unitId,
-    mode: query.mode,
     range,
     longestProcurementMethod: longestMethod,
     avgDurationDays: avgDurationComparison,
@@ -672,7 +670,6 @@ export const getUnitGroupProcurementDetails = async (
 
   return {
     unitId,
-    mode: query.mode,
     range,
     methods,
   };
@@ -943,7 +940,6 @@ export const getContractUnitSummary = async (
 
   return {
     unitId,
-    mode: query.mode,
     range,
     statusBreakdown: {
       unassigned,

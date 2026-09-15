@@ -42,7 +42,7 @@ export const getPeriodicRanges = (
   query: PeriodicSummaryQuery
 ): { current: DateRange; previous: DateRange } => {
   const current = { from: query.dateFrom, to: query.dateTo };
-  const previous = getPreviousRange(current, query.mode);
+  const previous = getPreviousRange(current);
   return { current, previous };
 };
 
@@ -116,7 +116,6 @@ export const getPeriodicSummary = async (
   ]);
 
   return {
-    mode: query.mode,
     range: ranges.current,
     previousRange: ranges.previous,
     newWork: toComparison(currentNew, previousNew),
@@ -190,14 +189,11 @@ const getStatusBuckets = async (
 const thaiMonthLabel = (year: number, month: number): string =>
   `${year}-${month.toString().padStart(2, '0')}`;
 
-const buildTimelineBuckets = (
-  mode: ProcurementOverviewQuery['mode'],
-  range: DateRange
-): DateRange[] => {
+const buildTimelineBuckets = (range: DateRange): DateRange[] => {
   const days = daysBetweenBangkokDates(range.from, range.to);
-  const effectiveMode = mode ?? (days <= 31 ? 'month' : 'fiscalYear');
+  const isMonthOrDaily = days <= 31;
 
-  if (effectiveMode === 'month') {
+  if (isMonthOrDaily) {
     const start = toBangkokParts(range.from);
     return Array.from(
       { length: daysInBangkokMonth(start.year, start.month) },
@@ -234,12 +230,11 @@ const buildTimelineBuckets = (
 
 const getTimelineLine = async (
   visibilityWhere: Prisma.ProjectWhereInput,
-  range: DateRange,
-  mode: ProcurementOverviewQuery['mode']
+  range: DateRange
 ) => {
   const days = daysBetweenBangkokDates(range.from, range.to);
-  const effectiveMode = mode ?? (days <= 31 ? 'month' : 'fiscalYear');
-  const buckets = buildTimelineBuckets(mode, range);
+  const isMonthOrDaily = days <= 31;
+  const buckets = buildTimelineBuckets(range);
 
   return Promise.all(
     buckets.map(async (bucket) => {
@@ -254,10 +249,9 @@ const getTimelineLine = async (
       const parts = toBangkokParts(bucket.from);
 
       return {
-        label:
-          effectiveMode === 'month'
-            ? parts.day.toString()
-            : thaiMonthLabel(parts.year, parts.month),
+        label: isMonthOrDaily
+          ? parts.day.toString()
+          : thaiMonthLabel(parts.year, parts.month),
         from: bucket.from,
         to: bucket.to,
         received,
@@ -391,7 +385,6 @@ export const getProcurementOverview = async (
       ]);
 
     return {
-      mode: query.mode,
       range,
       procurementTypes,
       costSummary,
@@ -404,11 +397,10 @@ export const getProcurementOverview = async (
       getProcurementTypeDonut(visibilityWhere, range),
       getCostSummary(visibilityWhere, range),
       getStatusBuckets(user, visibilityWhere, range),
-      getTimelineLine(visibilityWhere, range, query.mode),
+      getTimelineLine(visibilityWhere, range),
     ]);
 
   return {
-    mode: query.mode,
     range,
     procurementTypes,
     costSummary,

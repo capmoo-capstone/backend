@@ -13,7 +13,6 @@ import {
   nowUtc,
   toBangkokParts,
 } from '../../utils/date';
-import { DashboardMode } from '../../schemas/dashboard.schema';
 import { AuthPayload } from '../../types/auth.type';
 import { DashboardMetricComparison } from '../../types/dashboard.type';
 import { DAY_MS, DEFAULT_FISCAL_YEAR_OFFSET } from '../../utils/constant';
@@ -23,21 +22,27 @@ export type DateRange = {
   to: Date;
 };
 
-export const getPreviousRange = (
-  current: DateRange,
-  mode?: DashboardMode
-): DateRange => {
+export const daysBetweenBangkokDates = (from: Date, to: Date): number => {
+  const fromParts = toBangkokParts(from);
+  const toParts = toBangkokParts(to);
+  const fromDate = Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day);
+  const toDate = Date.UTC(toParts.year, toParts.month - 1, toParts.day);
+  return Math.ceil((toDate - fromDate) / DAY_MS);
+};
+
+export const getPreviousRange = (current: DateRange): DateRange => {
+  const days = daysBetweenBangkokDates(current.from, current.to);
   const fromParts = toBangkokParts(current.from);
   const toParts = toBangkokParts(current.to);
 
-  if (mode === 'today') {
+  if (days <= 1) {
     return {
       from: addBangkokDays(current.from, -1),
       to: addBangkokDays(current.to, -1, true),
     };
   }
 
-  if (mode === 'month') {
+  if (days <= 31) {
     const prevFromMonth = fromParts.month === 1 ? 12 : fromParts.month - 1;
     const prevFromYear =
       fromParts.month === 1 ? fromParts.year - 1 : fromParts.year;
@@ -85,14 +90,6 @@ export const currentFiscalYearStart = (now = nowUtc()): Date => {
   const parts = toBangkokParts(now);
   const startYear = parts.month >= 10 ? parts.year : parts.year - 1;
   return fromBangkokDate(startYear, 10, 1);
-};
-
-export const daysBetweenBangkokDates = (from: Date, to: Date): number => {
-  const fromParts = toBangkokParts(from);
-  const toParts = toBangkokParts(to);
-  const fromDate = Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day);
-  const toDate = Date.UTC(toParts.year, toParts.month - 1, toParts.day);
-  return Math.ceil((toDate - fromDate) / DAY_MS);
 };
 
 export const resolveTargetUnitId = (

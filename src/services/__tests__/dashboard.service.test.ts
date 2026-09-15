@@ -108,7 +108,6 @@ describe('dashboard.service', () => {
       .mockResolvedValueOnce(4);
 
     const result = await getPeriodicSummary(externalUser, {
-      mode: 'month',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
     });
@@ -149,7 +148,6 @@ describe('dashboard.service', () => {
     prismaMock.projectHistory.count.mockResolvedValue(0);
 
     const result = await getPeriodicSummary(supplyUser, {
-      mode: 'fiscalYear',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-12T16:59:59.999Z'),
     });
@@ -185,7 +183,6 @@ describe('dashboard.service', () => {
 
     const result = (await getProcurementOverview(supplyUser, {
       page: 'dashboard',
-      mode: 'quarter',
       deptId: OPS_DEPT_ID,
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2025-12-31T16:59:59.999Z'),
@@ -221,7 +218,6 @@ describe('dashboard.service', () => {
 
     const result = (await getProcurementOverview(supplyUser, {
       page: 'home',
-      mode: 'fiscalYear',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
     })) as HomePageResponse;
@@ -251,7 +247,6 @@ describe('dashboard.service', () => {
 
     const result = (await getProcurementOverview(externalUser, {
       page: 'dashboard',
-      mode: 'month',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
     })) as OverviewPageResponse;
@@ -275,7 +270,7 @@ describe('dashboard.service', () => {
     });
   });
 
-  it('queries budget plans by fiscal year when mode is fiscalYear on home page', async () => {
+  it('queries budget plans by fiscal year for date range on home page', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
     prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null, actual_cost: null } });
@@ -291,7 +286,6 @@ describe('dashboard.service', () => {
 
     const result = (await getProcurementOverview(externalUser, {
       page: 'home',
-      mode: 'fiscalYear',
       deptId: 'dept-1',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
@@ -376,7 +370,6 @@ describe('dashboard.service', () => {
 
     const result = (await getProcurementOverview(registrationGeneralStaff, {
       page: 'home',
-      mode: 'fiscalYear',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
     })) as HomePageResponse;
@@ -446,7 +439,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -476,7 +468,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -533,7 +524,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
         }
@@ -602,7 +592,6 @@ describe('dashboard.service', () => {
         {
           unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
-          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -647,7 +636,6 @@ describe('dashboard.service', () => {
         {
           unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
         }
@@ -684,7 +672,6 @@ describe('dashboard.service', () => {
         {
           unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
         }
@@ -749,7 +736,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 1,
@@ -787,7 +773,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 2,
@@ -837,7 +822,6 @@ describe('dashboard.service', () => {
       await expect(
         DashboardService.getUnitGroupStaffPerformance(staffUser, {
           unitId: 'missing-unit',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 1,
@@ -851,7 +835,6 @@ describe('dashboard.service', () => {
       await expect(
         DashboardService.getUnitGroupStaffPerformance(externalUser, {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 1,
@@ -876,7 +859,6 @@ describe('dashboard.service', () => {
           supplyUser,
           {
             unitId: 'unit-proc',
-            mode: 'month',
             dateFrom: new Date('2026-06-30T17:00:00.000Z'),
             dateTo: new Date('2026-07-31T16:59:59.999Z'),
           }
@@ -929,7 +911,6 @@ describe('dashboard.service', () => {
           supplyUser,
           {
             unitId: 'unit-contract',
-            mode: 'month',
             dateFrom: new Date('2026-06-30T17:00:00.000Z'),
             dateTo: new Date('2026-07-31T16:59:59.999Z'),
           }
@@ -1185,7 +1166,6 @@ describe('dashboard.service', () => {
           {
             unitId: 'unit-proc',
             targetUserId: 'staff-1',
-            mode: 'month',
             dateFrom: new Date('2026-06-30T17:00:00.000Z'),
             dateTo: new Date('2026-07-31T16:59:59.999Z'),
           }

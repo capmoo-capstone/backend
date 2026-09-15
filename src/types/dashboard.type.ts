@@ -4,7 +4,6 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { PaginatedResponse } from './common.type';
-import { DashboardMode } from '../schemas/dashboard.schema';
 
 export type DashboardTrend = 'increase' | 'decrease' | 'same';
 
@@ -16,7 +15,6 @@ export interface DashboardMetricComparison {
 }
 
 export interface PeriodicSummaryResponse {
-  mode: 'today' | 'month' | 'quarter' | 'fiscalYear';
   range: {
     from: Date;
     to: Date;
@@ -62,7 +60,6 @@ export interface DashboardCostSummary {
 }
 
 export interface OverviewBaseResponse {
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
@@ -95,7 +92,6 @@ export interface WorkloadVsDurationPoint {
 
 export interface UnitGroupExecutiveSummaryResponse {
   unitId: string;
-  mode: 'today' | 'month' | 'quarter' | 'fiscalYear';
   range: { from: Date; to: Date };
   longestProcurementMethod: ProcurementType | null;
   avgDurationDays: DashboardMetricComparison;
@@ -125,7 +121,6 @@ export interface ProcurementMethodDetailItem {
 
 export interface UnitGroupProcurementDetailsResponse {
   unitId: string;
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
@@ -163,7 +158,6 @@ export interface UnitGroupStaffPerformanceRow {
 
 export interface UnitGroupStaffPerformanceResponse extends PaginatedResponse<UnitGroupStaffPerformanceRow> {
   unitId: string;
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
@@ -185,7 +179,6 @@ export interface UnitContractPhaseWorkload {
 
 export interface ContractUnitSummaryResponse {
   unitId: string;
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
