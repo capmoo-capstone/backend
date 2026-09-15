@@ -136,6 +136,18 @@ const buildWhereClause = (
             },
           },
         },
+        {
+          less_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
+          pr_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
       ],
     });
   }
