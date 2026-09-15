@@ -7,9 +7,11 @@ import {
   ProcurementType,
   ProjectStatus,
   UnitResponsibleType,
+  UrgentType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { txMock } from '../../test/prisma-mock';
+import { UpdateProjectSchema } from '../../schemas/project.schema';
 import {
   cancelContractNumber,
   createProject,
@@ -152,6 +154,109 @@ describe('project-data.service', () => {
     );
   });
 
+  it('updateProjectData supports updating procurement_type, less_no, expected_approval_date, and is_urgent when UNASSIGNED with no submissions', async () => {
+    const oldDate = new Date('2026-07-01T00:00:00.000Z');
+    const newDate = new Date('2026-08-01T00:00:00.000Z');
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.UNASSIGNED,
+      procurement_type: ProcurementType.LT100K,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      responsible_unit_id: 'unit-proc-1',
+      procurement_unit_id: 'unit-proc-1',
+      less_no: 'LESS-OLD',
+      expected_approval_date: oldDate,
+      is_urgent: UrgentType.NORMAL,
+    });
+    txMock.projectSubmission.count.mockResolvedValue(0);
+    txMock.unit.findMany.mockResolvedValue([
+      { id: 'unit-selection-1', type: [UnitResponsibleType.SELECTION] },
+    ]);
+    txMock.project.findFirst.mockResolvedValue(null);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.UNASSIGNED,
+      procurement_type: ProcurementType.SELECTION,
+      current_workflow_type: UnitResponsibleType.SELECTION,
+      responsible_unit_id: 'unit-selection-1',
+      procurement_unit_id: 'unit-selection-1',
+      less_no: 'LESS-NEW',
+      expected_approval_date: newDate,
+      is_urgent: UrgentType.VERY_URGENT,
+    });
+
+    const parsed = UpdateProjectSchema.parse({
+      id: '11111111-1111-4111-a111-111111111111',
+      updateData: {
+        procurement_type: ProcurementType.SELECTION,
+        less_no: 'LESS-NEW',
+        expected_approval_date: '2026-08-01T00:00:00',
+        is_urgent: UrgentType.VERY_URGENT,
+      },
+    });
+
+    const result = await updateProjectData(user, {
+      id: 'project-1',
+      updateData: parsed.updateData,
+    });
+
+    expect(result.procurement_type).toBe(ProcurementType.SELECTION);
+    expect(result.less_no).toBe('LESS-NEW');
+    expect(result.is_urgent).toBe(UrgentType.VERY_URGENT);
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: expect.objectContaining({
+        expected_approval_date: expect.any(Date),
+        procurement_type: ProcurementType.SELECTION,
+        responsible_unit_id: 'unit-selection-1',
+        procurement_unit_id: 'unit-selection-1',
+        less_no: 'LESS-NEW',
+        is_urgent: UrgentType.VERY_URGENT,
+      }),
+    });
+    expect(txMock.projectHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          old_value: expect.objectContaining({
+            expected_approval_date: expect.any(String),
+            procurement_type: ProcurementType.LT100K,
+            responsible_unit_id: 'unit-proc-1',
+            procurement_unit_id: 'unit-proc-1',
+            less_no: 'LESS-OLD',
+            is_urgent: UrgentType.NORMAL,
+          }),
+          new_value: expect.objectContaining({
+            expected_approval_date: expect.any(String),
+            less_no: 'LESS-NEW',
+            is_urgent: UrgentType.VERY_URGENT,
+            procurement_type: ProcurementType.SELECTION,
+            responsible_unit_id: 'unit-selection-1',
+            procurement_unit_id: 'unit-selection-1',
+          }),
+          changed_by: user.id,
+        }),
+      })
+    );
+  });
+
+  it('rejects updating procurement_type when project status is not UNASSIGNED', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.IN_PROGRESS,
+      procurement_type: ProcurementType.LT100K,
+    });
+
+    await expect(
+      updateProjectData(user, {
+        id: 'project-1',
+        updateData: {
+          procurement_type: ProcurementType.SELECTION,
+        },
+      } as any)
+    ).rejects.toThrow(BadRequestError);
+  });
+
   it('allows installment-round updates during CONTRACT before the first export', async () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
@@ -219,9 +324,7 @@ describe('project-data.service', () => {
       expect(err).toBeInstanceOf(BatchOperationError);
       expect(err.statusCode).toBe(400);
       expect(err.message).toBe('Batch Operation Error');
-      expect(err.error).toEqual([
-        { code: 'DUPLICATE_PR_NO', id: ['PR-DUP'] },
-      ]);
+      expect(err.error).toEqual([{ code: 'DUPLICATE_PR_NO', id: ['PR-DUP'] }]);
     }
   });
 
@@ -229,17 +332,23 @@ describe('project-data.service', () => {
     mockResponsibleUnit();
     try {
       await importProjects(user, [
-        createProjectDto({ pr_no: 'PR-PO-1', less_no: 'L-PO-1', po_no: 'PO-DUP' }),
-        createProjectDto({ pr_no: 'PR-PO-2', less_no: 'L-PO-2', po_no: 'PO-DUP' }),
+        createProjectDto({
+          pr_no: 'PR-PO-1',
+          less_no: 'L-PO-1',
+          po_no: 'PO-DUP',
+        }),
+        createProjectDto({
+          pr_no: 'PR-PO-2',
+          less_no: 'L-PO-2',
+          po_no: 'PO-DUP',
+        }),
       ]);
       expect.fail('Expected importProjects to throw BatchOperationError');
     } catch (err: any) {
       expect(err).toBeInstanceOf(BatchOperationError);
       expect(err.statusCode).toBe(400);
       expect(err.message).toBe('Batch Operation Error');
-      expect(err.error).toEqual([
-        { code: 'DUPLICATE_PO_NO', id: ['PO-DUP'] },
-      ]);
+      expect(err.error).toEqual([{ code: 'DUPLICATE_PO_NO', id: ['PO-DUP'] }]);
     }
   });
 
@@ -247,8 +356,16 @@ describe('project-data.service', () => {
     txMock.unit.findMany.mockResolvedValue([]);
     try {
       await importProjects(user, [
-        createProjectDto({ title: 'Project A', pr_no: 'PR-DUP-1', po_no: 'PO-DUP-1' }),
-        createProjectDto({ title: 'Project B', pr_no: 'PR-DUP-1', po_no: 'PO-DUP-1' }),
+        createProjectDto({
+          title: 'Project A',
+          pr_no: 'PR-DUP-1',
+          po_no: 'PO-DUP-1',
+        }),
+        createProjectDto({
+          title: 'Project B',
+          pr_no: 'PR-DUP-1',
+          po_no: 'PO-DUP-1',
+        }),
       ]);
       expect.fail('Expected importProjects to throw BatchOperationError');
     } catch (err: any) {
@@ -257,7 +374,10 @@ describe('project-data.service', () => {
       expect(err.message).toBe('Batch Operation Error');
       expect(err.error).toEqual(
         expect.arrayContaining([
-          { code: 'RESPONSIBLE_UNIT_NOT_FOUND', id: ['Project A', 'Project B'] },
+          {
+            code: 'RESPONSIBLE_UNIT_NOT_FOUND',
+            id: ['Project A', 'Project B'],
+          },
           { code: 'DUPLICATE_PR_NO', id: ['PR-DUP-1'] },
           { code: 'DUPLICATE_PO_NO', id: ['PO-DUP-1'] },
         ])
@@ -283,9 +403,7 @@ describe('project-data.service', () => {
     } catch (err: any) {
       expect(err).toBeInstanceOf(BatchOperationError);
       expect(err.statusCode).toBe(400);
-      expect(err.error).toEqual([
-        { code: 'DUPLICATE_PR_NO', id: ['PR-1'] },
-      ]);
+      expect(err.error).toEqual([{ code: 'DUPLICATE_PR_NO', id: ['PR-1'] }]);
     }
   });
 
@@ -307,9 +425,7 @@ describe('project-data.service', () => {
     } catch (err: any) {
       expect(err).toBeInstanceOf(BatchOperationError);
       expect(err.statusCode).toBe(400);
-      expect(err.error).toEqual([
-        { code: 'DUPLICATE_PO_NO', id: ['PO-1'] },
-      ]);
+      expect(err.error).toEqual([{ code: 'DUPLICATE_PO_NO', id: ['PO-1'] }]);
     }
   });
 

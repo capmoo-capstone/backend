@@ -5,12 +5,12 @@ import {
   AuditLogType,
   AuditEventType,
   AuditTargetType,
+  UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import {
   NotFoundError,
   BadRequestError,
-  AppError,
   BatchErrorEntry,
   groupBatchErrors,
   BatchOperationError,
@@ -159,10 +159,16 @@ export const checkRefNumberDuplication = async (
         errors.push({ code: 'DUPLICATE_PO_NO', id: existing.po_no });
       }
       if (existing.migo_103_no && migo_103_no.includes(existing.migo_103_no)) {
-        errors.push({ code: 'DUPLICATE_MIGO_103_NO', id: existing.migo_103_no });
+        errors.push({
+          code: 'DUPLICATE_MIGO_103_NO',
+          id: existing.migo_103_no,
+        });
       }
       if (existing.migo_105_no && migo_105_no.includes(existing.migo_105_no)) {
-        errors.push({ code: 'DUPLICATE_MIGO_105_NO', id: existing.migo_105_no });
+        errors.push({
+          code: 'DUPLICATE_MIGO_105_NO',
+          id: existing.migo_105_no,
+        });
       }
     }
   }
@@ -353,7 +359,29 @@ export const updateProjectData = async (
       );
     }
 
-    const { budget_plan_id, ...projectData } = data.updateData;
+    const { budget_plan_id, ...projectData }: Record<string, any> =
+      data.updateData;
+
+    if (data.updateData.procurement_type !== undefined) {
+      if (
+        current.status !== ProjectStatus.UNASSIGNED ||
+        current.current_workflow_type === UnitResponsibleType.CONTRACT
+      ) {
+        throw new BadRequestError(
+          'Procurement type can only be updated when project status is UNASSIGNED'
+        );
+      }
+
+      const unitType = await getProcurementTypeToUnitIdMap(tx);
+      const targetUnitId = unitType.get(data.updateData.procurement_type);
+      if (targetUnitId == null) {
+        throw new NotFoundError(
+          `Responsible unit not found for procurement type ${data.updateData.procurement_type}`
+        );
+      }
+      projectData.responsible_unit_id = targetUnitId;
+      projectData.procurement_unit_id = targetUnitId;
+    }
 
     const oldValue = {};
     Object.keys(projectData).forEach((key) => {
