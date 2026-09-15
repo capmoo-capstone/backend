@@ -12,12 +12,16 @@ import {
   GetInstallmentsQuerySchema,
   GetNewContractNumberSchema,
   GetOwnProjectsQuerySchema,
+  GetOwnProjectsTotalQuerySchema,
+  GetProjectSummaryQuerySchema,
   GetProjectsQueryByUnitSchema,
   ProjectFilterQuerySchema,
   RequestEditInstallmentSchema,
+  SendVendorEmailSchema,
   UpdateProjectSchema,
   UpdateStatusProjectSchema,
   UpdateStatusProjectsSchema,
+  VendorEmailPreviewQuerySchema,
 } from '../schemas/project.schema';
 import * as AuditLogService from '../services/audit-log.service';
 import * as ProjectAssignmentService from '../services/project-assignment.service';
@@ -26,6 +30,10 @@ import * as ProjectInstallmentService from '../services/project-installment.serv
 import * as ProjectLifecycleService from '../services/project-lifecycle.service';
 import * as ProjectQueryService from '../services/project-query.service';
 import { AuthenticatedRequest } from '../types/auth.type';
+import {
+  getVendorEmailPreviewForProject,
+  sendVendorEmailForProject,
+} from '../services/notification/notification-email.service';
 
 export const getAll = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
@@ -138,9 +146,14 @@ export const getOwnProjects = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, ...query } = req.query;
+  const { page, limit, tab, dateFrom, dateTo, search } = req.query;
   const payload = req.user!;
-  const validated = GetOwnProjectsQuerySchema.parse(query);
+  const validated = GetOwnProjectsQuerySchema.parse({
+    tab,
+    dateFrom,
+    dateTo,
+    search,
+  });
   const projects = await ProjectQueryService.getOwnProjects(
     payload,
     parseInt(page as string) || 1,
@@ -156,8 +169,10 @@ export const getOwnProjectsTotal = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
+  const { dateFrom, dateTo } = req.query;
   const payload = req.user!;
-  const totals = await ProjectQueryService.getOwnProjectsTotal(payload);
+  const query = GetOwnProjectsTotalQuerySchema.parse({ dateFrom, dateTo });
+  const totals = await ProjectQueryService.getOwnProjectsTotal(payload, query);
   res.status(200).json(totals);
 };
 
@@ -177,7 +192,8 @@ export const getSummary = async (req: AuthenticatedRequest, res: Response) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
   const payload = req.user!;
-  const summary = await ProjectQueryService.getSummaryCards(payload);
+  const query = GetProjectSummaryQuerySchema.parse(req.query);
+  const summary = await ProjectQueryService.getSummaryCards(payload, query);
   res.status(200).json(summary);
 };
 
@@ -553,4 +569,36 @@ export const getDocumentSummary = async (
   const payload = req.user!;
   const data = await ProjectQueryService.getDocumentSummary(payload, projectId);
   res.status(200).json(data);
+};
+
+export const getVendorEmailPreview = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const projectId = req.params.id as string;
+  const query = VendorEmailPreviewQuerySchema.parse(req.query);
+  const preview = await getVendorEmailPreviewForProject(
+    projectId,
+    req.user!,
+    query
+  );
+  res.status(200).json(preview);
+};
+
+export const sendVendorEmail = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  // #swagger.tags = ['Project']
+  // #swagger.security = [{ bearerAuth: [] }]
+  const projectId = req.params.id as string;
+  const validated = SendVendorEmailSchema.parse(req.body);
+  const result = await sendVendorEmailForProject(
+    projectId,
+    validated,
+    req.user!
+  );
+  res.status(200).json(result);
 };

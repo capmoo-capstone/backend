@@ -6,7 +6,7 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WORKFLOW_STEP_ORDERS } from '../../utils/constant';
+import { OPS_DEPT_ID, WORKFLOW_STEP_ORDERS } from '../../utils/constant';
 import { BadRequestError, NotFoundError } from '../../utils/errors';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { AuthPayload } from '../../types/auth.type';
@@ -281,23 +281,64 @@ describe('project-finance.service', () => {
   });
 
   describe('getInstallments', () => {
-    it('should return a paginated response with export requests and total count', async () => {
-      const mockExports = [
+    it('should return a paginated response with actual_cost and mapped installment_amount', async () => {
+      const mockRawExports = [
         {
           id: '1',
-          project_id: 'p1',
           installment_no: 1,
           status: ProjectInstallmentStatus.WAITING_EXPORT,
+          request_edit_reason: null,
+          exported_at: new Date('2026-09-01'),
+          project: {
+            id: 'p1',
+            receive_no: 'RC-001',
+            title: 'Project 1',
+            actual_cost: 95000,
+            installment_amounts: { '1': 45000, '2': 50000 },
+            procurement_type: 'SELECTION',
+            assignee_contract: [{ id: 'u1', full_name: 'Staff 1' }],
+            requesting_dept: { id: 'd1', name: 'Dept 1' },
+          },
         },
         {
           id: '2',
-          project_id: 'p2',
-          installment_no: 2,
+          installment_no: 1,
           status: ProjectInstallmentStatus.EXPORTED,
+          request_edit_reason: null,
+          exported_at: new Date('2026-09-02'),
+          project: {
+            id: 'p2',
+            receive_no: 'RC-002',
+            title: 'Project 2',
+            actual_cost: 2000000,
+            installment_amounts: { '1': 300000, '2': 300000 },
+            procurement_type: 'SELECTION',
+            assignee_contract: [],
+            requesting_dept: { id: 'd2', name: 'Dept 2' },
+          },
         },
-      ] as ProjectInstallment[];
+        {
+          id: '3',
+          installment_no: 2,
+          status: ProjectInstallmentStatus.WAITING_EXPORT,
+          request_edit_reason: null,
+          exported_at: new Date('2026-09-03'),
+          project: {
+            id: 'p2',
+            receive_no: 'RC-002',
+            title: 'Project 2',
+            actual_cost: 2000000,
+            installment_amounts: { '1': 300000, '2': 300000 },
+            procurement_type: 'SELECTION',
+            assignee_contract: [],
+            requesting_dept: { id: 'd2', name: 'Dept 2' },
+          },
+        },
+      ];
 
-      prismaMock.projectInstallment.findMany.mockResolvedValue(mockExports);
+      prismaMock.projectInstallment.findMany.mockResolvedValue(
+        mockRawExports as any
+      );
       prismaMock.projectInstallment.count.mockResolvedValue(10);
 
       const page = 2;
@@ -309,7 +350,59 @@ describe('project-finance.service', () => {
         page,
         pageSize: limit,
         totalPages: 5,
-        data: mockExports,
+        data: [
+          {
+            id: '1',
+            installment_no: 1,
+            installment_amount: 45000,
+            status: ProjectInstallmentStatus.WAITING_EXPORT,
+            request_edit_reason: null,
+            exported_at: new Date('2026-09-01'),
+            project: {
+              id: 'p1',
+              receive_no: 'RC-001',
+              title: 'Project 1',
+              actual_cost: 95000,
+              procurement_type: 'SELECTION',
+              assignee_contract: [{ id: 'u1', full_name: 'Staff 1' }],
+              requesting_dept: { id: 'd1', name: 'Dept 1' },
+            },
+          },
+          {
+            id: '2',
+            installment_no: 1,
+            installment_amount: 300000,
+            status: ProjectInstallmentStatus.EXPORTED,
+            request_edit_reason: null,
+            exported_at: new Date('2026-09-02'),
+            project: {
+              id: 'p2',
+              receive_no: 'RC-002',
+              title: 'Project 2',
+              actual_cost: 2000000,
+              procurement_type: 'SELECTION',
+              assignee_contract: [],
+              requesting_dept: { id: 'd2', name: 'Dept 2' },
+            },
+          },
+          {
+            id: '3',
+            installment_no: 2,
+            installment_amount: 300000,
+            status: ProjectInstallmentStatus.WAITING_EXPORT,
+            request_edit_reason: null,
+            exported_at: new Date('2026-09-03'),
+            project: {
+              id: 'p2',
+              receive_no: 'RC-002',
+              title: 'Project 2',
+              actual_cost: 2000000,
+              procurement_type: 'SELECTION',
+              assignee_contract: [],
+              requesting_dept: { id: 'd2', name: 'Dept 2' },
+            },
+          },
+        ],
       });
 
       expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith({
@@ -356,6 +449,126 @@ describe('project-finance.service', () => {
       );
       expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
         where: expectedWhere,
+      });
+    });
+
+    it('should apply search filter for title, receive_no, and contract_no', async () => {
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(mockUser, 1, 10, {
+        search: 'CN-123',
+      });
+
+      const expectedWhere = {
+        AND: [
+          {
+            OR: [
+              {
+                project: {
+                  title: {
+                    contains: 'CN-123',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                project: {
+                  receive_no: {
+                    contains: 'CN-123',
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                project: {
+                  contract_no: {
+                    contract_no: {
+                      contains: 'CN-123',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+        })
+      );
+    });
+
+    it('should filter by assignee (procurement or contract) when user is general staff only', async () => {
+      const generalStaffUser = {
+        id: 'staff-user-1',
+        email: 'staff@example.com',
+        full_name: 'General Staff',
+        roles: [{ role: 'GENERAL_STAFF', dept_id: 'd1' }],
+      } as unknown as AuthPayload;
+
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(generalStaffUser, 1, 10);
+
+      const expectedWhere = {
+        project: {
+          requesting_dept_id: { in: ['d1'] },
+        },
+        AND: [
+          {
+            project: {
+              OR: [
+                {
+                  assignee_procurement: {
+                    some: { id: generalStaffUser.id },
+                  },
+                },
+                {
+                  assignee_contract: {
+                    some: { id: generalStaffUser.id },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expectedWhere,
+        })
+      );
+      expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+    });
+
+    it('should not filter by assignee when user has FINANCE_STAFF role in supply department', async () => {
+      const financeUser = {
+        id: 'finance-user-1',
+        email: 'finance@example.com',
+        full_name: 'Finance Staff',
+        roles: [{ role: 'FINANCE_STAFF', dept_id: OPS_DEPT_ID }],
+      } as unknown as AuthPayload;
+
+      prismaMock.projectInstallment.findMany.mockResolvedValue([]);
+      prismaMock.projectInstallment.count.mockResolvedValue(0);
+
+      await getInstallments(financeUser, 1, 10);
+
+      expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {},
+        })
+      );
+      expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
+        where: {},
       });
     });
   });

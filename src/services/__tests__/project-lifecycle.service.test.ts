@@ -144,6 +144,10 @@ describe('project-lifecycle.service', () => {
         data: { status: ProjectStatus.CANCELLED },
       })
     );
+    expect(txMock.budgetPlan.updateMany).toHaveBeenCalledWith({
+      where: { project_id: 'project-1' },
+      data: { project_id: null },
+    });
   });
 
   it('approveCancellation moves waiting-cancel projects to cancelled', async () => {
@@ -175,6 +179,10 @@ describe('project-lifecycle.service', () => {
     const result = await approveCancellation(headUser, 'project-1');
 
     expect(result.status).toBe(ProjectStatus.CANCELLED);
+    expect(txMock.budgetPlan.updateMany).toHaveBeenCalledWith({
+      where: { project_id: 'project-1' },
+      data: { project_id: null },
+    });
     expect(txMock.projectCancellation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'cancellation-1' },
@@ -307,7 +315,7 @@ describe('project-lifecycle.service', () => {
     expect(result.responsible_unit_id).toBe(CONTRACT_UNIT_ID);
   });
 
-  it('completeProcurementPhase sets contract_started_at when assignee_contract is attached', async () => {
+  it('completeProcurementPhase completes procurement without setting contract_started_at when assignee_contract is attached', async () => {
     txMock.project.findUnique
       .mockResolvedValueOnce({
         status: ProjectStatus.IN_PROGRESS,
@@ -378,12 +386,13 @@ describe('project-lifecycle.service', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           procurement_completed_at: expect.any(Date),
-          contract_started_at: expect.any(Date),
           responsible_unit_id: 'unit-proc',
           contract_unit_id: 'unit-proc',
         }),
       })
     );
+    const updateCall = txMock.project.update.mock.calls[0][0];
+    expect(updateCall.data.contract_started_at).toBeUndefined();
     expect(txMock.notification.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

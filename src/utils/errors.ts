@@ -21,6 +21,45 @@ export class BadRequestError extends AppError {
   }
 }
 
+export type BatchGroupedErrorItem = {
+  code: string;
+  id: string[];
+};
+
+export type BatchErrorEntry = {
+  code: string;
+  id: string;
+};
+
+export const groupBatchErrors = (
+  errors: BatchErrorEntry[]
+): BatchGroupedErrorItem[] => {
+  const map = new Map<string, Set<string>>();
+  for (const { code, id } of errors) {
+    if (!map.has(code)) {
+      map.set(code, new Set());
+    }
+    map.get(code)!.add(id);
+  }
+  return Array.from(map.entries()).map(([code, ids]) => ({
+    code,
+    id: Array.from(ids),
+  }));
+};
+
+export class BatchOperationError extends AppError {
+  public error: BatchGroupedErrorItem[];
+
+  constructor(
+    message: string = 'Batch Operation Error',
+    error: BatchGroupedErrorItem[] = [],
+    statusCode: number = 400
+  ) {
+    super(message, statusCode);
+    this.error = error;
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message: string = 'Unauthorized') {
     super(message, 401);

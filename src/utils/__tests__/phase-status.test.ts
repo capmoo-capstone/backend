@@ -51,7 +51,7 @@ describe('syncProjectPhases', () => {
       expect.objectContaining({
         data: {
           procurement_progress: {
-            GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 1 },
+            GENERAL_STAFF: { status: ProjectPhaseStatus.IN_PROGRESS, step: 0 },
             HEAD_OF_UNIT: {
               status: ProjectPhaseStatus.NOT_STARTED,
               step: null,
@@ -68,6 +68,7 @@ describe('syncProjectPhases', () => {
 
   it('marks all phase owners completed when every workflow step is completed', async () => {
     const tx = createPhaseTx([
+      { step_order: 0, status: SubmissionStatus.COMPLETED },
       { step_order: 1, status: SubmissionStatus.COMPLETED },
       { step_order: 2, status: SubmissionStatus.COMPLETED },
       { step_order: 3, status: SubmissionStatus.COMPLETED },

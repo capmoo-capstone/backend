@@ -176,6 +176,11 @@ const computeGeneralStaffProgress = (
   firstWaitingApproval: number | null,
   allCompleted: boolean
 ): PhaseEntry => {
+  const step0Status = latestByStep.get(0);
+  if (step0Status && step0Status !== SubmissionStatus.COMPLETED) {
+    return { status: ProjectPhaseStatus.IN_PROGRESS, step: 0 };
+  }
+
   if (firstRejected !== null) {
     return { status: ProjectPhaseStatus.REJECTED, step: firstRejected };
   } else if (allCompleted) {

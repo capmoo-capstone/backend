@@ -2,13 +2,19 @@ import {
   Prisma,
   Project,
   ProjectActionType,
+  ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
-import { BadRequestError, NotFoundError } from '../utils/errors';
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from '../utils/errors';
 import { syncProjectPhases } from '../utils/phase-status';
 import {
   ApproveSubmissionDto,
@@ -41,48 +47,25 @@ import {
   notifyVendorSubmissionReceived,
   notifyWorkflowStepApproved,
 } from './notification/notification.service';
-import { sendVendorPoRequestEmailForProject } from './notification/notification-email.service';
+
 import { generatePresignedDownloadUrl } from './storage.service';
 import { bangkokDayEndUtc, bangkokDayStartUtc, nowUtc } from '../utils/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
-import { Capability, assertCapability } from '../utils/access-policy';
+import {
+  Capability,
+  assertCapability,
+  hasRole,
+  isSuperAdmin,
+} from '../utils/access-policy';
 import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
 import { isHeadOfSupplyUnit } from '../utils/permissions';
-
-const VENDOR_PO_EMAIL_STEP_ORDERS = new Map<UnitResponsibleType, number>([
-  [UnitResponsibleType.MT500K, 5],
-  [UnitResponsibleType.EBIDDING, 9],
-  [UnitResponsibleType.SELECTION, 6],
-  [UnitResponsibleType.LT500K, 3],
-  [UnitResponsibleType.LT100K, 3],
-  [UnitResponsibleType.INTERNAL, 3],
-]);
-
-const shouldSendVendorPoEmailForSubmission = (input: {
-  workflowType: UnitResponsibleType;
-  stepOrder: number;
-  status: SubmissionStatus;
-}) =>
-  input.status === SubmissionStatus.COMPLETED &&
-  VENDOR_PO_EMAIL_STEP_ORDERS.get(input.workflowType) === input.stepOrder;
-
-const safeSendVendorPoEmail = async (projectId: string) => {
-  try {
-    await sendVendorPoRequestEmailForProject(projectId);
-  } catch (error) {
-    console.error(
-      'Vendor PO request email failed:',
-      error instanceof Error ? error.message : 'Unknown email error'
-    );
-  }
-};
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
   data: GetSubmissionRoundDto
 ) => {
   const installmentKey = data.installment_no ?? 'none';
-  const lockKey = `${data.project_id}:${data.workflow_type}:${installmentKey}:${data.step_order}:${data.type}`;
+  const lockKey = `${data.project_id}:${data.workflow_type}:${installmentKey}:${data.step_order}`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
   const lastSubmission = await tx.projectSubmission
@@ -92,7 +75,6 @@ const getSubmissionRound = async (
         step_order: data.step_order,
         workflow_type: data.workflow_type,
         installment_no: data.installment_no ?? null,
-        submission_type: data.type,
       },
       orderBy: { submission_round: 'desc' },
       select: { submission_round: true },
@@ -145,13 +127,15 @@ type ProjectForUpdate = Pick<
   | 'vendor_email'
   | 'contract_no_id'
   | 'installment_rounds'
+  | 'installment_amounts'
 >;
 
 const updateProjectForSubmission = async (
   tx: Prisma.TransactionClient,
   project: ProjectForUpdate,
   meta_data: any[],
-  userId: string
+  userId: string,
+  installmentNo?: number | null
 ) => {
   const dataToUpdate = {};
   meta_data.forEach((item) => {
@@ -171,23 +155,55 @@ const updateProjectForSubmission = async (
     await assertInstallmentRoundsCanBeUpdated(tx, project.id);
   }
 
-  const oldValue = {};
-  Object.keys(validated.data).forEach((key) => {
-    oldValue[key] = project[key];
+  const { installment_amount, ...directProjectData } = validated.data;
+  const projectUpdateData: Prisma.ProjectUpdateInput = { ...directProjectData };
+  const historyNewValue: Record<string, any> = { ...directProjectData };
+  const historyOldValue: Record<string, any> = {};
+
+  Object.keys(directProjectData).forEach((key) => {
+    historyOldValue[key] = project[key];
   });
 
-  await tx.project.update({
-    where: { id: project.id },
-    data: validated.data,
-  });
+  if (installment_amount !== undefined) {
+    if (!installmentNo) {
+      throw new BadRequestError(
+        'Installment number is required to update installment amount'
+      );
+    }
+    if (installmentNo > project.installment_rounds) {
+      throw new BadRequestError(
+        `Installment number must be between 1 and ${project.installment_rounds}`
+      );
+    }
+    const currentAmounts =
+      project.installment_amounts &&
+      typeof project.installment_amounts === 'object' &&
+      !Array.isArray(project.installment_amounts)
+        ? { ...(project.installment_amounts as Record<string, number>) }
+        : {};
+    const updatedAmounts = {
+      ...currentAmounts,
+      [installmentNo.toString()]: installment_amount,
+    };
+    projectUpdateData.installment_amounts = updatedAmounts;
+    historyOldValue.installment_amounts = project.installment_amounts;
+    historyNewValue.installment_amounts = updatedAmounts;
+  }
 
-  await createProjectHistoryAndAuditEvent(tx, {
-    projectId: project.id,
-    action: ProjectActionType.INFORMATION_UPDATE,
-    oldValue,
-    newValue: validated.data,
-    changedBy: userId,
-  });
+  if (Object.keys(projectUpdateData).length > 0) {
+    await tx.project.update({
+      where: { id: project.id },
+      data: projectUpdateData,
+    });
+
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId: project.id,
+      action: ProjectActionType.INFORMATION_UPDATE,
+      oldValue: historyOldValue,
+      newValue: historyNewValue,
+      changedBy: userId,
+    });
+  }
 };
 
 export const getProjectSubmissions = async (
@@ -223,7 +239,10 @@ export const getProjectSubmissions = async (
   const formattedSubmissions = await Promise.all(
     submissionData.map(async (submission) => ({
       ...submission,
-      submitted_by: submission.submitter?.full_name ?? null,
+      submitted_by:
+        submission.submission_type === SubmissionType.VENDOR
+          ? 'ผู้ค้า'
+          : (submission.submitter?.full_name ?? null),
       approved_by: submission.approver?.full_name ?? null,
       proposing_by: submission.proposer?.full_name ?? null,
       completed_by: submission.completer?.full_name ?? null,
@@ -458,6 +477,7 @@ export const createStaffSubmissionsProject = async (
         less_no: true,
         contract_no_id: true,
         installment_rounds: true,
+        installment_amounts: true,
         migo_103_no: true,
         migo_105_no: true,
         asset_code: true,
@@ -484,6 +504,11 @@ export const createStaffSubmissionsProject = async (
     }
     const validatedMeta =
       UpdateProjectForSubmissionSchema.safeParse(metaDataMap);
+    if (!validatedMeta.success && data.required_updating) {
+      throw new BadRequestError(
+        'Meta data contains invalid fields for project update'
+      );
+    }
     if (validatedMeta.success) {
       if (
         validatedMeta.data.pr_no ||
@@ -509,6 +534,14 @@ export const createStaffSubmissionsProject = async (
       if (validatedMeta.data.installment_rounds !== undefined) {
         await assertInstallmentRoundsCanBeUpdated(tx, project.id);
       }
+      if (
+        validatedMeta.data.installment_amount !== undefined &&
+        !data.installment_no
+      ) {
+        throw new BadRequestError(
+          'Installment number is required to update installment amount'
+        );
+      }
     }
 
     const installmentNo = validateInstallmentNo(
@@ -524,18 +557,13 @@ export const createStaffSubmissionsProject = async (
       workflow_type: data.workflow_type,
       installment_no: installmentNo,
     });
-    
-    let nextStatus: SubmissionStatus = data.required_approval
-      ? SubmissionStatus.WAITING_APPROVAL
-      : SubmissionStatus.COMPLETED;
 
-    if (isHeadOfSupplyUnit(user)) {
-      if (!data.required_signature) {
-        nextStatus = SubmissionStatus.WAITING_PROPOSAL;
-      } else {
-        nextStatus = SubmissionStatus.COMPLETED;
-      }
-    }
+    const nextStatus: SubmissionStatus =
+      data.required_approval && !isHeadOfSupplyUnit(user)
+        ? SubmissionStatus.WAITING_APPROVAL
+        : data.required_signature
+          ? SubmissionStatus.WAITING_PROPOSAL
+          : SubmissionStatus.COMPLETED;
 
     const submission = await tx.projectSubmission.create({
       data: {
@@ -576,7 +604,13 @@ export const createStaffSubmissionsProject = async (
     );
 
     if (nextStatus === SubmissionStatus.COMPLETED && data.required_updating) {
-      await updateProjectForSubmission(tx, project, data.meta_data, user.id);
+      await updateProjectForSubmission(
+        tx,
+        project,
+        data.meta_data,
+        user.id,
+        installmentNo
+      );
     }
     let notificationResults: PersistedNotificationResult[] = [];
     if (nextStatus === SubmissionStatus.WAITING_APPROVAL) {
@@ -585,7 +619,14 @@ export const createStaffSubmissionsProject = async (
         actor_id: user.id,
         step_order: submission.step_order,
       });
+    } else if (nextStatus === SubmissionStatus.WAITING_PROPOSAL) {
+      notificationResults = await notifySignatureRequired(tx, {
+        project_id: submission.project_id,
+        actor_id: user.id,
+        step_order: submission.step_order,
+      });
     }
+
     return { submission, notificationResults };
   });
 
@@ -639,7 +680,7 @@ export const createVendorSubmissionsProject = async (
         installment_no: installmentNo,
         submission_round,
         submission_type: SubmissionType.VENDOR,
-        status: SubmissionStatus.COMPLETED,
+        status: SubmissionStatus.WAITING_APPROVAL,
         po_no: data.po_no,
         meta_data: [{ field_key: 'installment_no', value: installmentNo }],
         documents: {
@@ -677,11 +718,51 @@ export const createVendorSubmissionsProject = async (
   return transactionResult.submission;
 };
 
+const completeStep0ProjectTransition = async (
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  stepOrder: number,
+  user: AuthPayload
+) => {
+  if (stepOrder !== 0) return;
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: { status: true, procurement_started_at: true },
+  });
+  if (project && project.status === ProjectStatus.REVIEW_TOR) {
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: ProjectStatus.IN_PROGRESS,
+        ...(!project.procurement_started_at
+          ? { procurement_started_at: nowUtc() }
+          : {}),
+      },
+    });
+    await createProjectHistoryAndAuditEvent(tx, {
+      projectId,
+      action: ProjectActionType.STATUS_UPDATE,
+      oldValue: { status: ProjectStatus.REVIEW_TOR },
+      newValue: { status: ProjectStatus.IN_PROGRESS },
+      changedBy: user,
+    });
+  }
+};
+
 export const rejectSubmission = async (
   user: AuthPayload,
   data: RejectSubmissionDto
 ): Promise<RejectedSubmissionResponse> => {
   assertCapability(user, Capability.SUBMISSION_APPROVE);
+
+  if (
+    !data.required_staff_approval &&
+    !hasRole(user, UserRole.HEAD_OF_UNIT) &&
+    !isSuperAdmin(user)
+  ) {
+    throw new ForbiddenError('General staff cannot approve this submission');
+  }
+
   const transactionResult = await prisma.$transaction(async (tx) => {
     const updated = await tx.projectSubmission.update({
       where: { id: data.id },
@@ -705,6 +786,21 @@ export const rejectSubmission = async (
         approved_at: true,
       },
     });
+
+    if (updated.step_order === 0) {
+      await tx.projectSubmission.create({
+        data: {
+          project_id: updated.project_id,
+          workflow_type: updated.workflow_type,
+          step_order: 0,
+          submission_round: updated.submission_round + 1,
+          submission_type: SubmissionType.STAFF,
+          status: SubmissionStatus.WAITING_APPROVAL,
+          submitted_by: user.id,
+        },
+      });
+    }
+
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     const notificationResults = await notifySubmissionRejected(tx, {
       project_id: updated.project_id,
@@ -726,10 +822,19 @@ export const approveSubmission = async (
   data: ApproveSubmissionDto
 ): Promise<ApprovedSubmissionResponse> => {
   assertCapability(user, Capability.SUBMISSION_APPROVE);
+
+  if (
+    !data.required_staff_approval &&
+    !hasRole(user, UserRole.HEAD_OF_UNIT) &&
+    !isSuperAdmin(user)
+  ) {
+    throw new ForbiddenError('General staff cannot approve this submission');
+  }
+
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
-      select: { status: true, submitted_by: true },
+      select: { status: true, submitted_by: true, meta_data: true },
     });
 
     if (!submission) {
@@ -767,6 +872,16 @@ export const approveSubmission = async (
         completed_by: data.required_signature ? false : true,
       },
     });
+
+    if (updated.status === SubmissionStatus.COMPLETED) {
+      await completeStep0ProjectTransition(
+        tx,
+        updated.project_id,
+        updated.step_order,
+        user
+      );
+    }
+
     await syncProjectPhases(tx, updated.workflow_type, updated.project_id);
     const notificationResults = data.required_signature
       ? await notifySignatureRequired(tx, {
@@ -780,19 +895,11 @@ export const approveSubmission = async (
           submitter_id: submission.submitted_by,
           step_order: updated.step_order,
         });
+
     return { updated, notificationResults };
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
-  if (
-    shouldSendVendorPoEmailForSubmission({
-      workflowType: transactionResult.updated.workflow_type,
-      stepOrder: transactionResult.updated.step_order,
-      status: transactionResult.updated.status,
-    })
-  ) {
-    await safeSendVendorPoEmail(transactionResult.updated.project_id);
-  }
 
   return transactionResult.updated;
 };
@@ -850,7 +957,12 @@ export const signAndCompleteSubmission = async (
   const transactionResult = await prisma.$transaction(async (tx) => {
     const submission = await tx.projectSubmission.findUnique({
       where: { id: data.id },
-      select: { status: true, submitted_by: true, meta_data: true },
+      select: {
+        status: true,
+        submitted_by: true,
+        meta_data: true,
+        installment_no: true,
+      },
     });
 
     if (!submission) {
@@ -911,6 +1023,7 @@ export const signAndCompleteSubmission = async (
           vendor_name: true,
           vendor_email: true,
           installment_rounds: true,
+          installment_amounts: true,
           current_workflow_type: true,
         },
       });
@@ -918,7 +1031,8 @@ export const signAndCompleteSubmission = async (
         tx,
         project,
         submission.meta_data,
-        user.id
+        user.id,
+        submission.installment_no
       );
     }
     const notificationResults = await notifyWorkflowStepApproved(tx, {
@@ -931,16 +1045,6 @@ export const signAndCompleteSubmission = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
-  if (
-    shouldSendVendorPoEmailForSubmission({
-      workflowType: transactionResult.updated.workflow_type,
-      stepOrder: transactionResult.updated.step_order,
-      status: transactionResult.updated.status,
-    })
-  ) {
-    await safeSendVendorPoEmail(transactionResult.updated.project_id);
-  }
 
   return transactionResult.updated;
 };
-

@@ -2,9 +2,17 @@ import {
   UnitResponsibleType,
   ProjectStatus,
   ProjectActionType,
+  SubmissionStatus,
+  SubmissionType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError, BadRequestError } from '../utils/errors';
+import {
+  NotFoundError,
+  BadRequestError,
+  BatchErrorEntry,
+  groupBatchErrors,
+  BatchOperationError,
+} from '../utils/errors';
 import { syncProjectPhases } from '../utils/phase-status';
 import { AuthPayload } from '../types/auth.type';
 import { PersistedNotificationResult } from '../types/notification.type';
@@ -69,35 +77,63 @@ export const assignProjectsToUser = async (
     const projectMap = new Map(projects.map((p) => [p.id, p]));
     const assigneeMap = new Map(assignees.map((a) => [a.id, a]));
 
-    const updatePromises = [];
-    const historyPromises = [];
-    const notificationPromises: Promise<PersistedNotificationResult[]>[] = [];
+    const errors: BatchErrorEntry[] = [];
 
     for (const item of data) {
       const { id, userId: assigneeId } = item;
       const project = projectMap.get(id);
       const assignee = assigneeMap.get(assigneeId);
 
-      if (!project) throw new NotFoundError(`Project ${id} not found`);
-      if (!assignee)
-        throw new NotFoundError(`Assignee ${assigneeId} not found`);
+      if (!project) {
+        errors.push({
+          code: 'PROJECT_NOT_FOUND',
+          id,
+        });
+        continue;
+      }
+      if (!assignee) {
+        errors.push({
+          code: 'ASSIGNEE_NOT_FOUND',
+          id,
+        });
+        continue;
+      }
       if (project.status !== ProjectStatus.UNASSIGNED) {
-        throw new BadRequestError(`Project ${id} is not unassigned`);
+        errors.push({
+          code: 'PROJECT_NOT_UNASSIGNED',
+          id,
+        });
+        continue;
       }
 
       const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
       if ((project as any)[assigneeField].length > 0) {
-        throw new BadRequestError(`Project ${id} is already assigned`);
+        errors.push({
+          code: 'ALREADY_ASSIGNED',
+          id,
+        });
+        continue;
       }
+    }
 
-      const shouldStartProcurement =
-        project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
-        !project.procurement_started_at;
+    if (errors.length > 0) {
+      throw new BatchOperationError(
+        'Batch Operation Error',
+        groupBatchErrors(errors),
+        400
+      );
+    }
 
-      const shouldStartContract =
-        project.current_workflow_type === UnitResponsibleType.CONTRACT &&
-        !project.contract_started_at;
+    const updatePromises = [];
+    const historyPromises = [];
+    const notificationPromises: Promise<PersistedNotificationResult[]>[] = [];
+
+    for (const item of data) {
+      const { id, userId: assigneeId } = item;
+      const project = projectMap.get(id)!;
+      const assignee = assigneeMap.get(assigneeId)!;
+      const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
       updatePromises.push(
         tx.project.update({
@@ -109,10 +145,6 @@ export const assignProjectsToUser = async (
           data: {
             status: ProjectStatus.WAITING_ACCEPT,
             [assigneeField]: { connect: { id: assigneeId } },
-            ...(shouldStartProcurement
-              ? { procurement_started_at: nowUtc() }
-              : {}),
-            ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
           },
           select: { id: true, status: true, [assigneeField]: true },
         })
@@ -265,13 +297,14 @@ export const claimProject = async (
       throw new BadRequestError('This project cannot be claimed');
     }
 
-    const shouldStartProcurement =
-      project.current_workflow_type !== UnitResponsibleType.CONTRACT &&
-      !project.procurement_started_at;
+    const isProcurement =
+      project.current_workflow_type !== UnitResponsibleType.CONTRACT;
+    const targetStatus = isProcurement
+      ? ProjectStatus.REVIEW_TOR
+      : ProjectStatus.IN_PROGRESS;
 
     const shouldStartContract =
-      project.current_workflow_type === UnitResponsibleType.CONTRACT &&
-      !project.contract_started_at;
+      !isProcurement && !project.contract_started_at;
 
     const updated = await tx.project.update({
       where: {
@@ -280,13 +313,26 @@ export const claimProject = async (
         [assigneeField]: { none: {} },
       },
       data: {
-        status: ProjectStatus.IN_PROGRESS,
+        status: targetStatus,
         [assigneeField]: { connect: { id: user.id } },
-        ...(shouldStartProcurement ? { procurement_started_at: nowUtc() } : {}),
         ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
       },
       select: { id: true, status: true, [assigneeField]: true },
     });
+
+    if (isProcurement) {
+      await tx.projectSubmission.create({
+        data: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+          step_order: 0,
+          submission_round: 1,
+          submission_type: SubmissionType.STAFF,
+          status: SubmissionStatus.WAITING_APPROVAL,
+          submitted_by: user.id,
+        },
+      });
+    }
 
     await syncProjectPhases(tx, project.current_workflow_type, projectId);
 
@@ -328,6 +374,7 @@ export const acceptProjects = async (
 
     const updatePromises = [];
     const historyPromises = [];
+    const step0Promises = [];
 
     for (const project of projects) {
       const assigneeField = resolveAssigneeField(project.current_workflow_type);
@@ -344,13 +391,38 @@ export const acceptProjects = async (
         );
       }
 
+      const isProcurement =
+        project.current_workflow_type !== UnitResponsibleType.CONTRACT;
+      const targetStatus = isProcurement
+        ? ProjectStatus.REVIEW_TOR
+        : ProjectStatus.IN_PROGRESS;
+
       updatePromises.push(
         tx.project.update({
           where: { id: project.id, status: ProjectStatus.WAITING_ACCEPT },
-          data: { status: ProjectStatus.IN_PROGRESS },
+          data: {
+            status: targetStatus,
+            ...(!isProcurement ? { contract_started_at: nowUtc() } : {}),
+          },
           select: { id: true, status: true },
         })
       );
+
+      if (isProcurement) {
+        step0Promises.push(
+          tx.projectSubmission.create({
+            data: {
+              project_id: project.id,
+              workflow_type: project.current_workflow_type,
+              step_order: 0,
+              submission_round: 1,
+              submission_type: SubmissionType.STAFF,
+              status: SubmissionStatus.WAITING_APPROVAL,
+              submitted_by: user.id,
+            },
+          })
+        );
+      }
 
       historyPromises.push(
         syncProjectPhases(tx, project.current_workflow_type, project.id),
@@ -358,12 +430,13 @@ export const acceptProjects = async (
           projectId: project.id,
           action: ProjectActionType.STATUS_UPDATE,
           oldValue: { status: ProjectStatus.WAITING_ACCEPT },
-          newValue: { status: ProjectStatus.IN_PROGRESS },
+          newValue: { status: targetStatus },
           changedBy: user,
         })
       );
     }
 
+    await Promise.all(step0Promises);
     const updatedProjects = await Promise.all(updatePromises);
     await Promise.all(historyPromises);
 
@@ -471,23 +544,56 @@ export const returnProject = async (
       select: {
         status: true,
         current_workflow_type: true,
-        _count: {
-          select: {
-            submissions: true,
-          },
-        },
       },
     });
     if (!project) {
       throw new NotFoundError('Project not found');
     }
-    if (project.status !== ProjectStatus.IN_PROGRESS) {
-      throw new BadRequestError('Only IN_PROGRESS projects can be returned');
-    }
-    if (project._count.submissions > 0) {
-      throw new BadRequestError(
-        'Cannot return project with existing submissions'
-      );
+
+    const isProcurement =
+      project.current_workflow_type !== UnitResponsibleType.CONTRACT;
+
+    if (isProcurement) {
+      if (project.status !== ProjectStatus.REVIEW_TOR) {
+        throw new BadRequestError(
+          'Procurement projects can only be returned in REVIEW_TOR status'
+        );
+      }
+      const subsequentSubmissionsCount = await tx.projectSubmission.count({
+        where: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+          step_order: { gt: 0 },
+        },
+      });
+      if (subsequentSubmissionsCount > 0) {
+        throw new BadRequestError(
+          'Cannot return project with existing submissions'
+        );
+      }
+      await tx.projectSubmission.deleteMany({
+        where: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+        },
+      });
+    } else {
+      if (project.status !== ProjectStatus.IN_PROGRESS) {
+        throw new BadRequestError(
+          'Contract projects can only be returned in IN_PROGRESS status'
+        );
+      }
+      const currentWorkflowSubmissionsCount = await tx.projectSubmission.count({
+        where: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+        },
+      });
+      if (currentWorkflowSubmissionsCount > 0) {
+        throw new BadRequestError(
+          'Cannot return project with existing submissions'
+        );
+      }
     }
 
     const assigneeField = resolveAssigneeField(project.current_workflow_type);
@@ -495,7 +601,9 @@ export const returnProject = async (
     const updated = await tx.project.update({
       where: {
         id: projectId,
-        status: ProjectStatus.IN_PROGRESS,
+        status: isProcurement
+          ? ProjectStatus.REVIEW_TOR
+          : ProjectStatus.IN_PROGRESS,
         [assigneeField]: { some: { id: user.id } },
       },
       data: {
@@ -503,6 +611,9 @@ export const returnProject = async (
         [assigneeField]: {
           disconnect: { id: user.id },
         },
+        ...(isProcurement
+          ? { procurement_started_at: null }
+          : { contract_started_at: null }),
       },
       select: { id: true, status: true },
     });

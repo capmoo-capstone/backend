@@ -1,5 +1,6 @@
 import {
   Prisma,
+  ProcurementType,
   ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
@@ -12,6 +13,7 @@ import { OPS_DEPT_ID, PROCUREMENT_WORKFLOW_TYPES } from '../utils/constant';
 import { isHeadOfSupplyDept, isSuperAdmin } from '../utils/permissions';
 import {
   GetOwnProjectsQuery,
+  GetOwnProjectsTotalQuery,
 } from '../schemas/project.schema';
 import { OwnProjectTab } from '../types/project.type';
 import { bangkokDayEndUtc, bangkokDayStartUtc } from '../utils/date';
@@ -30,6 +32,7 @@ export type OwnProjectRole = OwnRole;
 type RoleScope = {
   role: OwnRole;
   where: Prisma.ProjectWhereInput;
+  completedWhere?: Prisma.ProjectWhereInput;
 };
 
 export type OwnProjectRoleScope = RoleScope;
@@ -66,6 +69,8 @@ const PROJECT_SELECT = {
   budget: true,
   procurement_type: true,
   current_workflow_type: true,
+  procurement_completed_at: true,
+  contract_completed_at: true,
   assignee_procurement: { select: { id: true, full_name: true } },
   assignee_contract: { select: { id: true, full_name: true } },
   is_urgent: true,
@@ -75,6 +80,11 @@ const PROJECT_SELECT = {
   project_installments: {
     select: {
       status: true,
+    },
+  },
+  contract_no: {
+    select: {
+      contract_no: true,
     },
   },
 } satisfies Prisma.ProjectSelect;
@@ -92,7 +102,10 @@ export const OWN_PROJECT_ACTION_TABS: Record<OwnRole, OwnProjectTab[]> = {
     OwnProjectTab.WAITING_OTHERS,
     OwnProjectTab.WAITING_CANCEL,
   ],
-  [UserRole.DOCUMENT_STAFF]: [OwnProjectTab.WAITING_PROPOSAL, OwnProjectTab.WAITING_SIGNATURE],
+  [UserRole.DOCUMENT_STAFF]: [
+    OwnProjectTab.WAITING_PROPOSAL,
+    OwnProjectTab.WAITING_SIGNATURE,
+  ],
   [UserRole.FINANCE_STAFF]: [
     OwnProjectTab.WAITING_FINANCE_EXPORT,
     OwnProjectTab.WAITING_EDIT,
@@ -195,17 +208,55 @@ const buildGeneralStaffScope = (
   return clauses.length > 0 ? orWhere(clauses) : null;
 };
 
+const buildGeneralStaffCompletedWhere = (
+  user: AuthPayload
+): Prisma.ProjectWhereInput =>
+  orWhere([
+    andWhere(
+      orWhere([
+        { assignee_procurement: { some: { id: user.id } } },
+        { assignee_contract: { some: { id: user.id } } },
+      ]),
+      { status: ProjectStatus.CLOSED }
+    ),
+    andWhere(
+      { assignee_procurement: { some: { id: user.id } } },
+      { procurement_completed_at: { not: null } },
+      { current_workflow_type: UnitResponsibleType.CONTRACT },
+      {
+        NOT: {
+          assignee_contract: { some: { id: user.id } },
+        },
+      }
+    ),
+  ]);
+
 const buildHeadOfUnitScope = (
   units: UnitScope[]
 ): Prisma.ProjectWhereInput | null => {
-  const clauses = units
-    .filter((unit) => unit.type.length > 0)
-    .map((unit) =>
-      andWhere(
-        { responsible_unit_id: unit.id },
-        { current_workflow_type: { in: unit.type } }
-      )
+  const clauses: Prisma.ProjectWhereInput[] = [];
+
+  for (const unit of units) {
+    if (unit.type.length === 0) continue;
+
+    const hasContract = unit.type.includes(UnitResponsibleType.CONTRACT);
+    const nonContractTypes = unit.type.filter(
+      (t) => t !== UnitResponsibleType.CONTRACT
     );
+
+    if (nonContractTypes.length > 0) {
+      clauses.push(
+        andWhere(
+          { responsible_unit_id: unit.id },
+          { current_workflow_type: { in: nonContractTypes } }
+        )
+      );
+    }
+
+    if (hasContract) {
+      clauses.push({ current_workflow_type: UnitResponsibleType.CONTRACT });
+    }
+  }
 
   return clauses.length > 0 ? orWhere(clauses) : null;
 };
@@ -239,6 +290,25 @@ const progressStatusWhere = (
     ])
   );
 
+const progressRolesStatusWhere = (
+  roles: SupplyProgressRole[],
+  statuses: ProjectPhaseStatus[]
+): Prisma.ProjectWhereInput =>
+  orWhere(
+    roles.flatMap((role) =>
+      statuses.flatMap((status) => [
+        andWhere(
+          { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
+          progressFieldStatus('procurement_progress', role, status)
+        ),
+        andWhere(
+          { current_workflow_type: UnitResponsibleType.CONTRACT },
+          progressFieldStatus('contract_progress', role, status)
+        ),
+      ])
+    )
+  );
+
 export const buildOwnProjectRoleScopes = async (
   user: AuthPayload
 ): Promise<RoleScope[]> => {
@@ -254,7 +324,11 @@ export const buildOwnProjectRoleScopes = async (
       roleUnits.get(UserRole.GENERAL_STAFF) ?? []
     );
     if (generalScope) {
-      scopes.push({ role: UserRole.GENERAL_STAFF, where: generalScope });
+      scopes.push({
+        role: UserRole.GENERAL_STAFF,
+        where: generalScope,
+        completedWhere: buildGeneralStaffCompletedWhere(user),
+      });
     }
   }
 
@@ -306,30 +380,31 @@ export const buildOwnProjectRoleTabWhere = (
     if (tab === 'need_action') {
       return andWhere(
         scope.where,
-        { status: ProjectStatus.IN_PROGRESS },
         orWhere([
-          progressStatusWhere(scope.role, [ProjectPhaseStatus.IN_PROGRESS]),
           andWhere(
-            { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
-            progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
-            progressStatusWhere(UserRole.HEAD_OF_UNIT, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            progressStatusWhere(UserRole.DOCUMENT_STAFF, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            { project_installments: { none: {} } }
+            { status: ProjectStatus.REVIEW_TOR },
+            { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } }
           ),
           andWhere(
-            { current_workflow_type: UnitResponsibleType.CONTRACT },
-            progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
-            progressStatusWhere(UserRole.HEAD_OF_UNIT, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            progressStatusWhere(UserRole.DOCUMENT_STAFF, [
-              ProjectPhaseStatus.COMPLETED,
-            ]),
-            { contract_completed_at: null }
+            { status: ProjectStatus.IN_PROGRESS },
+            orWhere([
+              progressStatusWhere(scope.role, [
+                ProjectPhaseStatus.IN_PROGRESS,
+                ProjectPhaseStatus.NOT_STARTED,
+              ]),
+              andWhere(
+                progressStatusWhere(scope.role, [
+                  ProjectPhaseStatus.COMPLETED,
+                  ProjectPhaseStatus.WAITING_APPROVAL,
+                ]),
+                progressStatusWhere(UserRole.HEAD_OF_UNIT, [
+                  ProjectPhaseStatus.COMPLETED,
+                ]),
+                progressStatusWhere(UserRole.DOCUMENT_STAFF, [
+                  ProjectPhaseStatus.COMPLETED,
+                ])
+              ),
+            ])
           ),
         ])
       );
@@ -349,24 +424,16 @@ export const buildOwnProjectRoleTabWhere = (
           ProjectPhaseStatus.WAITING_APPROVAL,
           ProjectPhaseStatus.COMPLETED,
         ]),
-        progressStatusWhere(
-          UserRole.HEAD_OF_UNIT,
-          NON_COMPLETED_PHASE_STATUSES
-        ),
-        progressStatusWhere(
-          UserRole.DOCUMENT_STAFF,
+        progressRolesStatusWhere(
+          [UserRole.HEAD_OF_UNIT, UserRole.DOCUMENT_STAFF],
           NON_COMPLETED_PHASE_STATUSES
         )
       );
     }
     if (tab === 'completed') {
-      return andWhere(
-        scope.where,
-        orWhere([
-          { status: ProjectStatus.CLOSED },
-          { procurement_completed_at: { not: null } },
-          { contract_completed_at: { not: null } },
-        ])
+      return (
+        scope.completedWhere ??
+        andWhere(scope.where, { status: ProjectStatus.CLOSED })
       );
     }
   }
@@ -470,6 +537,14 @@ const buildSearchFilter = (search?: string): Prisma.ProjectWhereInput => {
         },
       },
       {
+        contract_no: {
+          contract_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+      },
+      {
         title: {
           contains: searchTerm,
           mode: Prisma.QueryMode.insensitive,
@@ -516,14 +591,8 @@ export const buildOwnProjectCompletedDateFilter = (
   }
 
   return orWhere([
-    andWhere(
-      { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
-      { procurement_completed_at: dateFilter }
-    ),
-    andWhere(
-      { current_workflow_type: UnitResponsibleType.CONTRACT },
-      { contract_completed_at: dateFilter }
-    ),
+    { procurement_completed_at: dateFilter },
+    { contract_completed_at: dateFilter },
   ]);
 };
 
@@ -565,6 +634,10 @@ const resolveOwnProjectStatus = (
     current_workflow_type: UnitResponsibleType;
     procurement_progress?: unknown;
     contract_progress?: unknown;
+    procurement_completed_at?: Date | null;
+    contract_completed_at?: Date | null;
+    assignee_procurement?: Array<{ id: string }>;
+    assignee_contract?: Array<{ id: string }>;
     project_installments?: Array<{ status: ProjectInstallmentStatus }>;
   },
   user: AuthPayload,
@@ -585,8 +658,34 @@ const resolveOwnProjectStatus = (
   ) as Record<string, { status?: ProjectPhaseStatus }> | undefined;
 
   if (roles.includes(UserRole.GENERAL_STAFF)) {
+    if (project.status === ProjectStatus.CLOSED) {
+      return 'COMPLETED';
+    }
+    const isProcurementAssignee = (
+      project.assignee_procurement as Array<{ id: string }> | undefined
+    )?.some((a) => a.id === user.id);
+    const isContractAssignee = (
+      project.assignee_contract as Array<{ id: string }> | undefined
+    )?.some((a) => a.id === user.id);
+
+    if (
+      isProcurementAssignee &&
+      project.procurement_completed_at &&
+      project.current_workflow_type === UnitResponsibleType.CONTRACT &&
+      !isContractAssignee
+    ) {
+      return 'COMPLETED';
+    }
     if (project.status === ProjectStatus.WAITING_ACCEPT) {
       return 'WAITING_ACCEPT';
+    }
+    if (
+      project.status === ProjectStatus.REVIEW_TOR &&
+      PROCUREMENT_WORKFLOW_TYPES.includes(
+        project.current_workflow_type as ProcurementType
+      )
+    ) {
+      return 'NEED_ACTION';
     }
     const staffStatus = activeProgress?.[UserRole.GENERAL_STAFF]?.status;
     const headStatus = activeProgress?.[UserRole.HEAD_OF_UNIT]?.status;
@@ -676,20 +775,28 @@ export const getOwnProjects = async (
     prisma.project.count({ where: whereClause }),
   ]);
 
-  const data = projects.map((project) => ({
-    title: project.title,
-    id: project.id,
-    status: resolveOwnProjectStatus(project, user, tab),
-    receive_no: project.receive_no,
-    procurement_type: project.procurement_type,
-    expected_approval_date: project.expected_approval_date,
-    requesting_dept: project.requesting_dept,
-    requesting_unit: project.requesting_unit,
-    assignee:
-      project.current_workflow_type === UnitResponsibleType.CONTRACT
-        ? project.assignee_contract
-        : project.assignee_procurement,
-  }));
+  const data = projects.map((project) => {
+    const isProcurementAssignee = (
+      project.assignee_procurement as Array<{ id: string }> | undefined
+    )?.some((a) => a.id === user.id);
+
+    return {
+      title: project.title,
+      id: project.id,
+      status: resolveOwnProjectStatus(project, user, tab),
+      receive_no: project.receive_no,
+      contract_no: project.contract_no?.contract_no ?? null,
+      procurement_type: project.procurement_type,
+      expected_approval_date: project.expected_approval_date,
+      requesting_dept: project.requesting_dept,
+      requesting_unit: project.requesting_unit,
+      assignee:
+        project.current_workflow_type === UnitResponsibleType.CONTRACT &&
+        !(isProcurementAssignee && tab === 'completed')
+          ? project.assignee_contract
+          : project.assignee_procurement,
+    };
+  });
 
   return {
     total,
@@ -717,7 +824,8 @@ const getApplicableTabs = (user: AuthPayload): OwnProjectTab[] => {
 };
 
 export const getOwnProjectsTotal = async (
-  user: AuthPayload
+  user: AuthPayload,
+  query?: GetOwnProjectsTotalQuery
 ): Promise<Record<string, number>> => {
   const tabs = getApplicableTabs(user);
   if (tabs.length === 0) {
@@ -727,7 +835,11 @@ export const getOwnProjectsTotal = async (
   const whereEntries = await Promise.all(
     tabs.map(async (tab) => ({
       tab,
-      where: await ownProjectWhereClause(user, { tab }),
+      where: await ownProjectWhereClause(user, {
+        tab,
+        dateFrom: query?.dateFrom,
+        dateTo: query?.dateTo,
+      }),
     }))
   );
 

@@ -16,6 +16,37 @@ export const GetOwnProjectsQuerySchema = z.object({
   dateTo: BangkokDateTimeSchema.optional(),
 });
 
+export const GetOwnProjectsTotalQuerySchema = z.object({
+  dateFrom: BangkokDateTimeSchema.optional(),
+  dateTo: BangkokDateTimeSchema.optional(),
+});
+
+const OptionalDate = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  BangkokDateTimeSchema.optional()
+);
+
+const OptionalDeptId = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().trim().optional()
+);
+
+export const GetProjectSummaryQuerySchema = z
+  .object({
+    dateFrom: OptionalDate,
+    dateTo: OptionalDate,
+    deptId: OptionalDeptId,
+  })
+  .superRefine((data, ctx) => {
+    if (data.dateFrom && data.dateTo && data.dateFrom > data.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
+
 export const CreateProjectSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
@@ -107,6 +138,9 @@ export const UpdateProjectSchema = z.object({
     description: z.string().optional(),
     budget: z.number().optional(),
     actual_cost: z.number().optional(),
+    procurement_type: z.enum(ProcurementType).optional(),
+    is_urgent: z.enum(UrgentType).optional(),
+    expected_approval_date: OptionalDate,
     pr_no: z.string().optional(),
     po_no: z.string().optional(),
     less_no: z.string().optional(),
@@ -124,6 +158,22 @@ export const GetProjectsQueryByUnitSchema = z.object({
   unitId: z.string(),
 });
 
+const phaseStatus = [
+  ProjectStatus.UNASSIGNED,
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
+  ProjectStatus.IN_PROGRESS,
+] as const;
+
+const mainStatus = [
+  ProjectStatus.UNASSIGNED,
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.WAITING_CANCEL,
+  ProjectStatus.WAITING_CLOSE,
+  ProjectStatus.CANCELLED,
+  ProjectStatus.CLOSED,
+] as const;
+
 export const ProjectFilterQuerySchema = z
   .object({
     search: z.string().optional(),
@@ -132,14 +182,13 @@ export const ProjectFilterQuerySchema = z
     dateTo: BangkokDateTimeSchema.optional(),
     fiscalYear: z.union([z.string(), z.coerce.number().int()]).optional(),
     procurementType: z.array(z.enum(ProcurementType)).optional(),
-    status: z.array(z.enum(ProjectStatus)).optional(),
-    procurementStatus: z.array(z.enum(ProjectStatus)).optional(),
-    contractStatus: z.array(z.enum(ProjectStatus)).optional(),
+    status: z.array(z.enum(mainStatus)).optional(),
+    procurementStatus: z.array(z.enum(phaseStatus)).optional(),
+    contractStatus: z.array(z.enum(phaseStatus)).optional(),
     urgentStatus: z.array(z.enum(UrgentType)).optional(),
     assignees: z.array(z.string()).optional(),
     departments: z.array(z.string()).optional(),
     units: z.array(z.string()).optional(),
-    myTasks: z.boolean().optional(),
     sortBy: z.string().optional(),
     sortOrder: z.enum(['asc', 'desc']).optional(),
   })
@@ -184,4 +233,48 @@ export type GetAssignedProjectsQuery = z.infer<
   typeof GetAssignedProjectsQuerySchema
 >;
 export type GetOwnProjectsQuery = z.infer<typeof GetOwnProjectsQuerySchema>;
+export type GetOwnProjectsTotalQuery = z.infer<
+  typeof GetOwnProjectsTotalQuerySchema
+>;
+export type GetProjectSummaryQuery = z.infer<
+  typeof GetProjectSummaryQuerySchema
+>;
 export type GetInstallmentsQuery = z.infer<typeof GetInstallmentsQuerySchema>;
+
+export const VendorPoEmailDataSchema = z.object({
+  poNumber: z.string().trim().min(1, 'PO number is required'),
+  vendorName: z.string().trim().optional().nullable(),
+  additionalMessage: z.string().trim().optional().nullable(),
+  installmentNo: z.coerce.number().int().min(1).optional().nullable(),
+  reason: z.string().trim().optional().nullable(),
+});
+export type VendorPoEmailDataDto = z.infer<typeof VendorPoEmailDataSchema>;
+
+export const SendVendorEmailSchema = z.object({
+  recipient: z.string().trim().email('Invalid vendor email address'),
+  templateId: z
+    .enum(['VENDOR_PO_REQUEST', 'VENDOR_REQUEST_EDIT'])
+    .default('VENDOR_PO_REQUEST'),
+  data: VendorPoEmailDataSchema,
+});
+export type SendVendorEmailDto = z.infer<typeof SendVendorEmailSchema>;
+
+export const VendorEmailPreviewQuerySchema = z.object({
+  poNumber: z.string().trim().optional(),
+  vendorName: z.string().trim().optional(),
+  templateId: z.enum(['VENDOR_PO_REQUEST', 'VENDOR_REQUEST_EDIT']).optional(),
+  installmentNo: z.coerce.number().int().min(1).optional(),
+  reason: z.string().trim().optional(),
+});
+export type VendorEmailPreviewQueryDto = z.infer<
+  typeof VendorEmailPreviewQuerySchema
+>;
+
+export const CronSendVendorPoEmailSchema = z.object({
+  projectId: z.string().trim().min(1, 'projectId is required'),
+  recipient: z.string().trim().email('Invalid email address'),
+  data: VendorPoEmailDataSchema,
+});
+export type CronSendVendorPoEmailDto = z.infer<
+  typeof CronSendVendorPoEmailSchema
+>;

@@ -62,6 +62,7 @@ export const VendorSubmissionFilterQuerySchema = z
 export const ApproveSubmissionSchema = z.object({
   id: z.uuid(),
   required_signature: z.boolean(),
+  required_staff_approval: z.boolean().optional(),
 });
 
 export const CompleteSubmissionSchema = z.object({
@@ -91,11 +92,13 @@ export const UpdateProjectForSubmissionSchema = z.object({
   vendor_name: z.string().optional(),
   vendor_email: z.string().optional(),
   installment_rounds: z.coerce.number().int().min(1).optional(),
+  installment_amount: z.coerce.number().min(0).optional(),
 });
 
 export const RejectSubmissionSchema = z.object({
   id: z.uuid(),
   comment: z.string(),
+  required_staff_approval: z.boolean().optional(),
 });
 
 export type CreateStaffSubmissionDto = z.infer<

@@ -14,6 +14,10 @@ import {
   getPeriodicSummary,
   getProcurementOverview,
 } from '../dashboard/dashboard.service';
+import {
+  HomePageResponse,
+  OverviewPageResponse,
+} from '../../types/dashboard.type';
 import { OwnProjectTab } from '../../types/project.type';
 
 const supplyUser: AuthPayload = {
@@ -104,7 +108,6 @@ describe('dashboard.service', () => {
       .mockResolvedValueOnce(4);
 
     const result = await getPeriodicSummary(externalUser, {
-      mode: 'month',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
     });
@@ -145,7 +148,6 @@ describe('dashboard.service', () => {
     prismaMock.projectHistory.count.mockResolvedValue(0);
 
     const result = await getPeriodicSummary(supplyUser, {
-      mode: 'fiscalYear',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-12T16:59:59.999Z'),
     });
@@ -163,7 +165,9 @@ describe('dashboard.service', () => {
   it('builds procurement overview buckets for fiscal Q1', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: 1000, actual_cost: 800 },
+    });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([
       {
         activity_type_name: 'งบประมาณแผ่นดิน',
@@ -177,35 +181,26 @@ describe('dashboard.service', () => {
       },
     ]);
 
-    const result = await getProcurementOverview(supplyUser, {
+    const result = (await getProcurementOverview(supplyUser, {
       page: 'dashboard',
-      mode: 'quarter',
       deptId: OPS_DEPT_ID,
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2025-12-31T16:59:59.999Z'),
-    });
+    })) as OverviewPageResponse;
 
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
     expect(result.range.to.toISOString()).toBe('2025-12-31T16:59:59.999Z');
     expect(result.procurementTypes).toHaveLength(6);
+    expect(result.costSummary).toEqual({
+      totalBudget: 1000,
+      totalActualCost: 800,
+    });
     expect(result.statusBar.map((point) => point.status)).toEqual([
       ProjectStatus.UNASSIGNED,
       ProjectStatus.WAITING_ACCEPT,
       ProjectStatus.IN_PROGRESS,
       ProjectStatus.CLOSED,
       ProjectStatus.CANCELLED,
-    ]);
-    expect(result.budgetInvestment).toEqual([
-      {
-        category: 'งบประมาณแผ่นดิน',
-        planCount: 2,
-        amount: 1500,
-      },
-      {
-        category: 'เงินรายได้',
-        planCount: 1,
-        amount: 500,
-      },
     ]);
     expect(result.timeline.map((point) => point.label)).toEqual([
       '2025-10',
@@ -214,19 +209,52 @@ describe('dashboard.service', () => {
     ]);
   });
 
+  it('aggregates total budget and total actual cost for cost summary in procurement overview home page', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.projectHistory.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: 150000.5, actual_cost: 120000.25 },
+    });
+
+    const result = (await getProcurementOverview(supplyUser, {
+      page: 'home',
+      dateFrom: new Date('2025-09-30T17:00:00.000Z'),
+      dateTo: new Date('2026-09-30T16:59:59.999Z'),
+    })) as HomePageResponse;
+
+    expect(result.costSummary).toEqual({
+      totalBudget: 150000.5,
+      totalActualCost: 120000.25,
+    });
+    expect(prismaMock.project.aggregate).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        created_at: expect.any(Object),
+      }),
+      _sum: {
+        budget: true,
+        actual_cost: true,
+      },
+    });
+  });
+
   it('uses external status buckets and unit visibility for procurement overview', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: null, actual_cost: null },
+    });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
 
-    const result = await getProcurementOverview(externalUser, {
+    const result = (await getProcurementOverview(externalUser, {
       page: 'dashboard',
-      mode: 'month',
       dateFrom: new Date('2026-06-30T17:00:00.000Z'),
       dateTo: new Date('2026-07-31T16:59:59.999Z'),
-    });
+    })) as OverviewPageResponse;
 
+    expect(result.costSummary).toEqual({
+      totalBudget: 0,
+      totalActualCost: 0,
+    });
     expect(result.statusBar.map((point) => point.status)).toEqual([
       'NOT_STARTED',
       ProjectStatus.IN_PROGRESS,
@@ -242,48 +270,29 @@ describe('dashboard.service', () => {
     });
   });
 
-  it('returns null budgetPlanSummary when mode is not fiscalYear on home page', async () => {
+  it('queries budget plans by fiscal year for date range on home page', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null, actual_cost: null } });
     prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
-
-    const result = await getProcurementOverview(externalUser, {
-      page: 'home',
-      mode: 'month',
-      deptId: 'dept-1',
-      dateFrom: new Date('2026-06-30T17:00:00.000Z'),
-      dateTo: new Date('2026-07-31T16:59:59.999Z'),
+    prismaMock.budgetPlan.aggregate.mockResolvedValueOnce({
+      _sum: { budget_amount: 50000 },
     });
-
-    expect(result.budgetPlanSummary).toBeNull();
-  });
-
-  it('queries budget plans by fiscal year when mode is fiscalYear on home page', async () => {
-    prismaMock.project.count.mockResolvedValue(0);
-    prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null } });
-    prismaMock.budgetPlan.groupBy.mockResolvedValue([]);
-    prismaMock.budgetPlan.aggregate
-      .mockResolvedValueOnce({ _sum: { budget_amount: 50000 } })
-      .mockResolvedValueOnce({ _sum: { budget_amount: 30000 } });
     prismaMock.budgetPlan.count
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(2);
 
-    const result = await getProcurementOverview(externalUser, {
+    const result = (await getProcurementOverview(externalUser, {
       page: 'home',
-      mode: 'fiscalYear',
       deptId: 'dept-1',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
-    });
+    })) as HomePageResponse;
 
     expect(result.budgetPlanSummary).toEqual({
       totalBudget: 50000,
-      usedBudget: 30000,
       totalPlans: 10,
       notStartedPlans: 3,
       inProgressPlans: 5,
@@ -294,29 +303,94 @@ describe('dashboard.service', () => {
       budget_year: 2569,
       unit: { dept_id: { in: ['dept-1'] } },
     });
+    // Verify totalPlans count
+    expect(prismaMock.budgetPlan.count.mock.calls[0][0].where).toEqual({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+    });
+    // Verify notStartedPlans count
+    expect(prismaMock.budgetPlan.count.mock.calls[1][0].where).toEqual({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+      project_id: null,
+    });
+    // Verify inProgressPlans count includes active statuses (including REVIEW_TOR) and does not filter project by created_at range
+    const inProgressPlanWhere =
+      prismaMock.budgetPlan.count.mock.calls[2][0].where;
+    expect(inProgressPlanWhere).toMatchObject({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+      project: {
+        AND: expect.arrayContaining([
+          { requesting_dept_id: { in: ['dept-1'] } },
+          {
+            status: {
+              in: [
+                ProjectStatus.UNASSIGNED,
+                ProjectStatus.WAITING_ACCEPT,
+                ProjectStatus.REVIEW_TOR,
+                ProjectStatus.IN_PROGRESS,
+                ProjectStatus.WAITING_CANCEL,
+                ProjectStatus.WAITING_CLOSE,
+              ],
+            },
+          },
+        ]),
+      },
+    });
+    expect(inProgressPlanWhere?.project).not.toHaveProperty('created_at');
+
+    // Verify completedPlans count
+    const completedPlanWhere =
+      prismaMock.budgetPlan.count.mock.calls[3][0].where;
+    expect(completedPlanWhere).toMatchObject({
+      budget_year: 2569,
+      unit: { dept_id: { in: ['dept-1'] } },
+      project: {
+        AND: expect.arrayContaining([
+          { requesting_dept_id: { in: ['dept-1'] } },
+          { status: ProjectStatus.CLOSED },
+        ]),
+      },
+    });
   });
 
   it('uses global project and budget visibility for DEPT-REG general staff', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
-    prismaMock.budgetPlan.aggregate
-      .mockResolvedValueOnce({ _sum: { budget_amount: 50000 } })
-      .mockResolvedValueOnce({ _sum: { budget_amount: 30000 } });
+    prismaMock.project.aggregate.mockResolvedValue({ _sum: { budget: null, actual_cost: null } });
+    prismaMock.budgetPlan.aggregate.mockResolvedValueOnce({
+      _sum: { budget_amount: 50000 },
+    });
     prismaMock.budgetPlan.count
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(2);
 
-    await getProcurementOverview(registrationGeneralStaff, {
+    const result = (await getProcurementOverview(registrationGeneralStaff, {
       page: 'home',
-      mode: 'fiscalYear',
       dateFrom: new Date('2025-09-30T17:00:00.000Z'),
       dateTo: new Date('2026-09-30T16:59:59.999Z'),
+    })) as HomePageResponse;
+
+    expect(result.budgetPlanSummary).toEqual({
+      totalBudget: 50000,
+      totalPlans: 10,
+      notStartedPlans: 3,
+      inProgressPlans: 5,
+      completedPlans: 2,
     });
 
     expect(prismaMock.budgetPlan.aggregate.mock.calls[0][0].where).toEqual({
       budget_year: 2569,
+    });
+    expect(prismaMock.budgetPlan.count.mock.calls[0][0].where).toEqual({
+      budget_year: 2569,
+    });
+    expect(prismaMock.budgetPlan.count.mock.calls[1][0].where).toEqual({
+      budget_year: 2569,
+      project_id: null,
     });
     expect(prismaMock.project.count.mock.calls[0][0].where).not.toMatchObject({
       requesting_dept_id: expect.anything(),
@@ -365,7 +439,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -395,7 +468,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -452,7 +524,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
         }
@@ -521,7 +592,6 @@ describe('dashboard.service', () => {
         {
           unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
-          mode: 'fiscalYear',
           dateFrom: new Date('2025-09-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-12T16:59:59.999Z'),
         }
@@ -535,18 +605,14 @@ describe('dashboard.service', () => {
         stageBreakdownDays: {
           assignmentDays: 22,
           procurementDays: 0,
-          contractDays: 0,
           approvalDays: 2,
-          financeDays: 0,
         },
       });
       const project = result.projects[0];
       expect(
         project.stageBreakdownDays.assignmentDays +
           project.stageBreakdownDays.procurementDays +
-          project.stageBreakdownDays.contractDays +
-          project.stageBreakdownDays.approvalDays +
-          project.stageBreakdownDays.financeDays
+          project.stageBreakdownDays.approvalDays
       ).toBe(project.totalDays);
     });
 
@@ -558,12 +624,9 @@ describe('dashboard.service', () => {
           title: 'Waiting for contract',
           procurement_type: ProcurementType.LT100K,
           procurement_unit_id: 'unit-proc',
-          contract_unit_id: 'unit-other',
           created_at: new Date('2026-07-01T00:00:00.000Z'),
           procurement_started_at: new Date('2026-07-02T00:00:00.000Z'),
           procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
-          contract_started_at: null,
-          contract_completed_at: null,
           submissions: [],
         },
       ]);
@@ -573,7 +636,6 @@ describe('dashboard.service', () => {
         {
           unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
         }
@@ -584,58 +646,47 @@ describe('dashboard.service', () => {
         stageBreakdownDays: {
           assignmentDays: 1,
           procurementDays: 2,
-          contractDays: 0,
           approvalDays: 0,
-          financeDays: 0,
         },
       });
     });
 
-    it('counts assignmentDays from procurement_completed_at when contract_started_at is null in contract unit', async () => {
+    it('queries top delayed projects for procurement_unit_id only', async () => {
       prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany.mockResolvedValueOnce([
         {
-          id: 'p-contract-unassigned',
-          title: 'Unassigned Contract Project',
+          id: 'p-proc-delayed',
+          title: 'Procurement Delayed Project',
           procurement_type: ProcurementType.LT100K,
-          procurement_unit_id: 'unit-other',
-          contract_unit_id: 'unit-contract',
+          procurement_unit_id: 'unit-proc',
+          status: ProjectStatus.IN_PROGRESS,
           created_at: new Date('2026-07-01T00:00:00.000Z'),
-          procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
-          procurement_completed_at: new Date('2026-07-06T00:00:00.000Z'),
-          contract_started_at: null,
-          contract_completed_at: null,
+          procurement_started_at: new Date('2026-07-03T00:00:00.000Z'),
+          procurement_completed_at: null,
           submissions: [],
-          project_histories: [],
         },
       ]);
 
       const result = await DashboardService.getUnitGroupTopDelayedProjects(
+        staffUser,
         {
-          ...staffUser,
-          roles: [
-            {
-              role: UserRole.GENERAL_STAFF,
-              dept_id: 'dept-1',
-              dept_name: 'Dept',
-              unit_id: 'unit-contract',
-              unit_name: 'Contract Unit',
-            },
-          ],
-        },
-        {
-          unitId: 'unit-contract',
+          unitId: 'unit-proc',
           procurementType: ProcurementType.LT100K,
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
         }
       );
 
+      expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            procurement_unit_id: 'unit-proc',
+            status: { not: ProjectStatus.CANCELLED },
+          }),
+        })
+      );
       expect(result.projects).toHaveLength(1);
-      const project = result.projects[0];
-      expect(project.stageBreakdownDays.contractDays).toBe(0);
-      expect(project.stageBreakdownDays.assignmentDays).toBe(project.totalDays);
+      expect(result.projects[0].projectId).toBe('p-proc-delayed');
     });
 
     it('aggregates completed phase durations for all current unit staff', async () => {
@@ -685,7 +736,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 1,
@@ -723,7 +773,6 @@ describe('dashboard.service', () => {
         staffUser,
         {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 2,
@@ -773,7 +822,6 @@ describe('dashboard.service', () => {
       await expect(
         DashboardService.getUnitGroupStaffPerformance(staffUser, {
           unitId: 'missing-unit',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 1,
@@ -787,7 +835,6 @@ describe('dashboard.service', () => {
       await expect(
         DashboardService.getUnitGroupStaffPerformance(externalUser, {
           unitId: 'unit-proc',
-          mode: 'month',
           dateFrom: new Date('2026-06-30T17:00:00.000Z'),
           dateTo: new Date('2026-07-31T16:59:59.999Z'),
           page: 1,
@@ -812,7 +859,6 @@ describe('dashboard.service', () => {
           supplyUser,
           {
             unitId: 'unit-proc',
-            mode: 'month',
             dateFrom: new Date('2026-06-30T17:00:00.000Z'),
             dateTo: new Date('2026-07-31T16:59:59.999Z'),
           }
@@ -865,7 +911,6 @@ describe('dashboard.service', () => {
           supplyUser,
           {
             unitId: 'unit-contract',
-            mode: 'month',
             dateFrom: new Date('2026-06-30T17:00:00.000Z'),
             dateTo: new Date('2026-07-31T16:59:59.999Z'),
           }
@@ -904,32 +949,11 @@ describe('dashboard.service', () => {
           IndividualTodoQuerySchema.parse({ targetUserId: 'staff-1' })
         ).toEqual({
           targetUserId: 'staff-1',
-          tab: OwnProjectTab.ALL,
+          tab: 'ALL',
         });
       });
 
       it("returns the selected user's project-own todo list", async () => {
-        prismaMock.user.findUnique.mockResolvedValue({
-          id: 'staff-1',
-          username: 'staff',
-          email: 'staff@example.com',
-          full_name: 'Staff User',
-          register_type: ['STANDARD'],
-          roles: [
-            {
-              role: UserRole.GENERAL_STAFF,
-              department: { id: OPS_DEPT_ID, name: 'Supply' },
-              unit: { id: 'unit-proc', name: 'Procurement' },
-            },
-          ],
-          delegations_received: [],
-        } as any);
-        prismaMock.unit.findMany.mockResolvedValue([
-          {
-            id: 'unit-proc',
-            type: [UnitResponsibleType.LT100K],
-          },
-        ] as any);
         prismaMock.project.findMany.mockResolvedValue([
           { id: 'project-1', title: 'Target todo' },
         ] as any);
@@ -937,7 +961,7 @@ describe('dashboard.service', () => {
 
         const result = await DashboardService.getIndividualStaffTodo(2, 20, {
           targetUserId: 'staff-1',
-          tab: OwnProjectTab.WAITING_ACCEPT,
+          tab: 'IN_PROGRESS',
         });
 
         expect(result).toMatchObject({
@@ -951,7 +975,7 @@ describe('dashboard.service', () => {
           expect.objectContaining({
             skip: 20,
             take: 20,
-            orderBy: [{ receive_no: 'desc' }],
+            where: expect.any(Object),
           })
         );
         expect(prismaMock.project.count).toHaveBeenCalledWith(
@@ -961,48 +985,58 @@ describe('dashboard.service', () => {
         );
       });
 
-      it('throws NotFoundError when the todo target user does not exist', async () => {
-        prismaMock.user.findUnique.mockResolvedValue(null);
+      it("returns completed projects when tab is COMPLETED", async () => {
+        prismaMock.project.findMany.mockResolvedValue([
+          { id: 'project-completed-1', title: 'Completed Project' },
+        ] as any);
+        prismaMock.project.count.mockResolvedValue(1);
 
+        const result = await DashboardService.getIndividualStaffTodo(1, 10, {
+          targetUserId: 'staff-1',
+          tab: 'COMPLETED',
+        });
+
+        expect(result.data).toHaveLength(1);
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  assignee_procurement: { some: { id: 'staff-1' } },
+                  assignee_contract: { none: { id: 'staff-1' } },
+                }),
+              ]),
+            }),
+          })
+        );
+      });
+
+      it('throws NotFoundError when given an invalid tab', async () => {
         await expect(
           DashboardService.getIndividualStaffTodo(1, 10, {
-            targetUserId: 'missing-user',
-            tab: OwnProjectTab.ALL,
+            targetUserId: 'staff-1',
+            tab: 'INVALID_TAB' as any,
           })
-        ).rejects.toThrowError('User not found');
+        ).rejects.toThrowError('Invalid tab');
         expect(prismaMock.project.findMany).not.toHaveBeenCalled();
       });
 
       it('returns total counts by tab for individual staff todos', async () => {
-        prismaMock.user.findUnique.mockResolvedValue({
-          id: 'staff-1',
-          username: 'staff',
-          email: 'staff@example.com',
-          full_name: 'Staff User',
-          register_type: ['STANDARD'],
-          roles: [
-            {
-              role: UserRole.GENERAL_STAFF,
-              department: { id: OPS_DEPT_ID, name: 'Supply' },
-              unit: { id: 'unit-proc', name: 'Procurement' },
-            },
-          ],
-          delegations_received: [],
-        } as any);
-        prismaMock.unit.findMany.mockResolvedValue([
-          {
-            id: 'unit-proc',
-            type: [UnitResponsibleType.LT100K],
-          },
-        ] as any);
-        prismaMock.project.count.mockResolvedValue(5);
+        prismaMock.project.count
+          .mockResolvedValueOnce(5)
+          .mockResolvedValueOnce(3)
+          .mockResolvedValueOnce(2);
 
         const totals = await DashboardService.getIndividualStaffTodoTotal({
           targetUserId: 'staff-1',
         });
 
         expect(totals).toBeDefined();
-        expect(totals.all).toBe(5);
+        expect(totals).toEqual({
+          ALL: 5,
+          IN_PROGRESS: 3,
+          COMPLETED: 2,
+        });
       });
 
       it('throws NotFoundError when staff user is not in the unit', async () => {
@@ -1107,6 +1141,69 @@ describe('dashboard.service', () => {
               workflowType: UnitResponsibleType.CONTRACT,
             }),
           ])
+        );
+      });
+
+      it('applies date range filtering in getIndividualStaffDashboard', async () => {
+        prismaMock.unit.findUnique.mockResolvedValue({
+          id: 'unit-proc',
+          dept_id: OPS_DEPT_ID,
+          name: 'Procurement Unit',
+          type: [UnitResponsibleType.LT100K],
+        } as any);
+
+        prismaMock.user.findFirst.mockResolvedValue({
+          id: 'staff-1',
+          full_name: 'Somchai Jaidee',
+        } as any);
+
+        prismaMock.holiday.findMany.mockResolvedValue([]);
+
+        prismaMock.project.findMany
+          .mockResolvedValueOnce([
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_unit_id: 'unit-proc',
+              contract_unit_id: null,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-05T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-1' }],
+              assignee_contract: [],
+            },
+          ] as any)
+          .mockResolvedValueOnce([
+            {
+              procurement_type: ProcurementType.LT100K,
+              procurement_unit_id: 'unit-proc',
+              contract_unit_id: null,
+              procurement_started_at: new Date('2026-07-01T00:00:00.000Z'),
+              procurement_completed_at: new Date('2026-07-05T00:00:00.000Z'),
+              contract_started_at: null,
+              contract_completed_at: null,
+              assignee_procurement: [{ id: 'staff-1' }],
+              assignee_contract: [],
+            },
+          ] as any);
+
+        const result = await DashboardService.getIndividualStaffDashboard(
+          supplyUser,
+          {
+            unitId: 'unit-proc',
+            targetUserId: 'staff-1',
+            dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+            dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          }
+        );
+
+        expect(result.procurementMethodMetrics.total).toBe(1);
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              status: { not: ProjectStatus.CANCELLED },
+            }),
+          })
         );
       });
     });

@@ -6,14 +6,16 @@ import {
   ProjectStatus,
   SubmissionStatus,
   UnitResponsibleType,
+  UserRole,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AuthPayload } from '../types/auth.type';
 import { BadRequestError, NotFoundError } from '../utils/errors';
 import { ListResponse, PaginatedResponse } from '../types/common.type';
-import { WORKFLOW_STEP_ORDERS } from '../utils/constant';
+import { OPS_DEPT_ID, WORKFLOW_STEP_ORDERS } from '../utils/constant';
 import { acquireProjectInstallmentLock } from '../utils/project-installment';
 import { Capability, assertCapability } from '../utils/access-policy';
+import { isSuperAdmin } from '../utils/permissions';
 import { projectReadWhere } from '../utils/project-scope';
 import { createProjectHistoryAndAuditEvent } from './audit-log.service';
 import {
@@ -21,6 +23,10 @@ import {
   ExportInstallmentDto,
   GetInstallmentsQuery,
 } from '../schemas/project.schema';
+import {
+  PaginatedProjectInstallments,
+  ProjectInstallmentListItem,
+} from '../types/project.type';
 import {
   notifyFinanceExportReady,
   notifyFinanceRequestEdit,
@@ -149,21 +155,51 @@ export const createInstallment = async (
   return transactionResult.exportRequest;
 };
 
+const isManagementOrFinanceRole = (user: AuthPayload): boolean => {
+  if (isSuperAdmin(user)) return true;
+  return user.roles.some(
+    (r) =>
+      r.dept_id === OPS_DEPT_ID &&
+      (r.role === UserRole.FINANCE_STAFF ||
+        r.role === UserRole.HEAD_OF_UNIT ||
+        r.role === UserRole.HEAD_OF_DEPARTMENT)
+  );
+};
+
 export const getInstallments = async (
   user: AuthPayload,
   page: number,
   limit: number,
   filters?: GetInstallmentsQuery
-): Promise<PaginatedResponse<ProjectInstallment>> => {
+): Promise<PaginatedProjectInstallments> => {
   const where: Prisma.ProjectInstallmentWhereInput = {};
   const projectScope = projectReadWhere(user);
   if (Object.keys(projectScope).length > 0) {
     where.project = projectScope;
   }
 
-  if (filters) {
-    const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
+  const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
 
+  if (!isManagementOrFinanceRole(user)) {
+    conditions.push({
+      project: {
+        OR: [
+          {
+            assignee_procurement: {
+              some: { id: user.id },
+            },
+          },
+          {
+            assignee_contract: {
+              some: { id: user.id },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  if (filters) {
     if (filters.search?.trim()) {
       conditions.push({
         OR: [
@@ -180,6 +216,16 @@ export const getInstallments = async (
               receive_no: {
                 contains: filters.search.trim(),
                 mode: 'insensitive',
+              },
+            },
+          },
+          {
+            project: {
+              contract_no: {
+                contract_no: {
+                  contains: filters.search.trim(),
+                  mode: 'insensitive',
+                },
               },
             },
           },
@@ -237,10 +283,10 @@ export const getInstallments = async (
         },
       });
     }
+  }
 
-    if (conditions.length > 0) {
-      where.AND = conditions;
-    }
+  if (conditions.length > 0) {
+    where.AND = conditions;
   }
 
   const [exportData, count] = await Promise.all([
@@ -256,8 +302,11 @@ export const getInstallments = async (
             id: true,
             receive_no: true,
             title: true,
-            budget: true,
+            actual_cost: true,
+            installment_amounts: true,
             procurement_type: true,
+            po_no: true,
+            vendor_name: true,
             assignee_contract: {
               select: { id: true, full_name: true },
             },
@@ -269,17 +318,47 @@ export const getInstallments = async (
         installment_no: true,
         status: true,
         request_edit_reason: true,
+        exported_at: true,
       },
     }),
     prisma.projectInstallment.count({ where }),
   ]);
+
+  const mappedData: ProjectInstallmentListItem[] = exportData.map((item) => {
+    const rawAmounts = item.project?.installment_amounts;
+    let installmentAmount: number | null = null;
+    if (
+      rawAmounts &&
+      typeof rawAmounts === 'object' &&
+      !Array.isArray(rawAmounts)
+    ) {
+      const amountValue = (rawAmounts as Record<string, unknown>)[
+        item.installment_no.toString()
+      ];
+      if (typeof amountValue === 'number') {
+        installmentAmount = amountValue;
+      }
+    }
+
+    const { installment_amounts, ...projectWithoutAmounts } = item.project;
+
+    return {
+      id: item.id,
+      installment_no: item.installment_no,
+      installment_amount: installmentAmount,
+      status: item.status,
+      request_edit_reason: item.request_edit_reason,
+      exported_at: item.exported_at,
+      project: projectWithoutAmounts,
+    };
+  });
 
   return {
     total: count,
     page,
     pageSize: limit,
     totalPages: Math.ceil(count / limit),
-    data: exportData,
+    data: mappedData,
   };
 };
 

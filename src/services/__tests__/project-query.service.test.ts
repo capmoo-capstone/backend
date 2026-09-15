@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CONTRACT_UNIT_ID,
   OPS_DEPT_ID,
   PROC1_UNIT_ID,
   REGISTRATION_DEPT_ID,
@@ -28,6 +29,7 @@ import {
   getWorkload,
   listProjects,
 } from '../project-query.service';
+import { ProjectFilterQuerySchema } from '../../schemas/project.schema';
 
 vi.mock('../storage.service', () => ({
   generatePresignedDownloadUrl: vi.fn(
@@ -207,6 +209,133 @@ describe('project-query.service', () => {
     });
   });
 
+  it('listProjects searches by contract_no and flattens contract_no in response', async () => {
+    prismaMock.project.findMany.mockResolvedValue([
+      {
+        ...projectRow,
+        contract_no: { contract_no: 'CN-2569/001' },
+      },
+    ]);
+    prismaMock.project.count.mockResolvedValue(1);
+
+    const result = await listProjects(supplyUser, 1, 10, {
+      search: 'CN-2569/001',
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        contract_no: { contract_no: 'CN-2569/001' },
+      })
+    );
+
+    const findCall = prismaMock.project.findMany.mock.calls[0][0];
+    const whereJson = JSON.stringify(findCall.where);
+    expect(whereJson).toContain(
+      '"contract_no":{"contract_no":{"contains":"CN-2569/001","mode":"insensitive"}}'
+    );
+  });
+
+  it('listProjects sorts by contract_no relation', async () => {
+    prismaMock.project.findMany.mockResolvedValue([projectRow]);
+    prismaMock.project.count.mockResolvedValue(1);
+
+    await listProjects(supplyUser, 1, 10, {
+      sortBy: 'contract_no',
+      sortOrder: 'asc',
+    });
+
+    const findCall = prismaMock.project.findMany.mock.calls[0][0];
+    expect(findCall.orderBy).toEqual([
+      { contract_no: { contract_no: 'asc' } },
+      { receive_no: 'desc' },
+    ]);
+  });
+
+  it('listProjects combines status, procurementStatus, and contractStatus with OR', async () => {
+    prismaMock.project.findMany.mockResolvedValue([projectRow]);
+    prismaMock.project.count.mockResolvedValue(1);
+
+    await listProjects(supplyUser, 1, 10, {
+      status: [ProjectStatus.WAITING_ACCEPT],
+      procurementStatus: [ProjectStatus.IN_PROGRESS, ProjectStatus.REVIEW_TOR],
+      contractStatus: [ProjectStatus.IN_PROGRESS],
+    });
+
+    const findCall = prismaMock.project.findMany.mock.calls[0][0];
+    expect(findCall.where.AND).toContainEqual({
+      OR: [
+        { status: { in: [ProjectStatus.WAITING_ACCEPT] } },
+        {
+          AND: [
+            { current_workflow_type: { not: UnitResponsibleType.CONTRACT } },
+            {
+              status: {
+                in: [ProjectStatus.IN_PROGRESS, ProjectStatus.REVIEW_TOR],
+              },
+            },
+          ],
+        },
+        {
+          AND: [
+            { current_workflow_type: UnitResponsibleType.CONTRACT },
+            { status: { in: [ProjectStatus.IN_PROGRESS] } },
+          ],
+        },
+      ],
+    });
+  });
+
+  describe('ProjectFilterQuerySchema status validation', () => {
+    it('accepts valid statuses and throws on invalid statuses', () => {
+      // Valid mainStatus
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          status: [ProjectStatus.UNASSIGNED, ProjectStatus.CLOSED],
+        })
+      ).not.toThrow();
+
+      // Invalid mainStatus (e.g. IN_PROGRESS or REVIEW_TOR is not in mainStatus)
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          status: [ProjectStatus.IN_PROGRESS],
+        })
+      ).toThrow();
+
+      // Valid phaseStatus for procurementStatus
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          procurementStatus: [
+            ProjectStatus.UNASSIGNED,
+            ProjectStatus.REVIEW_TOR,
+            ProjectStatus.IN_PROGRESS,
+          ],
+        })
+      ).not.toThrow();
+
+      // Invalid phaseStatus for procurementStatus (e.g. CLOSED or CANCELLED)
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          procurementStatus: [ProjectStatus.CLOSED],
+        })
+      ).toThrow();
+
+      // Valid phaseStatus for contractStatus
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          contractStatus: [ProjectStatus.IN_PROGRESS],
+        })
+      ).not.toThrow();
+
+      // Invalid phaseStatus for contractStatus (e.g. CANCELLED)
+      expect(() =>
+        ProjectFilterQuerySchema.parse({
+          contractStatus: [ProjectStatus.CANCELLED],
+        })
+      ).toThrow();
+    });
+  });
+
   it('getById returns full project details for supply users', async () => {
     txMock.project.findUnique.mockResolvedValue({
       ...projectRow,
@@ -216,6 +345,7 @@ describe('project-query.service', () => {
       procurement_progress: {},
       contract_progress: {},
       installment_rounds: 1,
+      installment_amounts: { '1': 10000 },
       budget_plans: [],
       less_no: null,
       pr_no: 'PR-1',
@@ -240,6 +370,7 @@ describe('project-query.service', () => {
 
     expect(result).toMatchObject({
       id: 'project-1',
+      installment_amounts: { '1': 10000 },
       requester: {
         dept_id: 'dept-1',
         unit_id: 'unit-1',
@@ -285,8 +416,42 @@ describe('project-query.service', () => {
     );
   });
 
-  describe('getOwnProjects role tabs', () => {
+  it('getAssignedProjects allows proc head to see projects even if current_workflow_type is CONTRACT and shows proc assignee', async () => {
+    prismaMock.unit.findMany.mockResolvedValue([
+      { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+    ]);
+    const contractPhaseProject = {
+      ...projectRow,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      procurement_unit_id: PROC1_UNIT_ID,
+      contract_unit_id: 'CONTRACT_UNIT_ID',
+      assignee_procurement: [{ id: 'staff-1', full_name: 'Proc Staff' }],
+      assignee_contract: [{ id: 'staff-2', full_name: 'Contract Staff' }],
+    };
+    prismaMock.project.findMany.mockResolvedValue([contractPhaseProject]);
+    prismaMock.project.count.mockResolvedValue(1);
 
+    const result = await getAssignedProjects(
+      headUnitUser,
+      new Date('2026-06-01')
+    );
+
+    expect((result.data[0] as any).assignee).toEqual([
+      { id: 'staff-2', full_name: 'Contract Staff' },
+    ]);
+    expect(prismaMock.project.findMany.mock.calls[0][0].where.AND).toEqual(
+      expect.arrayContaining([
+        {
+          OR: [
+            { responsible_unit_id: { in: [PROC1_UNIT_ID] } },
+            { procurement_unit_id: { in: [PROC1_UNIT_ID] } },
+          ],
+        },
+      ])
+    );
+  });
+
+  describe('getOwnProjects role tabs', () => {
     it('combines general staff tab conditions on the all tab', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
@@ -332,7 +497,9 @@ describe('project-query.service', () => {
           ...projectRow,
           current_workflow_type: UnitResponsibleType.CONTRACT,
           assignee_procurement: [{ id: 'staff-1', full_name: 'Staff One' }],
-          assignee_contract: [{ id: 'contract-staff-1', full_name: 'Contract Staff' }],
+          assignee_contract: [
+            { id: 'contract-staff-1', full_name: 'Contract Staff' },
+          ],
         },
       ]);
       prismaMock.project.count.mockResolvedValue(1);
@@ -357,6 +524,9 @@ describe('project-query.service', () => {
       });
 
       expect(ownProjectWhereJson()).toContain(
+        `"status":"${ProjectStatus.REVIEW_TOR}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
         `"status":"${ProjectStatus.IN_PROGRESS}"`
       );
       expect(ownProjectWhereJson()).toContain(
@@ -366,13 +536,13 @@ describe('project-query.service', () => {
         `"equals":"${ProjectPhaseStatus.IN_PROGRESS}"`
       );
       expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.NOT_STARTED}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
         '"path":["HEAD_OF_UNIT","status"]'
       );
       expect(ownProjectWhereJson()).toContain(
         '"path":["DOCUMENT_STAFF","status"]'
-      );
-      expect(ownProjectWhereJson()).toContain(
-        '"project_installments":{"none":{}}'
       );
       expect(ownProjectWhereJson()).not.toContain(
         `"equals":"${ProjectPhaseStatus.REJECTED}"`
@@ -455,6 +625,37 @@ describe('project-query.service', () => {
       );
     });
 
+    it('filters head of contract unit waiting_approval across all CONTRACT projects', async () => {
+      const headContractUser = {
+        id: 'head-contract-1',
+        is_delegated: false,
+        delegated_by: [],
+        roles: [
+          {
+            role: UserRole.HEAD_OF_UNIT,
+            dept_id: OPS_DEPT_ID,
+            unit_id: CONTRACT_UNIT_ID,
+          },
+        ],
+      } as any;
+
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: CONTRACT_UNIT_ID, type: [UnitResponsibleType.CONTRACT] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(headContractUser, 1, 10, {
+        tab: OwnProjectTab.WAITING_APPROVAL,
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        `"current_workflow_type":"${UnitResponsibleType.CONTRACT}"`
+      );
+      expect(ownProjectWhereJson()).not.toContain(
+        `"responsible_unit_id":"${CONTRACT_UNIT_ID}"`
+      );
+    });
+
     it('filters head-of-unit waiting_cancel by project status', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
@@ -510,6 +711,9 @@ describe('project-query.service', () => {
 
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.COMPLETED}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.WAITING_APPROVAL}"`
       );
       expect(ownProjectWhereJson()).toContain(
         '"path":["HEAD_OF_UNIT","status"]'
@@ -695,6 +899,27 @@ describe('project-query.service', () => {
       expect(ownProjectWhereJson()).toContain('"contract_completed_at"');
     });
 
+    it('includes procurement completed projects forwarded to CONTRACT in completed tab for procurement staff', async () => {
+      prismaMock.unit.findMany.mockResolvedValue([
+        { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
+      ]);
+      mockOwnProjectPage();
+
+      await getOwnProjects(staffUser, 1, 10, {
+        tab: OwnProjectTab.COMPLETED,
+      });
+
+      expect(ownProjectWhereJson()).toContain(
+        '"assignee_procurement":{"some":{"id":"staff-1"}}'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"procurement_completed_at":{"not":null}'
+      );
+      expect(ownProjectWhereJson()).toContain(
+        '"current_workflow_type":"CONTRACT"'
+      );
+    });
+
     it('applies search query filter on receive_no, title, and assignees', async () => {
       prismaMock.unit.findMany.mockResolvedValue([
         { id: PROC1_UNIT_ID, type: [UnitResponsibleType.LT100K] },
@@ -714,6 +939,7 @@ describe('project-query.service', () => {
       );
       expect(ownProjectWhereJson()).toContain('"assignee_procurement"');
       expect(ownProjectWhereJson()).toContain('"assignee_contract"');
+      expect(ownProjectWhereJson()).toContain('"contract_no"');
     });
 
     describe('getOwnProjectsTotal', () => {
@@ -855,6 +1081,77 @@ describe('project-query.service', () => {
     expect(prismaMock.project.count.mock.calls[0][0]).toEqual({ where: {} });
   });
 
+  it('getSummaryCards applies date range and deptId filters for supply user', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(6)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+
+    const dateFrom = new Date('2026-10-01T00:00:00.000Z');
+    const dateTo = new Date('2027-09-30T00:00:00.000Z');
+
+    const result = await getSummaryCards(supplyUser, {
+      dateFrom,
+      dateTo,
+      deptId: 'dept-99',
+    });
+
+    expect(result).toMatchObject({
+      role: 'SUPPLY',
+      total: 6,
+      UNASSIGNED: 1,
+      WAITING_ACCEPT: 1,
+    });
+
+    const firstCallWhere = prismaMock.project.count.mock.calls[0][0].where;
+    expect(firstCallWhere).toEqual({
+      AND: [
+        {
+          created_at: {
+            gte: expect.any(Date),
+            lte: expect.any(Date),
+          },
+        },
+        { requesting_dept_id: 'dept-99' },
+      ],
+    });
+  });
+
+  it('getSummaryCards scopes deptId correctly for external user', async () => {
+    prismaMock.project.count
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    // When external user (dept-1) filters by allowed dept-1
+    await getSummaryCards(externalUser, { deptId: 'dept-1' });
+    expect(prismaMock.project.count.mock.calls[0][0].where).toEqual({
+      requesting_dept_id: 'dept-1',
+    });
+
+    prismaMock.project.count.mockClear();
+    prismaMock.project.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    // When external user (dept-1) filters by unauthorized dept-2
+    await getSummaryCards(externalUser, { deptId: 'dept-2' });
+    expect(prismaMock.project.count.mock.calls[0][0].where).toEqual({
+      id: { in: [] },
+    });
+  });
+
   describe('getDocumentSummary', () => {
     it('throws ForbiddenError if the user does not have access to the project', async () => {
       prismaMock.project.count.mockResolvedValue(0);
@@ -874,7 +1171,7 @@ describe('project-query.service', () => {
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
-      expect(result.procurement).toHaveLength(4);
+      expect(result.procurement).toHaveLength(5);
       expect(result.contract).toHaveLength(1);
       expect(result.contract[0]).toMatchObject({
         installment_no: 1,
@@ -882,7 +1179,7 @@ describe('project-query.service', () => {
       });
 
       expect(result.procurement[0]).toMatchObject({
-        step_order: 1,
+        step_order: 0,
         step_status: 'NOT_STARTED',
         documents: [],
       });
@@ -926,11 +1223,11 @@ describe('project-query.service', () => {
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
-      expect(result.procurement[0].step_status).toBe(
+      expect(result.procurement[1].step_status).toBe(
         SubmissionStatus.WAITING_APPROVAL
       );
-      expect(result.procurement[0].documents).toHaveLength(1);
-      expect(result.procurement[0].documents[0]).toMatchObject({
+      expect(result.procurement[1].documents).toHaveLength(1);
+      expect(result.procurement[1].documents[0]).toMatchObject({
         file_name: 'round1-completed.pdf',
         download_url: 'https://files.test/r1.pdf',
       });
@@ -963,11 +1260,11 @@ describe('project-query.service', () => {
 
       const result = await getDocumentSummary(supplyUser, 'project-1');
 
-      expect(result.procurement[0].step_status).toBe(
+      expect(result.procurement[1].step_status).toBe(
         SubmissionStatus.WAITING_APPROVAL
       );
-      expect(result.procurement[0].documents).toHaveLength(1);
-      expect(result.procurement[0].documents[0]).toMatchObject({
+      expect(result.procurement[1].documents).toHaveLength(1);
+      expect(result.procurement[1].documents[0]).toMatchObject({
         file_name: 'round1-latest.pdf',
         download_url: 'https://files.test/r1.pdf',
       });

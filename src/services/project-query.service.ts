@@ -31,6 +31,8 @@ import {
 import { hasOrganizationWideReadAccess } from '../utils/access-policy';
 import {
   GetOwnProjectsQuery,
+  GetOwnProjectsTotalQuery,
+  GetProjectSummaryQuery,
   ProjectFilterQuery,
 } from '../schemas/project.schema';
 import { AuthPayload } from '../types/auth.type';
@@ -59,6 +61,7 @@ import { projectReadWhere } from '../utils/project-scope';
 
 const SORTABLE_FIELDS = new Set([
   'receive_no',
+  'contract_no',
   'title',
   'created_at',
   'status',
@@ -100,6 +103,14 @@ const buildWhereClause = (
           },
         },
         {
+          contract_no: {
+            contract_no: {
+              contains: searchTerm,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          },
+        },
+        {
           title: {
             contains: searchTerm,
             mode: Prisma.QueryMode.insensitive,
@@ -123,6 +134,18 @@ const buildWhereClause = (
                 mode: Prisma.QueryMode.insensitive,
               },
             },
+          },
+        },
+        {
+          less_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
+        {
+          pr_no: {
+            contains: searchTerm,
+            mode: Prisma.QueryMode.insensitive,
           },
         },
       ],
@@ -149,14 +172,15 @@ const buildWhereClause = (
   }
   if (filters?.procurementType?.length) {
     and.push({
-      procurement_type: { in: filters.procurementType as ProcurementType[] },
+      procurement_type: { in: filters.procurementType },
     });
   }
+  const statusConditions: Prisma.ProjectWhereInput[] = [];
   if (filters?.status?.length) {
-    and.push({ status: { in: filters.status as ProjectStatus[] } });
+    statusConditions.push({ status: { in: filters.status } });
   }
   if (filters?.procurementStatus?.length) {
-    and.push({
+    statusConditions.push({
       AND: [
         {
           current_workflow_type: {
@@ -165,24 +189,29 @@ const buildWhereClause = (
         },
         {
           status: {
-            in: filters.procurementStatus as ProjectStatus[],
+            in: filters.procurementStatus,
           },
         },
       ],
     });
   }
   if (filters?.contractStatus?.length) {
-    and.push({
+    statusConditions.push({
       AND: [
         {
           current_workflow_type: UnitResponsibleType.CONTRACT,
         },
         {
           status: {
-            in: filters.contractStatus as ProjectStatus[],
+            in: filters.contractStatus,
           },
         },
       ],
+    });
+  }
+  if (statusConditions.length > 0) {
+    and.push({
+      OR: statusConditions,
     });
   }
   if (filters?.urgentStatus?.length) {
@@ -194,27 +223,8 @@ const buildWhereClause = (
   if (filters?.departments?.length) {
     and.push({ requesting_dept_id: { in: filters.departments } });
   }
-  // ── Assignees (OR across both relations + myTasks shortcut) ───────────────
+  // ── Assignees (OR across both relations) ───────────────
   const assigneeIds = new Set<string>(filters?.assignees ?? []);
-  if (filters?.myTasks) {
-    if (isHeadOfSupplyDept(user)) {
-      and.push({
-        responsible_unit_id: {
-          in: [PROC1_UNIT_ID, PROC2_UNIT_ID, CONTRACT_UNIT_ID],
-        },
-      });
-    } else if (isHeadOfSupplyUnit(user)) {
-      const unitIds = user.roles
-        .filter((r) => r.role === UserRole.HEAD_OF_UNIT && r.unit_id)
-        .map((r) => r.unit_id as string);
-      if (unitIds.length > 0) {
-        and.push({ responsible_unit_id: { in: unitIds } });
-      }
-    }
-
-    assigneeIds.add(user.id);
-  }
-
   if (assigneeIds.size > 0) {
     const ids = [...assigneeIds];
     and.push({
@@ -236,6 +246,21 @@ const buildOrderBy = (filters?: ProjectFilterQuery) => {
       return [
         {
           status: sortOrder,
+        },
+        {
+          receive_no: 'desc' as Prisma.SortOrder,
+        },
+      ];
+    }
+
+    if (filters.sortBy === 'contract_no') {
+      const sortOrder: Prisma.SortOrder = filters.sortOrder ?? 'desc';
+
+      return [
+        {
+          contract_no: {
+            contract_no: sortOrder,
+          },
         },
         {
           receive_no: 'desc' as Prisma.SortOrder,
@@ -270,6 +295,7 @@ export const listProjects = async (
         requesting_unit: { select: { id: true, name: true } },
         assignee_procurement: { select: { id: true, full_name: true } },
         assignee_contract: { select: { id: true, full_name: true } },
+        contract_no: { select: { contract_no: true } },
       },
       skip,
       take: limit,
@@ -392,6 +418,9 @@ export const getById = async (
       actual_cost: projectData.actual_cost,
       status: projectData.status,
       installment_rounds: projectData.installment_rounds,
+      installment_amounts:
+        (projectData.installment_amounts as Record<string, number> | null) ??
+        null,
       procurement_progress:
         projectData.procurement_progress as unknown as ProjectPhaseProgress,
       contract_progress:
@@ -476,9 +505,7 @@ export const getUnassignedProjectsByUnit = async (
     !isHeadOfSupplyDept(user) &&
     !userUnitIds.includes(unitId)
   ) {
-    throw new ForbiddenError(
-      'You do not have permission to access this unit'
-    );
+    throw new ForbiddenError('You do not have permission to access this unit');
   }
 
   const where: Prisma.ProjectWhereInput = {
@@ -597,16 +624,31 @@ export const getAssignedProjects = async (
             in: unitIds,
           },
         },
-        select: { type: true },
+        select: { id: true, type: true },
       });
       if (unit.length === 0) {
         throw new NotFoundError('Unit not found');
       }
 
+      const unitTypes = unit.flatMap((u) => u.type);
+      const isContractHead = unitTypes.includes(UnitResponsibleType.CONTRACT);
+      const isProcHead = unitTypes.some(
+        (t) => t !== UnitResponsibleType.CONTRACT
+      );
+
+      const unitConditions: Prisma.ProjectWhereInput[] = [
+        { responsible_unit_id: { in: unitIds } },
+      ];
+
+      if (isProcHead) {
+        unitConditions.push({ procurement_unit_id: { in: unitIds } });
+      }
+      if (isContractHead) {
+        unitConditions.push({ contract_unit_id: { in: unitIds } });
+      }
+
       where.AND.push({
-        current_workflow_type: {
-          in: unit.flatMap((u) => u.type),
-        },
+        OR: unitConditions,
       });
     } else if (user.roles.some((r) => r.role === UserRole.GENERAL_STAFF)) {
       where.AND.push({
@@ -627,6 +669,8 @@ export const getAssignedProjects = async (
         receive_no: true,
         title: true,
         status: true,
+        procurement_unit_id: true,
+        contract_unit_id: true,
         requesting_dept: {
           select: {
             id: true,
@@ -762,9 +806,10 @@ export const getOwnProjects = async (
 };
 
 export const getOwnProjectsTotal = async (
-  user: AuthPayload
+  user: AuthPayload,
+  query?: GetOwnProjectsTotalQuery
 ): Promise<Record<string, number>> => {
-  return getOwnProjectsTotalFromHelper(user);
+  return getOwnProjectsTotalFromHelper(user, query);
 };
 
 const aggregateByStaff = (
@@ -890,10 +935,37 @@ export const getWorkload = async (
 };
 
 export const getSummaryCards = async (
-  user: AuthPayload
+  user: AuthPayload,
+  filters?: GetProjectSummaryQuery
 ): Promise<SummaryResponse> => {
   const isSupply = haveSupplyPermission(user);
+  const baseConditions: Prisma.ProjectWhereInput[] = [];
+
+  if (filters?.dateFrom || filters?.dateTo) {
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (filters?.dateFrom) {
+      dateFilter.gte = bangkokDayStartUtc(filters.dateFrom);
+    }
+    if (filters?.dateTo) {
+      dateFilter.lte = bangkokDayEndUtc(filters.dateTo);
+    }
+    baseConditions.push({ created_at: dateFilter });
+  }
+
+  const wrapWhere = (
+    extra?: Prisma.ProjectWhereInput
+  ): Prisma.ProjectWhereInput => {
+    const clauses = extra ? [...baseConditions, extra] : [...baseConditions];
+    if (clauses.length === 0) return {};
+    if (clauses.length === 1) return clauses[0];
+    return { AND: clauses };
+  };
+
   if (isSupply) {
+    if (filters?.deptId) {
+      baseConditions.push({ requesting_dept_id: filters.deptId });
+    }
+
     const [
       total,
       unassigned,
@@ -903,20 +975,28 @@ export const getSummaryCards = async (
       cancelled,
       urgent,
     ] = await prisma.$transaction([
-      prisma.project.count(),
-      prisma.project.count({ where: { status: ProjectStatus.UNASSIGNED } }),
-      prisma.project.count({ where: { status: ProjectStatus.WAITING_ACCEPT } }),
+      prisma.project.count({ where: wrapWhere() }),
       prisma.project.count({
-        where: {
+        where: wrapWhere({ status: ProjectStatus.UNASSIGNED }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({ status: ProjectStatus.WAITING_ACCEPT }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({
           status: {
             in: IN_PROGRESS_STATUSES,
           },
-        },
+        }),
       }),
-      prisma.project.count({ where: { status: ProjectStatus.CLOSED } }),
-      prisma.project.count({ where: { status: ProjectStatus.CANCELLED } }),
       prisma.project.count({
-        where: {
+        where: wrapWhere({ status: ProjectStatus.CLOSED }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({ status: ProjectStatus.CANCELLED }),
+      }),
+      prisma.project.count({
+        where: wrapWhere({
           is_urgent: {
             in: [
               UrgentType.URGENT,
@@ -924,7 +1004,7 @@ export const getSummaryCards = async (
               UrgentType.SUPER_URGENT,
             ],
           },
-        },
+        }),
       }),
     ]);
 
@@ -941,17 +1021,28 @@ export const getSummaryCards = async (
   }
 
   const hasOrganizationWideRead = hasOrganizationWideReadAccess(user);
-  const deptIds = getDeptIdsForUser(user);
-  const baseWhere = hasOrganizationWideRead
-    ? {}
-    : { requesting_dept_id: { in: deptIds } };
+  if (hasOrganizationWideRead) {
+    if (filters?.deptId) {
+      baseConditions.push({ requesting_dept_id: filters.deptId });
+    }
+  } else {
+    const deptIds = getDeptIdsForUser(user);
+    if (filters?.deptId) {
+      if (deptIds.includes(filters.deptId)) {
+        baseConditions.push({ requesting_dept_id: filters.deptId });
+      } else {
+        baseConditions.push({ id: { in: [] } });
+      }
+    } else {
+      baseConditions.push({ requesting_dept_id: { in: deptIds } });
+    }
+  }
 
   const [total, not_started, in_progress, closed, cancelled, urgent] =
     await prisma.$transaction([
-      prisma.project.count({ where: baseWhere }),
+      prisma.project.count({ where: wrapWhere() }),
       prisma.project.count({
-        where: {
-          ...baseWhere,
+        where: wrapWhere({
           AND: [
             {
               status: {
@@ -964,11 +1055,10 @@ export const getSummaryCards = async (
               },
             },
           ],
-        },
+        }),
       }),
       prisma.project.count({
-        where: {
-          ...baseWhere,
+        where: wrapWhere({
           OR: [
             {
               status: {
@@ -989,17 +1079,16 @@ export const getSummaryCards = async (
               ],
             },
           ],
-        },
+        }),
       }),
       prisma.project.count({
-        where: { ...baseWhere, status: ProjectStatus.CLOSED },
+        where: wrapWhere({ status: ProjectStatus.CLOSED }),
       }),
       prisma.project.count({
-        where: { ...baseWhere, status: ProjectStatus.CANCELLED },
+        where: wrapWhere({ status: ProjectStatus.CANCELLED }),
       }),
       prisma.project.count({
-        where: {
-          ...baseWhere,
+        where: wrapWhere({
           is_urgent: {
             in: [
               UrgentType.URGENT,
@@ -1007,7 +1096,7 @@ export const getSummaryCards = async (
               UrgentType.SUPER_URGENT,
             ],
           },
-        },
+        }),
       }),
     ]);
 

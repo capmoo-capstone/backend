@@ -2,6 +2,7 @@ import {
   ProcurementType,
   Project,
   ProjectCancellationStatus,
+  ProjectInstallmentStatus,
   ProjectPhaseStatus,
   ProjectStatus,
   UnitResponsibleType,
@@ -12,6 +13,29 @@ import { Decimal } from '@prisma/client/runtime/client';
 import { ListResponse, PaginatedResponse } from './common.type';
 
 export type PaginatedProjects = PaginatedResponse<Project>;
+
+export interface ProjectInstallmentListItem {
+  id: string;
+  installment_no: number;
+  installment_amount: number;
+  status: ProjectInstallmentStatus;
+  request_edit_reason: string | null;
+  exported_at: Date | null;
+  project: {
+    id: string;
+    receive_no: string;
+    title: string;
+    actual_cost: Decimal;
+    procurement_type: ProcurementType;
+    po_no: string;
+    vendor_name: string;
+    assignee_contract: Array<{ id: string; full_name: string }>;
+    requesting_dept: { id: string; name: string };
+  };
+}
+
+export type PaginatedProjectInstallments =
+  PaginatedResponse<ProjectInstallmentListItem>;
 
 export type ProjectsListResponse = ListResponse<Project>;
 
@@ -55,6 +79,7 @@ export interface ProjectDetailResponse {
   actual_cost: Decimal | null;
   status: ProjectStatus;
   installment_rounds: number;
+  installment_amounts?: Record<string, number> | null;
   procurement_progress: ProjectPhaseProgress;
   contract_progress: ProjectPhaseProgress;
   budget_plans: Array<{

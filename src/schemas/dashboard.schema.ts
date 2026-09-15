@@ -8,14 +8,6 @@ import {
 } from '../utils/date';
 import { OwnProjectTab } from '../types/project.type';
 
-export const DashboardModeEnum = z.enum([
-  'today',
-  'month',
-  'quarter',
-  'fiscalYear',
-]);
-export type DashboardMode = z.infer<typeof DashboardModeEnum>;
-
 const parseDateFrom = (value: unknown): Date => {
   const date = parseBangkokDateTime(value);
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
@@ -62,7 +54,6 @@ export const DateToSchema = z
 
 export const PeriodicSummaryQuerySchema = z
   .object({
-    mode: DashboardModeEnum.default('today'),
     dateFrom: DateFromSchema,
     dateTo: DateToSchema,
   })
@@ -80,18 +71,10 @@ export const ProcurementOverviewQuerySchema = z
   .object({
     page: z.enum(['home', 'dashboard']),
     deptId: z.string().optional(),
-    mode: DashboardModeEnum.default('fiscalYear'),
     dateFrom: DateFromSchema,
     dateTo: DateToSchema,
   })
   .superRefine((value, ctx) => {
-    if (value.mode === 'today') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['mode'],
-        message: "This dashboard cannot use the mode 'today'",
-      });
-    }
     if (value.dateFrom > value.dateTo) {
       ctx.addIssue({
         code: 'custom',
@@ -99,19 +82,11 @@ export const ProcurementOverviewQuerySchema = z
         message: 'dateFrom must be before or equal to dateTo',
       });
     }
-    if (value.page === 'home' && value.mode !== 'fiscalYear') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['mode'],
-        message: 'mode in home page must be fiscalYear',
-      });
-    }
   });
 
 export const UnitGroupQuerySchema = z
   .object({
     unitId: z.string(),
-    mode: DashboardModeEnum,
     dateFrom: DateFromSchema,
     dateTo: DateToSchema,
   })
@@ -128,7 +103,6 @@ export const UnitGroupQuerySchema = z
 export const UnitGroupTopDelayedQuerySchema = z.object({
   unitId: z.string(),
   procurementType: z.nativeEnum(ProcurementType),
-  mode: DashboardModeEnum,
   dateFrom: DateFromSchema,
   dateTo: DateToSchema,
 });
@@ -136,7 +110,6 @@ export const UnitGroupTopDelayedQuerySchema = z.object({
 export const UnitGroupStaffPerformanceQuerySchema = z
   .object({
     unitId: z.string(),
-    mode: DashboardModeEnum,
     dateFrom: DateFromSchema,
     dateTo: DateToSchema,
     page: z.coerce.number().int().min(1).default(1),
@@ -152,21 +125,45 @@ export const UnitGroupStaffPerformanceQuerySchema = z
     }
   });
 
-export const IndividualDashboardQuerySchema = z.object({
-  unitId: z.string(),
-  targetUserId: z.string(),
-});
+export const IndividualDashboardQuerySchema = z
+  .object({
+    unitId: z.string(),
+    targetUserId: z.string(),
+    dateFrom: DateFromSchema.optional(),
+    dateTo: DateToSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dateFrom && value.dateTo && value.dateFrom > value.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
 
 export const IndividualTodoQuerySchema = z.object({
   targetUserId: z.string(),
-  tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
+  tab: z.enum(['ALL', 'IN_PROGRESS', 'COMPLETED']).default('ALL'),
   dateFrom: BangkokDateTimeSchema.optional(),
   dateTo: BangkokDateTimeSchema.optional(),
 });
 
-export const IndividualTodoTotalQuerySchema = z.object({
-  targetUserId: z.string(),
-});
+export const IndividualTodoTotalQuerySchema = z
+  .object({
+    targetUserId: z.string(),
+    dateFrom: BangkokDateTimeSchema.optional(),
+    dateTo: BangkokDateTimeSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dateFrom && value.dateTo && value.dateFrom > value.dateTo) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dateFrom'],
+        message: 'dateFrom must be before or equal to dateTo',
+      });
+    }
+  });
 
 export type PeriodicSummaryQuery = z.infer<typeof PeriodicSummaryQuerySchema>;
 export type ProcurementOverviewQuery = z.infer<

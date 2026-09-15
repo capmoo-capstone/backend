@@ -3,9 +3,7 @@ import {
   ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/client';
 import { PaginatedResponse } from './common.type';
-import { DashboardMode } from '../schemas/dashboard.schema';
 
 export type DashboardTrend = 'increase' | 'decrease' | 'same';
 
@@ -17,7 +15,6 @@ export interface DashboardMetricComparison {
 }
 
 export interface PeriodicSummaryResponse {
-  mode: 'today' | 'month' | 'quarter' | 'fiscalYear';
   range: {
     from: Date;
     to: Date;
@@ -41,12 +38,6 @@ export interface DashboardStatusPoint {
   count: number;
 }
 
-export interface DashboardBudgetPoint {
-  category: string;
-  planCount: number;
-  amount: Decimal | number;
-}
-
 export interface DashboardTimelinePoint {
   label: string;
   from: Date;
@@ -55,17 +46,20 @@ export interface DashboardTimelinePoint {
   completed: number;
 }
 
-export interface ProcurementPlanSummary {
+export interface DashboardPlanSummary {
   totalBudget: number;
-  usedBudget: number;
   totalPlans: number;
   notStartedPlans: number;
   inProgressPlans: number;
   completedPlans: number;
 }
 
-export interface ProcurementOverviewResponse {
-  mode: DashboardMode;
+export interface DashboardCostSummary {
+  totalBudget: number;
+  totalActualCost: number;
+}
+
+export interface OverviewBaseResponse {
   range: {
     from: Date;
     to: Date;
@@ -74,10 +68,16 @@ export interface ProcurementOverviewResponse {
     type: ProcurementType;
     count: number;
   }>;
-  statusBar?: DashboardStatusPoint[];
-  budgetInvestment?: DashboardBudgetPoint[];
-  timeline?: DashboardTimelinePoint[];
-  budgetPlanSummary?: ProcurementPlanSummary | null;
+  costSummary: DashboardCostSummary;
+}
+
+export interface OverviewPageResponse extends OverviewBaseResponse {
+  statusBar: DashboardStatusPoint[];
+  timeline: DashboardTimelinePoint[];
+}
+
+export interface HomePageResponse extends OverviewBaseResponse {
+  budgetPlanSummary: DashboardPlanSummary;
 }
 
 // --- Unit Group KPI Dashboard Types ---
@@ -92,7 +92,6 @@ export interface WorkloadVsDurationPoint {
 
 export interface UnitGroupExecutiveSummaryResponse {
   unitId: string;
-  mode: 'today' | 'month' | 'quarter' | 'fiscalYear';
   range: { from: Date; to: Date };
   longestProcurementMethod: ProcurementType | null;
   avgDurationDays: DashboardMetricComparison;
@@ -122,7 +121,6 @@ export interface ProcurementMethodDetailItem {
 
 export interface UnitGroupProcurementDetailsResponse {
   unitId: string;
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
@@ -139,9 +137,7 @@ export interface TopDelayedProjectItem {
   stageBreakdownDays: {
     assignmentDays: number;
     procurementDays: number;
-    contractDays: number;
     approvalDays: number;
-    financeDays: number;
   };
 }
 
@@ -162,7 +158,6 @@ export interface UnitGroupStaffPerformanceRow {
 
 export interface UnitGroupStaffPerformanceResponse extends PaginatedResponse<UnitGroupStaffPerformanceRow> {
   unitId: string;
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;
@@ -184,7 +179,6 @@ export interface UnitContractPhaseWorkload {
 
 export interface ContractUnitSummaryResponse {
   unitId: string;
-  mode: DashboardMode;
   range: {
     from: Date;
     to: Date;

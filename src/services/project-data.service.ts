@@ -5,9 +5,16 @@ import {
   AuditLogType,
   AuditEventType,
   AuditTargetType,
+  UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { NotFoundError, BadRequestError, AppError } from '../utils/errors';
+import {
+  NotFoundError,
+  BadRequestError,
+  BatchErrorEntry,
+  groupBatchErrors,
+  BatchOperationError,
+} from '../utils/errors';
 import { getProcurementTypeToUnitIdMap } from '../utils/unit-type';
 import { AuthPayload } from '../types/auth.type';
 import { CreateProjectDto, UpdateProjectDto } from '../schemas/project.schema';
@@ -67,7 +74,7 @@ export const checkRefNumberDuplication = async (
   migo_103_no: string[] = [],
   migo_105_no: string[] = [],
   excludeProjectId?: string
-) => {
+): Promise<BatchErrorEntry[]> => {
   if (
     pr_no.length === 0 &&
     less_no.length === 0 &&
@@ -75,13 +82,34 @@ export const checkRefNumberDuplication = async (
     migo_103_no.length === 0 &&
     migo_105_no.length === 0
   )
-    return;
-  // For Import Projects
-  if (pr_no.length > 1 && new Set(pr_no).size !== pr_no.length) {
-    throw new BadRequestError('Duplicate PR numbers in request');
+    return [];
+
+  const errors: BatchErrorEntry[] = [];
+
+  const findDuplicates = (arr: string[]) => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const item of arr) {
+      if (seen.has(item)) duplicates.add(item);
+      seen.add(item);
+    }
+    return Array.from(duplicates);
+  };
+
+  for (const dup of findDuplicates(pr_no)) {
+    errors.push({ code: 'DUPLICATE_PR_NO', id: dup });
   }
-  if (less_no.length > 1 && new Set(less_no).size !== less_no.length) {
-    throw new BadRequestError('Duplicate LESS numbers in request');
+  for (const dup of findDuplicates(less_no)) {
+    errors.push({ code: 'DUPLICATE_LESS_NO', id: dup });
+  }
+  for (const dup of findDuplicates(po_no)) {
+    errors.push({ code: 'DUPLICATE_PO_NO', id: dup });
+  }
+  for (const dup of findDuplicates(migo_103_no)) {
+    errors.push({ code: 'DUPLICATE_MIGO_103_NO', id: dup });
+  }
+  for (const dup of findDuplicates(migo_105_no)) {
+    errors.push({ code: 'DUPLICATE_MIGO_105_NO', id: dup });
   }
 
   const whereClause: any = {
@@ -106,40 +134,46 @@ export const checkRefNumberDuplication = async (
     whereClause.NOT = { id: excludeProjectId };
   }
 
-  const existing = await tx.project.findFirst({
-    where: whereClause,
-    select: {
-      id: true,
-      pr_no: true,
-      less_no: true,
-      po_no: true,
-      migo_103_no: true,
-      migo_105_no: true,
-    },
-  });
-  if (existing) {
-    if (existing.pr_no && pr_no.includes(existing.pr_no)) {
-      throw new AppError(`Duplicate PR number: ${existing.pr_no}`, 409);
-    }
-    if (existing.less_no && less_no.includes(existing.less_no)) {
-      throw new AppError(`Duplicate LESS number: ${existing.less_no}`, 409);
-    }
-    if (existing.po_no && po_no.includes(existing.po_no)) {
-      throw new AppError(`Duplicate PO number: ${existing.po_no}`, 409);
-    }
-    if (existing.migo_103_no && migo_103_no.includes(existing.migo_103_no)) {
-      throw new AppError(
-        `Duplicate MIGO 103 number: ${existing.migo_103_no}`,
-        409
-      );
-    }
-    if (existing.migo_105_no && migo_105_no.includes(existing.migo_105_no)) {
-      throw new AppError(
-        `Duplicate MIGO 105 number: ${existing.migo_105_no}`,
-        409
-      );
+  if (whereClause.OR.length > 0) {
+    const existingList =
+      (await tx.project.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          pr_no: true,
+          less_no: true,
+          po_no: true,
+          migo_103_no: true,
+          migo_105_no: true,
+        },
+      })) ?? [];
+
+    for (const existing of existingList) {
+      if (existing.pr_no && pr_no.includes(existing.pr_no)) {
+        errors.push({ code: 'DUPLICATE_PR_NO', id: existing.pr_no });
+      }
+      if (existing.less_no && less_no.includes(existing.less_no)) {
+        errors.push({ code: 'DUPLICATE_LESS_NO', id: existing.less_no });
+      }
+      if (existing.po_no && po_no.includes(existing.po_no)) {
+        errors.push({ code: 'DUPLICATE_PO_NO', id: existing.po_no });
+      }
+      if (existing.migo_103_no && migo_103_no.includes(existing.migo_103_no)) {
+        errors.push({
+          code: 'DUPLICATE_MIGO_103_NO',
+          id: existing.migo_103_no,
+        });
+      }
+      if (existing.migo_105_no && migo_105_no.includes(existing.migo_105_no)) {
+        errors.push({
+          code: 'DUPLICATE_MIGO_105_NO',
+          id: existing.migo_105_no,
+        });
+      }
     }
   }
+
+  return errors;
 };
 
 export const createProject = async (
@@ -150,12 +184,20 @@ export const createProject = async (
   return await prisma.$transaction(async (tx) => {
     await acquireProjectCreationLock(tx);
 
-    await checkRefNumberDuplication(
+    const refErrors = await checkRefNumberDuplication(
       tx,
       data.pr_no ? [data.pr_no] : [],
       data.less_no ? [data.less_no] : [],
       data.po_no ? [data.po_no] : []
     );
+
+    if (refErrors.length > 0) {
+      throw new BatchOperationError(
+        'Batch Operation Error',
+        groupBatchErrors(refErrors),
+        400
+      );
+    }
 
     if (data.budget_plan_id && data.budget_plan_id.length > 0) {
       const budgetPlans = await tx.budgetPlan.findMany({
@@ -210,14 +252,35 @@ export const importProjects = async (
   return await prisma.$transaction(async (tx) => {
     await acquireProjectCreationLock(tx);
 
-    await checkRefNumberDuplication(
+    const unitType = await getProcurementTypeToUnitIdMap(tx);
+    const errors: BatchErrorEntry[] = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const d = data[i]!;
+      if (unitType.get(d.procurement_type) == null) {
+        errors.push({
+          code: 'RESPONSIBLE_UNIT_NOT_FOUND',
+          id: d.title || String(i),
+        });
+      }
+    }
+
+    const refErrors = await checkRefNumberDuplication(
       tx,
       data.map((d) => d.pr_no).filter((n): n is string => !!n),
       data.map((d) => d.less_no).filter((n): n is string => !!n),
       data.map((d) => d.po_no).filter((n): n is string => !!n)
     );
 
-    const unitType = await getProcurementTypeToUnitIdMap(tx);
+    errors.push(...refErrors);
+
+    if (errors.length > 0) {
+      throw new BatchOperationError(
+        'Batch Operation Error',
+        groupBatchErrors(errors),
+        400
+      );
+    }
 
     // Track per-year offsets to avoid gaps when multiple budget_year values are present
     const bufferByYear = new Map<number, number>();
@@ -233,15 +296,6 @@ export const importProjects = async (
         return getReceiveNumberSync(tx, d.budget_year, currentBuffer);
       })
     );
-
-    // 5. Bulk create projects (createManyAndReturn)
-    for (const d of data) {
-      if (unitType.get(d.procurement_type) == null) {
-        throw new NotFoundError(
-          `Responsible unit not found for procurement type ${d.procurement_type} in project ${d.title}`
-        );
-      }
-    }
 
     const createdProjects = await tx.project.createManyAndReturn({
       data: data.map((d, i) => {
@@ -278,6 +332,9 @@ export const updateProjectData = async (
   return await prisma.$transaction(async (tx) => {
     const current = await tx.project.findUnique({
       where: { id: data.id },
+      include: {
+        assignee_procurement: { select: { id: true, full_name: true } },
+      },
     });
     if (!current) {
       throw new NotFoundError('Project not found');
@@ -287,7 +344,7 @@ export const updateProjectData = async (
       await assertInstallmentRoundsCanBeUpdated(tx, current.id);
     }
 
-    await checkRefNumberDuplication(
+    const refErrors = await checkRefNumberDuplication(
       tx,
       data.updateData.pr_no ? [data.updateData.pr_no] : [],
       data.updateData.less_no ? [data.updateData.less_no] : [],
@@ -297,11 +354,63 @@ export const updateProjectData = async (
       current.id
     );
 
-    const { budget_plan_id, ...projectData } = data.updateData;
+    if (refErrors.length > 0) {
+      throw new BatchOperationError(
+        'Batch Operation Error',
+        groupBatchErrors(refErrors),
+        400
+      );
+    }
 
-    const oldValue = {};
+    const { budget_plan_id, ...projectData }: Record<string, any> =
+      data.updateData;
+
+    if (data.updateData.procurement_type !== undefined) {
+      if (
+        current.current_workflow_type === UnitResponsibleType.CONTRACT ||
+        Boolean(current.procurement_completed_at) ||
+        current.status === ProjectStatus.CLOSED ||
+        current.status === ProjectStatus.CANCELLED
+      ) {
+        throw new BadRequestError(
+          'Procurement type can only be updated when project is in procurement phase'
+        );
+      }
+
+      const isProjectHasAnySubmission = await tx.projectSubmission.findFirst({
+        where: {
+          project_id: data.id,
+          step_order: { gte: 1 },
+        },
+      });
+      if (isProjectHasAnySubmission) {
+        throw new BadRequestError(
+          'Procurement type can only be updated if project has not been submitted to any process'
+        );
+      }
+
+      const unitType = await getProcurementTypeToUnitIdMap(tx);
+      const targetUnitId = unitType.get(data.updateData.procurement_type);
+      if (targetUnitId == null) {
+        throw new NotFoundError(
+          `Responsible unit not found for procurement type ${data.updateData.procurement_type}`
+        );
+      }
+      projectData.responsible_unit_id = targetUnitId;
+      projectData.procurement_unit_id = targetUnitId;
+      projectData.current_workflow_type = data.updateData.procurement_type;
+      projectData.assignee_procurement = { set: [] };
+      projectData.status = ProjectStatus.UNASSIGNED;
+    }
+
+    const oldValue: Record<string, any> = {};
     Object.keys(projectData).forEach((key) => {
-      oldValue[key] = current[key];
+      if (key === 'assignee_procurement') {
+        oldValue[key] =
+          current.assignee_procurement?.map((a) => a.full_name) ?? [];
+      } else {
+        oldValue[key] = (current as any)[key];
+      }
     });
 
     const updated = await tx.project.update({
@@ -316,11 +425,16 @@ export const updateProjectData = async (
       });
     }
 
+    const historyNewValue: Record<string, any> = { ...projectData };
+    if (historyNewValue.assignee_procurement) {
+      historyNewValue.assignee_procurement = [];
+    }
+
     await createProjectHistoryAndAuditEvent(tx, {
       projectId: data.id,
       action: ProjectActionType.INFORMATION_UPDATE,
       oldValue: { ...oldValue },
-      newValue: { ...projectData },
+      newValue: historyNewValue,
       changedBy: user,
     });
 

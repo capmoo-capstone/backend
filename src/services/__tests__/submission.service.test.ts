@@ -1,15 +1,21 @@
 import {
   ProcurementType,
+  ProjectActionType,
+  ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
+  UserRole,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestError, NotFoundError } from '../../utils/errors';
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../utils/errors';
 import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock, prismaMock } from '../../test/prisma-mock';
 import { generatePresignedDownloadUrl } from '../storage.service';
-import { sendVendorPoRequestEmailForProject } from '../notification/notification-email.service';
 import {
   approveSubmission,
   createStaffSubmissionsProject,
@@ -20,6 +26,8 @@ import {
   rejectSubmission,
   signAndCompleteSubmission,
 } from '../submission.service';
+import { CreateStaffSubmissionSchema } from '../../schemas/submission.schema';
+import { OPS_DEPT_ID } from '../../utils/constant';
 
 vi.mock('../../utils/phase-status', () => ({
   syncProjectPhases: vi.fn().mockResolvedValue({ id: 'project-1' }),
@@ -31,23 +39,12 @@ vi.mock('../storage.service', () => ({
   ),
 }));
 
-vi.mock('../notification/notification-email.service', () => ({
-  sendVendorPoRequestEmailForProject: vi.fn().mockResolvedValue({
-    projectId: 'project-1',
-    poNumber: 'PO-1',
-    recipientEmail: 'vendor@example.com',
-  }),
-}));
-
 vi.mock('../notification/notification-realtime.service', () => ({
   publishNotificationRealtimeEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockedSyncProjectPhases = vi.mocked(syncProjectPhases);
 const mockedDownloadUrl = vi.mocked(generatePresignedDownloadUrl);
-const mockedSendVendorPoRequestEmailForProject = vi.mocked(
-  sendVendorPoRequestEmailForProject
-);
 
 const user = {
   id: 'user-1',
@@ -74,11 +71,6 @@ describe('submission.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
-    mockedSendVendorPoRequestEmailForProject.mockResolvedValue({
-      projectId: 'project-1',
-      poNumber: 'PO-1',
-      recipientEmail: 'vendor@example.com',
-    });
   });
 
   it('getProjectSubmissions groups procurement and contract submissions and signs document URLs', async () => {
@@ -121,6 +113,10 @@ describe('submission.service', () => {
     const result = await getProjectSubmissions(user, 'project-1');
 
     expect(result.procurement[0]).toMatchObject({
+      step_order: 0,
+      step_status: 'NOT_STARTED',
+    });
+    expect(result.procurement[1]).toMatchObject({
       step_order: 1,
       step_status: SubmissionStatus.COMPLETED,
     });
@@ -130,7 +126,7 @@ describe('submission.service', () => {
       step_status: SubmissionStatus.WAITING_SIGNATURE,
     });
     expect(mockedDownloadUrl).toHaveBeenCalledWith('a.pdf');
-    expect(result.procurement[0].data[0].documents[0].download_url).toBe(
+    expect(result.procurement[1].data[0].documents[0].download_url).toBe(
       'https://files.test/a.pdf'
     );
   });
@@ -296,6 +292,109 @@ describe('submission.service', () => {
     });
   });
 
+  it('CreateStaffSubmissionSchema parses require_signature correctly', () => {
+    const rawWithRequireSig = {
+      project_id: '11111111-1111-4111-a111-111111111111',
+      type: SubmissionType.STAFF,
+      step_order: 1,
+      workflow_type: UnitResponsibleType.LT100K,
+      required_approval: true,
+      required_signature: true,
+      required_updating: false,
+    };
+    const parsed = CreateStaffSubmissionSchema.parse(rawWithRequireSig);
+    expect(parsed.required_signature).toBe(true);
+  });
+
+  it('createStaffSubmissionsProject creates WAITING_PROPOSAL for Head of Unit when require_signature is true', async () => {
+    const headOfUnitUser = {
+      id: 'hou-1',
+      full_name: 'Head of Unit',
+      roles: [
+        {
+          role: UserRole.HEAD_OF_UNIT,
+          dept_id: OPS_DEPT_ID,
+          unit_id: 'unit-1',
+        },
+      ],
+    } as any;
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.WAITING_PROPOSAL,
+    });
+    txMock.userOrganizationRole.findMany.mockResolvedValue([]);
+    txMock.userDelegation.findMany.mockResolvedValue([]);
+    txMock.user.findMany.mockResolvedValue([]);
+
+    const result = await createStaffSubmissionsProject(
+      headOfUnitUser,
+      staffSubmissionDto({
+        required_approval: true,
+        required_signature: true,
+      })
+    );
+
+    expect(result.status).toBe(SubmissionStatus.WAITING_PROPOSAL);
+    expect(txMock.projectSubmission.create.mock.calls[0][0].data.status).toBe(
+      SubmissionStatus.WAITING_PROPOSAL
+    );
+  });
+
+  it('createStaffSubmissionsProject creates COMPLETED for Head of Unit when require_signature is false', async () => {
+    const headOfUnitUser = {
+      id: 'hou-1',
+      full_name: 'Head of Unit',
+      roles: [
+        {
+          role: UserRole.HEAD_OF_UNIT,
+          dept_id: OPS_DEPT_ID,
+          unit_id: 'unit-1',
+        },
+      ],
+    } as any;
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+
+    const result = await createStaffSubmissionsProject(
+      headOfUnitUser,
+      staffSubmissionDto({
+        required_approval: true,
+        require_signature: false,
+      })
+    );
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(txMock.projectSubmission.create.mock.calls[0][0].data.status).toBe(
+      SubmissionStatus.COMPLETED
+    );
+  });
+
   it('createStaffSubmissionsProject rejects workflow mismatches before creating a submission', async () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
@@ -382,7 +481,7 @@ describe('submission.service', () => {
       step_order: 2,
       submission_round: 1,
       installment_no: 1,
-      status: SubmissionStatus.COMPLETED,
+      status: SubmissionStatus.WAITING_APPROVAL,
     });
 
     const result = await createVendorSubmissionsProject({
@@ -400,7 +499,7 @@ describe('submission.service', () => {
       ],
     });
 
-    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(result.status).toBe(SubmissionStatus.WAITING_APPROVAL);
     expect(txMock.$executeRaw).toHaveBeenCalledTimes(1);
     expect(mockedSyncProjectPhases).toHaveBeenCalledWith(
       txMock,
@@ -584,41 +683,29 @@ describe('submission.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it('approveSubmission sends the vendor PO request email when the vendor-notification step completes', async () => {
-    txMock.projectSubmission.findUnique.mockResolvedValue({
-      status: SubmissionStatus.WAITING_APPROVAL,
-      submitted_by: 'submitter-1',
-    });
-    txMock.project.findUnique.mockResolvedValue({
-      id: 'project-1',
-      title: 'Project 1',
-      responsible_unit_id: 'unit-1',
-      created_by: 'user-1',
-      assignee_procurement: [],
-      assignee_contract: [],
-      creator: { id: 'user-1', full_name: 'User One', email: null },
-    });
-    txMock.projectSubmission.update.mockResolvedValue({
-      id: 'submission-1',
-      project_id: 'project-1',
-      workflow_type: UnitResponsibleType.LT100K,
-      step_order: 3,
-      submission_round: 1,
-      status: SubmissionStatus.COMPLETED,
-      completed_at: new Date('2026-06-01T00:00:00.000Z'),
-      completed_by: user.id,
-    });
+  it('approveSubmission throws ForbiddenError when general staff attempts to approve without required_staff_approval', async () => {
+    const generalStaffUser = {
+      id: 'staff-1',
+      full_name: 'General Staff',
+      roles: [{ role: UserRole.GENERAL_STAFF, dept_id: 'DEPT-SUP-OPS' }],
+    } as any;
 
-    const result = await approveSubmission(user, {
-      id: 'submission-1',
-      required_signature: false,
-    } as any);
-
-    expect(result.status).toBe(SubmissionStatus.COMPLETED);
-    expect(mockedSendVendorPoRequestEmailForProject).toHaveBeenCalledWith('project-1');
+    await expect(
+      approveSubmission(generalStaffUser, {
+        id: 'submission-1',
+        required_signature: false,
+        required_staff_approval: false,
+      })
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it('approveSubmission does not send the vendor PO request email for other completed steps', async () => {
+  it('approveSubmission allows general staff when required_staff_approval is true', async () => {
+    const generalStaffUser = {
+      id: 'staff-1',
+      full_name: 'General Staff',
+      roles: [{ role: UserRole.GENERAL_STAFF, dept_id: 'DEPT-SUP-OPS' }],
+    } as any;
+
     txMock.projectSubmission.findUnique.mockResolvedValue({
       status: SubmissionStatus.WAITING_APPROVAL,
       submitted_by: 'submitter-1',
@@ -639,16 +726,55 @@ describe('submission.service', () => {
       step_order: 1,
       submission_round: 1,
       status: SubmissionStatus.COMPLETED,
-      completed_at: new Date('2026-06-01T00:00:00.000Z'),
-      completed_by: user.id,
+      completed_by: generalStaffUser.id,
     });
 
-    await approveSubmission(user, {
+    const result = await approveSubmission(generalStaffUser, {
       id: 'submission-1',
       required_signature: false,
-    } as any);
+      required_staff_approval: true,
+    });
 
-    expect(mockedSendVendorPoRequestEmailForProject).not.toHaveBeenCalled();
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+  });
+
+  it('approveSubmission allows head of unit when required_staff_approval is false', async () => {
+    const headOfUnitUser = {
+      id: 'head-1',
+      full_name: 'Head of Unit',
+      roles: [{ role: UserRole.HEAD_OF_UNIT, dept_id: 'DEPT-SUP-OPS' }],
+    } as any;
+
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      created_by: 'user-1',
+      assignee_procurement: [],
+      assignee_contract: [],
+      creator: { id: 'user-1', full_name: 'User One', email: null },
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+      completed_by: headOfUnitUser.id,
+    });
+
+    const result = await approveSubmission(headOfUnitUser, {
+      id: 'submission-1',
+      required_signature: false,
+      required_staff_approval: false,
+    });
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
   });
 
   it('proposeSubmission moves waiting-proposal submissions to waiting signature', async () => {
@@ -834,6 +960,168 @@ describe('submission.service', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
+  it('updates installment_amounts map when staff submission contains installment_amount', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      actual_cost: null,
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      installment_rounds: 3,
+      installment_amounts: { '1': 10000 },
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 1,
+      submission_round: 1,
+      installment_no: 2,
+      status: SubmissionStatus.COMPLETED,
+      staff_remark: null,
+    });
+
+    await createStaffSubmissionsProject(
+      user,
+      staffSubmissionDto({
+        workflow_type: UnitResponsibleType.CONTRACT,
+        installment_no: 2,
+        required_approval: false,
+        required_updating: true,
+        meta_data: [{ field_key: 'installment_amount', value: 25000 }],
+      })
+    );
+
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: {
+        installment_amounts: {
+          '1': 10000,
+          '2': 25000,
+        },
+      },
+    });
+  });
+
+  it('rejects staff submission when installment_amount is supplied without installment_no', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      actual_cost: null,
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      installment_rounds: 1,
+      installment_amounts: {},
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+    });
+
+    await expect(
+      createStaffSubmissionsProject(
+        user,
+        staffSubmissionDto({
+          workflow_type: UnitResponsibleType.LT100K,
+          required_approval: false,
+          required_updating: true,
+          meta_data: [{ field_key: 'installment_amount', value: 5000 }],
+        })
+      )
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('rejects staff submission when installment_amount is negative', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      actual_cost: null,
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      installment_rounds: 2,
+      installment_amounts: {},
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+    });
+
+    await expect(
+      createStaffSubmissionsProject(
+        user,
+        staffSubmissionDto({
+          workflow_type: UnitResponsibleType.CONTRACT,
+          installment_no: 1,
+          required_approval: false,
+          required_updating: true,
+          meta_data: [{ field_key: 'installment_amount', value: -100 }],
+        })
+      )
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('signAndCompleteSubmission updates installment_amounts when completing submission with required_updating', async () => {
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      id: 'submission-1',
+      status: SubmissionStatus.WAITING_SIGNATURE,
+      submitted_by: 'submitter-1',
+      installment_no: 1,
+      meta_data: [{ field_key: 'installment_amount', value: 50000 }],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'submission-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.CONTRACT,
+      step_order: 1,
+      submission_round: 1,
+      installment_no: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      pr_no: null,
+      po_no: null,
+      less_no: null,
+      contract_no_id: null,
+      migo_103_no: null,
+      migo_105_no: null,
+      asset_code: null,
+      vendor_name: null,
+      vendor_email: null,
+      installment_rounds: 2,
+      installment_amounts: {},
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+
+    await signAndCompleteSubmission(user, {
+      id: 'submission-1',
+      required_updating: true,
+    } as any);
+
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: {
+        installment_amounts: {
+          '1': 50000,
+        },
+      },
+    });
+  });
+
   it('rejectSubmission stores the comment, syncs phases, and notifies the submitter', async () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
@@ -909,5 +1197,112 @@ describe('submission.service', () => {
         }),
       })
     );
+  });
+
+  it('approveSubmission completes Step 0 and transitions project from REVIEW_TOR to IN_PROGRESS', async () => {
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'submitter-1',
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'WORKFLOW_STEP_APPROVED' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'submitter-1', _count: { _all: 1 } },
+    ]);
+    txMock.projectSubmission.findUnique.mockResolvedValue({
+      id: 'step-0-sub',
+      status: SubmissionStatus.WAITING_APPROVAL,
+      submitted_by: 'submitter-1',
+      meta_data: [],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'step-0-sub',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 0,
+      submission_round: 1,
+      installment_no: null,
+      status: SubmissionStatus.COMPLETED,
+    });
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.REVIEW_TOR,
+      procurement_started_at: null,
+    });
+
+    const result = await approveSubmission(user, {
+      id: 'step-0-sub',
+      required_signature: false,
+    });
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'project-1' },
+        data: expect.objectContaining({
+          status: ProjectStatus.IN_PROGRESS,
+          procurement_started_at: expect.any(Date),
+        }),
+      })
+    );
+    expect(txMock.projectHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          project_id: 'project-1',
+          action: ProjectActionType.STATUS_UPDATE,
+          old_value: { status: ProjectStatus.REVIEW_TOR },
+          new_value: { status: ProjectStatus.IN_PROGRESS },
+        }),
+      })
+    );
+  });
+
+  it('rejectSubmission on Step 0 marks current round REJECTED and auto-creates next round in WAITING_APPROVAL', async () => {
+    txMock.notification.create.mockResolvedValue({
+      id: 'notification-1',
+      user_id: 'submitter-1',
+      created_at: new Date('2026-06-01T00:00:00.000Z'),
+      metadata: { notification_kind: 'SUBMISSION_REJECTED' },
+    });
+    txMock.notification.groupBy.mockResolvedValue([
+      { user_id: 'submitter-1', _count: { _all: 1 } },
+    ]);
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      title: 'Project 1',
+      responsible_unit_id: 'unit-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      created_by: 'submitter-1',
+      creator: { id: 'submitter-1', full_name: 'Submitter', email: null },
+      assignee_procurement: [],
+      assignee_contract: [],
+    });
+    txMock.projectSubmission.update.mockResolvedValue({
+      id: 'step-0-sub',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 0,
+      submission_round: 1,
+      submitted_by: 'submitter-1',
+      status: SubmissionStatus.REJECTED,
+      comment: 'TOR specification is incomplete',
+    });
+
+    const result = await rejectSubmission(user, {
+      id: 'step-0-sub',
+      comment: 'TOR specification is incomplete',
+    } as any);
+
+    expect(result.status).toBe(SubmissionStatus.REJECTED);
+    expect(txMock.projectSubmission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.LT100K,
+        step_order: 0,
+        submission_round: 2,
+        submission_type: SubmissionType.STAFF,
+        status: SubmissionStatus.WAITING_APPROVAL,
+      }),
+    });
   });
 });
