@@ -211,6 +211,9 @@ describe('project-data.service', () => {
         procurement_type: ProcurementType.SELECTION,
         responsible_unit_id: 'unit-selection-1',
         procurement_unit_id: 'unit-selection-1',
+        current_workflow_type: UnitResponsibleType.SELECTION,
+        assignee_procurement: { set: [] },
+        status: ProjectStatus.UNASSIGNED,
         less_no: 'LESS-NEW',
         is_urgent: UrgentType.VERY_URGENT,
       }),
@@ -233,6 +236,9 @@ describe('project-data.service', () => {
             procurement_type: ProcurementType.SELECTION,
             responsible_unit_id: 'unit-selection-1',
             procurement_unit_id: 'unit-selection-1',
+            current_workflow_type: UnitResponsibleType.SELECTION,
+            assignee_procurement: [],
+            status: ProjectStatus.UNASSIGNED,
           }),
           changed_by: user.id,
         }),
@@ -240,11 +246,58 @@ describe('project-data.service', () => {
     );
   });
 
-  it('rejects updating procurement_type when project status is not UNASSIGNED', async () => {
+  it('automatically removes assignee_procurement and resets status to UNASSIGNED when procurement_type is updated on an assigned project', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.WAITING_ACCEPT,
+      procurement_type: ProcurementType.LT100K,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      responsible_unit_id: 'unit-proc-1',
+      procurement_unit_id: 'unit-proc-1',
+      procurement_completed_at: null,
+      assignee_procurement: [{ id: 'staff-1', full_name: 'Somchai' }],
+    });
+    txMock.unit.findMany.mockResolvedValue([
+      { id: 'unit-selection-1', type: [UnitResponsibleType.SELECTION] },
+    ]);
+    txMock.project.findFirst.mockResolvedValue(null);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.UNASSIGNED,
+      procurement_type: ProcurementType.SELECTION,
+      current_workflow_type: UnitResponsibleType.SELECTION,
+      responsible_unit_id: 'unit-selection-1',
+      procurement_unit_id: 'unit-selection-1',
+    });
+
+    const result = await updateProjectData(user, {
+      id: 'project-1',
+      updateData: {
+        procurement_type: ProcurementType.SELECTION,
+      },
+    } as any);
+
+    expect(result.procurement_type).toBe(ProcurementType.SELECTION);
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: expect.objectContaining({
+        procurement_type: ProcurementType.SELECTION,
+        responsible_unit_id: 'unit-selection-1',
+        procurement_unit_id: 'unit-selection-1',
+        current_workflow_type: UnitResponsibleType.SELECTION,
+        assignee_procurement: { set: [] },
+        status: ProjectStatus.UNASSIGNED,
+      }),
+    });
+  });
+
+  it('rejects updating procurement_type when project is in contract phase or closed', async () => {
     txMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
       status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
       procurement_type: ProcurementType.LT100K,
+      procurement_completed_at: new Date('2026-07-01'),
     });
 
     await expect(

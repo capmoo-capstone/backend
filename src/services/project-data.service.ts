@@ -332,6 +332,9 @@ export const updateProjectData = async (
   return await prisma.$transaction(async (tx) => {
     const current = await tx.project.findUnique({
       where: { id: data.id },
+      include: {
+        assignee_procurement: { select: { id: true, full_name: true } },
+      },
     });
     if (!current) {
       throw new NotFoundError('Project not found');
@@ -364,11 +367,25 @@ export const updateProjectData = async (
 
     if (data.updateData.procurement_type !== undefined) {
       if (
-        current.status !== ProjectStatus.UNASSIGNED ||
-        current.current_workflow_type === UnitResponsibleType.CONTRACT
+        current.current_workflow_type === UnitResponsibleType.CONTRACT ||
+        Boolean(current.procurement_completed_at) ||
+        current.status === ProjectStatus.CLOSED ||
+        current.status === ProjectStatus.CANCELLED
       ) {
         throw new BadRequestError(
-          'Procurement type can only be updated when project status is UNASSIGNED'
+          'Procurement type can only be updated when project is in procurement phase'
+        );
+      }
+
+      const isProjectHasAnySubmission = await tx.projectSubmission.findFirst({
+        where: {
+          project_id: data.id,
+          step_order: { gte: 1 },
+        },
+      });
+      if (isProjectHasAnySubmission) {
+        throw new BadRequestError(
+          'Procurement type can only be updated if project has not been submitted to any process'
         );
       }
 
@@ -381,11 +398,19 @@ export const updateProjectData = async (
       }
       projectData.responsible_unit_id = targetUnitId;
       projectData.procurement_unit_id = targetUnitId;
+      projectData.current_workflow_type = data.updateData.procurement_type;
+      projectData.assignee_procurement = { set: [] };
+      projectData.status = ProjectStatus.UNASSIGNED;
     }
 
-    const oldValue = {};
+    const oldValue: Record<string, any> = {};
     Object.keys(projectData).forEach((key) => {
-      oldValue[key] = current[key];
+      if (key === 'assignee_procurement') {
+        oldValue[key] =
+          current.assignee_procurement?.map((a) => a.full_name) ?? [];
+      } else {
+        oldValue[key] = (current as any)[key];
+      }
     });
 
     const updated = await tx.project.update({
@@ -400,11 +425,16 @@ export const updateProjectData = async (
       });
     }
 
+    const historyNewValue: Record<string, any> = { ...projectData };
+    if (historyNewValue.assignee_procurement) {
+      historyNewValue.assignee_procurement = [];
+    }
+
     await createProjectHistoryAndAuditEvent(tx, {
       projectId: data.id,
       action: ProjectActionType.INFORMATION_UPDATE,
       oldValue: { ...oldValue },
-      newValue: { ...projectData },
+      newValue: historyNewValue,
       changedBy: user,
     });
 
