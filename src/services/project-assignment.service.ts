@@ -551,21 +551,51 @@ export const returnProject = async (
     if (!project) {
       throw new NotFoundError('Project not found');
     }
-    if (project.status !== ProjectStatus.IN_PROGRESS) {
-      throw new BadRequestError('Only IN_PROGRESS projects can be returned');
-    }
 
-    const currentWorkflowSubmissionsCount = await tx.projectSubmission.count({
-      where: {
-        project_id: projectId,
-        workflow_type: project.current_workflow_type,
-      },
-    });
+    const isProcurement =
+      project.current_workflow_type !== UnitResponsibleType.CONTRACT;
 
-    if (currentWorkflowSubmissionsCount > 0) {
-      throw new BadRequestError(
-        'Cannot return project with existing submissions'
-      );
+    if (isProcurement) {
+      if (project.status !== ProjectStatus.REVIEW_TOR) {
+        throw new BadRequestError(
+          'Procurement projects can only be returned in REVIEW_TOR status'
+        );
+      }
+      const subsequentSubmissionsCount = await tx.projectSubmission.count({
+        where: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+          step_order: { gt: 0 },
+        },
+      });
+      if (subsequentSubmissionsCount > 0) {
+        throw new BadRequestError(
+          'Cannot return project with existing submissions'
+        );
+      }
+      await tx.projectSubmission.deleteMany({
+        where: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+        },
+      });
+    } else {
+      if (project.status !== ProjectStatus.IN_PROGRESS) {
+        throw new BadRequestError(
+          'Contract projects can only be returned in IN_PROGRESS status'
+        );
+      }
+      const currentWorkflowSubmissionsCount = await tx.projectSubmission.count({
+        where: {
+          project_id: projectId,
+          workflow_type: project.current_workflow_type,
+        },
+      });
+      if (currentWorkflowSubmissionsCount > 0) {
+        throw new BadRequestError(
+          'Cannot return project with existing submissions'
+        );
+      }
     }
 
     const assigneeField = resolveAssigneeField(project.current_workflow_type);
@@ -573,7 +603,9 @@ export const returnProject = async (
     const updated = await tx.project.update({
       where: {
         id: projectId,
-        status: ProjectStatus.IN_PROGRESS,
+        status: isProcurement
+          ? ProjectStatus.REVIEW_TOR
+          : ProjectStatus.IN_PROGRESS,
         [assigneeField]: { some: { id: user.id } },
       },
       data: {
@@ -581,6 +613,9 @@ export const returnProject = async (
         [assigneeField]: {
           disconnect: { id: user.id },
         },
+        ...(isProcurement
+          ? { procurement_started_at: null }
+          : { contract_started_at: null }),
       },
       select: { id: true, status: true },
     });

@@ -470,8 +470,141 @@ describe('project-assignment.service', () => {
         ])
       );
       expect(txMock.project.update).not.toHaveBeenCalled();
-      expect(txMock.projectHistory.create).not.toHaveBeenCalled();
+      expect(txMock.projectHistory.create).toHaveBeenCalledTimes(0);
       expect(txMock.notification.create).not.toHaveBeenCalled();
     }
+  });
+
+  it('returnProject returns a procurement project in REVIEW_TOR status and deletes step 0 submissions', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.REVIEW_TOR,
+      current_workflow_type: UnitResponsibleType.LT100K,
+    });
+    txMock.projectSubmission.count.mockResolvedValue(0);
+    txMock.projectSubmission.deleteMany.mockResolvedValue({ count: 1 });
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.UNASSIGNED,
+    });
+
+    const result = await returnProject(user, 'project-1');
+
+    expect(result.status).toBe(ProjectStatus.UNASSIGNED);
+    expect(txMock.projectSubmission.count).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.LT100K,
+        step_order: { gt: 0 },
+      },
+    });
+    expect(txMock.projectSubmission.deleteMany).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-1',
+        workflow_type: UnitResponsibleType.LT100K,
+      },
+    });
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: {
+        id: 'project-1',
+        status: ProjectStatus.REVIEW_TOR,
+        assignee_procurement: { some: { id: user.id } },
+      },
+      data: {
+        status: ProjectStatus.UNASSIGNED,
+        assignee_procurement: { disconnect: { id: user.id } },
+        procurement_started_at: null,
+      },
+      select: { id: true, status: true },
+    });
+    expect(mockedSyncProjectPhases).toHaveBeenCalledWith(
+      expect.anything(),
+      UnitResponsibleType.LT100K,
+      'project-1'
+    );
+  });
+
+  it('returnProject rejects returning a procurement project when not in REVIEW_TOR status', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.LT100K,
+    });
+
+    await expect(returnProject(user, 'project-1')).rejects.toThrow(
+      'Procurement projects can only be returned in REVIEW_TOR status'
+    );
+  });
+
+  it('returnProject rejects returning a procurement project when submissions beyond step 0 exist', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.REVIEW_TOR,
+      current_workflow_type: UnitResponsibleType.LT100K,
+    });
+    txMock.projectSubmission.count.mockResolvedValue(1);
+
+    await expect(returnProject(user, 'project-1')).rejects.toThrow(
+      'Cannot return project with existing submissions'
+    );
+  });
+
+  it('returnProject returns a contract project in IN_PROGRESS status and resets contract_started_at', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-contract',
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+    txMock.projectSubmission.count.mockResolvedValue(0);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-contract',
+      status: ProjectStatus.UNASSIGNED,
+    });
+
+    const result = await returnProject(user, 'project-contract');
+
+    expect(result.status).toBe(ProjectStatus.UNASSIGNED);
+    expect(txMock.projectSubmission.count).toHaveBeenCalledWith({
+      where: {
+        project_id: 'project-contract',
+        workflow_type: UnitResponsibleType.CONTRACT,
+      },
+    });
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: {
+        id: 'project-contract',
+        status: ProjectStatus.IN_PROGRESS,
+        assignee_contract: { some: { id: user.id } },
+      },
+      data: {
+        status: ProjectStatus.UNASSIGNED,
+        assignee_contract: { disconnect: { id: user.id } },
+        contract_started_at: null,
+      },
+      select: { id: true, status: true },
+    });
+  });
+
+  it('returnProject rejects returning a contract project when not in IN_PROGRESS status or when submissions exist', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-contract',
+      status: ProjectStatus.WAITING_ACCEPT,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+
+    await expect(returnProject(user, 'project-contract')).rejects.toThrow(
+      'Contract projects can only be returned in IN_PROGRESS status'
+    );
+
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-contract',
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+    });
+    txMock.projectSubmission.count.mockResolvedValue(1);
+
+    await expect(returnProject(user, 'project-contract')).rejects.toThrow(
+      'Cannot return project with existing submissions'
+    );
   });
 });
