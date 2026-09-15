@@ -506,7 +506,6 @@ export const completeProcurementPhase = async (
       status: hasContractAssignee
         ? ProjectStatus.WAITING_ACCEPT
         : ProjectStatus.UNASSIGNED,
-      contract_started_at: hasContractAssignee ? transitionAt : undefined,
       responsible_unit_id: data.contract_unit_id,
       contract_unit_id: data.contract_unit_id,
       assignee_contract: data.assignee_contract

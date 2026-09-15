@@ -315,7 +315,7 @@ describe('project-lifecycle.service', () => {
     expect(result.responsible_unit_id).toBe(CONTRACT_UNIT_ID);
   });
 
-  it('completeProcurementPhase sets contract_started_at when assignee_contract is attached', async () => {
+  it('completeProcurementPhase completes procurement without setting contract_started_at when assignee_contract is attached', async () => {
     txMock.project.findUnique
       .mockResolvedValueOnce({
         status: ProjectStatus.IN_PROGRESS,
@@ -386,12 +386,13 @@ describe('project-lifecycle.service', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           procurement_completed_at: expect.any(Date),
-          contract_started_at: expect.any(Date),
           responsible_unit_id: 'unit-proc',
           contract_unit_id: 'unit-proc',
         }),
       })
     );
+    const updateCall = txMock.project.update.mock.calls[0][0];
+    expect(updateCall.data.contract_started_at).toBeUndefined();
     expect(txMock.notification.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

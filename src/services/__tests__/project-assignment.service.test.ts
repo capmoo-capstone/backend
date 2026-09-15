@@ -197,7 +197,7 @@ describe('project-assignment.service', () => {
     );
   });
 
-  it('assignProjectsToUser sets contract_started_at for contract phase projects', async () => {
+  it('assignProjectsToUser assigns contract phase projects to WAITING_ACCEPT without setting contract_started_at', async () => {
     txMock.project.findMany.mockResolvedValue([
       {
         id: 'project-2',
@@ -234,10 +234,12 @@ describe('project-assignment.service', () => {
     expect(txMock.project.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          contract_started_at: expect.any(Date),
+          status: ProjectStatus.WAITING_ACCEPT,
         }),
       })
     );
+    const updateCall = txMock.project.update.mock.calls[0][0];
+    expect(updateCall.data.contract_started_at).toBeUndefined();
   });
 
   it('claimProject sets contract_started_at for contract phase projects', async () => {
@@ -297,6 +299,42 @@ describe('project-assignment.service', () => {
       txMock,
       UnitResponsibleType.LT100K,
       'project-1'
+    );
+  });
+
+  it('acceptProjects moves waiting-accept contract projects to IN_PROGRESS and sets contract_started_at', async () => {
+    txMock.project.findMany.mockResolvedValue([
+      {
+        id: 'project-contract-1',
+        status: ProjectStatus.WAITING_ACCEPT,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+        assignee_procurement: [],
+        assignee_contract: [{ id: user.id }],
+      },
+    ]);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-contract-1',
+      status: ProjectStatus.IN_PROGRESS,
+    });
+
+    const result = await acceptProjects(user, {
+      id: ['project-contract-1'],
+    } as any);
+
+    expect(result).toEqual([
+      { id: 'project-contract-1', status: ProjectStatus.IN_PROGRESS },
+    ]);
+    expect(txMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'project-contract-1',
+          status: ProjectStatus.WAITING_ACCEPT,
+        },
+        data: expect.objectContaining({
+          status: ProjectStatus.IN_PROGRESS,
+          contract_started_at: expect.any(Date),
+        }),
+      })
     );
   });
 

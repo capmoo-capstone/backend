@@ -135,10 +135,6 @@ export const assignProjectsToUser = async (
       const assignee = assigneeMap.get(assigneeId)!;
       const assigneeField = resolveAssigneeField(project.current_workflow_type);
 
-      const shouldStartContract =
-        project.current_workflow_type === UnitResponsibleType.CONTRACT &&
-        !project.contract_started_at;
-
       updatePromises.push(
         tx.project.update({
           where: {
@@ -149,7 +145,6 @@ export const assignProjectsToUser = async (
           data: {
             status: ProjectStatus.WAITING_ACCEPT,
             [assigneeField]: { connect: { id: assigneeId } },
-            ...(shouldStartContract ? { contract_started_at: nowUtc() } : {}),
           },
           select: { id: true, status: true, [assigneeField]: true },
         })
@@ -405,7 +400,10 @@ export const acceptProjects = async (
       updatePromises.push(
         tx.project.update({
           where: { id: project.id, status: ProjectStatus.WAITING_ACCEPT },
-          data: { status: targetStatus },
+          data: {
+            status: targetStatus,
+            ...(!isProcurement ? { contract_started_at: nowUtc() } : {}),
+          },
           select: { id: true, status: true },
         })
       );
