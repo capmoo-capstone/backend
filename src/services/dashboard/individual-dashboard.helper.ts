@@ -33,13 +33,20 @@ type CompletedPhase = {
 
 const getWhere = (query: IndividualTodoQuery) => {
   const { tab, dateFrom, dateTo, targetUserId } = query;
+  const createdDateFilter =
+    dateFrom || dateTo
+      ? {
+          created_at: {
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo ? { lte: dateTo } : {}),
+          },
+        }
+      : {};
+
   switch (tab) {
     case 'ALL':
       return {
-        created_at: {
-          gte: dateFrom,
-          lte: dateTo,
-        },
+        ...createdDateFilter,
         status: {
           in: [
             ProjectStatus.WAITING_ACCEPT,
@@ -55,48 +62,53 @@ const getWhere = (query: IndividualTodoQuery) => {
           },
           {
             assignee_contract: { some: { id: targetUserId } },
+            current_workflow_type: UnitResponsibleType.CONTRACT,
           },
         ],
       };
     case 'IN_PROGRESS':
       return {
-        created_at: {
-          gte: dateFrom,
-          lte: dateTo,
-        },
-        status: {
-          in: [
-            ProjectStatus.WAITING_ACCEPT,
-            ProjectStatus.REVIEW_TOR,
-            ProjectStatus.IN_PROGRESS,
-          ],
-        },
+        ...createdDateFilter,
         OR: [
           {
             assignee_procurement: { some: { id: targetUserId } },
+            current_workflow_type: { not: UnitResponsibleType.CONTRACT },
+            status: {
+              in: [
+                ProjectStatus.WAITING_ACCEPT,
+                ProjectStatus.REVIEW_TOR,
+                ProjectStatus.IN_PROGRESS,
+              ],
+            },
           },
           {
             assignee_contract: { some: { id: targetUserId } },
+            current_workflow_type: UnitResponsibleType.CONTRACT,
+            status: {
+              in: [
+                ProjectStatus.WAITING_ACCEPT,
+                ProjectStatus.REVIEW_TOR,
+                ProjectStatus.IN_PROGRESS,
+              ],
+            },
           },
         ],
       };
     case 'COMPLETED':
       return {
-        created_at: {
-          gte: dateFrom,
-          lte: dateTo,
-        },
-        current_workflow_type: UnitResponsibleType.CONTRACT,
+        ...createdDateFilter,
         OR: [
           {
             assignee_procurement: { some: { id: targetUserId } },
             assignee_contract: { none: { id: targetUserId } },
+            current_workflow_type: UnitResponsibleType.CONTRACT,
           },
           {
+            assignee_contract: { some: { id: targetUserId } },
+            current_workflow_type: UnitResponsibleType.CONTRACT,
             status: {
               in: [ProjectStatus.WAITING_CLOSE, ProjectStatus.CLOSED],
             },
-            assignee_contract: { some: { id: targetUserId } },
           },
         ],
       };

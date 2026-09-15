@@ -1000,7 +1000,12 @@ describe('dashboard.service', () => {
         expect(prismaMock.project.findMany).toHaveBeenCalledWith(
           expect.objectContaining({
             where: expect.objectContaining({
-              current_workflow_type: UnitResponsibleType.CONTRACT,
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  assignee_procurement: { some: { id: 'staff-1' } },
+                  assignee_contract: { none: { id: 'staff-1' } },
+                }),
+              ]),
             }),
           })
         );
