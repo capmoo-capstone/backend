@@ -86,7 +86,7 @@ const getWhere = (query: IndividualTodoQuery) => {
           gte: dateFrom,
           lte: dateTo,
         },
-        current_workflow: UnitResponsibleType.CONTRACT,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
         OR: [
           {
             assignee_procurement: { some: { id: targetUserId } },

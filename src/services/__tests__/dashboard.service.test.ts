@@ -985,6 +985,27 @@ describe('dashboard.service', () => {
         );
       });
 
+      it("returns completed projects when tab is COMPLETED", async () => {
+        prismaMock.project.findMany.mockResolvedValue([
+          { id: 'project-completed-1', title: 'Completed Project' },
+        ] as any);
+        prismaMock.project.count.mockResolvedValue(1);
+
+        const result = await DashboardService.getIndividualStaffTodo(1, 10, {
+          targetUserId: 'staff-1',
+          tab: 'COMPLETED',
+        });
+
+        expect(result.data).toHaveLength(1);
+        expect(prismaMock.project.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              current_workflow_type: UnitResponsibleType.CONTRACT,
+            }),
+          })
+        );
+      });
+
       it('throws NotFoundError when given an invalid tab', async () => {
         await expect(
           DashboardService.getIndividualStaffTodo(1, 10, {
