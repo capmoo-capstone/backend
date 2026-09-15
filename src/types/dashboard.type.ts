@@ -3,7 +3,6 @@ import {
   ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/client';
 import { PaginatedResponse } from './common.type';
 import { DashboardMode } from '../schemas/dashboard.schema';
 

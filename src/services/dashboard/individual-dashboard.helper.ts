@@ -1,6 +1,7 @@
 import {
   Prisma,
   ProcurementType,
+  Project,
   ProjectStatus,
   UnitResponsibleType,
 } from '@prisma/client';
@@ -21,8 +22,6 @@ import {
   DurationComparisonItem,
   IndividualDashboardResponse,
 } from '../../types/dashboard.type';
-import { fetchAndFormatUserDetails } from '../auth.service';
-import { getOwnProjects, getOwnProjectsTotal } from '../project-query.service';
 import { resolveTargetUnitId } from './dashboard.helper';
 
 type CompletedPhase = {
@@ -32,24 +31,78 @@ type CompletedPhase = {
   assigneeIds: string[];
 };
 
-const isCompletedInRange = (
-  startedAt: Date | null | undefined,
-  completedAt: Date | null | undefined,
-  range?: { from: Date; to: Date }
-): boolean => {
-  if (!startedAt || !completedAt) return false;
-  if (!range) return true;
-  return completedAt >= range.from && completedAt <= range.to;
-};
-
-const isInProgressInRange = (
-  startedAt: Date | null | undefined,
-  completedAt: Date | null | undefined,
-  range?: { from: Date; to: Date }
-): boolean => {
-  if (!startedAt) return false;
-  if (!range) return !completedAt;
-  return startedAt <= range.to && (!completedAt || completedAt > range.to);
+const getWhere = (query: IndividualTodoQuery) => {
+  const { tab, dateFrom, dateTo, targetUserId } = query;
+  switch (tab) {
+    case 'ALL':
+      return {
+        created_at: {
+          gte: dateFrom,
+          lte: dateTo,
+        },
+        status: {
+          in: [
+            ProjectStatus.WAITING_ACCEPT,
+            ProjectStatus.REVIEW_TOR,
+            ProjectStatus.IN_PROGRESS,
+            ProjectStatus.WAITING_CLOSE,
+            ProjectStatus.CLOSED,
+          ],
+        },
+        OR: [
+          {
+            assignee_procurement: { some: { id: targetUserId } },
+          },
+          {
+            assignee_contract: { some: { id: targetUserId } },
+          },
+        ],
+      };
+    case 'IN_PROGRESS':
+      return {
+        created_at: {
+          gte: dateFrom,
+          lte: dateTo,
+        },
+        status: {
+          in: [
+            ProjectStatus.WAITING_ACCEPT,
+            ProjectStatus.REVIEW_TOR,
+            ProjectStatus.IN_PROGRESS,
+          ],
+        },
+        OR: [
+          {
+            assignee_procurement: { some: { id: targetUserId } },
+          },
+          {
+            assignee_contract: { some: { id: targetUserId } },
+          },
+        ],
+      };
+    case 'COMPLETED':
+      return {
+        created_at: {
+          gte: dateFrom,
+          lte: dateTo,
+        },
+        current_workflow: UnitResponsibleType.CONTRACT,
+        OR: [
+          {
+            assignee_procurement: { some: { id: targetUserId } },
+            assignee_contract: { none: { id: targetUserId } },
+          },
+          {
+            status: {
+              in: [ProjectStatus.WAITING_CLOSE, ProjectStatus.CLOSED],
+            },
+            assignee_contract: { some: { id: targetUserId } },
+          },
+        ],
+      };
+    default:
+      throw new NotFoundError('Invalid tab');
+  }
 };
 
 export const getIndividualStaffTodo = async (
@@ -57,52 +110,125 @@ export const getIndividualStaffTodo = async (
   limit: number,
   query: IndividualTodoQuery
 ): Promise<PaginatedProjects> => {
-  const target = await fetchAndFormatUserDetails({
-    id: query.targetUserId,
-  });
+  let projects: Partial<Project>[] = [],
+    count = 0;
 
-  if (!target) {
-    throw new NotFoundError('User not found');
-  }
-
-  const targetUser: AuthPayload = {
-    token: '',
-    id: target.user.id,
-    username: target.user.username,
-    full_name: target.user.full_name,
-    email: target.user.email,
-    user_type: target.user.register_type,
-    ...target.authData,
+  const select = {
+    id: true,
+    receive_no: true,
+    title: true,
+    status: true,
+    assignee_procurement: {
+      select: {
+        id: true,
+        full_name: true,
+      },
+    },
+    assignee_contract: {
+      select: {
+        id: true,
+        full_name: true,
+      },
+    },
+    contract_no: true,
+    expected_approval_date: true,
+    procurement_type: true,
+    requesting_dept: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    requesting_unit: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
   };
 
-  return getOwnProjects(targetUser, page, limit, query);
+  switch (query.tab) {
+    case 'ALL':
+      [projects, count] = await Promise.all([
+        prisma.project.findMany({
+          skip: (page - 1) * limit,
+          take: limit,
+          select,
+          where: getWhere(query),
+          orderBy: {
+            receive_no: 'desc',
+          },
+        }),
+        prisma.project.count({
+          where: getWhere(query),
+        }),
+      ]);
+      break;
+    case 'IN_PROGRESS':
+      [projects, count] = await Promise.all([
+        prisma.project.findMany({
+          skip: (page - 1) * limit,
+          take: limit,
+          select,
+          where: getWhere(query),
+          orderBy: {
+            receive_no: 'desc',
+          },
+        }),
+        prisma.project.count({
+          where: getWhere(query),
+        }),
+      ]);
+      break;
+    case 'COMPLETED':
+      [projects, count] = await Promise.all([
+        prisma.project.findMany({
+          skip: (page - 1) * limit,
+          take: limit,
+          select,
+          where: getWhere(query),
+          orderBy: {
+            receive_no: 'desc',
+          },
+        }),
+        prisma.project.count({
+          where: getWhere(query),
+        }),
+      ]);
+      break;
+    default:
+      throw new NotFoundError('Invalid tab');
+  }
+
+  return {
+    total: count,
+    page,
+    pageSize: limit,
+    totalPages: Math.ceil(count / limit),
+    data: projects,
+  };
 };
 
 export const getIndividualStaffTodoTotal = async (
   query: IndividualTodoTotalQuery
 ): Promise<Record<string, number>> => {
-  const target = await fetchAndFormatUserDetails({
-    id: query.targetUserId,
-  });
+  const [allCount, inProgressCount, completedCount] = await Promise.all([
+    prisma.project.count({
+      where: getWhere({ tab: 'ALL', ...query }),
+    }),
+    prisma.project.count({
+      where: getWhere({ tab: 'IN_PROGRESS', ...query }),
+    }),
+    prisma.project.count({
+      where: getWhere({ tab: 'COMPLETED', ...query }),
+    }),
+  ]);
 
-  if (!target) {
-    throw new NotFoundError('User not found');
-  }
-
-  const targetUser: AuthPayload = {
-    token: '',
-    id: target.user.id,
-    username: target.user.username,
-    full_name: target.user.full_name,
-    email: target.user.email,
-    user_type: target.user.register_type,
-    ...target.authData,
+  return {
+    ALL: allCount,
+    IN_PROGRESS: inProgressCount,
+    COMPLETED: completedCount,
   };
-
-  return getOwnProjectsTotal(targetUser, {
-    dateFrom: query.dateFrom,
-    dateTo: query.dateTo,
-  });
 };
 
 export const getIndividualStaffDashboard = async (

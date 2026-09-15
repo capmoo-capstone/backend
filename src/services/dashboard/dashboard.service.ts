@@ -84,7 +84,8 @@ export const getIndividualStaffTodo = (
   page: number,
   limit: number,
   query: IndividualTodoQuery
-): Promise<PaginatedProjects> => individualHelper.getIndividualStaffTodo(page, limit, query);
+): Promise<PaginatedProjects> =>
+  individualHelper.getIndividualStaffTodo(page, limit, query);
 
 export const getIndividualStaffTodoTotal = (
   query: IndividualTodoTotalQuery

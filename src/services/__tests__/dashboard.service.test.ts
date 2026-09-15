@@ -968,32 +968,11 @@ describe('dashboard.service', () => {
           IndividualTodoQuerySchema.parse({ targetUserId: 'staff-1' })
         ).toEqual({
           targetUserId: 'staff-1',
-          tab: OwnProjectTab.ALL,
+          tab: 'ALL',
         });
       });
 
       it("returns the selected user's project-own todo list", async () => {
-        prismaMock.user.findUnique.mockResolvedValue({
-          id: 'staff-1',
-          username: 'staff',
-          email: 'staff@example.com',
-          full_name: 'Staff User',
-          register_type: ['STANDARD'],
-          roles: [
-            {
-              role: UserRole.GENERAL_STAFF,
-              department: { id: OPS_DEPT_ID, name: 'Supply' },
-              unit: { id: 'unit-proc', name: 'Procurement' },
-            },
-          ],
-          delegations_received: [],
-        } as any);
-        prismaMock.unit.findMany.mockResolvedValue([
-          {
-            id: 'unit-proc',
-            type: [UnitResponsibleType.LT100K],
-          },
-        ] as any);
         prismaMock.project.findMany.mockResolvedValue([
           { id: 'project-1', title: 'Target todo' },
         ] as any);
@@ -1001,7 +980,7 @@ describe('dashboard.service', () => {
 
         const result = await DashboardService.getIndividualStaffTodo(2, 20, {
           targetUserId: 'staff-1',
-          tab: OwnProjectTab.WAITING_ACCEPT,
+          tab: 'IN_PROGRESS',
         });
 
         expect(result).toMatchObject({
@@ -1015,7 +994,7 @@ describe('dashboard.service', () => {
           expect.objectContaining({
             skip: 20,
             take: 20,
-            orderBy: [{ receive_no: 'desc' }],
+            where: expect.any(Object),
           })
         );
         expect(prismaMock.project.count).toHaveBeenCalledWith(
@@ -1025,48 +1004,32 @@ describe('dashboard.service', () => {
         );
       });
 
-      it('throws NotFoundError when the todo target user does not exist', async () => {
-        prismaMock.user.findUnique.mockResolvedValue(null);
-
+      it('throws NotFoundError when given an invalid tab', async () => {
         await expect(
           DashboardService.getIndividualStaffTodo(1, 10, {
-            targetUserId: 'missing-user',
-            tab: OwnProjectTab.ALL,
+            targetUserId: 'staff-1',
+            tab: 'INVALID_TAB' as any,
           })
-        ).rejects.toThrowError('User not found');
+        ).rejects.toThrowError('Invalid tab');
         expect(prismaMock.project.findMany).not.toHaveBeenCalled();
       });
 
       it('returns total counts by tab for individual staff todos', async () => {
-        prismaMock.user.findUnique.mockResolvedValue({
-          id: 'staff-1',
-          username: 'staff',
-          email: 'staff@example.com',
-          full_name: 'Staff User',
-          register_type: ['STANDARD'],
-          roles: [
-            {
-              role: UserRole.GENERAL_STAFF,
-              department: { id: OPS_DEPT_ID, name: 'Supply' },
-              unit: { id: 'unit-proc', name: 'Procurement' },
-            },
-          ],
-          delegations_received: [],
-        } as any);
-        prismaMock.unit.findMany.mockResolvedValue([
-          {
-            id: 'unit-proc',
-            type: [UnitResponsibleType.LT100K],
-          },
-        ] as any);
-        prismaMock.project.count.mockResolvedValue(5);
+        prismaMock.project.count
+          .mockResolvedValueOnce(5)
+          .mockResolvedValueOnce(3)
+          .mockResolvedValueOnce(2);
 
         const totals = await DashboardService.getIndividualStaffTodoTotal({
           targetUserId: 'staff-1',
         });
 
         expect(totals).toBeDefined();
-        expect(totals.all).toBe(5);
+        expect(totals).toEqual({
+          ALL: 5,
+          IN_PROGRESS: 3,
+          COMPLETED: 2,
+        });
       });
 
       it('throws NotFoundError when staff user is not in the unit', async () => {

@@ -172,7 +172,7 @@ export const IndividualDashboardQuerySchema = z
 
 export const IndividualTodoQuerySchema = z.object({
   targetUserId: z.string(),
-  tab: z.enum(OwnProjectTab).default(OwnProjectTab.ALL),
+  tab: z.enum(['ALL', 'IN_PROGRESS', 'COMPLETED']).default('ALL'),
   dateFrom: BangkokDateTimeSchema.optional(),
   dateTo: BangkokDateTimeSchema.optional(),
 });

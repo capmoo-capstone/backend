@@ -51,13 +51,13 @@ router.get(
 
 router.get(
   '/individual-todo',
-  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getIndividualStaffTodo
 );
 
 router.get(
   '/individual-todo/total',
-  requireSupplyRoles([HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
+  requireSupplyRoles([GENERAL_STAFF, HEAD_OF_UNIT, HEAD_OF_DEPARTMENT]),
   controller.getIndividualStaffTodoTotal
 );
 
