@@ -213,26 +213,21 @@ const buildGeneralStaffCompletedWhere = (
 ): Prisma.ProjectWhereInput =>
   orWhere([
     andWhere(
-      { assignee_procurement: { some: { id: user.id } } },
       orWhere([
-        { procurement_completed_at: { not: null } },
-        { status: ProjectStatus.CLOSED },
+        { assignee_procurement: { some: { id: user.id } } },
+        { assignee_contract: { some: { id: user.id } } },
       ]),
-      {
-        NOT: {
-          current_workflow_type: UnitResponsibleType.CONTRACT,
-          assignee_contract: { some: { id: user.id } },
-          contract_completed_at: null,
-          status: { not: ProjectStatus.CLOSED },
-        },
-      }
+      { status: ProjectStatus.CLOSED }
     ),
     andWhere(
-      { assignee_contract: { some: { id: user.id } } },
-      orWhere([
-        { contract_completed_at: { not: null } },
-        { status: ProjectStatus.CLOSED },
-      ])
+      { assignee_procurement: { some: { id: user.id } } },
+      { procurement_completed_at: { not: null } },
+      { current_workflow_type: UnitResponsibleType.CONTRACT },
+      {
+        NOT: {
+          assignee_contract: { some: { id: user.id } },
+        },
+      }
     ),
   ]);
 
@@ -374,28 +369,21 @@ export const buildOwnProjectRoleTabWhere = (
           andWhere(
             { status: ProjectStatus.IN_PROGRESS },
             orWhere([
-              progressStatusWhere(scope.role, [ProjectPhaseStatus.IN_PROGRESS]),
+              progressStatusWhere(scope.role, [
+                ProjectPhaseStatus.IN_PROGRESS,
+                ProjectPhaseStatus.NOT_STARTED,
+              ]),
               andWhere(
-                { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
-                progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
+                progressStatusWhere(scope.role, [
+                  ProjectPhaseStatus.COMPLETED,
+                  ProjectPhaseStatus.WAITING_APPROVAL,
+                ]),
                 progressStatusWhere(UserRole.HEAD_OF_UNIT, [
                   ProjectPhaseStatus.COMPLETED,
                 ]),
                 progressStatusWhere(UserRole.DOCUMENT_STAFF, [
                   ProjectPhaseStatus.COMPLETED,
-                ]),
-                { project_installments: { none: {} } }
-              ),
-              andWhere(
-                { current_workflow_type: UnitResponsibleType.CONTRACT },
-                progressStatusWhere(scope.role, [ProjectPhaseStatus.COMPLETED]),
-                progressStatusWhere(UserRole.HEAD_OF_UNIT, [
-                  ProjectPhaseStatus.COMPLETED,
-                ]),
-                progressStatusWhere(UserRole.DOCUMENT_STAFF, [
-                  ProjectPhaseStatus.COMPLETED,
-                ]),
-                { contract_completed_at: null }
+                ])
               ),
             ])
           ),
@@ -417,27 +405,22 @@ export const buildOwnProjectRoleTabWhere = (
           ProjectPhaseStatus.WAITING_APPROVAL,
           ProjectPhaseStatus.COMPLETED,
         ]),
-        progressStatusWhere(
-          UserRole.HEAD_OF_UNIT,
-          NON_COMPLETED_PHASE_STATUSES
-        ),
-        progressStatusWhere(
-          UserRole.DOCUMENT_STAFF,
-          NON_COMPLETED_PHASE_STATUSES
-        )
+        orWhere([
+          progressStatusWhere(
+            UserRole.HEAD_OF_UNIT,
+            NON_COMPLETED_PHASE_STATUSES
+          ),
+          progressStatusWhere(
+            UserRole.DOCUMENT_STAFF,
+            NON_COMPLETED_PHASE_STATUSES
+          ),
+        ])
       );
     }
     if (tab === 'completed') {
       return (
         scope.completedWhere ??
-        andWhere(
-          scope.where,
-          orWhere([
-            { status: ProjectStatus.CLOSED },
-            { procurement_completed_at: { not: null } },
-            { contract_completed_at: { not: null } },
-          ])
-        )
+        andWhere(scope.where, { status: ProjectStatus.CLOSED })
       );
     }
   }
@@ -595,14 +578,8 @@ export const buildOwnProjectCompletedDateFilter = (
   }
 
   return orWhere([
-    andWhere(
-      { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
-      { procurement_completed_at: dateFilter }
-    ),
-    andWhere(
-      { current_workflow_type: UnitResponsibleType.CONTRACT },
-      { contract_completed_at: dateFilter }
-    ),
+    { procurement_completed_at: dateFilter },
+    { contract_completed_at: dateFilter },
   ]);
 };
 

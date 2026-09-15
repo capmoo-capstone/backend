@@ -536,13 +536,13 @@ describe('project-query.service', () => {
         `"equals":"${ProjectPhaseStatus.IN_PROGRESS}"`
       );
       expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.NOT_STARTED}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
         '"path":["HEAD_OF_UNIT","status"]'
       );
       expect(ownProjectWhereJson()).toContain(
         '"path":["DOCUMENT_STAFF","status"]'
-      );
-      expect(ownProjectWhereJson()).toContain(
-        '"project_installments":{"none":{}}'
       );
       expect(ownProjectWhereJson()).not.toContain(
         `"equals":"${ProjectPhaseStatus.REJECTED}"`
@@ -711,6 +711,9 @@ describe('project-query.service', () => {
 
       expect(ownProjectWhereJson()).toContain(
         `"equals":"${ProjectPhaseStatus.COMPLETED}"`
+      );
+      expect(ownProjectWhereJson()).toContain(
+        `"equals":"${ProjectPhaseStatus.WAITING_APPROVAL}"`
       );
       expect(ownProjectWhereJson()).toContain(
         '"path":["HEAD_OF_UNIT","status"]'

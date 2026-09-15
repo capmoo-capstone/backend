@@ -146,9 +146,14 @@ export const getOwnProjects = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
-  const { page, limit, ...query } = req.query;
+  const { page, limit, tab, dateFrom, dateTo, search } = req.query;
   const payload = req.user!;
-  const validated = GetOwnProjectsQuerySchema.parse(query);
+  const validated = GetOwnProjectsQuerySchema.parse({
+    tab,
+    dateFrom,
+    dateTo,
+    search,
+  });
   const projects = await ProjectQueryService.getOwnProjects(
     payload,
     parseInt(page as string) || 1,
@@ -164,8 +169,9 @@ export const getOwnProjectsTotal = async (
 ) => {
   // #swagger.tags = ['Project']
   // #swagger.security = [{ bearerAuth: [] }]
+  const { dateFrom, dateTo } = req.query;
   const payload = req.user!;
-  const query = GetOwnProjectsTotalQuerySchema.parse(req.query);
+  const query = GetOwnProjectsTotalQuerySchema.parse({ dateFrom, dateTo });
   const totals = await ProjectQueryService.getOwnProjectsTotal(payload, query);
   res.status(200).json(totals);
 };
