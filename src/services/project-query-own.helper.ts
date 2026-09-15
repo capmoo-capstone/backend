@@ -290,6 +290,25 @@ const progressStatusWhere = (
     ])
   );
 
+const progressRolesStatusWhere = (
+  roles: SupplyProgressRole[],
+  statuses: ProjectPhaseStatus[]
+): Prisma.ProjectWhereInput =>
+  orWhere(
+    roles.flatMap((role) =>
+      statuses.flatMap((status) => [
+        andWhere(
+          { current_workflow_type: { in: PROCUREMENT_WORKFLOW_TYPES } },
+          progressFieldStatus('procurement_progress', role, status)
+        ),
+        andWhere(
+          { current_workflow_type: UnitResponsibleType.CONTRACT },
+          progressFieldStatus('contract_progress', role, status)
+        ),
+      ])
+    )
+  );
+
 export const buildOwnProjectRoleScopes = async (
   user: AuthPayload
 ): Promise<RoleScope[]> => {
@@ -405,16 +424,10 @@ export const buildOwnProjectRoleTabWhere = (
           ProjectPhaseStatus.WAITING_APPROVAL,
           ProjectPhaseStatus.COMPLETED,
         ]),
-        orWhere([
-          progressStatusWhere(
-            UserRole.HEAD_OF_UNIT,
-            NON_COMPLETED_PHASE_STATUSES
-          ),
-          progressStatusWhere(
-            UserRole.DOCUMENT_STAFF,
-            NON_COMPLETED_PHASE_STATUSES
-          ),
-        ])
+        progressRolesStatusWhere(
+          [UserRole.HEAD_OF_UNIT, UserRole.DOCUMENT_STAFF],
+          NON_COMPLETED_PHASE_STATUSES
+        )
       );
     }
     if (tab === 'completed') {
