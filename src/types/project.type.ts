@@ -92,8 +92,6 @@ export interface ProjectDetailResponse {
   pr_no: string | null;
   po_no: string | null;
   contract_no: string | null;
-  migo_103_no: string | null;
-  migo_105_no: string | null;
   asset_code: boolean | null;
   expected_approval_date: Date | null;
   procurement_completed_date: Date | null;

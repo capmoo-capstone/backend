@@ -445,8 +445,6 @@ describe('project-data.service', () => {
         pr_no: 'PR-1',
         less_no: null,
         po_no: null,
-        migo_103_no: null,
-        migo_105_no: null,
       },
     ]);
 
@@ -467,8 +465,6 @@ describe('project-data.service', () => {
         pr_no: null,
         less_no: null,
         po_no: 'PO-1',
-        migo_103_no: null,
-        migo_105_no: null,
       },
     ]);
 
