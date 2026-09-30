@@ -351,8 +351,6 @@ describe('project-query.service', () => {
       pr_no: 'PR-1',
       po_no: null,
       contract_no: null,
-      migo_103_no: null,
-      migo_105_no: null,
       asset_code: null,
       expected_approval_date: null,
       expected_completion_procurement_date: null,

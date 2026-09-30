@@ -120,8 +120,6 @@ type ProjectForUpdate = Pick<
   | 'pr_no'
   | 'po_no'
   | 'less_no'
-  | 'migo_103_no'
-  | 'migo_105_no'
   | 'asset_code'
   | 'vendor_name'
   | 'vendor_email'
@@ -478,8 +476,6 @@ export const createStaffSubmissionsProject = async (
         contract_no_id: true,
         installment_rounds: true,
         installment_amounts: true,
-        migo_103_no: true,
-        migo_105_no: true,
         asset_code: true,
         vendor_name: true,
         vendor_email: true,
@@ -513,21 +509,13 @@ export const createStaffSubmissionsProject = async (
       if (
         validatedMeta.data.pr_no ||
         validatedMeta.data.less_no ||
-        validatedMeta.data.po_no ||
-        validatedMeta.data.migo_103_no ||
-        validatedMeta.data.migo_105_no
+        validatedMeta.data.po_no
       ) {
         await checkRefNumberDuplication(
           tx,
           validatedMeta.data.pr_no ? [validatedMeta.data.pr_no] : [],
           validatedMeta.data.less_no ? [validatedMeta.data.less_no] : [],
           validatedMeta.data.po_no ? [validatedMeta.data.po_no] : [],
-          validatedMeta.data.migo_103_no
-            ? [validatedMeta.data.migo_103_no]
-            : [],
-          validatedMeta.data.migo_105_no
-            ? [validatedMeta.data.migo_105_no]
-            : [],
           project.id
         );
       }
@@ -1017,8 +1005,6 @@ export const signAndCompleteSubmission = async (
           po_no: true,
           less_no: true,
           contract_no_id: true,
-          migo_103_no: true,
-          migo_105_no: true,
           asset_code: true,
           vendor_name: true,
           vendor_email: true,

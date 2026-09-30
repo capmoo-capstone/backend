@@ -86,8 +86,6 @@ export const UpdateProjectForSubmissionSchema = z.object({
   po_no: z.string().optional(),
   less_no: z.string().optional(),
   contract_no_id: z.uuid().optional(),
-  migo_103_no: z.string().optional(),
-  migo_105_no: z.string().optional(),
   asset_code: z.coerce.boolean().optional().nullable(),
   vendor_name: z.string().optional(),
   vendor_email: z.string().optional(),

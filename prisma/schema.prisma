@@ -380,8 +380,6 @@ model Project {
   pr_no                    String?
   po_no                    String?
   less_no                  String?
-  migo_103_no              String?
-  migo_105_no              String?
   contract_no_id           String?             @unique
   asset_code               Boolean?
   vendor_name              String?

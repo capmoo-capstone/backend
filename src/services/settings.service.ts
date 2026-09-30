@@ -117,7 +117,6 @@ export const getRepresentatives =
             name: true,
             organization_roles: {
               where: { role: UserRole.REPRESENTATIVE },
-              take: 1,
               select: {
                 user: {
                   select: {
@@ -141,12 +140,10 @@ export const getRepresentatives =
         units: department.units.map((unit) => ({
           id: unit.id,
           name: unit.name,
-          representative: unit.organization_roles[0]
-            ? {
-                id: unit.organization_roles[0].user.id,
-                full_name: unit.organization_roles[0].user.full_name,
-              }
-            : null,
+          representative: unit.organization_roles.map((role) => ({
+            id: role.user.id,
+            full_name: role.user.full_name,
+          })),
         })),
       })),
     };

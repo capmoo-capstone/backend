@@ -2,7 +2,11 @@ import { UnitResponsibleType, UserRole } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { OPS_DEPT_ID } from '../../utils/constant';
 import { prismaMock } from '../../test/prisma-mock';
-import { getOpsStaff, getOpsUnits } from '../settings.service';
+import {
+  getOpsStaff,
+  getOpsUnits,
+  getRepresentatives,
+} from '../settings.service';
 
 describe('settings.service', () => {
   it('getOpsUnits shows only the active delegation matching the unit head scope', async () => {
@@ -106,5 +110,41 @@ describe('settings.service', () => {
         unit_id: null,
       },
     });
+  });
+
+  it('getRepresentatives returns array of representatives per unit', async () => {
+    prismaMock.department.findMany.mockResolvedValue([
+      {
+        id: 'dept-1',
+        name: 'Dept One',
+        units: [
+          {
+            id: 'unit-1',
+            name: 'Unit One',
+            organization_roles: [
+              {
+                user: {
+                  id: 'rep-1',
+                  full_name: 'Rep One',
+                },
+              },
+              {
+                user: {
+                  id: 'rep-2',
+                  full_name: 'Rep Two',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const result = await getRepresentatives();
+
+    expect(result.departments[0].units[0].representative).toEqual([
+      { id: 'rep-1', full_name: 'Rep One' },
+      { id: 'rep-2', full_name: 'Rep Two' },
+    ]);
   });
 });
