@@ -263,10 +263,10 @@ export const deleteUnit = async (id: string): Promise<Unit> => {
 
 export const getRepresentative = async (
   id: string
-): Promise<UnitRepresentativeResponse | null> => {
+): Promise<UnitRepresentativeResponse[]> => {
   await getById(id);
 
-  const representative = await prisma.userOrganizationRole.findFirst({
+  const representatives = await prisma.userOrganizationRole.findMany({
     where: { unit_id: id, role: UserRole.REPRESENTATIVE },
     select: {
       user: {
@@ -278,13 +278,11 @@ export const getRepresentative = async (
     },
   });
 
-  return representative
-    ? {
-        id: representative.user.id,
-        full_name: representative.user.full_name,
-        unit_id: id,
-      }
-    : null;
+  return representatives.map((rep) => ({
+    id: rep.user.id,
+    full_name: rep.user.full_name,
+    unit_id: id,
+  }));
 };
 
 export const updateUnitUsers = async (

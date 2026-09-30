@@ -369,19 +369,32 @@ describe('unit.service', () => {
     expect(result.name).toBe('New Unit');
   });
 
-  it('getRepresentative returns the representative user for a unit', async () => {
+  it('getRepresentative returns an array of representative users for a unit', async () => {
     prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-1' });
-    prismaMock.userOrganizationRole.findFirst.mockResolvedValue({
-      user: { id: 'rep-1', full_name: 'Rep One' },
-    });
+    prismaMock.userOrganizationRole.findMany.mockResolvedValue([
+      {
+        user: { id: 'rep-1', full_name: 'Rep One' },
+      },
+    ]);
 
     const result = await getRepresentative('unit-1');
 
-    expect(result).toEqual({
-      id: 'rep-1',
-      full_name: 'Rep One',
-      unit_id: 'unit-1',
-    });
+    expect(result).toEqual([
+      {
+        id: 'rep-1',
+        full_name: 'Rep One',
+        unit_id: 'unit-1',
+      },
+    ]);
+  });
+
+  it('getRepresentative returns an empty array when no representatives exist', async () => {
+    prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-1' });
+    prismaMock.userOrganizationRole.findMany.mockResolvedValue([]);
+
+    const result = await getRepresentative('unit-1');
+
+    expect(result).toEqual([]);
   });
 
   it('updateUnitUsers adds general staff users to a supply unit', async () => {

@@ -34,7 +34,7 @@ export interface OpsUnitSettingsResponse {
 export interface RepresentativeSettingsUnit {
   id: string;
   name: string;
-  representative: SettingsUser | null;
+  representative: SettingsUser[];
 }
 
 export interface RepresentativeSettingsDepartment {
