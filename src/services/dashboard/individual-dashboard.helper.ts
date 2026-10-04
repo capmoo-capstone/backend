@@ -31,7 +31,26 @@ type CompletedPhase = {
   assigneeIds: string[];
 };
 
-const getWhere = (query: IndividualTodoQuery) => {
+const VALID_TODO_STATUSES: ProjectStatus[] = [
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
+  ProjectStatus.IN_PROGRESS,
+  ProjectStatus.WAITING_CLOSE,
+  ProjectStatus.CLOSED,
+];
+
+const IN_PROGRESS_STATUSES: ProjectStatus[] = [
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
+  ProjectStatus.IN_PROGRESS,
+];
+
+const COMPLETED_STATUSES: ProjectStatus[] = [
+  ProjectStatus.WAITING_CLOSE,
+  ProjectStatus.CLOSED,
+];
+
+const getWhere = (query: IndividualTodoQuery): Prisma.ProjectWhereInput => {
   const { tab, dateFrom, dateTo, targetUserId } = query;
   const createdDateFilter =
     dateFrom || dateTo
@@ -48,13 +67,7 @@ const getWhere = (query: IndividualTodoQuery) => {
       return {
         ...createdDateFilter,
         status: {
-          in: [
-            ProjectStatus.WAITING_ACCEPT,
-            ProjectStatus.REVIEW_TOR,
-            ProjectStatus.IN_PROGRESS,
-            ProjectStatus.WAITING_CLOSE,
-            ProjectStatus.CLOSED,
-          ],
+          in: VALID_TODO_STATUSES,
         },
         OR: [
           {
@@ -69,28 +82,17 @@ const getWhere = (query: IndividualTodoQuery) => {
     case 'IN_PROGRESS':
       return {
         ...createdDateFilter,
+        status: {
+          in: IN_PROGRESS_STATUSES,
+        },
         OR: [
           {
             assignee_procurement: { some: { id: targetUserId } },
             current_workflow_type: { not: UnitResponsibleType.CONTRACT },
-            status: {
-              in: [
-                ProjectStatus.WAITING_ACCEPT,
-                ProjectStatus.REVIEW_TOR,
-                ProjectStatus.IN_PROGRESS,
-              ],
-            },
           },
           {
             assignee_contract: { some: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
-            status: {
-              in: [
-                ProjectStatus.WAITING_ACCEPT,
-                ProjectStatus.REVIEW_TOR,
-                ProjectStatus.IN_PROGRESS,
-              ],
-            },
           },
         ],
       };
@@ -102,12 +104,21 @@ const getWhere = (query: IndividualTodoQuery) => {
             assignee_procurement: { some: { id: targetUserId } },
             assignee_contract: { none: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
+            status: {
+              in: VALID_TODO_STATUSES,
+            },
+          },
+          {
+            assignee_procurement: { some: { id: targetUserId } },
+            status: {
+              in: COMPLETED_STATUSES,
+            },
           },
           {
             assignee_contract: { some: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
             status: {
-              in: [ProjectStatus.WAITING_CLOSE, ProjectStatus.CLOSED],
+              in: COMPLETED_STATUSES,
             },
           },
         ],
@@ -280,6 +291,16 @@ export const getIndividualStaffDashboard = async (
   const dateTo = query.dateTo;
   const range = dateFrom && dateTo ? { from: dateFrom, to: dateTo } : undefined;
 
+  const createdDateFilter =
+    dateFrom || dateTo
+      ? {
+          created_at: {
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo ? { lte: dateTo } : {}),
+          },
+        }
+      : {};
+
   const procurementPhaseFilter: Prisma.ProjectWhereInput = {
     procurement_unit_id: unitId,
     assignee_procurement: { some: { id: staffUser.id } },
@@ -287,12 +308,16 @@ export const getIndividualStaffDashboard = async (
 
   const contractPhaseFilter: Prisma.ProjectWhereInput = {
     contract_unit_id: unitId,
+    current_workflow_type: UnitResponsibleType.CONTRACT,
     assignee_contract: { some: { id: staffUser.id } },
   };
 
   const staffProjects = await prisma.project.findMany({
     where: {
-      status: { not: ProjectStatus.CANCELLED },
+      ...createdDateFilter,
+      status: {
+        in: VALID_TODO_STATUSES,
+      },
       OR: [procurementPhaseFilter, contractPhaseFilter],
     },
     select: {

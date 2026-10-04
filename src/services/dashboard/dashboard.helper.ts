@@ -63,9 +63,21 @@ export const getPreviousRange = (current: DateRange): DateRange => {
     };
   }
 
+  const shiftYears = days > 365 ? Math.max(1, Math.ceil(days / 365)) : 1;
+  const prevFromYear = fromParts.year - shiftYears;
+  const prevToYear = toParts.year - shiftYears;
+  const prevFromDay = Math.min(
+    fromParts.day,
+    daysInBangkokMonth(prevFromYear, fromParts.month)
+  );
+  const prevToDay = Math.min(
+    toParts.day,
+    daysInBangkokMonth(prevToYear, toParts.month)
+  );
+
   return {
-    from: fromBangkokDate(fromParts.year - 1, fromParts.month, fromParts.day),
-    to: fromBangkokDate(toParts.year - 1, toParts.month, toParts.day, true),
+    from: fromBangkokDate(prevFromYear, fromParts.month, prevFromDay),
+    to: fromBangkokDate(prevToYear, toParts.month, prevToDay, true),
   };
 };
 
@@ -76,6 +88,20 @@ export const currentFiscalYear = (now = nowUtc()): number => {
   const parts = toBangkokParts(now);
   const gregorianEndYear = parts.month >= 10 ? parts.year + 1 : parts.year;
   return gregorianEndYear + DEFAULT_FISCAL_YEAR_OFFSET;
+};
+
+export const fiscalYearsInRange = (range: DateRange): number[] => {
+  const startYear = currentFiscalYear(range.from);
+  const endYear = currentFiscalYear(range.to);
+  const years: number[] = [];
+  for (
+    let y = Math.min(startYear, endYear);
+    y <= Math.max(startYear, endYear);
+    y++
+  ) {
+    years.push(y);
+  }
+  return years;
 };
 
 export const fiscalYearRange = (fiscalYear: number): DateRange => {

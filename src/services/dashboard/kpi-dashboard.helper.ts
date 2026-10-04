@@ -46,7 +46,7 @@ import {
 } from './dashboard.helper';
 
 type StaffPerformancePhase = {
-  startedAt: Date;
+  startedAt: Date | null;
   completedAt: Date | null;
   assigneeIds: string[];
 };
@@ -63,7 +63,7 @@ const isCompletedInRange = (
   startedAt: Date | null,
   completedAt: Date | null,
   range: { from: Date; to: Date }
-): startedAt is Date =>
+): boolean =>
   startedAt !== null &&
   completedAt !== null &&
   completedAt >= range.from &&
@@ -73,7 +73,7 @@ const isInProgressInRange = (
   startedAt: Date | null,
   completedAt: Date | null,
   range: { from: Date; to: Date }
-): startedAt is Date =>
+): boolean =>
   startedAt !== null &&
   startedAt <= range.to &&
   (completedAt === null || completedAt > range.to);
@@ -118,12 +118,12 @@ export const getUnitGroupStaffPerformance = async (
   const projectPhaseFilters: Prisma.ProjectWhereInput[] = [
     {
       procurement_unit_id: unitId,
-      procurement_started_at: { lte: range.to },
+      created_at: { lte: range.to },
       assignee_procurement: { some: { id: { in: staffIds } } },
     },
     {
       contract_unit_id: unitId,
-      contract_started_at: { lte: range.to },
+      created_at: { lte: range.to },
       assignee_contract: { some: { id: { in: staffIds } } },
     },
   ];
@@ -137,6 +137,8 @@ export const getUnitGroupStaffPerformance = async (
             OR: projectPhaseFilters,
           },
           select: {
+            status: true,
+            created_at: true,
             procurement_unit_id: true,
             contract_unit_id: true,
             procurement_started_at: true,
@@ -167,7 +169,12 @@ export const getUnitGroupStaffPerformance = async (
       const assigneeIds = assignees.map((assignee) => assignee.id);
       if (isCompletedInRange(startedAt, completedAt, range)) {
         completedPhases.push({ startedAt, completedAt, assigneeIds });
-      } else if (isInProgressInRange(startedAt, completedAt, range)) {
+      } else if (
+        isInProgressInRange(startedAt, completedAt, range) ||
+        ((project.status === ProjectStatus.WAITING_ACCEPT ||
+          project.status === ProjectStatus.REVIEW_TOR) &&
+          project.created_at <= range.to)
+      ) {
         inProgressPhases.push({ startedAt, completedAt, assigneeIds });
       }
     };
@@ -491,7 +498,7 @@ export const getUnitGroupProcurementMetrics = async (
         ),
       })
     )
-  )
+  );
 
   const totalByProcurementType = types.map((type, index) => ({
     type,
@@ -542,7 +549,7 @@ export const getUnitGroupProcurementDetails = async (
       contract_started_at: true,
       contract_completed_at: true,
     },
-  })
+  });
 
   const completedProcurementPhaseRanges: Array<{
     type: ProcurementType;
@@ -583,23 +590,17 @@ export const getUnitGroupProcurementDetails = async (
     }
   }
 
-  const holidayIndex =
-    await getBangkokWorkingDayHolidayIndex([
-      ...completedProcurementPhaseRanges,
-      ...completedContractPhaseRanges,
-    ]);
+  const holidayIndex = await getBangkokWorkingDayHolidayIndex([
+    ...completedProcurementPhaseRanges,
+    ...completedContractPhaseRanges,
+  ]);
   const averagePhaseDuration = (
     phases: Array<{ type: ProcurementType; from: Date; to: Date }>
   ): number => {
     if (phases.length === 0) return 0;
     const total = phases.reduce(
       (sum, phase) =>
-        sum +
-        countBangkokWorkingDays(
-          phase.from,
-          phase.to,
-          holidayIndex
-        ),
+        sum + countBangkokWorkingDays(phase.from, phase.to, holidayIndex),
       0
     );
     return Number((total / phases.length).toFixed(1));
@@ -611,11 +612,11 @@ export const getUnitGroupProcurementDetails = async (
     const typeProjects = projects.filter((p) => p.procurement_type === type);
     const totalCount = typeProjects.length;
 
-    const procurementPhases = completedProcurementPhaseRanges.filter((project) =>
-      project.type === type
+    const procurementPhases = completedProcurementPhaseRanges.filter(
+      (project) => project.type === type
     );
-    const contractPhases = completedContractPhaseRanges.filter((project) =>
-      project.type === type
+    const contractPhases = completedContractPhaseRanges.filter(
+      (project) => project.type === type
     );
 
     // Status counts
@@ -691,7 +692,7 @@ export const getUnitGroupTopDelayedProjects = async (
   const where: Prisma.ProjectWhereInput = {
     status: { not: ProjectStatus.CANCELLED },
     procurement_unit_id: unitId,
-    procurement_type: query.procurementType
+    procurement_type: query.procurementType,
   };
 
   const projects = await prisma.project.findMany({

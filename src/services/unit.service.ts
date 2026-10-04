@@ -445,31 +445,31 @@ export const updateRepresentative = async (
 
     await assertUsersExist(tx, [...new_users, ...remove_users]);
 
-    // ตรวจว่าถ้าจะ add ใหม่ และ unit มี REPRESENTATIVE อยู่แล้ว
-    // (ที่ไม่ใช่คนที่กำลังจะ remove) → throw error
-    if (new_users.length > 0) {
-      const existingRep = await tx.userOrganizationRole.findFirst({
-        where: {
-          unit_id,
-          role: UserRole.REPRESENTATIVE,
-          user_id: { notIn: remove_users },
-        },
-        select: { user_id: true },
-      });
-      if (existingRep) {
-        throw new BadRequestError(
-          'Unit already has a representative. Include them in remove_users to replace.'
-        );
-      }
-    }
-
     // REMOVE
     for (const userId of remove_users) {
-      await removeRoleInternal(tx, {
-        userId,
-        role: UserRole.REPRESENTATIVE,
-        deptId: unit.department.id,
-        unitId: unit_id,
+      const target = await tx.userOrganizationRole.findFirst({
+        where: {
+          user_id: userId,
+          role: UserRole.REPRESENTATIVE,
+          dept_id: unit.department.id,
+          unit_id,
+        },
+      });
+
+      if (!target) {
+        throw new NotFoundError(
+          `Role ${UserRole.REPRESENTATIVE} not found for this user in the specified dept/unit`
+        );
+      }
+
+      await tx.userOrganizationRole.update({
+        where: { id: target.id },
+        data: { role: UserRole.GUEST },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { role_updated_at: nowUtc() },
       });
     }
 
