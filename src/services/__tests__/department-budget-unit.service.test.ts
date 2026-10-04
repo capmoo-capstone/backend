@@ -539,4 +539,58 @@ describe('unit.service', () => {
       },
     });
   });
+
+  it('updateRepresentative allows multiple representatives to be added to a unit', async () => {
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      department: { id: 'dept-1' },
+    });
+    txMock.user.count.mockResolvedValue(2);
+    txMock.userOrganizationRole.findFirst.mockResolvedValue(null);
+    txMock.userOrganizationRole.findMany.mockResolvedValue([]);
+    txMock.userOrganizationRole.create.mockResolvedValue({
+      id: 'role-created',
+      role: UserRole.REPRESENTATIVE,
+    });
+
+    const result = await updateRepresentative({
+      unit_id: 'unit-1',
+      new_users: ['rep-1', 'rep-2'],
+      remove_users: [],
+    });
+
+    expect(result).toEqual({ added: 2, removed: 0 });
+    expect(txMock.userOrganizationRole.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('updateRepresentative changes removed reps to GUEST without clearing unit_id', async () => {
+    txMock.unit.findUnique.mockResolvedValue({
+      id: 'unit-1',
+      department: { id: 'dept-1' },
+    });
+    txMock.user.count.mockResolvedValue(1);
+    txMock.userOrganizationRole.findFirst.mockResolvedValue({
+      id: 'rep-role-1',
+      user_id: 'rep-1',
+      role: UserRole.REPRESENTATIVE,
+      dept_id: 'dept-1',
+      unit_id: 'unit-1',
+    });
+
+    const result = await updateRepresentative({
+      unit_id: 'unit-1',
+      new_users: [],
+      remove_users: ['rep-1'],
+    });
+
+    expect(result).toEqual({ added: 0, removed: 1 });
+    expect(txMock.userOrganizationRole.update).toHaveBeenCalledWith({
+      where: { id: 'rep-role-1' },
+      data: { role: UserRole.GUEST },
+    });
+    expect(txMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'rep-1' },
+      data: { role_updated_at: expect.any(Date) },
+    });
+  });
 });

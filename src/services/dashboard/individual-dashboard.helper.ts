@@ -31,7 +31,18 @@ type CompletedPhase = {
   assigneeIds: string[];
 };
 
-const getWhere = (query: IndividualTodoQuery) => {
+const IN_PROGRESS_STATUSES: ProjectStatus[] = [
+  ProjectStatus.WAITING_ACCEPT,
+  ProjectStatus.REVIEW_TOR,
+  ProjectStatus.IN_PROGRESS,
+];
+
+const COMPLETED_STATUSES: ProjectStatus[] = [
+  ProjectStatus.WAITING_CLOSE,
+  ProjectStatus.CLOSED,
+];
+
+const getWhere = (query: IndividualTodoQuery): Prisma.ProjectWhereInput => {
   const { tab, dateFrom, dateTo, targetUserId } = query;
   const createdDateFilter =
     dateFrom || dateTo
@@ -48,13 +59,7 @@ const getWhere = (query: IndividualTodoQuery) => {
       return {
         ...createdDateFilter,
         status: {
-          in: [
-            ProjectStatus.WAITING_ACCEPT,
-            ProjectStatus.REVIEW_TOR,
-            ProjectStatus.IN_PROGRESS,
-            ProjectStatus.WAITING_CLOSE,
-            ProjectStatus.CLOSED,
-          ],
+          not: ProjectStatus.CANCELLED,
         },
         OR: [
           {
@@ -69,28 +74,17 @@ const getWhere = (query: IndividualTodoQuery) => {
     case 'IN_PROGRESS':
       return {
         ...createdDateFilter,
+        status: {
+          in: IN_PROGRESS_STATUSES,
+        },
         OR: [
           {
             assignee_procurement: { some: { id: targetUserId } },
             current_workflow_type: { not: UnitResponsibleType.CONTRACT },
-            status: {
-              in: [
-                ProjectStatus.WAITING_ACCEPT,
-                ProjectStatus.REVIEW_TOR,
-                ProjectStatus.IN_PROGRESS,
-              ],
-            },
           },
           {
             assignee_contract: { some: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
-            status: {
-              in: [
-                ProjectStatus.WAITING_ACCEPT,
-                ProjectStatus.REVIEW_TOR,
-                ProjectStatus.IN_PROGRESS,
-              ],
-            },
           },
         ],
       };
@@ -102,12 +96,21 @@ const getWhere = (query: IndividualTodoQuery) => {
             assignee_procurement: { some: { id: targetUserId } },
             assignee_contract: { none: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
+            status: {
+              not: ProjectStatus.CANCELLED,
+            },
+          },
+          {
+            assignee_procurement: { some: { id: targetUserId } },
+            status: {
+              in: COMPLETED_STATUSES,
+            },
           },
           {
             assignee_contract: { some: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
             status: {
-              in: [ProjectStatus.WAITING_CLOSE, ProjectStatus.CLOSED],
+              in: COMPLETED_STATUSES,
             },
           },
         ],
@@ -122,9 +125,7 @@ export const getIndividualStaffTodo = async (
   limit: number,
   query: IndividualTodoQuery
 ): Promise<PaginatedProjects> => {
-  let projects: Partial<Project>[] = [],
-    count = 0;
-
+  const where = getWhere(query);
   const select = {
     id: true,
     receive_no: true,
@@ -159,58 +160,20 @@ export const getIndividualStaffTodo = async (
     },
   };
 
-  switch (query.tab) {
-    case 'ALL':
-      [projects, count] = await Promise.all([
-        prisma.project.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          select,
-          where: getWhere(query),
-          orderBy: {
-            receive_no: 'desc',
-          },
-        }),
-        prisma.project.count({
-          where: getWhere(query),
-        }),
-      ]);
-      break;
-    case 'IN_PROGRESS':
-      [projects, count] = await Promise.all([
-        prisma.project.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          select,
-          where: getWhere(query),
-          orderBy: {
-            receive_no: 'desc',
-          },
-        }),
-        prisma.project.count({
-          where: getWhere(query),
-        }),
-      ]);
-      break;
-    case 'COMPLETED':
-      [projects, count] = await Promise.all([
-        prisma.project.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          select,
-          where: getWhere(query),
-          orderBy: {
-            receive_no: 'desc',
-          },
-        }),
-        prisma.project.count({
-          where: getWhere(query),
-        }),
-      ]);
-      break;
-    default:
-      throw new NotFoundError('Invalid tab');
-  }
+  const [projects, count] = await Promise.all([
+    prisma.project.findMany({
+      skip: (page - 1) * limit,
+      take: limit,
+      select,
+      where,
+      orderBy: {
+        receive_no: 'desc',
+      },
+    }),
+    prisma.project.count({
+      where,
+    }),
+  ]);
 
   return {
     total: count,
@@ -280,6 +243,16 @@ export const getIndividualStaffDashboard = async (
   const dateTo = query.dateTo;
   const range = dateFrom && dateTo ? { from: dateFrom, to: dateTo } : undefined;
 
+  const createdDateFilter =
+    dateFrom || dateTo
+      ? {
+          created_at: {
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo ? { lte: dateTo } : {}),
+          },
+        }
+      : {};
+
   const procurementPhaseFilter: Prisma.ProjectWhereInput = {
     procurement_unit_id: unitId,
     assignee_procurement: { some: { id: staffUser.id } },
@@ -287,12 +260,16 @@ export const getIndividualStaffDashboard = async (
 
   const contractPhaseFilter: Prisma.ProjectWhereInput = {
     contract_unit_id: unitId,
+    current_workflow_type: UnitResponsibleType.CONTRACT,
     assignee_contract: { some: { id: staffUser.id } },
   };
 
   const staffProjects = await prisma.project.findMany({
     where: {
-      status: { not: ProjectStatus.CANCELLED },
+      ...createdDateFilter,
+      status: {
+        not: ProjectStatus.CANCELLED,
+      },
       OR: [procurementPhaseFilter, contractPhaseFilter],
     },
     select: {

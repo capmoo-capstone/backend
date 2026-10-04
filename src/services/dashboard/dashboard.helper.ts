@@ -31,41 +31,15 @@ export const daysBetweenBangkokDates = (from: Date, to: Date): number => {
 };
 
 export const getPreviousRange = (current: DateRange): DateRange => {
-  const days = daysBetweenBangkokDates(current.from, current.to);
   const fromParts = toBangkokParts(current.from);
   const toParts = toBangkokParts(current.to);
-
-  if (days <= 1) {
-    return {
-      from: addBangkokDays(current.from, -1),
-      to: addBangkokDays(current.to, -1, true),
-    };
-  }
-
-  if (days <= 31) {
-    const prevFromMonth = fromParts.month === 1 ? 12 : fromParts.month - 1;
-    const prevFromYear =
-      fromParts.month === 1 ? fromParts.year - 1 : fromParts.year;
-    const prevToMonth = toParts.month === 1 ? 12 : toParts.month - 1;
-    const prevToYear = toParts.month === 1 ? toParts.year - 1 : toParts.year;
-    const prevFromDay = Math.min(
-      fromParts.day,
-      daysInBangkokMonth(prevFromYear, prevFromMonth)
-    );
-    const prevToDay = Math.min(
-      toParts.day,
-      daysInBangkokMonth(prevToYear, prevToMonth)
-    );
-
-    return {
-      from: fromBangkokDate(prevFromYear, prevFromMonth, prevFromDay),
-      to: fromBangkokDate(prevToYear, prevToMonth, prevToDay, true),
-    };
-  }
+  const fromDate = Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day);
+  const toDate = Date.UTC(toParts.year, toParts.month - 1, toParts.day);
+  const dayCount = Math.max(1, Math.round((toDate - fromDate) / DAY_MS) + 1);
 
   return {
-    from: fromBangkokDate(fromParts.year - 1, fromParts.month, fromParts.day),
-    to: fromBangkokDate(toParts.year - 1, toParts.month, toParts.day, true),
+    from: addBangkokDays(current.from, -dayCount),
+    to: addBangkokDays(current.to, -dayCount, true),
   };
 };
 
@@ -76,6 +50,20 @@ export const currentFiscalYear = (now = nowUtc()): number => {
   const parts = toBangkokParts(now);
   const gregorianEndYear = parts.month >= 10 ? parts.year + 1 : parts.year;
   return gregorianEndYear + DEFAULT_FISCAL_YEAR_OFFSET;
+};
+
+export const fiscalYearsInRange = (range: DateRange): number[] => {
+  const startYear = currentFiscalYear(range.from);
+  const endYear = currentFiscalYear(range.to);
+  const years: number[] = [];
+  for (
+    let y = Math.min(startYear, endYear);
+    y <= Math.max(startYear, endYear);
+    y++
+  ) {
+    years.push(y);
+  }
+  return years;
 };
 
 export const fiscalYearRange = (fiscalYear: number): DateRange => {

@@ -155,10 +155,10 @@ describe('dashboard.service', () => {
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
     expect(result.range.to.toISOString()).toBe('2026-07-12T16:59:59.999Z');
     expect(result.previousRange.from.toISOString()).toBe(
-      '2024-09-30T17:00:00.000Z'
+      '2024-12-19T17:00:00.000Z'
     );
     expect(result.previousRange.to.toISOString()).toBe(
-      '2025-07-12T16:59:59.999Z'
+      '2025-09-30T16:59:59.999Z'
     );
   });
 
@@ -235,6 +235,32 @@ describe('dashboard.service', () => {
         actual_cost: true,
       },
     });
+  });
+
+  it('queries all fiscal years in multi-year date range for home page plan summary', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: 0, actual_cost: 0 },
+    });
+    prismaMock.budgetPlan.aggregate.mockResolvedValue({
+      _sum: { budget_amount: 300000 },
+    });
+    prismaMock.budgetPlan.count.mockResolvedValue(5);
+
+    const result = (await getProcurementOverview(supplyUser, {
+      page: 'home',
+      dateFrom: new Date('2024-09-30T17:00:00.000Z'), // FY 2568
+      dateTo: new Date('2026-09-30T16:59:59.999Z'),   // FY 2569
+    })) as HomePageResponse;
+
+    expect(result.budgetPlanSummary).toBeDefined();
+    expect(prismaMock.budgetPlan.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          budget_year: { in: [2568, 2569] },
+        }),
+      })
+    );
   });
 
   it('uses external status buckets and unit visibility for procurement overview', async () => {
@@ -794,26 +820,94 @@ describe('dashboard.service', () => {
           where: expect.objectContaining({
             status: { not: ProjectStatus.CANCELLED },
             OR: [
-              expect.objectContaining({
+              {
                 procurement_unit_id: 'unit-proc',
-                procurement_started_at: { lte: expect.any(Date) },
+                created_at: { gte: expect.any(Date), lte: expect.any(Date) },
                 assignee_procurement: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },
-              }),
-              expect.objectContaining({
+              },
+              {
                 contract_unit_id: 'unit-proc',
-                contract_started_at: { lte: expect.any(Date) },
+                created_at: { gte: expect.any(Date), lte: expect.any(Date) },
                 assignee_contract: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },
-              }),
+              },
             ],
           }),
         })
       );
       expect(prismaMock.projectHistory.findMany).not.toHaveBeenCalled();
       expect(prismaMock.projectInstallment.findMany).not.toHaveBeenCalled();
+    });
+
+    it('counts WAITING_ACCEPT and REVIEW_TOR projects with null started_at in inProgressProjectCount', async () => {
+      prismaMock.unit.findUnique.mockResolvedValue({ id: 'unit-proc' });
+      prismaMock.user.findMany.mockResolvedValue([
+        { id: 'staff-1', full_name: 'Ava' },
+      ]);
+      prismaMock.project.findMany.mockResolvedValue([
+        {
+          status: ProjectStatus.WAITING_ACCEPT,
+          created_at: new Date('2026-07-01T17:00:00.000Z'),
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: null,
+          procurement_started_at: null,
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+          assignee_procurement: [{ id: 'staff-1' }],
+          assignee_contract: [],
+        },
+        {
+          status: ProjectStatus.REVIEW_TOR,
+          created_at: new Date('2026-07-01T17:00:00.000Z'),
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: null,
+          procurement_started_at: null,
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+          assignee_procurement: [{ id: 'staff-1' }],
+          assignee_contract: [],
+        },
+        {
+          status: ProjectStatus.IN_PROGRESS,
+          created_at: new Date('2026-07-01T17:00:00.000Z'),
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: null,
+          procurement_started_at: new Date('2026-07-01T17:00:00.000Z'),
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+          assignee_procurement: [{ id: 'staff-1' }],
+          assignee_contract: [],
+        },
+      ]);
+      prismaMock.holiday.findMany.mockResolvedValue([]);
+
+      const result = await DashboardService.getUnitGroupStaffPerformance(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+          page: 1,
+          limit: 10,
+        }
+      );
+
+      expect(result.data).toEqual([
+        {
+          userId: 'staff-1',
+          fullName: 'Ava',
+          projectCount: 3,
+          inProgressProjectCount: 3,
+          completedProjectCount: 0,
+          avgWorkingDurationDays: null,
+        },
+      ]);
     });
 
     it('returns a not-found error when the selected unit does not exist', async () => {
@@ -1000,12 +1094,23 @@ describe('dashboard.service', () => {
         expect(prismaMock.project.findMany).toHaveBeenCalledWith(
           expect.objectContaining({
             where: expect.objectContaining({
-              OR: expect.arrayContaining([
+              OR: [
                 expect.objectContaining({
                   assignee_procurement: { some: { id: 'staff-1' } },
                   assignee_contract: { none: { id: 'staff-1' } },
+                  current_workflow_type: UnitResponsibleType.CONTRACT,
+                  status: { not: ProjectStatus.CANCELLED },
                 }),
-              ]),
+                expect.objectContaining({
+                  assignee_procurement: { some: { id: 'staff-1' } },
+                  status: { in: expect.any(Array) },
+                }),
+                expect.objectContaining({
+                  assignee_contract: { some: { id: 'staff-1' } },
+                  current_workflow_type: UnitResponsibleType.CONTRACT,
+                  status: { in: expect.any(Array) },
+                }),
+              ],
             }),
           })
         );
