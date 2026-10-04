@@ -31,53 +31,15 @@ export const daysBetweenBangkokDates = (from: Date, to: Date): number => {
 };
 
 export const getPreviousRange = (current: DateRange): DateRange => {
-  const days = daysBetweenBangkokDates(current.from, current.to);
   const fromParts = toBangkokParts(current.from);
   const toParts = toBangkokParts(current.to);
-
-  if (days <= 1) {
-    return {
-      from: addBangkokDays(current.from, -1),
-      to: addBangkokDays(current.to, -1, true),
-    };
-  }
-
-  if (days <= 31) {
-    const prevFromMonth = fromParts.month === 1 ? 12 : fromParts.month - 1;
-    const prevFromYear =
-      fromParts.month === 1 ? fromParts.year - 1 : fromParts.year;
-    const prevToMonth = toParts.month === 1 ? 12 : toParts.month - 1;
-    const prevToYear = toParts.month === 1 ? toParts.year - 1 : toParts.year;
-    const prevFromDay = Math.min(
-      fromParts.day,
-      daysInBangkokMonth(prevFromYear, prevFromMonth)
-    );
-    const prevToDay = Math.min(
-      toParts.day,
-      daysInBangkokMonth(prevToYear, prevToMonth)
-    );
-
-    return {
-      from: fromBangkokDate(prevFromYear, prevFromMonth, prevFromDay),
-      to: fromBangkokDate(prevToYear, prevToMonth, prevToDay, true),
-    };
-  }
-
-  const shiftYears = days > 365 ? Math.max(1, Math.ceil(days / 365)) : 1;
-  const prevFromYear = fromParts.year - shiftYears;
-  const prevToYear = toParts.year - shiftYears;
-  const prevFromDay = Math.min(
-    fromParts.day,
-    daysInBangkokMonth(prevFromYear, fromParts.month)
-  );
-  const prevToDay = Math.min(
-    toParts.day,
-    daysInBangkokMonth(prevToYear, toParts.month)
-  );
+  const fromDate = Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day);
+  const toDate = Date.UTC(toParts.year, toParts.month - 1, toParts.day);
+  const dayCount = Math.max(1, Math.round((toDate - fromDate) / DAY_MS) + 1);
 
   return {
-    from: fromBangkokDate(prevFromYear, fromParts.month, prevFromDay),
-    to: fromBangkokDate(prevToYear, toParts.month, prevToDay, true),
+    from: addBangkokDays(current.from, -dayCount),
+    to: addBangkokDays(current.to, -dayCount, true),
   };
 };
 

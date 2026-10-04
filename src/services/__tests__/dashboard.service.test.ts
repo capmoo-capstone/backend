@@ -155,10 +155,10 @@ describe('dashboard.service', () => {
     expect(result.range.from.toISOString()).toBe('2025-09-30T17:00:00.000Z');
     expect(result.range.to.toISOString()).toBe('2026-07-12T16:59:59.999Z');
     expect(result.previousRange.from.toISOString()).toBe(
-      '2024-09-30T17:00:00.000Z'
+      '2024-12-19T17:00:00.000Z'
     );
     expect(result.previousRange.to.toISOString()).toBe(
-      '2025-07-12T16:59:59.999Z'
+      '2025-09-30T16:59:59.999Z'
     );
   });
 
