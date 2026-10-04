@@ -1099,7 +1099,7 @@ describe('dashboard.service', () => {
                   assignee_procurement: { some: { id: 'staff-1' } },
                   assignee_contract: { none: { id: 'staff-1' } },
                   current_workflow_type: UnitResponsibleType.CONTRACT,
-                  status: { in: expect.any(Array) },
+                  status: { not: ProjectStatus.CANCELLED },
                 }),
                 expect.objectContaining({
                   assignee_procurement: { some: { id: 'staff-1' } },

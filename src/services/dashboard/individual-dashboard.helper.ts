@@ -31,14 +31,6 @@ type CompletedPhase = {
   assigneeIds: string[];
 };
 
-const VALID_TODO_STATUSES: ProjectStatus[] = [
-  ProjectStatus.WAITING_ACCEPT,
-  ProjectStatus.REVIEW_TOR,
-  ProjectStatus.IN_PROGRESS,
-  ProjectStatus.WAITING_CLOSE,
-  ProjectStatus.CLOSED,
-];
-
 const IN_PROGRESS_STATUSES: ProjectStatus[] = [
   ProjectStatus.WAITING_ACCEPT,
   ProjectStatus.REVIEW_TOR,
@@ -67,7 +59,7 @@ const getWhere = (query: IndividualTodoQuery): Prisma.ProjectWhereInput => {
       return {
         ...createdDateFilter,
         status: {
-          in: VALID_TODO_STATUSES,
+          not: ProjectStatus.CANCELLED,
         },
         OR: [
           {
@@ -105,7 +97,7 @@ const getWhere = (query: IndividualTodoQuery): Prisma.ProjectWhereInput => {
             assignee_contract: { none: { id: targetUserId } },
             current_workflow_type: UnitResponsibleType.CONTRACT,
             status: {
-              in: VALID_TODO_STATUSES,
+              not: ProjectStatus.CANCELLED,
             },
           },
           {
@@ -316,7 +308,7 @@ export const getIndividualStaffDashboard = async (
     where: {
       ...createdDateFilter,
       status: {
-        in: VALID_TODO_STATUSES,
+        not: ProjectStatus.CANCELLED,
       },
       OR: [procurementPhaseFilter, contractPhaseFilter],
     },
