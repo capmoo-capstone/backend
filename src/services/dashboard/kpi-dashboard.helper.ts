@@ -1,7 +1,6 @@
 import {
   Prisma,
   ProcurementType,
-  ProjectActionType,
   ProjectStatus,
   SubmissionStatus,
   UnitResponsibleType,
@@ -59,25 +58,6 @@ type CompletedDashboardPhase = {
   expectedApprovalDate: Date | null;
 };
 
-const isCompletedInRange = (
-  startedAt: Date | null,
-  completedAt: Date | null,
-  range: { from: Date; to: Date }
-): boolean =>
-  startedAt !== null &&
-  completedAt !== null &&
-  completedAt >= range.from &&
-  completedAt <= range.to;
-
-const isInProgressInRange = (
-  startedAt: Date | null,
-  completedAt: Date | null,
-  range: { from: Date; to: Date }
-): boolean =>
-  startedAt !== null &&
-  startedAt <= range.to &&
-  (completedAt === null || completedAt > range.to);
-
 const isPhaseCompleted = (
   startedAt: Date | null | undefined,
   completedAt: Date | null | undefined
@@ -118,12 +98,12 @@ export const getUnitGroupStaffPerformance = async (
   const projectPhaseFilters: Prisma.ProjectWhereInput[] = [
     {
       procurement_unit_id: unitId,
-      created_at: { lte: range.to },
+      created_at: { gte: range.from, lte: range.to },
       assignee_procurement: { some: { id: { in: staffIds } } },
     },
     {
       contract_unit_id: unitId,
-      created_at: { lte: range.to },
+      created_at: { gte: range.from, lte: range.to },
       assignee_contract: { some: { id: { in: staffIds } } },
     },
   ];
@@ -167,14 +147,9 @@ export const getUnitGroupStaffPerformance = async (
       assignees: Array<{ id: string }>
     ) => {
       const assigneeIds = assignees.map((assignee) => assignee.id);
-      if (isCompletedInRange(startedAt, completedAt, range)) {
+      if (isPhaseCompleted(startedAt, completedAt) && completedAt! <= range.to) {
         completedPhases.push({ startedAt, completedAt, assigneeIds });
-      } else if (
-        isInProgressInRange(startedAt, completedAt, range) ||
-        ((project.status === ProjectStatus.WAITING_ACCEPT ||
-          project.status === ProjectStatus.REVIEW_TOR) &&
-          project.created_at <= range.to)
-      ) {
+      } else {
         inProgressPhases.push({ startedAt, completedAt, assigneeIds });
       }
     };

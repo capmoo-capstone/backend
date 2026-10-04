@@ -822,14 +822,14 @@ describe('dashboard.service', () => {
             OR: [
               {
                 procurement_unit_id: 'unit-proc',
-                created_at: { lte: expect.any(Date) },
+                created_at: { gte: expect.any(Date), lte: expect.any(Date) },
                 assignee_procurement: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },
               },
               {
                 contract_unit_id: 'unit-proc',
-                created_at: { lte: expect.any(Date) },
+                created_at: { gte: expect.any(Date), lte: expect.any(Date) },
                 assignee_contract: {
                   some: { id: { in: ['staff-1', 'staff-2', 'staff-3'] } },
                 },

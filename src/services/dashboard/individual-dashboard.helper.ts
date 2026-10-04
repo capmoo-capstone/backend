@@ -125,9 +125,7 @@ export const getIndividualStaffTodo = async (
   limit: number,
   query: IndividualTodoQuery
 ): Promise<PaginatedProjects> => {
-  let projects: Partial<Project>[] = [],
-    count = 0;
-
+  const where = getWhere(query);
   const select = {
     id: true,
     receive_no: true,
@@ -162,58 +160,20 @@ export const getIndividualStaffTodo = async (
     },
   };
 
-  switch (query.tab) {
-    case 'ALL':
-      [projects, count] = await Promise.all([
-        prisma.project.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          select,
-          where: getWhere(query),
-          orderBy: {
-            receive_no: 'desc',
-          },
-        }),
-        prisma.project.count({
-          where: getWhere(query),
-        }),
-      ]);
-      break;
-    case 'IN_PROGRESS':
-      [projects, count] = await Promise.all([
-        prisma.project.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          select,
-          where: getWhere(query),
-          orderBy: {
-            receive_no: 'desc',
-          },
-        }),
-        prisma.project.count({
-          where: getWhere(query),
-        }),
-      ]);
-      break;
-    case 'COMPLETED':
-      [projects, count] = await Promise.all([
-        prisma.project.findMany({
-          skip: (page - 1) * limit,
-          take: limit,
-          select,
-          where: getWhere(query),
-          orderBy: {
-            receive_no: 'desc',
-          },
-        }),
-        prisma.project.count({
-          where: getWhere(query),
-        }),
-      ]);
-      break;
-    default:
-      throw new NotFoundError('Invalid tab');
-  }
+  const [projects, count] = await Promise.all([
+    prisma.project.findMany({
+      skip: (page - 1) * limit,
+      take: limit,
+      select,
+      where,
+      orderBy: {
+        receive_no: 'desc',
+      },
+    }),
+    prisma.project.count({
+      where,
+    }),
+  ]);
 
   return {
     total: count,
