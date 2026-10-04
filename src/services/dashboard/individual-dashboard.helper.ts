@@ -291,6 +291,16 @@ export const getIndividualStaffDashboard = async (
   const dateTo = query.dateTo;
   const range = dateFrom && dateTo ? { from: dateFrom, to: dateTo } : undefined;
 
+  const createdDateFilter =
+    dateFrom || dateTo
+      ? {
+          created_at: {
+            ...(dateFrom ? { gte: dateFrom } : {}),
+            ...(dateTo ? { lte: dateTo } : {}),
+          },
+        }
+      : {};
+
   const procurementPhaseFilter: Prisma.ProjectWhereInput = {
     procurement_unit_id: unitId,
     assignee_procurement: { some: { id: staffUser.id } },
@@ -298,12 +308,16 @@ export const getIndividualStaffDashboard = async (
 
   const contractPhaseFilter: Prisma.ProjectWhereInput = {
     contract_unit_id: unitId,
+    current_workflow_type: UnitResponsibleType.CONTRACT,
     assignee_contract: { some: { id: staffUser.id } },
   };
 
   const staffProjects = await prisma.project.findMany({
     where: {
-      status: { not: ProjectStatus.CANCELLED },
+      ...createdDateFilter,
+      status: {
+        in: VALID_TODO_STATUSES,
+      },
       OR: [procurementPhaseFilter, contractPhaseFilter],
     },
     select: {
