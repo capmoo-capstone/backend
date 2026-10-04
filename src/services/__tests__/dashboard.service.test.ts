@@ -1068,12 +1068,23 @@ describe('dashboard.service', () => {
         expect(prismaMock.project.findMany).toHaveBeenCalledWith(
           expect.objectContaining({
             where: expect.objectContaining({
-              OR: expect.arrayContaining([
+              OR: [
                 expect.objectContaining({
                   assignee_procurement: { some: { id: 'staff-1' } },
                   assignee_contract: { none: { id: 'staff-1' } },
+                  current_workflow_type: UnitResponsibleType.CONTRACT,
+                  status: { in: expect.any(Array) },
                 }),
-              ]),
+                expect.objectContaining({
+                  assignee_procurement: { some: { id: 'staff-1' } },
+                  status: { in: expect.any(Array) },
+                }),
+                expect.objectContaining({
+                  assignee_contract: { some: { id: 'staff-1' } },
+                  current_workflow_type: UnitResponsibleType.CONTRACT,
+                  status: { in: expect.any(Array) },
+                }),
+              ],
             }),
           })
         );
