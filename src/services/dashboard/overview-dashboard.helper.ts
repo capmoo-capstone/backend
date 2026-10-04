@@ -35,7 +35,7 @@ import {
   toComparison,
   getProcurementTypeDonut,
   getPreviousRange,
-  currentFiscalYear,
+  fiscalYearsInRange,
 } from './dashboard.helper';
 
 export const getPeriodicRanges = (
@@ -263,11 +263,12 @@ const getTimelineLine = async (
 
 const buildBudgetPlanWhere = (
   user: AuthPayload,
-  budgetYear: number,
+  budgetYears: number[],
   deptId?: string
 ): Prisma.BudgetPlanWhereInput => {
   const where: Prisma.BudgetPlanWhereInput = {
-    budget_year: budgetYear,
+    budget_year:
+      budgetYears.length === 1 ? budgetYears[0] : { in: budgetYears },
   };
 
   if (deptId) {
@@ -297,8 +298,8 @@ const getPlanSummary = async (
   range: DateRange,
   deptId?: string
 ): Promise<DashboardPlanSummary> => {
-  const budgetYear = currentFiscalYear(range.from);
-  const baseBudgetWhere = buildBudgetPlanWhere(user, budgetYear, deptId);
+  const budgetYears = fiscalYearsInRange(range);
+  const baseBudgetWhere = buildBudgetPlanWhere(user, budgetYears, deptId);
 
   const [
     totalBudgetAggr,

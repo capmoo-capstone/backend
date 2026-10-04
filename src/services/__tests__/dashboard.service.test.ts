@@ -237,6 +237,32 @@ describe('dashboard.service', () => {
     });
   });
 
+  it('queries all fiscal years in multi-year date range for home page plan summary', async () => {
+    prismaMock.project.count.mockResolvedValue(0);
+    prismaMock.project.aggregate.mockResolvedValue({
+      _sum: { budget: 0, actual_cost: 0 },
+    });
+    prismaMock.budgetPlan.aggregate.mockResolvedValue({
+      _sum: { budget_amount: 300000 },
+    });
+    prismaMock.budgetPlan.count.mockResolvedValue(5);
+
+    const result = (await getProcurementOverview(supplyUser, {
+      page: 'home',
+      dateFrom: new Date('2024-09-30T17:00:00.000Z'), // FY 2568
+      dateTo: new Date('2026-09-30T16:59:59.999Z'),   // FY 2569
+    })) as HomePageResponse;
+
+    expect(result.budgetPlanSummary).toBeDefined();
+    expect(prismaMock.budgetPlan.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          budget_year: { in: [2568, 2569] },
+        }),
+      })
+    );
+  });
+
   it('uses external status buckets and unit visibility for procurement overview', async () => {
     prismaMock.project.count.mockResolvedValue(0);
     prismaMock.projectHistory.count.mockResolvedValue(0);
