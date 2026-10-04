@@ -23,8 +23,8 @@ export const UpdateUnitUsersSchema = z.object({
 
 export const UpdateRepresentativeSchema = z.object({
   unit_id: z.string(),
-  new_users: z.array(z.uuid()).max(1).default([]),
-  remove_users: z.array(z.uuid()).max(1).default([]),
+  new_users: z.array(z.uuid()).default([]),
+  remove_users: z.array(z.uuid()).default([]),
 });
 
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
