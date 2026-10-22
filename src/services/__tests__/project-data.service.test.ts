@@ -537,6 +537,20 @@ describe('project-data.service', () => {
     expect(txMock.project.findUnique).not.toHaveBeenCalled();
   });
 
+  it('rejects updates when project is in CANCELLED status', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.CANCELLED,
+    });
+
+    await expect(
+      updateProjectData(user, {
+        id: 'project-1',
+        updateData: { title: 'New title' },
+      })
+    ).rejects.toThrow(new BadRequestError('Cannot update a cancelled project'));
+  });
+
   it('generateContractNumber creates the next contract number under an advisory lock', async () => {
     txMock.projectContractNumber.count.mockResolvedValue(2);
     txMock.projectContractNumber.create.mockResolvedValue({

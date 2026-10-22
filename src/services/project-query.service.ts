@@ -995,6 +995,7 @@ export const getSummaryCards = async (
       }),
       prisma.project.count({
         where: wrapWhere({
+          status: { notIn: [ProjectStatus.CANCELLED, ProjectStatus.CLOSED] },
           is_urgent: {
             in: [
               UrgentType.URGENT,
@@ -1087,6 +1088,7 @@ export const getSummaryCards = async (
       }),
       prisma.project.count({
         where: wrapWhere({
+          status: { notIn: [ProjectStatus.CANCELLED, ProjectStatus.CLOSED] },
           is_urgent: {
             in: [
               UrgentType.URGENT,

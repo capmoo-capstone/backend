@@ -196,6 +196,11 @@ describe('submission.service', () => {
         { workflow_type: 'CONTRACT' },
         {
           project: {
+            status: { not: 'CANCELLED' },
+          },
+        },
+        {
+          project: {
             receive_no: { contains: '2569/00001', mode: 'insensitive' },
           },
         },
@@ -406,6 +411,44 @@ describe('submission.service', () => {
       createStaffSubmissionsProject(user, staffSubmissionDto())
     ).rejects.toBeInstanceOf(BadRequestError);
     expect(txMock.projectSubmission.create).not.toHaveBeenCalled();
+  });
+
+  it('createStaffSubmissionsProject rejects submissions for cancelled projects', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.CANCELLED,
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+
+    await expect(
+      createStaffSubmissionsProject(user, staffSubmissionDto())
+    ).rejects.toThrow(
+      new BadRequestError('Cannot submit workflow step for a cancelled project')
+    );
+    expect(txMock.projectSubmission.create).not.toHaveBeenCalled();
+  });
+
+  it('createVendorSubmissionsProject rejects submissions for cancelled projects', async () => {
+    txMock.project.findFirstOrThrow.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.CANCELLED,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      installment_rounds: 2,
+    });
+
+    await expect(
+      createVendorSubmissionsProject({
+        po_no: 'PO-123',
+        workflow_type: UnitResponsibleType.CONTRACT,
+        step_order: 1,
+        installment_no: 1,
+      } as any)
+    ).rejects.toThrow(
+      new BadRequestError(
+        'Cannot submit vendor submission for a cancelled project'
+      )
+    );
   });
 
   it('createVendorSubmissionsProject resolves project by PO, locks the round, and syncs phases', async () => {

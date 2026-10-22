@@ -58,11 +58,24 @@ describe('project-finance.service', () => {
       expect(txMock.project.findUnique).toHaveBeenCalledWith({
         where: { id: dto.id },
         select: {
+          status: true,
           installment_rounds: true,
           current_workflow_type: true,
           contract_completed_at: true,
         },
       });
+    });
+
+    it('should throw BadRequestError if project is CANCELLED', async () => {
+      txMock.project.findUnique.mockResolvedValue({
+        status: ProjectStatus.CANCELLED,
+        installment_rounds: 3,
+        current_workflow_type: UnitResponsibleType.CONTRACT,
+      });
+
+      await expect(createFinanceExportRequest(mockUser, dto)).rejects.toThrow(
+        new BadRequestError('Cannot create installment for a cancelled project')
+      );
     });
 
     it('should throw BadRequestError if project workflow is not CONTRACT', async () => {
@@ -406,14 +419,30 @@ describe('project-finance.service', () => {
       });
 
       expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith({
-        where: {},
+        where: {
+          AND: [
+            {
+              project: {
+                status: { not: ProjectStatus.CANCELLED },
+              },
+            },
+          ],
+        },
         orderBy: { created_at: 'desc' },
         skip: 2,
         take: 2,
         select: expect.any(Object),
       });
       expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
-        where: {},
+        where: {
+          AND: [
+            {
+              project: {
+                status: { not: ProjectStatus.CANCELLED },
+              },
+            },
+          ],
+        },
       });
     });
 
@@ -428,6 +457,11 @@ describe('project-finance.service', () => {
 
       const expectedWhere = {
         AND: [
+          {
+            project: {
+              status: { not: ProjectStatus.CANCELLED },
+            },
+          },
           {
             project: {
               title: {
@@ -462,6 +496,11 @@ describe('project-finance.service', () => {
 
       const expectedWhere = {
         AND: [
+          {
+            project: {
+              status: { not: ProjectStatus.CANCELLED },
+            },
+          },
           {
             OR: [
               {
@@ -522,6 +561,11 @@ describe('project-finance.service', () => {
         AND: [
           {
             project: {
+              status: { not: ProjectStatus.CANCELLED },
+            },
+          },
+          {
+            project: {
               OR: [
                 {
                   assignee_procurement: {
@@ -564,11 +608,27 @@ describe('project-finance.service', () => {
 
       expect(prismaMock.projectInstallment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: {},
+          where: {
+            AND: [
+              {
+                project: {
+                  status: { not: ProjectStatus.CANCELLED },
+                },
+              },
+            ],
+          },
         })
       );
       expect(prismaMock.projectInstallment.count).toHaveBeenCalledWith({
-        where: {},
+        where: {
+          AND: [
+            {
+              project: {
+                status: { not: ProjectStatus.CANCELLED },
+              },
+            },
+          ],
+        },
       });
     });
   });
@@ -595,6 +655,9 @@ describe('project-finance.service', () => {
               ProjectInstallmentStatus.WAITING_EXPORT,
               ProjectInstallmentStatus.REQUEST_EDIT,
             ],
+          },
+          project: {
+            status: { not: ProjectStatus.CANCELLED },
           },
         },
       });
@@ -639,6 +702,9 @@ describe('project-finance.service', () => {
               ProjectInstallmentStatus.WAITING_EXPORT,
               ProjectInstallmentStatus.REQUEST_EDIT,
             ],
+          },
+          project: {
+            status: { not: ProjectStatus.CANCELLED },
           },
         },
         data: {

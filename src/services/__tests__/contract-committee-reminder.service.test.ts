@@ -1,4 +1,8 @@
-﻿import { NotificationChannel, NotificationDeliveryStatus } from '@prisma/client';
+import {
+  NotificationChannel,
+  NotificationDeliveryStatus,
+  ProjectStatus,
+} from '@prisma/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { notificationEmailTransport } from '../notification/notification-email.service';
@@ -131,6 +135,9 @@ describe('contract-committee-reminder.service', () => {
           step_order: 1,
           submission_type: 'STAFF',
           status: 'COMPLETED',
+          project: {
+            status: { not: ProjectStatus.CANCELLED },
+          },
         }),
       })
     );

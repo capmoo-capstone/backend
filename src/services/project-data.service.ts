@@ -311,6 +311,10 @@ export const updateProjectData = async (
       throw new NotFoundError('Project not found');
     }
 
+    if (current.status === ProjectStatus.CANCELLED) {
+      throw new BadRequestError('Cannot update a cancelled project');
+    }
+
     if (data.updateData.installment_rounds !== undefined) {
       await assertInstallmentRoundsCanBeUpdated(tx, current.id);
     }
@@ -338,8 +342,7 @@ export const updateProjectData = async (
       if (
         current.current_workflow_type === UnitResponsibleType.CONTRACT ||
         Boolean(current.procurement_completed_at) ||
-        current.status === ProjectStatus.CLOSED ||
-        current.status === ProjectStatus.CANCELLED
+        current.status === ProjectStatus.CLOSED
       ) {
         throw new BadRequestError(
           'Procurement type can only be updated when project is in procurement phase'
