@@ -4,6 +4,7 @@ const { clients, values } = vi.hoisted(() => ({ clients: [] as Array<any>, value
 
 vi.mock('ioredis', () => ({
   default: class FakeRedis {
+    connect = vi.fn(async () => {});
     set = vi.fn(async (key: string, value: string) => {
       if (values.has(key)) return null;
       values.set(key, value);
@@ -43,6 +44,7 @@ describe('cron Redis lock', () => {
 
     const result = await runWithCronLock('process-deadlines', async () => 'queued');
     expect(result).toEqual({ acquired: true, value: 'queued' });
+    expect(clients[0].connect).toHaveBeenCalled();
     expect(clients[0].set).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(String),
