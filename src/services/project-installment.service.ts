@@ -80,6 +80,7 @@ export const createInstallment = async (
         id: data.id,
       },
       select: {
+        status: true,
         installment_rounds: true,
         current_workflow_type: true,
         contract_completed_at: true,
@@ -88,6 +89,12 @@ export const createInstallment = async (
 
     if (!installmentData) {
       throw new NotFoundError('Project not found');
+    }
+
+    if (installmentData.status === ProjectStatus.CANCELLED) {
+      throw new BadRequestError(
+        'Cannot create installment for a cancelled project'
+      );
     }
 
     if (
@@ -178,7 +185,13 @@ export const getInstallments = async (
     where.project = projectScope;
   }
 
-  const conditions: Prisma.ProjectInstallmentWhereInput[] = [];
+  const conditions: Prisma.ProjectInstallmentWhereInput[] = [
+    {
+      project: {
+        status: { not: ProjectStatus.CANCELLED },
+      },
+    },
+  ];
 
   if (!isManagementOrFinanceRole(user)) {
     conditions.push({
@@ -379,6 +392,9 @@ export const exportInstallments = async (
             ProjectInstallmentStatus.REQUEST_EDIT,
           ],
         },
+        project: {
+          status: { not: ProjectStatus.CANCELLED },
+        },
       },
     });
     if (countExportRequests !== data.id.length) {
@@ -396,6 +412,9 @@ export const exportInstallments = async (
             ProjectInstallmentStatus.WAITING_EXPORT,
             ProjectInstallmentStatus.REQUEST_EDIT,
           ],
+        },
+        project: {
+          status: { not: ProjectStatus.CANCELLED },
         },
       },
       data: {
@@ -455,10 +474,19 @@ export const requestEditInstallment = async (
   const transactionResult = await prisma.$transaction(async (tx) => {
     const exportRecord = await tx.projectInstallment.findUnique({
       where: { id: exportId },
+      include: {
+        project: {
+          select: { status: true },
+        },
+      },
     });
 
     if (!exportRecord) {
       throw new NotFoundError('Installment export request not found');
+    }
+
+    if (exportRecord.project?.status === ProjectStatus.CANCELLED) {
+      throw new BadRequestError('Cannot request edit for a cancelled project');
     }
 
     if (exportRecord.status !== ProjectInstallmentStatus.EXPORTED) {

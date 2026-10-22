@@ -478,6 +478,37 @@ describe('project-data.service', () => {
     }
   });
 
+  it('excludes cancelled projects from reference number duplicate validation when creating a project', async () => {
+    txMock.project.findMany.mockResolvedValue([]);
+    txMock.budgetPlan.findMany.mockResolvedValue([{ id: 'budget-1' }]);
+    txMock.project.count.mockResolvedValue(0);
+    mockResponsibleUnit();
+    txMock.project.create.mockResolvedValue({
+      id: 'project-new',
+      status: ProjectStatus.UNASSIGNED,
+      receive_no: '2569/00001',
+      responsible_unit_id: 'unit-proc-1',
+    });
+
+    const result = await createProject(
+      user,
+      createProjectDto({ pr_no: 'CANCELLED-PR', less_no: 'CANCELLED-LESS' })
+    );
+
+    expect(result.id).toBe('project-new');
+    expect(txMock.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { not: ProjectStatus.CANCELLED },
+          OR: [
+            { pr_no: { in: ['CANCELLED-PR'] } },
+            { less_no: { in: ['CANCELLED-LESS'] } },
+          ],
+        }),
+      })
+    );
+  });
+
   it('rejects missing budget plans before creating the project', async () => {
     txMock.project.findFirst.mockResolvedValue(null);
     txMock.budgetPlan.findMany.mockResolvedValue([]);
@@ -504,6 +535,20 @@ describe('project-data.service', () => {
       updateProjectData(user, { id: 'project-1', updateData: {} } as any)
     ).rejects.toBeInstanceOf(BadRequestError);
     expect(txMock.project.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects updates when project is in CANCELLED status', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.CANCELLED,
+    });
+
+    await expect(
+      updateProjectData(user, {
+        id: 'project-1',
+        updateData: { title: 'New title' },
+      })
+    ).rejects.toThrow(new BadRequestError('Cannot update a cancelled project'));
   });
 
   it('generateContractNumber creates the next contract number under an advisory lock', async () => {

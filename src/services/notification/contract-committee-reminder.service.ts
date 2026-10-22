@@ -2,6 +2,7 @@ import {
   NotificationChannel,
   NotificationDeliveryStatus,
   Prisma,
+  ProjectStatus,
   SubmissionStatus,
   SubmissionType,
   UnitResponsibleType,
@@ -269,6 +270,9 @@ export const sendContractCommitteeReminders = async (options?: {
       step_order: 1,
       submission_type: SubmissionType.STAFF,
       status: SubmissionStatus.COMPLETED,
+      project: {
+        status: { not: ProjectStatus.CANCELLED },
+      },
     },
     orderBy: [
       { project_id: 'asc' },
