@@ -478,6 +478,37 @@ describe('project-data.service', () => {
     }
   });
 
+  it('excludes cancelled projects from reference number duplicate validation when creating a project', async () => {
+    txMock.project.findMany.mockResolvedValue([]);
+    txMock.budgetPlan.findMany.mockResolvedValue([{ id: 'budget-1' }]);
+    txMock.project.count.mockResolvedValue(0);
+    mockResponsibleUnit();
+    txMock.project.create.mockResolvedValue({
+      id: 'project-new',
+      status: ProjectStatus.UNASSIGNED,
+      receive_no: '2569/00001',
+      responsible_unit_id: 'unit-proc-1',
+    });
+
+    const result = await createProject(
+      user,
+      createProjectDto({ pr_no: 'CANCELLED-PR', less_no: 'CANCELLED-LESS' })
+    );
+
+    expect(result.id).toBe('project-new');
+    expect(txMock.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { not: ProjectStatus.CANCELLED },
+          OR: [
+            { pr_no: { in: ['CANCELLED-PR'] } },
+            { less_no: { in: ['CANCELLED-LESS'] } },
+          ],
+        }),
+      })
+    );
+  });
+
   it('rejects missing budget plans before creating the project', async () => {
     txMock.project.findFirst.mockResolvedValue(null);
     txMock.budgetPlan.findMany.mockResolvedValue([]);

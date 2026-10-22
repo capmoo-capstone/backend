@@ -102,23 +102,24 @@ export const checkRefNumberDuplication = async (
     errors.push({ code: 'DUPLICATE_PO_NO', id: dup });
   }
 
-  const whereClause: any = {
+  const whereClause: Prisma.ProjectWhereInput = {
+    status: { not: ProjectStatus.CANCELLED },
     OR: [],
   };
   if (pr_no.length > 0) {
-    whereClause.OR.push({ pr_no: { in: pr_no } });
+    whereClause.OR!.push({ pr_no: { in: pr_no } });
   }
   if (less_no.length > 0) {
-    whereClause.OR.push({ less_no: { in: less_no } });
+    whereClause.OR!.push({ less_no: { in: less_no } });
   }
   if (po_no.length > 0) {
-    whereClause.OR.push({ po_no: { in: po_no } });
+    whereClause.OR!.push({ po_no: { in: po_no } });
   }
   if (excludeProjectId) {
     whereClause.NOT = { id: excludeProjectId };
   }
 
-  if (whereClause.OR.length > 0) {
+  if (whereClause.OR && whereClause.OR.length > 0) {
     const existingList =
       (await tx.project.findMany({
         where: whereClause,
