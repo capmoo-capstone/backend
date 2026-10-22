@@ -332,6 +332,11 @@ export const getVendorSubmissions = async (
   const and: Prisma.ProjectSubmissionWhereInput[] = [
     { submission_type: SubmissionType.VENDOR },
     { workflow_type: UnitResponsibleType.CONTRACT },
+    {
+      project: {
+        status: { not: ProjectStatus.CANCELLED },
+      },
+    },
   ];
   const projectScope = projectReadWhere(user);
   if (Object.keys(projectScope).length > 0) {
@@ -468,6 +473,7 @@ export const createStaffSubmissionsProject = async (
       where: { id: data.project_id },
       select: {
         id: true,
+        status: true,
         current_workflow_type: true,
         actual_cost: true,
         pr_no: true,
@@ -483,6 +489,11 @@ export const createStaffSubmissionsProject = async (
     });
     if (!project) {
       throw new NotFoundError('Project not found');
+    }
+    if (project.status === ProjectStatus.CANCELLED) {
+      throw new BadRequestError(
+        'Cannot submit workflow step for a cancelled project'
+      );
     }
     if (project.current_workflow_type !== data.workflow_type) {
       throw new BadRequestError(
@@ -632,6 +643,7 @@ export const createVendorSubmissionsProject = async (
         where: { po_no: data.po_no },
         select: {
           id: true,
+          status: true,
           current_workflow_type: true,
           installment_rounds: true,
         },
@@ -639,6 +651,12 @@ export const createVendorSubmissionsProject = async (
       .catch(() => {
         throw new NotFoundError('Project not found');
       });
+
+    if (project.status === ProjectStatus.CANCELLED) {
+      throw new BadRequestError(
+        'Cannot submit vendor submission for a cancelled project'
+      );
+    }
 
     if (project.current_workflow_type !== data.workflow_type) {
       throw new BadRequestError(

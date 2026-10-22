@@ -872,6 +872,7 @@ export const getContractUnitSummary = async (
     where: {
       contract_unit_id: unitId,
       created_at: { gte: range.from, lte: range.to },
+      status: { not: ProjectStatus.CANCELLED },
     },
     select: {
       contract_started_at: true,

@@ -227,9 +227,12 @@ describe('dashboard.service', () => {
       totalActualCost: 120000.25,
     });
     expect(prismaMock.project.aggregate).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        created_at: expect.any(Object),
-      }),
+      where: {
+        AND: [
+          { created_at: expect.any(Object) },
+          { status: { not: 'CANCELLED' } },
+        ],
+      },
       _sum: {
         budget: true,
         actual_cost: true,

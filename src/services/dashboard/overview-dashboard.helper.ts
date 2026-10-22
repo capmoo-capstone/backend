@@ -351,7 +351,9 @@ const getCostSummary = async (
   range: DateRange
 ): Promise<DashboardCostSummary> => {
   const aggr = await prisma.project.aggregate({
-    where: projectRangeWhere(visibilityWhere, range),
+    where: andWhere(projectRangeWhere(visibilityWhere, range), {
+      status: { not: ProjectStatus.CANCELLED },
+    }),
     _sum: {
       budget: true,
       actual_cost: true,

@@ -5,6 +5,8 @@ import { runtimeConfig } from '../../config/runtime';
 import { ServiceUnavailableError } from '../../utils/errors';
 
 type RedisLockClient = {
+  status?: string;
+  connect?(): Promise<void>;
   set(...args: Array<string | number>): Promise<'OK' | null>;
   eval(script: string, keyCount: number, ...args: string[]): Promise<number>;
   disconnect(): void;
@@ -87,12 +89,23 @@ const reserve = async <T>(
   let acquired = false;
 
   try {
+    if (
+      typeof client.connect === 'function' &&
+      (client.status === undefined || client.status === 'wait')
+    ) {
+      await withTimeout(client.connect());
+    }
+
     acquired =
       (await withTimeout(client.set(key, owner, 'PX', ttlMs, 'NX'))) === 'OK';
     if (!acquired) return { acquired: false as const };
 
     return { acquired: true as const, value: await task() };
-  } catch {
+  } catch (error) {
+    console.error('Cron lock execution failed', {
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    });
     // SET may succeed after the local timeout; owner-scoped release is safe.
     await withTimeout(client.eval(RELEASE_SCRIPT, 1, key, owner)).catch(
       () => undefined
