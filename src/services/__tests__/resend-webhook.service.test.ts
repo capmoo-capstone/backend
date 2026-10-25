@@ -1,14 +1,21 @@
 import { NotificationDeliveryStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { prismaMock, txMock } from '../../test/prisma-mock';
+import { txMock } from '../../test/prisma-mock';
 import {
   processResendWebhookEvent,
   ResendWebhookEvent,
 } from '../resend-webhook.service';
-import { rejectCompletedSubmissionForEmailFailure } from '../submission-email-failure.service';
+import { publishPersistedNotifications } from '../notification/notification.service';
+import { rejectCompletedSubmissionForEmailFailureInTransaction } from '../submission-email-failure.service';
 
 vi.mock('../submission-email-failure.service', () => ({
-  rejectCompletedSubmissionForEmailFailure: vi.fn().mockResolvedValue(true),
+  rejectCompletedSubmissionForEmailFailureInTransaction: vi
+    .fn()
+    .mockResolvedValue({ changed: true, notificationResults: [] }),
+}));
+
+vi.mock('../notification/notification.service', () => ({
+  publishPersistedNotifications: vi.fn().mockResolvedValue(undefined),
 }));
 
 const event = (
@@ -29,9 +36,12 @@ const log = (overrides: Record<string, unknown> = {}) => ({
 
 describe('resend-webhook.service', () => {
   beforeEach(() => {
-    vi.mocked(rejectCompletedSubmissionForEmailFailure).mockClear();
+    vi.mocked(
+      rejectCompletedSubmissionForEmailFailureInTransaction
+    ).mockClear();
+    vi.mocked(publishPersistedNotifications).mockClear();
     txMock.notificationDelivery.findFirst.mockResolvedValue(log());
-    prismaMock.notificationDelivery.updateMany.mockResolvedValue({ count: 1 });
+    txMock.notificationDelivery.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it.each([
@@ -42,14 +52,16 @@ describe('resend-webhook.service', () => {
   ])('maps %s without rejecting the submission', async (type, status) => {
     await processResendWebhookEvent(event(type), `svix-${type}`);
 
-    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
+    expect(txMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({ id: 'notification-delivery-1' }),
       data: expect.objectContaining({
         status,
         latest_svix_event_id: `svix-${type}`,
       }),
     });
-    expect(rejectCompletedSubmissionForEmailFailure).not.toHaveBeenCalled();
+    expect(
+      rejectCompletedSubmissionForEmailFailureInTransaction
+    ).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -88,14 +100,16 @@ describe('resend-webhook.service', () => {
         `svix-${type}`
       );
 
-      expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
+      expect(txMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
         where: expect.objectContaining({ id: 'notification-delivery-1' }),
         data: expect.objectContaining({
           status,
           error_message: reason,
         }),
       });
-      expect(rejectCompletedSubmissionForEmailFailure).toHaveBeenCalledWith({
+      expect(
+        rejectCompletedSubmissionForEmailFailureInTransaction
+      ).toHaveBeenCalledWith(txMock, {
         submissionId: 'submission-1',
         reason,
         occurredAt: new Date('2026-10-25T12:00:00.000Z'),
@@ -116,8 +130,10 @@ describe('resend-webhook.service', () => {
       'svix-first-provider-event'
     );
 
-    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledOnce();
-    expect(rejectCompletedSubmissionForEmailFailure).toHaveBeenCalledOnce();
+    expect(txMock.notificationDelivery.updateMany).toHaveBeenCalledOnce();
+    expect(
+      rejectCompletedSubmissionForEmailFailureInTransaction
+    ).toHaveBeenCalledOnce();
   });
 
   it('falls back to the exact notification_delivery_id tag and stores the Resend ID', async () => {
@@ -140,7 +156,7 @@ describe('resend-webhook.service', () => {
     expect(txMock.notificationDelivery.findUnique).toHaveBeenCalledWith({
       where: { id: 'notification-delivery-1' },
     });
-    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
+    expect(txMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           provider_message_id: 'resend-race',
@@ -163,20 +179,23 @@ describe('resend-webhook.service', () => {
     );
     await processResendWebhookEvent(event('email.failed'), 'svix-stale');
 
-    expect(prismaMock.notificationDelivery.updateMany).not.toHaveBeenCalled();
-    expect(rejectCompletedSubmissionForEmailFailure).not.toHaveBeenCalled();
+    expect(txMock.notificationDelivery.updateMany).not.toHaveBeenCalled();
+    expect(
+      rejectCompletedSubmissionForEmailFailureInTransaction
+    ).not.toHaveBeenCalled();
   });
 
   it('leaves a terminal event unprocessed when rejection fails so Resend can retry', async () => {
-    vi.mocked(rejectCompletedSubmissionForEmailFailure).mockRejectedValueOnce(
-      new Error('system actor unavailable')
-    );
+    vi.mocked(
+      rejectCompletedSubmissionForEmailFailureInTransaction
+    ).mockRejectedValueOnce(new Error('system actor unavailable'));
 
     await expect(
       processResendWebhookEvent(event('email.failed'), 'svix-retry')
     ).rejects.toThrow('system actor unavailable');
 
-    expect(prismaMock.notificationDelivery.updateMany).not.toHaveBeenCalled();
+    expect(txMock.notificationDelivery.updateMany).toHaveBeenCalledOnce();
+    expect(publishPersistedNotifications).not.toHaveBeenCalled();
   });
 
   it('returns 200-compatible ignored results for unsupported and unknown events', async () => {
@@ -194,6 +213,39 @@ describe('resend-webhook.service', () => {
         'svix-unknown'
       )
     ).toMatchObject({ handled: true, applied: false, reason: 'unknown_email' });
-    expect(rejectCompletedSubmissionForEmailFailure).not.toHaveBeenCalled();
+    expect(
+      rejectCompletedSubmissionForEmailFailureInTransaction
+    ).not.toHaveBeenCalled();
+  });
+
+  it('compares timestamp and status rank in the same atomic update', async () => {
+    await processResendWebhookEvent(
+      event('email.delivered'),
+      'svix-atomic-ordering'
+    );
+
+    expect(txMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'notification-delivery-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              latest_svix_event_id: { not: 'svix-atomic-ordering' },
+              OR: expect.arrayContaining([
+                { status_at: { lt: new Date('2026-10-25T12:00:00.000Z') } },
+                expect.objectContaining({
+                  status_at: new Date('2026-10-25T12:00:00.000Z'),
+                  status: {
+                    in: expect.arrayContaining([
+                      NotificationDeliveryStatus.DELIVERED,
+                    ]),
+                  },
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      })
+    );
   });
 });

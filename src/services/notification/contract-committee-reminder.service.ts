@@ -40,6 +40,7 @@ type ReminderRecipient = {
 
 type PendingReminderDelivery = {
   deliveryId: string;
+  dedupeKey: string;
   userId: string;
   recipientEmail: string;
   subject: string;
@@ -416,6 +417,7 @@ export const sendContractCommitteeReminders = async (options?: {
 
         pendingDeliveries.push({
           deliveryId: reservedDelivery.id,
+          dedupeKey,
           userId: recipient.userId,
           recipientEmail: recipient.email,
           subject: recipientContent.subject,
@@ -435,16 +437,8 @@ export const sendContractCommitteeReminders = async (options?: {
         recipientEmail: pendingDelivery.recipientEmail,
         submissionId: submission.id,
         notificationDeliveryId: pendingDelivery.deliveryId,
+        dedupeKey: pendingDelivery.dedupeKey,
         emailKind: EmailKind.COMMITTEE_REMINDER,
-      });
-
-      await prisma.notificationDelivery.update({
-        where: { id: pendingDelivery.deliveryId },
-        data: {
-          status: result.status,
-          error_message: result.errorMessage ?? null,
-          sent_at: result.sentAt ?? null,
-        },
       });
 
       if (

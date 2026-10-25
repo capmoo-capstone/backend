@@ -593,7 +593,7 @@ class ResendNotificationEmailTransport implements NotificationEmailTransport {
       });
 
       return {
-        status: NotificationDeliveryStatus.SENT,
+        status: result.status,
         sentAt: result.sentAt,
         errorMessage: null,
         providerMessageId: result.resendEmailId,

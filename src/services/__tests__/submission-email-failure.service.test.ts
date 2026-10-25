@@ -1,6 +1,6 @@
 import { SubmissionStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { prismaMock, txMock } from '../../test/prisma-mock';
+import { txMock } from '../../test/prisma-mock';
 import { syncProjectPhases } from '../../utils/phase-status';
 import {
   notifySubmissionRejected,
@@ -25,7 +25,7 @@ vi.mock('../notification/notification.service', () => ({
 describe('submission-email-failure.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.user.findFirst.mockResolvedValue({
+    txMock.user.findFirst.mockResolvedValue({
       id: NEXUS_SYSTEM_SUPER_ADMIN_ID,
     });
     txMock.projectSubmission.findUnique.mockResolvedValue({
@@ -50,7 +50,7 @@ describe('submission-email-failure.service', () => {
       })
     ).resolves.toBe(true);
 
-    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+    expect(txMock.user.findFirst).toHaveBeenCalledWith({
       where: {
         id: NEXUS_SYSTEM_SUPER_ADMIN_ID,
         is_active: true,
@@ -103,7 +103,7 @@ describe('submission-email-failure.service', () => {
   });
 
   it('returns a retryable service error when the configured system actor is invalid', async () => {
-    prismaMock.user.findFirst.mockResolvedValue(null);
+    txMock.user.findFirst.mockResolvedValue(null);
 
     await expect(
       rejectCompletedSubmissionForEmailFailure({

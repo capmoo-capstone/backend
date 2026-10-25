@@ -501,6 +501,7 @@ model NotificationDelivery {
   user         User?              @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, channel, dedupe_key], map: "notification_deliveries_user_id_channel_dedupe_key_key")
+  @@unique([recipient_email, channel, dedupe_key], map: "notification_deliveries_recipient_channel_dedupe_key_key")
   @@index([submission_id])
   @@index([recipient_email])
   @@index([provider_message_id])

@@ -1,6 +1,12 @@
-import { NotificationDeliveryStatus, UserRole } from '@prisma/client';
+import {
+  NotificationChannel,
+  NotificationDeliveryStatus,
+  UserRole,
+} from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock, resetPrismaMock } from '../../test/prisma-mock';
+import { EmailKind } from '../../types/email-delivery.type';
+import { sendTrackedEmail } from '../email-delivery.service';
 import {
   buildContractCommitteeReminderEmail,
   notificationEmailTransport,
@@ -232,6 +238,48 @@ describe('notification-email.service', () => {
     expect(where).not.toHaveProperty('status');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(prismaMock.notificationDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the database reservation winner when concurrent sends race without a user id', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.notificationDelivery.create.mockRejectedValueOnce({
+      code: 'P2002',
+    });
+    prismaMock.notificationDelivery.findFirst.mockResolvedValueOnce({
+      id: 'winning-delivery',
+      status: NotificationDeliveryStatus.PENDING,
+      provider_message_id: null,
+      sent_at: null,
+    });
+
+    await expect(
+      sendTrackedEmail({
+        kind: EmailKind.VENDOR_PO,
+        recipient: 'vendor@example.com',
+        subject: 'PO ready',
+        text: 'Please review the PO',
+        dedupeKey: 'vendor-submission:submission-1',
+      })
+    ).resolves.toMatchObject({
+      notificationDeliveryId: 'winning-delivery',
+      status: NotificationDeliveryStatus.PENDING,
+    });
+
+    expect(prismaMock.notificationDelivery.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            {
+              recipient_email: 'vendor@example.com',
+              channel: NotificationChannel.EMAIL_IMMEDIATE,
+              dedupe_key: 'vendor-submission:submission-1',
+            },
+          ],
+        },
+      })
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns vendor email preview with locked body, subject, and form URL', async () => {

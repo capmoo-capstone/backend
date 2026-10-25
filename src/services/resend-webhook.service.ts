@@ -1,6 +1,7 @@
 import { NotificationDeliveryStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { rejectCompletedSubmissionForEmailFailure } from './submission-email-failure.service';
+import { publishPersistedNotifications } from './notification/notification.service';
+import { rejectCompletedSubmissionForEmailFailureInTransaction } from './submission-email-failure.service';
 
 const EVENT_STATUS = {
   'email.sent': NotificationDeliveryStatus.SENT,
@@ -105,7 +106,7 @@ export const processResendWebhookEvent = async (
     getTag(event, 'notification_delivery_id')?.trim() || null;
   const detail = extractResendStatusDetail(event);
 
-  const candidate = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const delivery = resendEmailId
       ? await tx.notificationDelivery.findFirst({
           where: { provider_message_id: resendEmailId },
@@ -120,85 +121,111 @@ export const processResendWebhookEvent = async (
         : null);
 
     if (!matchedDelivery) {
-      return { applied: false, reason: 'unknown_email' as const };
+      return {
+        handled: true,
+        applied: false,
+        reason: 'unknown_email' as const,
+        notificationResults: [],
+      };
     }
     if (matchedDelivery.latest_svix_event_id === svixEventId) {
-      return { applied: false, reason: 'duplicate_event' as const };
+      return {
+        handled: true,
+        applied: false,
+        reason: 'duplicate_event' as const,
+        notificationResults: [],
+      };
     }
     const hasProcessedWebhook = Boolean(matchedDelivery.latest_svix_event_id);
     if (hasProcessedWebhook && matchedDelivery.status_at > eventAt) {
-      return { applied: false, reason: 'stale_event' as const };
+      return {
+        handled: true,
+        applied: false,
+        reason: 'stale_event' as const,
+        notificationResults: [],
+      };
     }
     if (
       hasProcessedWebhook &&
       matchedDelivery.status_at.getTime() === eventAt.getTime() &&
       STATUS_RANK[incomingStatus] < STATUS_RANK[matchedDelivery.status]
     ) {
-      return { applied: false, reason: 'regressive_event' as const };
+      return {
+        handled: true,
+        applied: false,
+        reason: 'regressive_event' as const,
+        notificationResults: [],
+      };
     }
 
+    const statusesAtOrBelowIncoming = Object.values(
+      NotificationDeliveryStatus
+    ).filter((status) => STATUS_RANK[status] <= STATUS_RANK[incomingStatus]);
+    const updated = await tx.notificationDelivery.updateMany({
+      where: {
+        id: matchedDelivery.id,
+        OR: [
+          { latest_svix_event_id: null },
+          {
+            latest_svix_event_id: { not: svixEventId },
+            OR: [
+              { status_at: { lt: eventAt } },
+              {
+                status_at: eventAt,
+                status: { in: statusesAtOrBelowIncoming },
+              },
+            ],
+          },
+        ],
+      },
+      data: {
+        status: incomingStatus,
+        status_at: eventAt,
+        latest_svix_event_id: svixEventId,
+        error_message: detail,
+        ...(incomingStatus === NotificationDeliveryStatus.DELIVERED
+          ? { delivered_at: eventAt }
+          : {}),
+        ...(incomingStatus === NotificationDeliveryStatus.BOUNCED
+          ? { bounced_at: eventAt }
+          : {}),
+        ...(resendEmailId && !matchedDelivery.provider_message_id
+          ? { provider_message_id: resendEmailId }
+          : {}),
+      },
+    });
+
+    if (updated.count === 0) {
+      return {
+        handled: true,
+        applied: false,
+        reason: 'concurrent_or_stale_event' as const,
+        submissionId: matchedDelivery.submission_id,
+        status: incomingStatus,
+        notificationResults: [],
+      };
+    }
+
+    const rejection =
+      matchedDelivery.submission_id &&
+      TERMINAL_FAILURE_STATUSES.has(incomingStatus)
+        ? await rejectCompletedSubmissionForEmailFailureInTransaction(tx, {
+            submissionId: matchedDelivery.submission_id,
+            reason: detail || `Resend reported ${event.type}`,
+            occurredAt: eventAt,
+          })
+        : { changed: false, notificationResults: [] };
+
     return {
-      ready: true,
-      notificationDeliveryId: matchedDelivery.id,
-      shouldStoreResendId: Boolean(
-        resendEmailId && !matchedDelivery.provider_message_id
-      ),
+      handled: true,
+      applied: true,
       submissionId: matchedDelivery.submission_id,
       status: incomingStatus,
+      notificationResults: rejection.notificationResults,
     };
   });
 
-  if (
-    candidate.ready &&
-    candidate.submissionId &&
-    TERMINAL_FAILURE_STATUSES.has(candidate.status)
-  ) {
-    await rejectCompletedSubmissionForEmailFailure({
-      submissionId: candidate.submissionId,
-      reason: detail || `Resend reported ${event.type}`,
-      occurredAt: eventAt,
-    });
-  }
-
-  if (!candidate.ready) {
-    return { handled: true, ...candidate };
-  }
-
-  const updated = await prisma.notificationDelivery.updateMany({
-    where: {
-      id: candidate.notificationDeliveryId,
-      OR: [
-        { latest_svix_event_id: null },
-        {
-          latest_svix_event_id: { not: svixEventId },
-          status_at: { lte: eventAt },
-        },
-      ],
-    },
-    data: {
-      status: incomingStatus,
-      status_at: eventAt,
-      latest_svix_event_id: svixEventId,
-      error_message: detail,
-      ...(incomingStatus === NotificationDeliveryStatus.DELIVERED
-        ? { delivered_at: eventAt }
-        : {}),
-      ...(incomingStatus === NotificationDeliveryStatus.BOUNCED
-        ? { bounced_at: eventAt }
-        : {}),
-      ...(candidate.shouldStoreResendId
-        ? { provider_message_id: resendEmailId }
-        : {}),
-    },
-  });
-
-  return {
-    handled: true,
-    applied: updated.count > 0,
-    ...(updated.count > 0
-      ? {}
-      : { reason: 'concurrent_or_stale_event' as const }),
-    submissionId: candidate.submissionId,
-    status: candidate.status,
-  };
+  const { notificationResults, ...response } = result;
+  await publishPersistedNotifications(notificationResults);
+  return response;
 };

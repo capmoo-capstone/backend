@@ -30,7 +30,15 @@ export type TrackedEmailResult = {
   notificationDeliveryId: string;
   resendEmailId: string | null;
   status: NotificationDeliveryStatus;
-  sentAt: Date;
+  sentAt: Date | null;
+};
+
+type ReservedDelivery = {
+  id: string;
+  reserved: boolean;
+  status: NotificationDeliveryStatus;
+  providerMessageId: string | null;
+  sentAt: Date | null;
 };
 
 export class EmailDeliverySendError extends Error {
@@ -84,10 +92,22 @@ const markSendFailure = async (
   });
 };
 
-const reserveDelivery = async (input: TrackedEmailInput, recipient: string) => {
+const isUniqueConstraintError = (error: unknown) =>
+  Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+
+const reserveDelivery = async (
+  input: TrackedEmailInput,
+  recipient: string
+): Promise<ReservedDelivery> => {
+  const channel = input.channel ?? NotificationChannel.EMAIL_IMMEDIATE;
   const data = {
     recipient_email: recipient,
-    channel: input.channel ?? NotificationChannel.EMAIL_IMMEDIATE,
+    channel,
     email_type: input.kind,
     status: NotificationDeliveryStatus.PENDING,
     status_at: new Date(),
@@ -106,17 +126,88 @@ const reserveDelivery = async (input: TrackedEmailInput, recipient: string) => {
   };
 
   if (input.notificationDeliveryId) {
-    return prisma.notificationDelivery.update({
+    const delivery = await prisma.notificationDelivery.update({
       where: { id: input.notificationDeliveryId },
       data,
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+        provider_message_id: true,
+        sent_at: true,
+      },
     });
+
+    return {
+      id: delivery.id,
+      reserved: true,
+      status: delivery.status,
+      providerMessageId: delivery.provider_message_id,
+      sentAt: delivery.sent_at,
+    };
   }
 
-  return prisma.notificationDelivery.create({
-    data,
-    select: { id: true },
-  });
+  try {
+    const delivery = await prisma.notificationDelivery.create({
+      data,
+      select: {
+        id: true,
+        status: true,
+        provider_message_id: true,
+        sent_at: true,
+      },
+    });
+
+    return {
+      id: delivery.id,
+      reserved: true,
+      status: delivery.status,
+      providerMessageId: delivery.provider_message_id,
+      sentAt: delivery.sent_at,
+    };
+  } catch (error) {
+    if (!input.dedupeKey || !isUniqueConstraintError(error)) {
+      throw error;
+    }
+
+    const existing = await prisma.notificationDelivery.findFirst({
+      where: {
+        OR: [
+          {
+            recipient_email: recipient,
+            channel,
+            dedupe_key: input.dedupeKey,
+          },
+          ...(input.userId
+            ? [
+                {
+                  user_id: input.userId,
+                  channel,
+                  dedupe_key: input.dedupeKey,
+                },
+              ]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+        provider_message_id: true,
+        sent_at: true,
+      },
+    });
+
+    if (!existing) {
+      throw error;
+    }
+
+    return {
+      id: existing.id,
+      reserved: false,
+      status: existing.status,
+      providerMessageId: existing.provider_message_id,
+      sentAt: existing.sent_at,
+    };
+  }
 };
 
 export const sendTrackedEmail = async (
@@ -124,6 +215,15 @@ export const sendTrackedEmail = async (
 ): Promise<TrackedEmailResult> => {
   const recipient = input.recipient.trim();
   const pending = await reserveDelivery(input, recipient);
+
+  if (!pending.reserved) {
+    return {
+      notificationDeliveryId: pending.id,
+      resendEmailId: pending.providerMessageId,
+      status: pending.status,
+      sentAt: pending.sentAt,
+    };
+  }
 
   const { apiKey, from } = getResendConfig();
   const configurationError = !apiKey
