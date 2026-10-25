@@ -3,14 +3,11 @@ import {
   NotificationDeliveryStatus,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
+import { EmailKind } from '../../types/email-delivery.type';
 import { activeUserWhere } from '../../utils/active-state';
 import { OPS_DEPT_ID } from '../../utils/constant';
 import { formatBangkokDate } from '../../utils/date';
-import {
-  BadRequestError,
-  ForbiddenError,
-  NotFoundError,
-} from '../../utils/errors';
+import { ForbiddenError, NotFoundError } from '../../utils/errors';
 import { projectReadWhere } from '../../utils/project-scope';
 import {
   buildDailySummaryAudienceText,
@@ -33,19 +30,12 @@ import {
 import {
   renderVendorRequestEditEmailContent,
   renderVendorRequestEditEmailPreview,
-  VendorRequestEditEmailData,
   VendorRequestEditEmailPreview,
 } from './templates/vendor-request-edit-email.template';
-
-const RESEND_API_URL = 'https://api.resend.com/emails';
-
-type ResendEmailPayload = {
-  from: string;
-  to: string[];
-  subject: string;
-  text: string;
-  html?: string;
-};
+import {
+  EmailDeliverySendError,
+  sendTrackedEmail,
+} from '../email-delivery.service';
 
 type EmailRecipient = {
   email: string;
@@ -79,6 +69,9 @@ export interface EmailDeliveryDraft {
   htmlBody?: string;
   dedupeKey?: string | null;
   recipientEmail?: string | null;
+  submissionId?: string | null;
+  notificationDeliveryId?: string | null;
+  emailKind?: EmailKind;
 }
 
 export interface EmailDeliveryResult {
@@ -86,22 +79,21 @@ export interface EmailDeliveryResult {
   errorMessage?: string | null;
   sentAt?: Date | null;
   providerMessageId?: string | null;
+  notificationDeliveryId?: string | null;
 }
 
 export interface NotificationEmailTransport {
   queue(draft: EmailDeliveryDraft): Promise<EmailDeliveryResult>;
 }
 
-const getResendConfig = () => ({
-  apiKey: process.env.RESEND_API_KEY?.trim() || '',
-  from: process.env.RESEND_FROM?.trim() || '',
+const getEmailAppConfig = () => ({
   appPublicUrl: process.env.APP_PUBLIC_URL?.trim() || '',
 });
 
 const normalizeUrl = (value: string) => value.replace(/\/+$/, '');
 
 const getAppPublicUrl = () => {
-  const { appPublicUrl } = getResendConfig();
+  const { appPublicUrl } = getEmailAppConfig();
 
   if (!appPublicUrl) {
     throw new Error('APP_PUBLIC_URL is not configured');
@@ -112,176 +104,60 @@ const getAppPublicUrl = () => {
 
 const buildLoginUrl = () => `${getAppPublicUrl()}/login`;
 
-const sendResendEmail = async (
-  payload: ResendEmailPayload
-): Promise<{ id: string | null }> => {
-  const { apiKey } = getResendConfig();
-  const response = await fetch(RESEND_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (response.ok) {
-    try {
-      const data = (await response.json()) as { id?: string };
-      return { id: data?.id ?? null };
-    } catch {
-      return { id: null };
-    }
-  }
-
-  let message = `Resend request failed with status ${response.status}`;
-
-  try {
-    const data = (await response.json()) as {
-      message?: string;
-      error?: { message?: string };
-    };
-    message = data.error?.message || data.message || message;
-  } catch {
-    // Keep the default message when the provider body is unavailable.
-  }
-
-  throw new Error(message);
-};
-
-const sendEmail = async (payload: {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}): Promise<{ providerMessageId: string | null }> => {
-  const { apiKey, from } = getResendConfig();
-  if (!apiKey) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
-
-  if (!from) {
-    throw new Error('RESEND_FROM is not configured');
-  }
-
-  const recipient = payload.to.trim();
-  if (!recipient) {
-    throw new Error('A recipient email is required');
-  }
-
-  const resendResult = await sendResendEmail({
-    from,
-    to: [recipient],
-    subject: payload.subject,
-    text: payload.text,
-    ...(payload.html ? { html: payload.html } : {}),
-  });
-
-  return { providerMessageId: resendResult.id };
-};
-
 export interface BusinessEmailOptions {
   userId?: string | null;
-  emailType?: string;
-  metadata?: Record<string, unknown> | null;
+  kind: EmailKind;
   dedupeKey?: string | null;
   notificationId?: string | null;
+  submissionId?: string | null;
 }
 
 const sendBusinessEmail = async (
   recipientEmail: string,
   content: { subject: string; text: string; html?: string },
   options?: BusinessEmailOptions
-): Promise<{ providerMessageId: string | null }> => {
+): Promise<{
+  providerMessageId: string | null;
+  notificationDeliveryId: string | null;
+}> => {
   const recipient = recipientEmail?.trim() || '';
-  const emailType = options?.emailType ?? 'BUSINESS_EMAIL';
   const userId = options?.userId ?? null;
 
   if (options?.dedupeKey) {
     const existing = await prisma.notificationDelivery.findFirst({
       where: {
         ...(userId ? { user_id: userId } : {}),
+        recipient_email: recipient,
         channel: NotificationChannel.EMAIL_IMMEDIATE,
         dedupe_key: options.dedupeKey,
-        status: {
-          in: [
-            NotificationDeliveryStatus.PENDING,
-            NotificationDeliveryStatus.SENT,
-            NotificationDeliveryStatus.SKIPPED,
-          ],
-        },
       },
       select: { id: true, provider_message_id: true },
     });
 
     if (existing) {
-      return { providerMessageId: existing.provider_message_id };
+      return {
+        providerMessageId: existing.provider_message_id,
+        notificationDeliveryId: existing.id,
+      };
     }
   }
 
-  let deliveryRecord: { id: string } | null = null;
-  try {
-    deliveryRecord = await prisma.notificationDelivery.create({
-      data: {
-        user_id: userId,
-        recipient_email: recipient,
-        channel: NotificationChannel.EMAIL_IMMEDIATE,
-        email_type: emailType,
-        status: NotificationDeliveryStatus.PENDING,
-        subject: content.subject,
-        body: content.text,
-        dedupe_key: options?.dedupeKey ?? null,
-        notification_id: options?.notificationId ?? null,
-        metadata: options?.metadata ? (options.metadata as any) : undefined,
-      },
-      select: { id: true },
-    });
-  } catch (err) {
-    console.error('Failed to create pending notification delivery record', err);
-  }
+  const result = await sendTrackedEmail({
+    kind: options?.kind ?? EmailKind.NOTIFICATION,
+    recipient,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+    submissionId: options?.submissionId,
+    notificationId: options?.notificationId,
+    userId,
+    dedupeKey: options?.dedupeKey,
+  });
 
-  try {
-    const { providerMessageId } = await sendEmail({
-      to: recipient,
-      subject: content.subject,
-      text: content.text,
-      html: content.html,
-    });
-
-    if (deliveryRecord) {
-      await prisma.notificationDelivery.update({
-        where: { id: deliveryRecord.id },
-        data: {
-          status: NotificationDeliveryStatus.SENT,
-          sent_at: new Date(),
-          provider_message_id: providerMessageId,
-        },
-      });
-    }
-
-    return { providerMessageId };
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown email failure';
-    const isSkipped =
-      errorMessage === 'RESEND_API_KEY is not configured' ||
-      errorMessage === 'RESEND_FROM is not configured' ||
-      errorMessage === 'A recipient email is required';
-
-    if (deliveryRecord) {
-      await prisma.notificationDelivery.update({
-        where: { id: deliveryRecord.id },
-        data: {
-          status: isSkipped
-            ? NotificationDeliveryStatus.SKIPPED
-            : NotificationDeliveryStatus.FAILED,
-          error_message: errorMessage,
-        },
-      });
-    }
-
-    throw error;
-  }
+  return {
+    providerMessageId: result.resendEmailId,
+    notificationDeliveryId: result.notificationDeliveryId,
+  };
 };
 
 const formatPersonGreeting = (fullName: string) => `สวัสดีคุณ ${fullName},`;
@@ -457,7 +333,7 @@ export const sendHelloTestEmail = async (to?: string | null) => {
       text: 'hello test email',
     },
     {
-      emailType: 'TEST',
+      kind: EmailKind.TEST,
     }
   );
 };
@@ -469,8 +345,7 @@ export const sendRegistrationPendingEmail = async (
     recipient.email,
     buildRegistrationPendingEmailContent(recipient),
     {
-      emailType: 'STAFF_REGISTRATION_PENDING',
-      metadata: { fullName: recipient.fullName },
+      kind: EmailKind.REGISTRATION_PENDING,
     }
   );
 };
@@ -482,8 +357,7 @@ export const sendRegistrationApprovedEmail = async (
     recipient.email,
     buildRegistrationApprovedEmailContent(recipient),
     {
-      emailType: 'STAFF_REGISTRATION_APPROVED',
-      metadata: { fullName: recipient.fullName },
+      kind: EmailKind.REGISTRATION_APPROVED,
     }
   );
 };
@@ -564,7 +438,8 @@ export const sendVendorEmailForProject = async (
       reason?: string | null;
     };
   },
-  user?: AuthPayload
+  user?: AuthPayload,
+  options?: { submissionId?: string | null }
 ) => {
   if (user) {
     const projectScope = projectReadWhere(user);
@@ -594,11 +469,14 @@ export const sendVendorEmailForProject = async (
       : renderVendorPoEmailContent(input.data);
 
   await sendBusinessEmail(input.recipient, content, {
-    emailType: input.templateId,
-    metadata: {
-      projectId: project.id,
-    },
-    dedupeKey: `vendor-${project.id}-${input.templateId}-${Date.now()}`,
+    kind:
+      input.templateId === 'VENDOR_REQUEST_EDIT'
+        ? EmailKind.VENDOR_REQUEST_EDIT
+        : EmailKind.VENDOR_PO,
+    dedupeKey: options?.submissionId
+      ? `vendor-submission:${options.submissionId}`
+      : `vendor-${project.id}-${input.templateId}-${Date.now()}`,
+    submissionId: options?.submissionId,
   });
 
   return {
@@ -613,11 +491,7 @@ export const sendContractCommitteeReminderEmail = async (
 ) => {
   const content = buildContractCommitteeReminderEmail(input);
   await sendBusinessEmail(input.recipientEmail, content, {
-    emailType: 'COMMITTEE_REMINDER',
-    metadata: {
-      projectTitle: input.projectTitle,
-      remainingDays: input.remainingDays,
-    },
+    kind: EmailKind.COMMITTEE_REMINDER,
     dedupeKey: `contract-committee-${input.projectTitle}-${input.recipientEmail}-${input.remainingDays}`,
   });
 };
@@ -642,11 +516,7 @@ export const sendDailySummaryEmail = async (
   const dateKey = reportDate.toISOString().slice(0, 10);
   await sendBusinessEmail(recipient.email, content, {
     userId: recipient.id,
-    emailType: 'DAILY_SUMMARY',
-    metadata: {
-      reportDate: dateKey,
-      role: recipient.role,
-    },
+    kind: EmailKind.DAILY_SUMMARY,
     dedupeKey: `daily-summary-${recipient.id}-${dateKey}`,
   });
 };
@@ -708,40 +578,43 @@ class ResendNotificationEmailTransport implements NotificationEmailTransport {
   async queue(draft: EmailDeliveryDraft): Promise<EmailDeliveryResult> {
     const recipient = draft.recipientEmail?.trim() || '';
 
-    if (!recipient) {
-      return {
-        status: NotificationDeliveryStatus.SKIPPED,
-        errorMessage: 'Recipient email is missing',
-      };
-    }
-
     try {
-      const { providerMessageId } = await sendEmail({
-        to: recipient,
+      const result = await sendTrackedEmail({
+        kind: draft.emailKind ?? EmailKind.NOTIFICATION,
+        recipient,
         subject: draft.subject,
         text: draft.body,
         html: draft.htmlBody,
+        submissionId: draft.submissionId,
+        notificationDeliveryId: draft.notificationDeliveryId,
+        userId: draft.userId,
+        dedupeKey: draft.dedupeKey,
+        channel: draft.channel,
       });
 
       return {
         status: NotificationDeliveryStatus.SENT,
-        sentAt: new Date(),
+        sentAt: result.sentAt,
         errorMessage: null,
-        providerMessageId,
+        providerMessageId: result.resendEmailId,
+        notificationDeliveryId: result.notificationDeliveryId,
       };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown email failure';
-      const skippedErrors = new Set([
-        'RESEND_API_KEY is not configured',
-        'RESEND_FROM is not configured',
-      ]);
+      const skipped =
+        error instanceof EmailDeliverySendError &&
+        error.status === NotificationDeliveryStatus.SKIPPED;
 
       return {
-        status: skippedErrors.has(message)
+        status: skipped
           ? NotificationDeliveryStatus.SKIPPED
           : NotificationDeliveryStatus.FAILED,
         errorMessage: message,
+        notificationDeliveryId:
+          error instanceof EmailDeliverySendError
+            ? error.notificationDeliveryId
+            : null,
       };
     }
   }

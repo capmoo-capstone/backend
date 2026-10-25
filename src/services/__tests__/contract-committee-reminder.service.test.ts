@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { notificationEmailTransport } from '../notification/notification-email.service';
 import { sendContractCommitteeReminders } from '../notification/contract-committee-reminder.service';
+import { rejectCompletedSubmissionForEmailFailure } from '../submission-email-failure.service';
+
+vi.mock('../submission-email-failure.service', () => ({
+  rejectCompletedSubmissionForEmailFailure: vi.fn().mockResolvedValue(true),
+}));
 
 const buildSubmission = (overrides?: {
   id?: string;
@@ -21,17 +26,15 @@ const buildSubmission = (overrides?: {
   project_id: 'project-1',
   installment_no: overrides?.installmentNo ?? null,
   submission_round: overrides?.submissionRound ?? 1,
-  meta_data:
-    overrides?.metaData ??
-    [
-      { field_key: 'contract_enable_notification', value: true },
-      { field_key: 'contract_inspection_date', value: '2026-08-31' },
-      { field_key: 'contract_notification_days', value: '[5]' },
-      {
-        field_key: 'contract_committee_email',
-        value: '["committee@example.com"]',
-      },
-    ],
+  meta_data: overrides?.metaData ?? [
+    { field_key: 'contract_enable_notification', value: true },
+    { field_key: 'contract_inspection_date', value: '2026-08-31' },
+    { field_key: 'contract_notification_days', value: '[5]' },
+    {
+      field_key: 'contract_committee_email',
+      value: '["committee@example.com"]',
+    },
+  ],
   project: {
     id: 'project-1',
     title: overrides?.title ?? 'Contract project',
@@ -113,7 +116,9 @@ describe('contract-committee-reminder.service', () => {
 
   it('sends only on exact configured lead times to committee and assignee_contract recipients', async () => {
     vi.setSystemTime(new Date('2026-08-26T00:00:00.000Z'));
-    prismaMock.projectSubmission.findMany.mockResolvedValue([buildSubmission()]);
+    prismaMock.projectSubmission.findMany.mockResolvedValue([
+      buildSubmission(),
+    ]);
     vi.spyOn(notificationEmailTransport, 'queue').mockResolvedValue({
       status: NotificationDeliveryStatus.SENT,
       sentAt: new Date('2026-08-26T00:00:00.000Z'),
@@ -211,7 +216,9 @@ describe('contract-committee-reminder.service', () => {
       buildSubmission({ assignees: [] }),
     ]);
     const queueSpy = vi.spyOn(notificationEmailTransport, 'queue');
-    txMock.notificationDelivery.findFirst.mockResolvedValue({ id: 'delivery-1' });
+    txMock.notificationDelivery.findFirst.mockResolvedValue({
+      id: 'delivery-1',
+    });
 
     const result = await sendContractCommitteeReminders();
 
@@ -316,8 +323,12 @@ describe('contract-committee-reminder.service', () => {
         status: NotificationDeliveryStatus.FAILED,
         error_message: 'SMTP timeout',
         sent_at: null,
-        provider_message_id: null,
       },
+    });
+    expect(rejectCompletedSubmissionForEmailFailure).toHaveBeenCalledWith({
+      submissionId: 'submission-1',
+      reason: 'SMTP timeout',
+      occurredAt: expect.any(Date),
     });
   });
 });

@@ -120,6 +120,9 @@ export const errorHandler = (
     return res.status(err.statusCode).json({
       status: 'error',
       message: err.message,
+      ...('code' in err && typeof (err as any).code === 'string'
+        ? { code: (err as any).code }
+        : {}),
       ...('error' in err && Array.isArray((err as any).error)
         ? { error: (err as any).error }
         : {}),

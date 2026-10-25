@@ -6,6 +6,7 @@ import swaggerDocument from '../swagger-output.json';
 import { bangkokDateResponse } from './middlewares/date-response';
 import { errorHandler } from './middlewares/error';
 import apiV1Routes from './routes/index';
+import { receiveResendWebhook } from './controllers/resend-webhook.controller';
 
 const NODE_ENV = process.env.NODE_ENV || 'local';
 const PORT = process.env.PORT || 3000;
@@ -56,6 +57,11 @@ const corsOptions = {
 
 app.options('/{*path}', cors(corsOptions));
 app.use(cors(corsOptions));
+app.post(
+  '/api/v1/webhooks/resend',
+  express.raw({ type: 'application/json' }),
+  receiveResendWebhook
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); // CU Portal sends SAMLResponse to the ACS as an HTML form POST.
 app.use(bangkokDateResponse);

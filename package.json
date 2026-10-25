@@ -64,6 +64,7 @@
     "lru-cache": "^11.3.5",
     "pg": "^8.20.0",
     "prisma": "^7.7.0",
+    "svix": "1.99.1",
     "swagger-autogen": "^2.23.7",
     "swagger-ui-express": "^5.0.1",
     "tsx": "^4.21.0",

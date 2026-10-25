@@ -3,7 +3,6 @@ import {
   Notification,
   NotificationCategory,
   NotificationChannel,
-  NotificationDeliveryStatus,
   NotificationOutboxStatus,
   NotificationPriority,
   Prisma,
@@ -308,13 +307,6 @@ export const queueEmailDelivery = async (
         user_id: draft.userId,
         channel: draft.channel,
         dedupe_key: draft.dedupeKey,
-        status: {
-          in: [
-            NotificationDeliveryStatus.PENDING,
-            NotificationDeliveryStatus.SENT,
-            NotificationDeliveryStatus.SKIPPED,
-          ],
-        },
       },
       select: { id: true },
     });
@@ -327,17 +319,25 @@ export const queueEmailDelivery = async (
   const result = await notificationEmailTransport.queue(draft);
 
   try {
+    if (result.notificationDeliveryId) {
+      return await tx.notificationDelivery.update({
+        where: { id: result.notificationDeliveryId },
+        data: { notification_id: draft.notificationId ?? null },
+      });
+    }
+
     return await tx.notificationDelivery.create({
       data: {
         notification_id: draft.notificationId ?? null,
         user_id: draft.userId,
         recipient_email: draft.recipientEmail || '',
         channel: draft.channel,
-        email_type: 'IN_APP_NOTIFICATION',
+        email_type: draft.emailKind ?? 'NOTIFICATION',
         subject: draft.subject,
         body: draft.body,
         dedupe_key: draft.dedupeKey ?? null,
         status: result.status,
+        status_at: result.sentAt ?? new Date(),
         provider_message_id: result.providerMessageId ?? null,
         error_message: result.errorMessage ?? null,
         sent_at: result.sentAt ?? null,
