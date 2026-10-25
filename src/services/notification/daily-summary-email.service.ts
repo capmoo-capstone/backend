@@ -1,4 +1,4 @@
-import { Prisma, UserRole } from '@prisma/client';
+import { Prisma, ProjectStatus, UrgentType, UserRole } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import {
   buildOwnProjectCompletedDateFilter,
@@ -10,6 +10,7 @@ import {
 import { AuthPayload } from '../../types/auth.type';
 import { OwnProjectTab } from '../../types/project.type';
 import { bangkokDayEndUtc, bangkokDayStartUtc } from '../../utils/date';
+import { projectReadWhere } from '../../utils/project-scope';
 import {
   BusinessEmailContent,
   escapeHtml,
@@ -165,9 +166,41 @@ export const buildDailySummaryEmailContent = (
 
 export const getDailySummaryCountsForRole = async (
   user: AuthPayload,
-  role: OwnProjectRole,
+  role: OwnProjectRole | null,
   reportDate: Date = new Date()
 ): Promise<DailySummaryCounts> => {
+  // Role controls summary content, never eligibility to receive an opted-in email.
+  if (role === null) {
+    const scope = projectReadWhere(user);
+    const pendingWhere: Prisma.ProjectWhereInput = {
+      status: { notIn: [ProjectStatus.CLOSED, ProjectStatus.CANCELLED] },
+    };
+    const [new_count, completed_count, pending_count, urgent_count] =
+      await prisma.$transaction([
+        prisma.project.count({
+          where: andWhere(scope, {
+            created_at: {
+              gte: bangkokDayStartUtc(reportDate),
+              lte: bangkokDayEndUtc(reportDate),
+            },
+          }),
+        }),
+        prisma.project.count({
+          where: andWhere(
+            scope,
+            buildOwnProjectCompletedDateFilter(reportDate, reportDate)
+          ),
+        }),
+        prisma.project.count({ where: andWhere(scope, pendingWhere) }),
+        prisma.project.count({
+          where: andWhere(scope, pendingWhere, {
+            is_urgent: { not: UrgentType.NORMAL },
+          }),
+        }),
+      ]);
+    return { new_count, completed_count, pending_count, urgent_count };
+  }
+
   const scopes = await buildOwnProjectRoleScopes(user);
   const scope = scopes.find((entry) => entry.role === role);
 

@@ -11,7 +11,6 @@ import {
 } from '../utils/active-state';
 import {
   BadRequestError,
-  ForbiddenError,
   SSO_FAILURE_CODES,
   SsoAuthenticationError,
   UnauthorizedError,
@@ -141,20 +140,6 @@ export const updateDailyEmail = async (
   user: AuthPayload,
   dailyEmail: boolean
 ): Promise<{ daily_email: boolean }> => {
-  const isEligible = user.roles.some(
-    (role) =>
-      role.dept_id === OPS_DEPT_ID &&
-      [
-        'HEAD_OF_UNIT',
-        'DOCUMENT_STAFF',
-        'FINANCE_STAFF',
-        'GENERAL_STAFF',
-      ].includes(role.role)
-  );
-  if (!isEligible)
-    throw new ForbiddenError(
-      'Daily email is only available to supported Supply Operations users'
-    );
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: { daily_email: dailyEmail },

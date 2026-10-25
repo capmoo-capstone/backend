@@ -215,6 +215,7 @@ const buildSubmissionGroupKey = (input: {
 const reserveReminderDelivery = async (input: {
   tx: Prisma.TransactionClient;
   userId: string;
+  recipientEmail: string;
   dedupeKey: string;
   subject: string;
   body: string;
@@ -244,7 +245,9 @@ const reserveReminderDelivery = async (input: {
     return await input.tx.notificationDelivery.create({
       data: {
         user_id: input.userId,
+        recipient_email: input.recipientEmail,
         channel: NotificationChannel.EMAIL_IMMEDIATE,
+        email_type: 'COMMITTEE_REMINDER',
         subject: input.subject,
         body: input.body,
         dedupe_key: input.dedupeKey,
@@ -402,6 +405,7 @@ export const sendContractCommitteeReminders = async (options?: {
         const reservedDelivery = await reserveReminderDelivery({
           tx,
           userId: recipient.userId,
+          recipientEmail: recipient.email,
           dedupeKey,
           subject: recipientContent.subject,
           body: recipientContent.text,
@@ -439,6 +443,7 @@ export const sendContractCommitteeReminders = async (options?: {
           status: result.status,
           error_message: result.errorMessage ?? null,
           sent_at: result.sentAt ?? null,
+          provider_message_id: result.providerMessageId ?? null,
         },
       });
 

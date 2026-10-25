@@ -21,6 +21,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate cron files
+        shell: bash
+        run: |
+          set -eu
+          if LC_ALL=C grep -n $'\r' ops/systemd/*; then
+            echo 'Cron files must use Linux LF line endings.' >&2
+            exit 1
+          fi
+          /bin/sh -n ops/systemd/nexus-procure-cron.sh
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -82,6 +92,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           envs: ENV_PRODUCTION
           script: |
+            set -eu
             cd /opt/nexus-procure
 
             # Create or update .env.production from GitHub Secret
@@ -91,7 +102,10 @@ jobs:
             echo ${{ secrets.GHCR_TOKEN }} | \
               docker login ghcr.io -u ${{ secrets.VPS_USER }} --password-stdin
 
-            sudo chmod +x /opt/nexus-procure/ops/systemd/nexus-procure-cron.sh
+            # Make every deployment repair CRLF endings and execution permissions.
+            sudo sed -i 's/\r$//' /opt/nexus-procure/ops/systemd/nexus-procure-cron.sh
+            sudo chmod 0755 /opt/nexus-procure/ops/systemd/nexus-procure-cron.sh
+            /bin/sh -n /opt/nexus-procure/ops/systemd/nexus-procure-cron.sh
             sudo install -m 0644 ops/systemd/nexus-procure-cron@.service /etc/systemd/system/nexus-procure-cron@.service
             sudo install -m 0644 ops/systemd/nexus-procure-process-deadlines.timer /etc/systemd/system/
             sudo install -m 0644 ops/systemd/nexus-procure-contract-committee-reminders.timer /etc/systemd/system/

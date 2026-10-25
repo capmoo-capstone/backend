@@ -6,5 +6,5 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 EnvironmentFile=/opt/nexus-procure/.env.production
-ExecStart=/opt/nexus-procure/ops/systemd/nexus-procure-cron.sh %i
+ExecStart=/bin/sh /opt/nexus-procure/ops/systemd/nexus-procure-cron.sh %i
 TimeoutStartSec=90s
