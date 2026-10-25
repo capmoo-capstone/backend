@@ -141,6 +141,12 @@ export const toBangkokParts = (date: Date): DateParts => {
   };
 };
 
+export const currentBangkokBudgetYear = (now = nowUtc()): number => {
+  const parts = toBangkokParts(now);
+  const buddhistYear = parts.year + 543;
+  return parts.month >= 10 ? buddhistYear + 1 : buddhistYear;
+};
+
 export const toBangkokDateTimeParts = (date: Date): Required<DateTimeParts> => {
   const bangkokDate = new Date(date.getTime() + BANGKOK_OFFSET_MS);
   return {

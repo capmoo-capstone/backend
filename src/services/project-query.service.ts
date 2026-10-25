@@ -41,6 +41,7 @@ import {
   bangkokDayEndUtc,
   bangkokDayStartUtc,
   bangkokTodayStartUtc,
+  currentBangkokBudgetYear,
   nowUtc,
 } from '../utils/date';
 import {
@@ -509,6 +510,9 @@ export const getUnassignedProjectsByUnit = async (
   const where: Prisma.ProjectWhereInput = {
     status: ProjectStatus.UNASSIGNED,
     responsible_unit_id: unitId,
+    receive_no: {
+      startsWith: `${currentBangkokBudgetYear()}/`,
+    },
   };
 
   const [projects, total] = await prisma.$transaction([
