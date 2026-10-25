@@ -78,6 +78,14 @@ export class ServiceUnavailableError extends AppError {
   }
 }
 
+export class SubmissionEmailFailureError extends AppError {
+  public readonly code = 'submission_email_failed';
+
+  constructor(message: string) {
+    super(message, 502);
+  }
+}
+
 export const SSO_FAILURE_CODES = {
   REGISTRATION_PENDING: 'registration_pending',
   NOT_AUTHORIZED: 'not_authorized',

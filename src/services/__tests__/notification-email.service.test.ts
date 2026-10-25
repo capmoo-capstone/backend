@@ -27,6 +27,7 @@ const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>, callIndex = 0) => {
     subject: string;
     text: string;
     html?: string;
+    tags?: Array<{ name: string; value: string }>;
   };
 };
 
@@ -106,6 +107,12 @@ describe('notification-email.service', () => {
       to: ['person@example.com'],
       subject: 'NexusProcure test email',
       text: 'hello test email',
+      tags: [
+        {
+          name: 'notification_delivery_id',
+          value: 'notification-delivery-1',
+        },
+      ],
     });
   });
 
@@ -202,6 +209,29 @@ describe('notification-email.service', () => {
     expect(payload.text).toContain('Committee Member');
     expect(payload.html).toContain('Committee Member');
     expectBusinessFooter(payload);
+  });
+
+  it('does not resend a deduplicated reminder after its delivery status changes', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.notificationDelivery.findFirst.mockResolvedValueOnce({
+      id: 'existing-delivery',
+      provider_message_id: 'resend-existing',
+      status: NotificationDeliveryStatus.DELIVERED,
+    } as any);
+
+    await sendContractCommitteeReminderEmail({
+      recipientEmail: 'committee@example.com',
+      projectTitle: 'Project Alpha',
+      inspectionDate: new Date('2026-08-31T00:00:00.000Z'),
+      remainingDays: 5,
+    });
+
+    const where = prismaMock.notificationDelivery.findFirst.mock.calls[0][0]
+      .where as Record<string, unknown>;
+    expect(where).not.toHaveProperty('status');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(prismaMock.notificationDelivery.create).not.toHaveBeenCalled();
   });
 
   it('returns vendor email preview with locked body, subject, and form URL', async () => {
@@ -444,7 +474,8 @@ describe('notification-email.service', () => {
 
     expect(result).toEqual({
       status: NotificationDeliveryStatus.SKIPPED,
-      errorMessage: 'Recipient email is missing',
+      errorMessage: 'A recipient email is required',
+      notificationDeliveryId: 'notification-delivery-1',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -564,14 +595,7 @@ describe('notification-email.service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('records delivery in notification_deliveries with provider message id on success', async () => {
-    prismaMock.notificationDelivery.create.mockResolvedValue({
-      id: 'delivery-1',
-    });
-    prismaMock.notificationDelivery.update.mockResolvedValue({
-      id: 'delivery-1',
-    });
-
+  it('records a direct provider delivery in notification_deliveries on success', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: 'resend_msg_123' }),
@@ -591,9 +615,12 @@ describe('notification-email.service', () => {
       })
     );
 
-    expect(prismaMock.notificationDelivery.update).toHaveBeenCalledWith(
+    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'delivery-1' },
+        where: {
+          id: 'notification-delivery-1',
+          status: NotificationDeliveryStatus.PENDING,
+        },
         data: expect.objectContaining({
           status: NotificationDeliveryStatus.SENT,
           provider_message_id: 'resend_msg_123',
@@ -602,14 +629,7 @@ describe('notification-email.service', () => {
     );
   });
 
-  it('records delivery failure in notification_deliveries when provider call fails', async () => {
-    prismaMock.notificationDelivery.create.mockResolvedValue({
-      id: 'delivery-failed',
-    });
-    prismaMock.notificationDelivery.update.mockResolvedValue({
-      id: 'delivery-failed',
-    });
-
+  it('records a direct provider failure in notification_deliveries', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
@@ -621,9 +641,12 @@ describe('notification-email.service', () => {
       'Domain not verified'
     );
 
-    expect(prismaMock.notificationDelivery.update).toHaveBeenCalledWith(
+    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'delivery-failed' },
+        where: {
+          id: 'notification-delivery-1',
+          status: NotificationDeliveryStatus.PENDING,
+        },
         data: expect.objectContaining({
           status: NotificationDeliveryStatus.FAILED,
           error_message: 'Domain not verified',

@@ -280,6 +280,7 @@ export const notifySubmissionRejected = async (
     project_id: string;
     actor_id: string;
     submitter_id?: string | null;
+    submission_id?: string;
     step_order: number;
     reason?: string | null;
   }
@@ -303,7 +304,9 @@ export const notifySubmissionRejected = async (
     target_path: `/app/projects/${project.id}`,
     action_label: 'เปิดโครงการ',
     requires_action: true,
-    dedupe_key: `submission-rejected:${project.id}:${input.step_order}`,
+    dedupe_key: input.submission_id
+      ? `submission-rejected:${input.submission_id}`
+      : `submission-rejected:${project.id}:${input.step_order}`,
   });
 };
 

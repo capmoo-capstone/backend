@@ -8,6 +8,7 @@ import {
   UnitResponsibleType,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
+import { EmailKind } from '../../types/email-delivery.type';
 import {
   formatBangkokDate,
   nowUtc,
@@ -18,6 +19,7 @@ import {
   buildContractCommitteeReminderEmail,
   notificationEmailTransport,
 } from './notification-email.service';
+import { rejectCompletedSubmissionForEmailFailure } from '../submission-email-failure.service';
 
 const CONTRACT_COMMITTEE_EMAIL_KEY = 'contract_committee_email';
 const CONTRACT_ENABLE_NOTIFICATION_KEY = 'contract_enable_notification';
@@ -192,6 +194,7 @@ const buildReminderRecipients = (input: {
 };
 
 const buildDeliveryDedupeKey = (input: {
+  submissionId: string;
   projectId: string;
   installmentNo: number | null;
   inspectionDate: Date;
@@ -200,6 +203,7 @@ const buildDeliveryDedupeKey = (input: {
 }) =>
   [
     'contract-committee-reminder',
+    input.submissionId,
     input.projectId,
     input.installmentNo ?? 'none',
     `${input.remainingDays}d`,
@@ -226,13 +230,6 @@ const reserveReminderDelivery = async (input: {
       user_id: input.userId,
       channel: NotificationChannel.EMAIL_IMMEDIATE,
       dedupe_key: input.dedupeKey,
-      status: {
-        in: [
-          NotificationDeliveryStatus.PENDING,
-          NotificationDeliveryStatus.SENT,
-          NotificationDeliveryStatus.SKIPPED,
-        ],
-      },
     },
     select: { id: true },
   });
@@ -247,7 +244,7 @@ const reserveReminderDelivery = async (input: {
         user_id: input.userId,
         recipient_email: input.recipientEmail,
         channel: NotificationChannel.EMAIL_IMMEDIATE,
-        email_type: 'COMMITTEE_REMINDER',
+        email_type: EmailKind.COMMITTEE_REMINDER,
         subject: input.subject,
         body: input.body,
         dedupe_key: input.dedupeKey,
@@ -387,6 +384,7 @@ export const sendContractCommitteeReminders = async (options?: {
     await prisma.$transaction(async (tx) => {
       for (const recipient of recipients) {
         const dedupeKey = buildDeliveryDedupeKey({
+          submissionId: submission.id,
           projectId: submission.project_id,
           installmentNo: submission.installment_no,
           inspectionDate,
@@ -435,6 +433,9 @@ export const sendContractCommitteeReminders = async (options?: {
         body: pendingDelivery.body,
         htmlBody: pendingDelivery.htmlBody,
         recipientEmail: pendingDelivery.recipientEmail,
+        submissionId: submission.id,
+        notificationDeliveryId: pendingDelivery.deliveryId,
+        emailKind: EmailKind.COMMITTEE_REMINDER,
       });
 
       await prisma.notificationDelivery.update({
@@ -443,9 +444,19 @@ export const sendContractCommitteeReminders = async (options?: {
           status: result.status,
           error_message: result.errorMessage ?? null,
           sent_at: result.sentAt ?? null,
-          provider_message_id: result.providerMessageId ?? null,
         },
       });
+
+      if (
+        result.status === NotificationDeliveryStatus.FAILED ||
+        result.status === NotificationDeliveryStatus.SKIPPED
+      ) {
+        await rejectCompletedSubmissionForEmailFailure({
+          submissionId: submission.id,
+          reason: result.errorMessage || 'Committee reminder email failed',
+          occurredAt: nowUtc(),
+        });
+      }
 
       deliveryCount += 1;
     }

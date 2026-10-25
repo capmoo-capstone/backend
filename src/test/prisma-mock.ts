@@ -116,6 +116,14 @@ export const resetPrismaMock = () => {
   prismaMock.notificationOutbox.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.notificationOutbox.update.mockResolvedValue(undefined);
   txMock.notificationOutbox.create.mockResolvedValue(undefined);
+  prismaMock.notificationDelivery.create.mockResolvedValue({
+    id: 'notification-delivery-1',
+  });
+  prismaMock.notificationDelivery.update.mockResolvedValue(undefined);
+  prismaMock.notificationDelivery.updateMany.mockResolvedValue({ count: 1 });
+  txMock.notificationDelivery.create.mockResolvedValue({
+    id: 'notification-delivery-1',
+  });
   prismaMock.$transaction.mockImplementation(async (arg: any) => {
     if (Array.isArray(arg)) {
       return Promise.all(arg);

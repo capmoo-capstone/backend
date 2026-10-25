@@ -151,6 +151,10 @@ describe('notification date handling', () => {
       dedupeKey: 'email:project-1:user-1',
     });
 
+    const initialDedupeWhere = txMock.notificationDelivery.findFirst.mock
+      .calls[0][0].where as Record<string, unknown>;
+    expect(initialDedupeWhere).not.toHaveProperty('status');
+
     expect(result).toEqual(
       expect.objectContaining({
         id: 'delivery-1',
