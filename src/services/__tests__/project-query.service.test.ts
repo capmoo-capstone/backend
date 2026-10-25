@@ -380,7 +380,7 @@ describe('project-query.service', () => {
     });
   });
 
-  it('getUnassignedProjectsByUnit allows head-of-department users to query any unit', async () => {
+  it('getUnassignedProjectsByUnit returns projects from only the current budget year', async () => {
     prismaMock.project.findMany.mockResolvedValue([projectRow]);
     prismaMock.project.count.mockResolvedValue(1);
 
@@ -390,7 +390,23 @@ describe('project-query.service', () => {
     expect(prismaMock.project.findMany.mock.calls[0][0].where).toMatchObject({
       status: ProjectStatus.UNASSIGNED,
       responsible_unit_id: PROC1_UNIT_ID,
+      receive_no: { startsWith: '2569/' },
     });
+    expect(prismaMock.project.count.mock.calls[0][0].where).toEqual(
+      prismaMock.project.findMany.mock.calls[0][0].where
+    );
+  });
+
+  it('getUnassignedProjectsByUnit rolls over the budget year in October Bangkok time', async () => {
+    vi.setSystemTime(new Date('2026-09-30T17:00:00.000Z'));
+    prismaMock.project.findMany.mockResolvedValue([]);
+    prismaMock.project.count.mockResolvedValue(0);
+
+    await getUnassignedProjectsByUnit(supplyUser, PROC1_UNIT_ID);
+
+    expect(
+      prismaMock.project.findMany.mock.calls[0][0].where.receive_no
+    ).toEqual({ startsWith: '2570/' });
   });
 
   it('getAssignedProjects returns staff-assigned projects with flattened assignee data', async () => {
