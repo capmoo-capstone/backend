@@ -414,55 +414,131 @@ export const updateProjectData = async (
   });
 };
 
-export const generateContractNumber = async (
+type ContractNumberType = 'CU' | 'SP' | 'PSY' | 'NUR' | 'HS';
+
+const CONTRACT_TYPE_BY_DEPARTMENT_ID: Partial<
+  Record<string, ContractNumberType>
+> = {
+  'FAC-SPORTS-SCI': 'SP',
+  'FAC-NURSING': 'NUR',
+  'FAC-PSYCHOLOGY': 'PSY',
+  'FAC-ALLIED-HEALTH': 'HS',
+};
+
+const getContractNumberType = (requestingDepartmentId: string) =>
+  CONTRACT_TYPE_BY_DEPARTMENT_ID[requestingDepartmentId] ?? 'CU';
+
+const formatGeneratedContractYear = (
+  type: ContractNumberType,
+  budgetYear: number
+) => (type === 'HS' ? String(budgetYear) : String(budgetYear).slice(-2));
+
+const acquireContractNumberLock = async (
+  tx: Prisma.TransactionClient,
+  type: string,
+  year: string | number
+) => {
+  const lockKey = `${year}:${type}`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+};
+
+const createContractNumberRecord = async (
+  tx: Prisma.TransactionClient,
   user: AuthPayload,
   type: string,
+  contractNo: string
+): Promise<{ id: string; contract_no: string }> => {
+  const newContract = await tx.projectContractNumber.create({
+    data: {
+      type,
+      contract_no: contractNo,
+    },
+    select: {
+      id: true,
+      contract_no: true,
+      type: true,
+      is_active: true,
+      cancellation_reason: true,
+    },
+  });
+
+  await recordAuditEvent(tx, {
+    kind: AuditLogType.CONTRACT_NUMBER,
+    eventType: AuditEventType.CONTRACT_NUMBER_CREATED,
+    targetType: AuditTargetType.CONTRACT_NUMBER,
+    targetId: newContract.id,
+    actor: user,
+    actorId: user.id,
+    targetSnapshot: await buildContractNumberTargetSnapshot(tx, newContract),
+    sourceTable: 'project_contract_numbers',
+    sourceId: newContract.id,
+  });
+
+  return { id: newContract.id, contract_no: newContract.contract_no };
+};
+
+export const generateContractNumber = async (
+  user: AuthPayload,
+  projectId: string,
   budget_year: number
 ): Promise<{ id: string; contract_no: string }> => {
   assertCapability(user, Capability.CONTRACT_MANAGE);
   return await prisma.$transaction(async (tx) => {
-    const lockKey = `${budget_year}:${type}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-    const newContractNo = await tx.projectContractNumber
-      .count({
-        where: {
-          type,
-          contract_no: {
-            endsWith: `/${budget_year}`,
-          },
-        },
-      })
-      .then((count) => {
-        return `${count + 1}/${budget_year}`;
-      });
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { requesting_dept_id: true },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
 
-    const newContract = await tx.projectContractNumber.create({
-      data: {
+    const type = getContractNumberType(project.requesting_dept_id);
+    const contractYear = formatGeneratedContractYear(type, budget_year);
+    await acquireContractNumberLock(tx, type, contractYear);
+
+    const existingContractNumbers = await tx.projectContractNumber.findMany({
+      where: {
         type,
-        contract_no: newContractNo,
+        contract_no: {
+          endsWith: `/${contractYear}`,
+        },
       },
-      select: {
-        id: true,
-        contract_no: true,
-        type: true,
-        is_active: true,
-        cancellation_reason: true,
+      select: { contract_no: true },
+    });
+    const contractNumberPattern = new RegExp(`^(\\d+)\\/${contractYear}$`);
+    const highestSequence = existingContractNumbers.reduce(
+      (highest, { contract_no }) => {
+        const match = contractNumberPattern.exec(contract_no);
+        return match ? Math.max(highest, Number(match[1])) : highest;
       },
-    });
+      0
+    );
+    const newContractNo = `${highestSequence + 1}/${contractYear}`;
 
-    await recordAuditEvent(tx, {
-      kind: AuditLogType.CONTRACT_NUMBER,
-      eventType: AuditEventType.CONTRACT_NUMBER_CREATED,
-      targetType: AuditTargetType.CONTRACT_NUMBER,
-      targetId: newContract.id,
-      actor: user,
-      actorId: user.id,
-      targetSnapshot: await buildContractNumberTargetSnapshot(tx, newContract),
-      sourceTable: 'project_contract_numbers',
-      sourceId: newContract.id,
-    });
+    return createContractNumberRecord(tx, user, type, newContractNo);
+  });
+};
 
-    return { id: newContract.id, contract_no: newContract.contract_no };
+export const createManualContractNumber = async (
+  user: AuthPayload,
+  projectId: string,
+  contractNo: string
+): Promise<{ id: string; contract_no: string }> => {
+  assertCapability(user, Capability.CONTRACT_MANAGE);
+  return await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      select: { requesting_dept_id: true },
+    });
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    const type = getContractNumberType(project.requesting_dept_id);
+    const year = contractNo.slice(contractNo.lastIndexOf('/') + 1);
+    await acquireContractNumberLock(tx, type, year);
+
+    return createContractNumberRecord(tx, user, type, contractNo);
   });
 };
 

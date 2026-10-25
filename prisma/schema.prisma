@@ -525,7 +525,7 @@ model ProjectContractNumber {
   updated_at          DateTime? @updatedAt
   project             Project?
 
-  @@unique([type, contract_no])
+  @@index([type, contract_no])
   @@index([is_active])
   @@map("project_contract_numbers")
 }
