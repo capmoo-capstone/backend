@@ -56,6 +56,52 @@ describe('daily-summary-email.service', () => {
     expect(resolveDailySummaryRole(user)).toBe(UserRole.FINANCE_STAFF);
   });
 
+  it.each([UserRole.SUPER_ADMIN, UserRole.GUEST])(
+    'calculates fallback counts within project read access for %s',
+    async (role) => {
+      const user = buildUser([
+        {
+          role,
+          dept_id: 'DEPT-OTHER',
+          dept_name: 'Other',
+          unit_id: null,
+          unit_name: null,
+        },
+      ]);
+      prismaMock.project.count
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(3);
+
+      expect(
+        await getDailySummaryCountsForRole(user, null, REPORT_DATE)
+      ).toEqual({
+        new_count: 2,
+        completed_count: 1,
+        pending_count: 4,
+        urgent_count: 3,
+      });
+      const filters = prismaMock.project.count.mock.calls.map(
+        ([arg]) => arg.where
+      );
+      expect(filters).toHaveLength(4);
+      if (role === UserRole.GUEST) {
+        for (const where of filters) {
+          expect(where.AND).toContainEqual({
+            requesting_dept_id: { in: ['DEPT-OTHER'] },
+          });
+        }
+      } else {
+        expect(JSON.stringify(filters)).not.toContain('requesting_dept_id');
+      }
+      expect(JSON.stringify(filters[0])).toContain('2026-08-28T17:00:00.000Z');
+      expect(JSON.stringify(filters[1])).toContain('procurement_completed_at');
+      expect(JSON.stringify(filters[2])).toContain('CANCELLED');
+      expect(JSON.stringify(filters[3])).toContain('is_urgent');
+    }
+  );
+
   it('calculates GENERAL_STAFF daily counts from own scope and tab composition', async () => {
     const user = buildUser([
       {
@@ -289,6 +335,8 @@ describe('daily-summary-email.service', () => {
       '<a href="https://www.nexus-procure.com">https://www.nexus-procure.com</a>'
     );
     expect(content.html).toContain('<strong>NexusProcure</strong>');
-    expect(content.html).toContain('<em>(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)</em>');
+    expect(content.html).toContain(
+      '<em>(อีเมลฉบับนี้เป็นอีเมลอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)</em>'
+    );
   });
 });

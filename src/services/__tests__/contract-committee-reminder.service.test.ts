@@ -316,6 +316,7 @@ describe('contract-committee-reminder.service', () => {
         status: NotificationDeliveryStatus.FAILED,
         error_message: 'SMTP timeout',
         sent_at: null,
+        provider_message_id: null,
       },
     });
   });

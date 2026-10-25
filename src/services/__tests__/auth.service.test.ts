@@ -11,7 +11,9 @@ import {
   exchangeSsoCode,
   login,
   loginWithSamlClaims,
+  updateDailyEmail,
 } from '../auth.service';
+import type { AuthPayload } from '../../types/auth.type';
 
 vi.mock('bcrypt', () => ({
   default: {
@@ -44,6 +46,42 @@ describe('auth.service', () => {
     mockedJwt.sign.mockReset();
     mockedClearUserAuthCache.mockReset();
   });
+
+  it.each(Object.values(UserRole))(
+    'allows %s to save their own daily email preference',
+    async (role) => {
+      const user: AuthPayload = {
+        token: '',
+        id: 'user-1',
+        username: 'user.one',
+        full_name: 'User One',
+        email: 'user@example.com',
+        roles: [
+          {
+            role,
+            dept_id: 'DEPT-OTHER',
+            dept_name: 'Other',
+            unit_id: null,
+            unit_name: null,
+          },
+        ],
+        is_delegated: false,
+        delegated_by: [],
+      };
+      for (const enabled of [true, false]) {
+        prismaMock.user.update.mockResolvedValue({ daily_email: enabled });
+        expect(await updateDailyEmail(user, enabled)).toEqual({
+          daily_email: enabled,
+        });
+        expect(prismaMock.user.update).toHaveBeenLastCalledWith({
+          where: { id: user.id },
+          data: { daily_email: enabled },
+          select: { daily_email: true },
+        });
+      }
+      expect(mockedClearUserAuthCache).toHaveBeenCalledWith(user.id);
+    }
+  );
 
   it('allows password login for a dual-login account', async () => {
     prismaMock.user.findUnique

@@ -1,7 +1,6 @@
 import {
   NotificationChannel,
   NotificationDeliveryStatus,
-  UserRole,
 } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { activeUserWhere } from '../../utils/active-state';
@@ -58,7 +57,7 @@ const isAllowedEmail = (email: string, allowedEmails?: ReadonlySet<string>) =>
 
 type DailySummaryRecipient = EmailRecipient & {
   id: string;
-  role: NonNullable<ReturnType<typeof resolveDailySummaryRole>>;
+  role: ReturnType<typeof resolveDailySummaryRole>;
   audienceText: string;
   auth: AuthPayload;
 };
@@ -86,6 +85,7 @@ export interface EmailDeliveryResult {
   status: NotificationDeliveryStatus;
   errorMessage?: string | null;
   sentAt?: Date | null;
+  providerMessageId?: string | null;
 }
 
 export interface NotificationEmailTransport {
@@ -112,7 +112,9 @@ const getAppPublicUrl = () => {
 
 const buildLoginUrl = () => `${getAppPublicUrl()}/login`;
 
-const sendResendEmail = async (payload: ResendEmailPayload) => {
+const sendResendEmail = async (
+  payload: ResendEmailPayload
+): Promise<{ id: string | null }> => {
   const { apiKey } = getResendConfig();
   const response = await fetch(RESEND_API_URL, {
     method: 'POST',
@@ -124,7 +126,12 @@ const sendResendEmail = async (payload: ResendEmailPayload) => {
   });
 
   if (response.ok) {
-    return;
+    try {
+      const data = (await response.json()) as { id?: string };
+      return { id: data?.id ?? null };
+    } catch {
+      return { id: null };
+    }
   }
 
   let message = `Resend request failed with status ${response.status}`;
@@ -147,7 +154,7 @@ const sendEmail = async (payload: {
   subject: string;
   text: string;
   html?: string;
-}) => {
+}): Promise<{ providerMessageId: string | null }> => {
   const { apiKey, from } = getResendConfig();
   if (!apiKey) {
     throw new Error('RESEND_API_KEY is not configured');
@@ -162,25 +169,119 @@ const sendEmail = async (payload: {
     throw new Error('A recipient email is required');
   }
 
-  await sendResendEmail({
+  const resendResult = await sendResendEmail({
     from,
     to: [recipient],
     subject: payload.subject,
     text: payload.text,
     ...(payload.html ? { html: payload.html } : {}),
   });
+
+  return { providerMessageId: resendResult.id };
 };
+
+export interface BusinessEmailOptions {
+  userId?: string | null;
+  emailType?: string;
+  metadata?: Record<string, unknown> | null;
+  dedupeKey?: string | null;
+  notificationId?: string | null;
+}
 
 const sendBusinessEmail = async (
   recipientEmail: string,
-  content: BusinessEmailContent
-) => {
-  await sendEmail({
-    to: recipientEmail,
-    subject: content.subject,
-    text: content.text,
-    html: content.html,
-  });
+  content: { subject: string; text: string; html?: string },
+  options?: BusinessEmailOptions
+): Promise<{ providerMessageId: string | null }> => {
+  const recipient = recipientEmail?.trim() || '';
+  const emailType = options?.emailType ?? 'BUSINESS_EMAIL';
+  const userId = options?.userId ?? null;
+
+  if (options?.dedupeKey) {
+    const existing = await prisma.notificationDelivery.findFirst({
+      where: {
+        ...(userId ? { user_id: userId } : {}),
+        channel: NotificationChannel.EMAIL_IMMEDIATE,
+        dedupe_key: options.dedupeKey,
+        status: {
+          in: [
+            NotificationDeliveryStatus.PENDING,
+            NotificationDeliveryStatus.SENT,
+            NotificationDeliveryStatus.SKIPPED,
+          ],
+        },
+      },
+      select: { id: true, provider_message_id: true },
+    });
+
+    if (existing) {
+      return { providerMessageId: existing.provider_message_id };
+    }
+  }
+
+  let deliveryRecord: { id: string } | null = null;
+  try {
+    deliveryRecord = await prisma.notificationDelivery.create({
+      data: {
+        user_id: userId,
+        recipient_email: recipient,
+        channel: NotificationChannel.EMAIL_IMMEDIATE,
+        email_type: emailType,
+        status: NotificationDeliveryStatus.PENDING,
+        subject: content.subject,
+        body: content.text,
+        dedupe_key: options?.dedupeKey ?? null,
+        notification_id: options?.notificationId ?? null,
+        metadata: options?.metadata ? (options.metadata as any) : undefined,
+      },
+      select: { id: true },
+    });
+  } catch (err) {
+    console.error('Failed to create pending notification delivery record', err);
+  }
+
+  try {
+    const { providerMessageId } = await sendEmail({
+      to: recipient,
+      subject: content.subject,
+      text: content.text,
+      html: content.html,
+    });
+
+    if (deliveryRecord) {
+      await prisma.notificationDelivery.update({
+        where: { id: deliveryRecord.id },
+        data: {
+          status: NotificationDeliveryStatus.SENT,
+          sent_at: new Date(),
+          provider_message_id: providerMessageId,
+        },
+      });
+    }
+
+    return { providerMessageId };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown email failure';
+    const isSkipped =
+      errorMessage === 'RESEND_API_KEY is not configured' ||
+      errorMessage === 'RESEND_FROM is not configured' ||
+      errorMessage === 'A recipient email is required';
+
+    if (deliveryRecord) {
+      await prisma.notificationDelivery.update({
+        where: { id: deliveryRecord.id },
+        data: {
+          status: isSkipped
+            ? NotificationDeliveryStatus.SKIPPED
+            : NotificationDeliveryStatus.FAILED,
+          error_message: errorMessage,
+        },
+      });
+    }
+
+    throw error;
+  }
 };
 
 const formatPersonGreeting = (fullName: string) => `สวัสดีคุณ ${fullName},`;
@@ -273,9 +374,7 @@ const buildDailySummaryAuthPayload = (user: {
   username: user.username,
   full_name: user.full_name,
   email: user.email,
-  roles: mapAuthRoles(
-    user.roles.filter((role) => role.department.id === OPS_DEPT_ID)
-  ),
+  roles: mapAuthRoles(user.roles),
   is_delegated: false,
   delegated_by: [],
 });
@@ -291,29 +390,31 @@ const resolveDailySummaryRecipient = (user: {
     unit: { id: string; name: string } | null;
   }>;
 }): DailySummaryRecipient | null => {
-  if (!user.email) {
+  if (!user.email?.trim()) {
     return null;
   }
 
   const auth = buildDailySummaryAuthPayload(user);
-  const role = resolveDailySummaryRole(auth);
-
-  if (!role) {
-    return null;
-  }
+  const role = resolveDailySummaryRole({
+    roles: auth.roles.filter((entry) => entry.dept_id === OPS_DEPT_ID),
+  });
 
   return {
     id: user.id,
     email: user.email,
     fullName: user.full_name,
     role,
-    audienceText: buildDailySummaryAudienceText({
-      role,
-      unitNames: auth.roles
-        .filter((entry) => entry.role === role)
-        .map((entry) => entry.unit_name ?? '')
-        .filter(Boolean),
-    }),
+    audienceText: role
+      ? buildDailySummaryAudienceText({
+          role,
+          unitNames: auth.roles
+            .filter(
+              (entry) => entry.role === role && entry.dept_id === OPS_DEPT_ID
+            )
+            .map((entry) => entry.unit_name ?? '')
+            .filter(Boolean),
+        })
+      : 'สถานะโครงการที่ท่านสามารถเข้าถึงได้',
     auth,
   };
 };
@@ -348,11 +449,17 @@ export const buildContractCommitteeReminderEmail = (
 };
 
 export const sendHelloTestEmail = async (to?: string | null) => {
-  await sendEmail({
-    to: to?.trim() || '',
-    subject: 'NexusProcure test email',
-    text: 'hello test email',
-  });
+  const recipient = to?.trim() || '';
+  await sendBusinessEmail(
+    recipient,
+    {
+      subject: 'NexusProcure test email',
+      text: 'hello test email',
+    },
+    {
+      emailType: 'TEST',
+    }
+  );
 };
 
 export const sendRegistrationPendingEmail = async (
@@ -360,7 +467,11 @@ export const sendRegistrationPendingEmail = async (
 ) => {
   await sendBusinessEmail(
     recipient.email,
-    buildRegistrationPendingEmailContent(recipient)
+    buildRegistrationPendingEmailContent(recipient),
+    {
+      emailType: 'STAFF_REGISTRATION_PENDING',
+      metadata: { fullName: recipient.fullName },
+    }
   );
 };
 
@@ -369,7 +480,11 @@ export const sendRegistrationApprovedEmail = async (
 ) => {
   await sendBusinessEmail(
     recipient.email,
-    buildRegistrationApprovedEmailContent(recipient)
+    buildRegistrationApprovedEmailContent(recipient),
+    {
+      emailType: 'STAFF_REGISTRATION_APPROVED',
+      metadata: { fullName: recipient.fullName },
+    }
   );
 };
 
@@ -478,7 +593,13 @@ export const sendVendorEmailForProject = async (
       ? renderVendorRequestEditEmailContent(input.data)
       : renderVendorPoEmailContent(input.data);
 
-  await sendBusinessEmail(input.recipient, content);
+  await sendBusinessEmail(input.recipient, content, {
+    emailType: input.templateId,
+    metadata: {
+      projectId: project.id,
+    },
+    dedupeKey: `vendor-${project.id}-${input.templateId}-${Date.now()}`,
+  });
 
   return {
     projectId: project.id,
@@ -491,7 +612,14 @@ export const sendContractCommitteeReminderEmail = async (
   input: ContractCommitteeReminderEmailInput
 ) => {
   const content = buildContractCommitteeReminderEmail(input);
-  await sendBusinessEmail(input.recipientEmail, content);
+  await sendBusinessEmail(input.recipientEmail, content, {
+    emailType: 'COMMITTEE_REMINDER',
+    metadata: {
+      projectTitle: input.projectTitle,
+      remainingDays: input.remainingDays,
+    },
+    dedupeKey: `contract-committee-${input.projectTitle}-${input.recipientEmail}-${input.remainingDays}`,
+  });
 };
 
 export const sendDailySummaryEmail = async (
@@ -511,7 +639,16 @@ export const sendDailySummaryEmail = async (
     appPublicUrl: getAppPublicUrl(),
   });
 
-  await sendBusinessEmail(recipient.email, content);
+  const dateKey = reportDate.toISOString().slice(0, 10);
+  await sendBusinessEmail(recipient.email, content, {
+    userId: recipient.id,
+    emailType: 'DAILY_SUMMARY',
+    metadata: {
+      reportDate: dateKey,
+      role: recipient.role,
+    },
+    dedupeKey: `daily-summary-${recipient.id}-${dateKey}`,
+  });
 };
 
 export const sendDailySummaryEmailsToOptedInUsers = async (
@@ -523,19 +660,6 @@ export const sendDailySummaryEmailsToOptedInUsers = async (
       ...activeUserWhere(),
       daily_email: true,
       email: { not: null },
-      roles: {
-        some: {
-          dept_id: OPS_DEPT_ID,
-          role: {
-            in: [
-              UserRole.HEAD_OF_UNIT,
-              UserRole.DOCUMENT_STAFF,
-              UserRole.FINANCE_STAFF,
-              UserRole.GENERAL_STAFF,
-            ],
-          },
-        },
-      },
     },
     select: {
       id: true,
@@ -592,7 +716,7 @@ class ResendNotificationEmailTransport implements NotificationEmailTransport {
     }
 
     try {
-      await sendEmail({
+      const { providerMessageId } = await sendEmail({
         to: recipient,
         subject: draft.subject,
         text: draft.body,
@@ -603,6 +727,7 @@ class ResendNotificationEmailTransport implements NotificationEmailTransport {
         status: NotificationDeliveryStatus.SENT,
         sentAt: new Date(),
         errorMessage: null,
+        providerMessageId,
       };
     } catch (error) {
       const message =

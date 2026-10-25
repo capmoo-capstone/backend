@@ -184,6 +184,9 @@ enum NotificationChannel {
 enum NotificationDeliveryStatus {
   PENDING
   SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
   SKIPPED
   FAILED
 }
@@ -469,24 +472,34 @@ model Notification {
 }
 
 model NotificationDelivery {
-  id              String                     @id @default(uuid())
-  notification_id String?
-  user_id         String
-  channel         NotificationChannel
-  status          NotificationDeliveryStatus @default(PENDING)
-  subject         String
-  body            String?
-  dedupe_key      String?
-  error_message   String?
-  sent_at         DateTime?
-  created_at      DateTime                   @default(now())
-  updated_at      DateTime                   @updatedAt
+  id                  String                     @id @default(uuid())
+  notification_id     String?
+  user_id             String?
+  recipient_email     String
+  channel             NotificationChannel        @default(EMAIL_IMMEDIATE)
+  email_type          String?
+  status              NotificationDeliveryStatus @default(PENDING)
+  subject             String
+  body                String?
+  dedupe_key          String?
+  provider_message_id String?
+  error_message       String?
+  metadata            Json?
+  sent_at             DateTime?
+  delivered_at        DateTime?
+  bounced_at          DateTime?
+  created_at          DateTime                   @default(now())
+  updated_at          DateTime                   @updatedAt
 
   notification Notification? @relation(fields: [notification_id], references: [id], onDelete: Cascade)
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, channel, dedupe_key], map: "notification_deliveries_user_id_channel_dedupe_key_key")
+  @@index([recipient_email])
+  @@index([provider_message_id])
   @@index([user_id, channel, status, created_at(sort: Desc)])
+  @@index([status, created_at(sort: Desc)])
+  @@index([email_type, created_at(sort: Desc)])
   @@index([notification_id])
   @@map("notification_deliveries")
 }
