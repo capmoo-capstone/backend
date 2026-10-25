@@ -14,6 +14,7 @@ import {
   BadRequestError,
   ForbiddenError,
   NotFoundError,
+  SubmissionEmailFailureError,
 } from '../utils/errors';
 import { syncProjectPhases } from '../utils/phase-status';
 import {
@@ -59,6 +60,8 @@ import {
 } from '../utils/access-policy';
 import { assertCanReadProject, projectReadWhere } from '../utils/project-scope';
 import { isHeadOfSupplyUnit } from '../utils/permissions';
+import { sendVendorEmailForProject } from './notification/notification-email.service';
+import { rejectCompletedSubmissionForEmailFailure } from './submission-email-failure.service';
 
 const getSubmissionRound = async (
   tx: Prisma.TransactionClient,
@@ -557,8 +560,9 @@ export const createStaffSubmissionsProject = async (
       installment_no: installmentNo,
     });
 
-    const nextStatus: SubmissionStatus =
-      data.required_approval && !isHeadOfSupplyUnit(user)
+    const nextStatus: SubmissionStatus = data.vendor_email
+      ? SubmissionStatus.COMPLETED
+      : data.required_approval && !isHeadOfSupplyUnit(user)
         ? SubmissionStatus.WAITING_APPROVAL
         : data.required_signature
           ? SubmissionStatus.WAITING_PROPOSAL
@@ -574,6 +578,9 @@ export const createStaffSubmissionsProject = async (
         submission_round,
         submission_type: SubmissionType.STAFF,
         status: nextStatus,
+        ...(nextStatus === SubmissionStatus.COMPLETED
+          ? { completed_at: nowUtc(), completed_by: user.id }
+          : {}),
         staff_remark: data.staff_remark,
         meta_data: data.meta_data,
         documents: {
@@ -630,6 +637,31 @@ export const createStaffSubmissionsProject = async (
   });
 
   await publishPersistedNotifications(transactionResult.notificationResults);
+
+  if (
+    data.vendor_email &&
+    transactionResult.submission.status === SubmissionStatus.COMPLETED
+  ) {
+    try {
+      await sendVendorEmailForProject(
+        transactionResult.submission.project_id,
+        data.vendor_email,
+        undefined,
+        { submissionId: transactionResult.submission.id }
+      );
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? error.message
+          : 'Unknown email sending failure';
+      await rejectCompletedSubmissionForEmailFailure({
+        submissionId: transactionResult.submission.id,
+        reason,
+        occurredAt: nowUtc(),
+      });
+      throw new SubmissionEmailFailureError(reason);
+    }
+  }
 
   return transactionResult.submission;
 };

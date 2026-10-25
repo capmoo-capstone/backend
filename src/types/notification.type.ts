@@ -56,6 +56,14 @@ export interface NotificationDeliveryRecord {
   subject: string;
   body: string | null;
   dedupe_key: string | null;
+  recipient_email?: string;
+  email_type?: string | null;
+  provider_message_id?: string | null;
+  submission_id?: string | null;
+  latest_svix_event_id?: string | null;
+  status_at?: Date;
+  error_message?: string | null;
+  sent_at?: Date | null;
 }
 
 export interface NotificationRealtimeEnvelope {

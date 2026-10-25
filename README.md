@@ -175,7 +175,7 @@ All routes are prefixed with `/api/v1` and require a Bearer token, except public
 | POST   | `/import`                                  | Bulk import projects                                        |
 | PATCH  | `/assign`                                  | Assign projects to a staff member (HEAD_OF_UNIT)            |
 | PATCH  | `/accept`                                  | Accept assigned projects (GENERAL_STAFF)                    |
-| POST   | `/contract/new`                            | Generate new contract number                                |
+| POST   | `/contract/new`                            | Generate or reserve a manual contract number                |
 | PATCH  | `/contract/:contractId/cancel`             | Cancel contract number                                      |
 | GET    | `/:id/history`                             | Get audit history for a project                             |
 | GET    | `/:id/document-summary`                    | Get document summary for a project                          |

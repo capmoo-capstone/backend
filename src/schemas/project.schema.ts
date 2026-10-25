@@ -111,10 +111,27 @@ export const RequestEditInstallmentSchema = z.object({
   reason: z.string(),
 });
 
-export const GetNewContractNumberSchema = z.object({
-  type: z.enum(['CU', 'SP', 'PSY', 'NUR', 'HS']),
-  budget_year: z.coerce.number().int(),
-});
+const GenerateContractNumberSchema = z
+  .object({
+    project_id: z.uuid(),
+    budget_year: z.coerce.number().int().min(1000).max(9999),
+  })
+  .strict();
+
+const ManualContractNumberSchema = z
+  .object({
+    project_id: z.uuid(),
+    contract_no: z
+      .string()
+      .trim()
+      .regex(/^\d+\/(?:\d{2}|\d{4})$/, 'Invalid contract number format'),
+  })
+  .strict();
+
+export const GetNewContractNumberSchema = z.union([
+  GenerateContractNumberSchema,
+  ManualContractNumberSchema,
+]);
 
 export const CancelContractNumberSchema = z.object({
   contractId: z.uuid(),

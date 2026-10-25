@@ -32,6 +32,17 @@ export const CreateStaffSubmissionSchema = z.object({
       })
     )
     .optional(),
+  vendor_email: z
+    .object({
+      recipient: z.email(),
+      templateId: z.literal('VENDOR_PO_REQUEST'),
+      data: z.object({
+        poNumber: z.string(),
+        vendorName: z.string().nullable().optional(),
+        additionalMessage: z.string().nullable().optional(),
+      }),
+    })
+    .optional(),
 });
 
 export const CreateVendorSubmissionSchema = z.object({

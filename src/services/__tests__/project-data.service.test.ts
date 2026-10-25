@@ -11,9 +11,13 @@ import {
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { txMock } from '../../test/prisma-mock';
-import { UpdateProjectSchema } from '../../schemas/project.schema';
+import {
+  GetNewContractNumberSchema,
+  UpdateProjectSchema,
+} from '../../schemas/project.schema';
 import {
   cancelContractNumber,
+  createManualContractNumber,
   createProject,
   generateContractNumber,
   importProjects,
@@ -551,22 +555,30 @@ describe('project-data.service', () => {
     ).rejects.toThrow(new BadRequestError('Cannot update a cancelled project'));
   });
 
-  it('generateContractNumber creates the next contract number under an advisory lock', async () => {
-    txMock.projectContractNumber.count.mockResolvedValue(2);
+  it('generateContractNumber creates a two-digit-year number after the highest department sequence', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      requesting_dept_id: 'FAC-SPORTS-SCI',
+    });
+    txMock.projectContractNumber.findMany.mockResolvedValue([
+      { contract_no: '1/69' },
+      { contract_no: '42/69' },
+      { contract_no: 'invalid/69' },
+    ]);
     txMock.projectContractNumber.create.mockResolvedValue({
       id: 'contract-1',
-      contract_no: '3/2569',
-      type: 'PO',
+      contract_no: '43/69',
+      type: 'SP',
       is_active: true,
       cancellation_reason: null,
     });
 
-    const result = await generateContractNumber(user, 'PO', 2569);
+    const result = await generateContractNumber(user, 'project-1', 2569);
 
-    expect(result).toEqual({ id: 'contract-1', contract_no: '3/2569' });
+    expect(result).toEqual({ id: 'contract-1', contract_no: '43/69' });
     expect(txMock.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(txMock.projectContractNumber.count).toHaveBeenCalledWith({
-      where: { type: 'PO', contract_no: { endsWith: '/2569' } },
+    expect(txMock.projectContractNumber.findMany).toHaveBeenCalledWith({
+      where: { type: 'SP', contract_no: { endsWith: '/69' } },
+      select: { contract_no: true },
     });
     expect(txMock.auditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -581,19 +593,167 @@ describe('project-data.service', () => {
     );
   });
 
-  it('uses a stable contract-number advisory lock key for the type and fiscal year', async () => {
-    txMock.projectContractNumber.count.mockResolvedValue(0);
+  it('keeps a four-digit year for allied-health generated contract numbers', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      requesting_dept_id: 'FAC-ALLIED-HEALTH',
+    });
+    txMock.projectContractNumber.findMany.mockResolvedValue([]);
     txMock.projectContractNumber.create.mockResolvedValue({
       id: 'contract-1',
       contract_no: '1/2569',
-      type: 'PO',
+      type: 'HS',
       is_active: true,
       cancellation_reason: null,
     });
 
-    await generateContractNumber(user, 'PO', 2569);
+    const result = await generateContractNumber(user, 'project-1', 2569);
 
-    expect(txMock.$executeRaw.mock.calls[0][1]).toBe('2569:PO');
+    expect(result).toEqual({ id: 'contract-1', contract_no: '1/2569' });
+    expect(txMock.$executeRaw.mock.calls[0][1]).toBe('2569:HS');
+    expect(txMock.projectContractNumber.findMany).toHaveBeenCalledWith({
+      where: { type: 'HS', contract_no: { endsWith: '/2569' } },
+      select: { contract_no: true },
+    });
+  });
+
+  it.each([
+    ['OTHER-DEPARTMENT', 'CU', '69'],
+    ['FAC-SPORTS-SCI', 'SP', '69'],
+    ['FAC-PSYCHOLOGY', 'PSY', '69'],
+    ['FAC-NURSING', 'NUR', '69'],
+    ['FAC-ALLIED-HEALTH', 'HS', '2569'],
+  ])(
+    'infers generated type and year format for department %s',
+    async (requestingDeptId, expectedType, expectedYear) => {
+      txMock.project.findUnique.mockResolvedValue({
+        requesting_dept_id: requestingDeptId,
+      });
+      txMock.projectContractNumber.findMany.mockResolvedValue([]);
+      txMock.projectContractNumber.create.mockResolvedValue({
+        id: 'contract-1',
+        contract_no: `1/${expectedYear}`,
+        type: expectedType,
+        is_active: true,
+        cancellation_reason: null,
+      });
+
+      const result = await generateContractNumber(user, 'project-1', 2569);
+
+      expect(result).toEqual({
+        id: 'contract-1',
+        contract_no: `1/${expectedYear}`,
+      });
+      expect(txMock.projectContractNumber.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            type: expectedType,
+            contract_no: `1/${expectedYear}`,
+          },
+        })
+      );
+      expect(txMock.$executeRaw.mock.calls[0][1]).toBe(
+        `${expectedYear}:${expectedType}`
+      );
+    }
+  );
+
+  it('generateContractNumber rejects an unknown project', async () => {
+    txMock.project.findUnique.mockResolvedValue(null);
+
+    await expect(
+      generateContractNumber(user, 'missing-project', 2569)
+    ).rejects.toThrow(new NotFoundError('Project not found'));
+  });
+
+  it.each([
+    ['FAC-SPORTS-SCI', 'SP'],
+    ['FAC-NURSING', 'NUR'],
+    ['FAC-PSYCHOLOGY', 'PSY'],
+    ['FAC-ALLIED-HEALTH', 'HS'],
+    ['OTHER-DEPARTMENT', 'CU'],
+  ])(
+    'createManualContractNumber maps department %s to contract type %s',
+    async (requestingDeptId, expectedType) => {
+      txMock.project.findUnique.mockResolvedValue({
+        requesting_dept_id: requestingDeptId,
+      });
+      txMock.projectContractNumber.create.mockResolvedValue({
+        id: 'contract-1',
+        contract_no: '001/69',
+        type: expectedType,
+        is_active: true,
+        cancellation_reason: null,
+      });
+
+      const result = await createManualContractNumber(
+        user,
+        'project-1',
+        '001/69'
+      );
+
+      expect(result).toEqual({ id: 'contract-1', contract_no: '001/69' });
+      expect(txMock.projectContractNumber.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { type: expectedType, contract_no: '001/69' },
+        })
+      );
+      expect(txMock.$executeRaw.mock.calls[0][1]).toBe(`69:${expectedType}`);
+    }
+  );
+
+  it('createManualContractNumber rejects an unknown project', async () => {
+    txMock.project.findUnique.mockResolvedValue(null);
+
+    await expect(
+      createManualContractNumber(user, 'missing-project', '1/2569')
+    ).rejects.toThrow(new NotFoundError('Project not found'));
+  });
+
+  it('accepts trimmed manual contract numbers with two- or four-digit years', () => {
+    const project_id = '10000000-0000-4000-8000-000000000001';
+
+    expect(
+      GetNewContractNumberSchema.parse({
+        project_id,
+        contract_no: ' 001/69 ',
+      })
+    ).toEqual({ project_id, contract_no: '001/69' });
+    expect(
+      GetNewContractNumberSchema.parse({ project_id, contract_no: '1/2569' })
+    ).toEqual({ project_id, contract_no: '1/2569' });
+  });
+
+  it.each(['ABC/2569', '1/9', '1/256', '1-2569', ''])(
+    'rejects malformed manual contract number %j',
+    (contract_no) => {
+      expect(() =>
+        GetNewContractNumberSchema.parse({
+          project_id: '10000000-0000-4000-8000-000000000001',
+          contract_no,
+        })
+      ).toThrow();
+    }
+  );
+
+  it('rejects payloads that mix generated and manual contract-number fields', () => {
+    expect(() =>
+      GetNewContractNumberSchema.parse({
+        budget_year: 2569,
+        project_id: '10000000-0000-4000-8000-000000000001',
+        contract_no: '1/2569',
+      })
+    ).toThrow();
+  });
+
+  it('accepts generated requests with a project and four-digit fiscal year', () => {
+    const project_id = '10000000-0000-4000-8000-000000000001';
+
+    expect(
+      GetNewContractNumberSchema.parse({ project_id, budget_year: 2569 })
+    ).toEqual({ project_id, budget_year: 2569 });
+    expect(() =>
+      GetNewContractNumberSchema.parse({ project_id, budget_year: 69 })
+    ).toThrow();
   });
 
   it('cancelContractNumber deactivates the contract and clears the linked project contract id', async () => {

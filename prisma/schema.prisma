@@ -184,6 +184,11 @@ enum NotificationChannel {
 enum NotificationDeliveryStatus {
   PENDING
   SENT
+  DELIVERED
+  DELAYED
+  BOUNCED
+  COMPLAINED
+  SUPPRESSED
   SKIPPED
   FAILED
 }
@@ -396,14 +401,14 @@ model Project {
   contract_unit    Unit?                  @relation("ContractPhaseUnit", fields: [contract_unit_id], references: [id], onDelete: Restrict)
   contract_no      ProjectContractNumber? @relation(fields: [contract_no_id], references: [id], onDelete: SetNull)
 
-  assignee_procurement   User[]                 @relation("ProcurementProjects")
-  assignee_contract      User[]                 @relation("ContractProjects")
-  project_cancellation   ProjectCancellation[]
-  project_histories      ProjectHistory[]
-  project_installments   ProjectInstallment[]
-  submissions            ProjectSubmission[]
-  budget_plans           BudgetPlan[]
-  notifications          Notification[]
+  assignee_procurement User[]                @relation("ProcurementProjects")
+  assignee_contract    User[]                @relation("ContractProjects")
+  project_cancellation ProjectCancellation[]
+  project_histories    ProjectHistory[]
+  project_installments ProjectInstallment[]
+  submissions          ProjectSubmission[]
+  budget_plans         BudgetPlan[]
+  notifications        Notification[]
 
   @@index([receive_no(sort: Desc)])
   @@index([status, current_workflow_type])
@@ -456,10 +461,10 @@ model Notification {
   created_at      DateTime             @default(now())
   updated_at      DateTime             @updatedAt
 
-  user                  User                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  project               Project?               @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  deliveries            NotificationDelivery[]
-  outbox                NotificationOutbox[]
+  user       User                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  project    Project?               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+  outbox     NotificationOutbox[]
 
   @@unique([user_id, dedupe_key], map: "notifications_user_id_dedupe_key_key")
   @@index([user_id, is_read, created_at(sort: Desc)])
@@ -469,24 +474,40 @@ model Notification {
 }
 
 model NotificationDelivery {
-  id              String                     @id @default(uuid())
-  notification_id String?
-  user_id         String
-  channel         NotificationChannel
-  status          NotificationDeliveryStatus @default(PENDING)
-  subject         String
-  body            String?
-  dedupe_key      String?
-  error_message   String?
-  sent_at         DateTime?
-  created_at      DateTime                   @default(now())
-  updated_at      DateTime                   @updatedAt
+  id                   String                     @id @default(uuid())
+  notification_id      String?
+  submission_id        String?
+  user_id              String?
+  recipient_email      String
+  channel              NotificationChannel        @default(EMAIL_IMMEDIATE)
+  email_type           String?
+  status               NotificationDeliveryStatus @default(PENDING)
+  status_at            DateTime                   @default(now())
+  subject              String
+  body                 String?
+  dedupe_key           String?
+  provider_message_id  String?
+  latest_svix_event_id String?
+  error_message        String?
+  metadata             Json?
+  sent_at              DateTime?
+  delivered_at         DateTime?
+  bounced_at           DateTime?
+  created_at           DateTime                   @default(now())
+  updated_at           DateTime                   @updatedAt
 
-  notification Notification? @relation(fields: [notification_id], references: [id], onDelete: Cascade)
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  notification Notification?      @relation(fields: [notification_id], references: [id], onDelete: Cascade)
+  submission   ProjectSubmission? @relation(fields: [submission_id], references: [id], onDelete: SetNull)
+  user         User?              @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, channel, dedupe_key], map: "notification_deliveries_user_id_channel_dedupe_key_key")
+  @@unique([recipient_email, channel, dedupe_key], map: "notification_deliveries_recipient_channel_dedupe_key_key")
+  @@index([submission_id])
+  @@index([recipient_email])
+  @@index([provider_message_id])
   @@index([user_id, channel, status, created_at(sort: Desc)])
+  @@index([status, created_at(sort: Desc)])
+  @@index([email_type, created_at(sort: Desc)])
   @@index([notification_id])
   @@map("notification_deliveries")
 }
@@ -525,7 +546,7 @@ model ProjectContractNumber {
   updated_at          DateTime? @updatedAt
   project             Project?
 
-  @@unique([type, contract_no])
+  @@index([type, contract_no])
   @@index([is_active])
   @@map("project_contract_numbers")
 }
@@ -616,12 +637,13 @@ model ProjectSubmission {
   staff_remark     String?
   meta_data        Json[]
 
-  project   Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  submitter User?             @relation("SubmitBy", fields: [submitted_by], references: [id], onDelete: SetNull)
-  approver  User?             @relation("ApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
-  proposer  User?             @relation("ProposedBy", fields: [proposing_by], references: [id], onDelete: SetNull)
-  completer User?             @relation("CompletedBy", fields: [completed_by], references: [id], onDelete: SetNull)
-  documents ProjectDocument[]
+  project          Project                @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  submitter        User?                  @relation("SubmitBy", fields: [submitted_by], references: [id], onDelete: SetNull)
+  approver         User?                  @relation("ApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
+  proposer         User?                  @relation("ProposedBy", fields: [proposing_by], references: [id], onDelete: SetNull)
+  completer        User?                  @relation("CompletedBy", fields: [completed_by], references: [id], onDelete: SetNull)
+  documents        ProjectDocument[]
+  email_deliveries NotificationDelivery[]
 
   @@index([project_id, submitted_at(sort: Desc)])
   @@index([project_id, step_order, submission_type])

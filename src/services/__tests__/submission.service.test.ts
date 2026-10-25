@@ -12,6 +12,7 @@ import {
   BadRequestError,
   ForbiddenError,
   NotFoundError,
+  SubmissionEmailFailureError,
 } from '../../utils/errors';
 import { syncProjectPhases } from '../../utils/phase-status';
 import { txMock, prismaMock } from '../../test/prisma-mock';
@@ -28,6 +29,8 @@ import {
 } from '../submission.service';
 import { CreateStaffSubmissionSchema } from '../../schemas/submission.schema';
 import { OPS_DEPT_ID } from '../../utils/constant';
+import * as NotificationEmailService from '../notification/notification-email.service';
+import * as SubmissionEmailFailureService from '../submission-email-failure.service';
 
 vi.mock('../../utils/phase-status', () => ({
   syncProjectPhases: vi.fn().mockResolvedValue({ id: 'project-1' }),
@@ -294,6 +297,109 @@ describe('submission.service', () => {
     expect(txMock.project.update).toHaveBeenCalledWith({
       where: { id: 'project-1' },
       data: { actual_cost: 1250.5 },
+    });
+  });
+
+  it('completes an email-enabled submission before sending and links the email to it', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-email-1',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+    const sendSpy = vi
+      .spyOn(NotificationEmailService, 'sendVendorEmailForProject')
+      .mockResolvedValue({
+        projectId: 'project-1',
+        recipientEmail: 'vendor@example.com',
+        subject: 'PO',
+      });
+
+    const result = await createStaffSubmissionsProject(
+      user,
+      staffSubmissionDto({
+        required_approval: true,
+        required_signature: true,
+        vendor_email: {
+          recipient: 'vendor@example.com',
+          templateId: 'VENDOR_PO_REQUEST',
+          data: { poNumber: 'PO-1', vendorName: 'Vendor' },
+        },
+      })
+    );
+
+    expect(result.status).toBe(SubmissionStatus.COMPLETED);
+    expect(txMock.projectSubmission.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: SubmissionStatus.COMPLETED,
+          completed_by: user.id,
+          completed_at: expect.any(Date),
+        }),
+      })
+    );
+    expect(sendSpy).toHaveBeenCalledWith(
+      'project-1',
+      expect.objectContaining({ recipient: 'vendor@example.com' }),
+      undefined,
+      { submissionId: 'submission-email-1' }
+    );
+  });
+
+  it('rejects a completed email-enabled submission when the initial send fails', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      current_workflow_type: UnitResponsibleType.LT100K,
+      installment_rounds: 1,
+    });
+    txMock.projectSubmission.findFirst.mockResolvedValue(null);
+    txMock.projectSubmission.create.mockResolvedValue({
+      id: 'submission-email-2',
+      project_id: 'project-1',
+      workflow_type: UnitResponsibleType.LT100K,
+      step_order: 1,
+      submission_round: 1,
+      status: SubmissionStatus.COMPLETED,
+    });
+    vi.spyOn(
+      NotificationEmailService,
+      'sendVendorEmailForProject'
+    ).mockRejectedValue(new Error('Domain not verified'));
+    const rejectSpy = vi
+      .spyOn(
+        SubmissionEmailFailureService,
+        'rejectCompletedSubmissionForEmailFailure'
+      )
+      .mockResolvedValue(true);
+
+    await expect(
+      createStaffSubmissionsProject(
+        user,
+        staffSubmissionDto({
+          vendor_email: {
+            recipient: 'bad@example.com',
+            templateId: 'VENDOR_PO_REQUEST',
+            data: { poNumber: 'PO-1' },
+          },
+        })
+      )
+    ).rejects.toMatchObject({
+      code: 'submission_email_failed',
+      message: 'Domain not verified',
+    } satisfies Partial<SubmissionEmailFailureError>);
+
+    expect(rejectSpy).toHaveBeenCalledWith({
+      submissionId: 'submission-email-2',
+      reason: 'Domain not verified',
+      occurredAt: expect.any(Date),
     });
   });
 

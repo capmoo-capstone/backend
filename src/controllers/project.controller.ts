@@ -462,12 +462,19 @@ export const getNewContractNumber = async (
   // #swagger.security = [{ bearerAuth: [] }]
   // #swagger.requestBody = { schema: { $ref: '#/definitions/GetNewContractNumberDto' } }
   const payload = req.user!;
-  const { type, budget_year } = GetNewContractNumberSchema.parse(req.body);
-  const result = await ProjectDataService.generateContractNumber(
-    payload,
-    type,
-    budget_year
-  );
+  const data = GetNewContractNumberSchema.parse(req.body);
+  const result =
+    'contract_no' in data
+      ? await ProjectDataService.createManualContractNumber(
+          payload,
+          data.project_id,
+          data.contract_no
+        )
+      : await ProjectDataService.generateContractNumber(
+          payload,
+          data.project_id,
+          data.budget_year
+        );
   res.status(200).json(result);
 };
 

@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock, txMock } from '../../test/prisma-mock';
 import { notificationEmailTransport } from '../notification/notification-email.service';
 import { sendContractCommitteeReminders } from '../notification/contract-committee-reminder.service';
+import { rejectCompletedSubmissionForEmailFailure } from '../submission-email-failure.service';
+
+vi.mock('../submission-email-failure.service', () => ({
+  rejectCompletedSubmissionForEmailFailure: vi.fn().mockResolvedValue(true),
+}));
 
 const buildSubmission = (overrides?: {
   id?: string;
@@ -21,17 +26,15 @@ const buildSubmission = (overrides?: {
   project_id: 'project-1',
   installment_no: overrides?.installmentNo ?? null,
   submission_round: overrides?.submissionRound ?? 1,
-  meta_data:
-    overrides?.metaData ??
-    [
-      { field_key: 'contract_enable_notification', value: true },
-      { field_key: 'contract_inspection_date', value: '2026-08-31' },
-      { field_key: 'contract_notification_days', value: '[5]' },
-      {
-        field_key: 'contract_committee_email',
-        value: '["committee@example.com"]',
-      },
-    ],
+  meta_data: overrides?.metaData ?? [
+    { field_key: 'contract_enable_notification', value: true },
+    { field_key: 'contract_inspection_date', value: '2026-08-31' },
+    { field_key: 'contract_notification_days', value: '[5]' },
+    {
+      field_key: 'contract_committee_email',
+      value: '["committee@example.com"]',
+    },
+  ],
   project: {
     id: 'project-1',
     title: overrides?.title ?? 'Contract project',
@@ -113,7 +116,9 @@ describe('contract-committee-reminder.service', () => {
 
   it('sends only on exact configured lead times to committee and assignee_contract recipients', async () => {
     vi.setSystemTime(new Date('2026-08-26T00:00:00.000Z'));
-    prismaMock.projectSubmission.findMany.mockResolvedValue([buildSubmission()]);
+    prismaMock.projectSubmission.findMany.mockResolvedValue([
+      buildSubmission(),
+    ]);
     vi.spyOn(notificationEmailTransport, 'queue').mockResolvedValue({
       status: NotificationDeliveryStatus.SENT,
       sentAt: new Date('2026-08-26T00:00:00.000Z'),
@@ -124,7 +129,6 @@ describe('contract-committee-reminder.service', () => {
       id: String(data.dedupe_key),
       ...data,
     }));
-    prismaMock.notificationDelivery.update.mockResolvedValue(undefined);
 
     const result = await sendContractCommitteeReminders();
 
@@ -153,6 +157,9 @@ describe('contract-committee-reminder.service', () => {
         channel: NotificationChannel.EMAIL_IMMEDIATE,
         recipientEmail: 'staff@example.com',
         htmlBody: expect.stringContaining('<p>'),
+        dedupeKey: expect.stringContaining(
+          'contract-committee-reminder:submission-1'
+        ),
       })
     );
     expect(notificationEmailTransport.queue).toHaveBeenCalledWith(
@@ -162,7 +169,7 @@ describe('contract-committee-reminder.service', () => {
         recipientEmail: 'committee@example.com',
       })
     );
-    expect(prismaMock.notificationDelivery.update).toHaveBeenCalledTimes(2);
+    expect(prismaMock.notificationDelivery.update).not.toHaveBeenCalled();
   });
 
   it('deduplicates committee and contract staff recipients by email address', async () => {
@@ -193,7 +200,6 @@ describe('contract-committee-reminder.service', () => {
       id: String(data.dedupe_key),
       ...data,
     }));
-    prismaMock.notificationDelivery.update.mockResolvedValue(undefined);
 
     const result = await sendContractCommitteeReminders();
 
@@ -211,7 +217,9 @@ describe('contract-committee-reminder.service', () => {
       buildSubmission({ assignees: [] }),
     ]);
     const queueSpy = vi.spyOn(notificationEmailTransport, 'queue');
-    txMock.notificationDelivery.findFirst.mockResolvedValue({ id: 'delivery-1' });
+    txMock.notificationDelivery.findFirst.mockResolvedValue({
+      id: 'delivery-1',
+    });
 
     const result = await sendContractCommitteeReminders();
 
@@ -263,7 +271,6 @@ describe('contract-committee-reminder.service', () => {
       id: String(data.dedupe_key),
       ...data,
     }));
-    prismaMock.notificationDelivery.update.mockResolvedValue(undefined);
 
     await sendContractCommitteeReminders();
 
@@ -280,7 +287,7 @@ describe('contract-committee-reminder.service', () => {
     );
   });
 
-  it('persists reservations before delivery and records the final send result afterward', async () => {
+  it('passes the reservation to the centralized sender and rejects on immediate failure', async () => {
     vi.setSystemTime(new Date('2026-08-26T00:00:00.000Z'));
     prismaMock.projectSubmission.findMany.mockResolvedValue([
       buildSubmission({ assignees: [] }),
@@ -294,7 +301,6 @@ describe('contract-committee-reminder.service', () => {
     txMock.notificationDelivery.create.mockResolvedValue({
       id: 'reserved-delivery',
     });
-    prismaMock.notificationDelivery.update.mockResolvedValue(undefined);
 
     const result = await sendContractCommitteeReminders();
 
@@ -310,13 +316,20 @@ describe('contract-committee-reminder.service', () => {
         }),
       })
     );
-    expect(prismaMock.notificationDelivery.update).toHaveBeenCalledWith({
-      where: { id: 'reserved-delivery' },
-      data: {
-        status: NotificationDeliveryStatus.FAILED,
-        error_message: 'SMTP timeout',
-        sent_at: null,
-      },
+    expect(notificationEmailTransport.queue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        submissionId: 'submission-1',
+        notificationDeliveryId: 'reserved-delivery',
+        dedupeKey: expect.stringContaining(
+          'contract-committee-reminder:submission-1'
+        ),
+      })
+    );
+    expect(prismaMock.notificationDelivery.update).not.toHaveBeenCalled();
+    expect(rejectCompletedSubmissionForEmailFailure).toHaveBeenCalledWith({
+      submissionId: 'submission-1',
+      reason: 'SMTP timeout',
+      occurredAt: expect.any(Date),
     });
   });
 });

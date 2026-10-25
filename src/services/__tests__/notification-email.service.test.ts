@@ -1,6 +1,12 @@
-import { NotificationDeliveryStatus, UserRole } from '@prisma/client';
+import {
+  NotificationChannel,
+  NotificationDeliveryStatus,
+  UserRole,
+} from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaMock, resetPrismaMock } from '../../test/prisma-mock';
+import { EmailKind } from '../../types/email-delivery.type';
+import { sendTrackedEmail } from '../email-delivery.service';
 import {
   buildContractCommitteeReminderEmail,
   notificationEmailTransport,
@@ -27,6 +33,7 @@ const getSentPayload = (fetchMock: ReturnType<typeof vi.fn>, callIndex = 0) => {
     subject: string;
     text: string;
     html?: string;
+    tags?: Array<{ name: string; value: string }>;
   };
 };
 
@@ -106,6 +113,12 @@ describe('notification-email.service', () => {
       to: ['person@example.com'],
       subject: 'NexusProcure test email',
       text: 'hello test email',
+      tags: [
+        {
+          name: 'notification_delivery_id',
+          value: 'notification-delivery-1',
+        },
+      ],
     });
   });
 
@@ -202,6 +215,71 @@ describe('notification-email.service', () => {
     expect(payload.text).toContain('Committee Member');
     expect(payload.html).toContain('Committee Member');
     expectBusinessFooter(payload);
+  });
+
+  it('does not resend a deduplicated reminder after its delivery status changes', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.notificationDelivery.findFirst.mockResolvedValueOnce({
+      id: 'existing-delivery',
+      provider_message_id: 'resend-existing',
+      status: NotificationDeliveryStatus.DELIVERED,
+    } as any);
+
+    await sendContractCommitteeReminderEmail({
+      recipientEmail: 'committee@example.com',
+      projectTitle: 'Project Alpha',
+      inspectionDate: new Date('2026-08-31T00:00:00.000Z'),
+      remainingDays: 5,
+    });
+
+    const where = prismaMock.notificationDelivery.findFirst.mock.calls[0][0]
+      .where as Record<string, unknown>;
+    expect(where).not.toHaveProperty('status');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(prismaMock.notificationDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the database reservation winner when concurrent sends race without a user id', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    prismaMock.notificationDelivery.create.mockRejectedValueOnce({
+      code: 'P2002',
+    });
+    prismaMock.notificationDelivery.findFirst.mockResolvedValueOnce({
+      id: 'winning-delivery',
+      status: NotificationDeliveryStatus.PENDING,
+      provider_message_id: null,
+      sent_at: null,
+    });
+
+    await expect(
+      sendTrackedEmail({
+        kind: EmailKind.VENDOR_PO,
+        recipient: 'vendor@example.com',
+        subject: 'PO ready',
+        text: 'Please review the PO',
+        dedupeKey: 'vendor-submission:submission-1',
+      })
+    ).resolves.toMatchObject({
+      notificationDeliveryId: 'winning-delivery',
+      status: NotificationDeliveryStatus.PENDING,
+    });
+
+    expect(prismaMock.notificationDelivery.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            {
+              recipient_email: 'vendor@example.com',
+              channel: NotificationChannel.EMAIL_IMMEDIATE,
+              dedupe_key: 'vendor-submission:submission-1',
+            },
+          ],
+        },
+      })
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns vendor email preview with locked body, subject, and form URL', async () => {
@@ -376,30 +454,17 @@ describe('notification-email.service', () => {
 
     const result = await sendDailySummaryEmailsToOptedInUsers(reportDate);
 
-    expect(result).toEqual({ recipientCount: 2 });
+    expect(result).toEqual({ recipientCount: 3 });
     expect(prismaMock.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           is_active: true,
           daily_email: true,
           email: { not: null },
-          roles: {
-            some: {
-              dept_id: 'DEPT-SUP-OPS',
-              role: {
-                in: [
-                  UserRole.HEAD_OF_UNIT,
-                  UserRole.DOCUMENT_STAFF,
-                  UserRole.FINANCE_STAFF,
-                  UserRole.GENERAL_STAFF,
-                ],
-              },
-            },
-          },
         }),
       })
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
 
     const documentPayload = getSentPayload(fetchMock, 0);
     expect(documentPayload.to).toEqual(['ops1@example.com']);
@@ -457,62 +522,56 @@ describe('notification-email.service', () => {
 
     expect(result).toEqual({
       status: NotificationDeliveryStatus.SKIPPED,
-      errorMessage: 'Recipient email is missing',
+      errorMessage: 'A recipient email is required',
+      notificationDeliveryId: 'notification-delivery-1',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
-  it('sends the daily summary only to opted-in supported users', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-    prismaMock.user.findMany.mockResolvedValue([
-      {
-        id: 'super-admin-1',
-        username: 'super.admin',
-        email: 'super@example.com',
-        full_name: 'Super Admin',
-        roles: [
-          {
-            role: UserRole.DOCUMENT_STAFF,
-            department: { id: 'DEPT-SUP-OPS', name: 'OPS' },
-            unit: null,
-          },
-        ],
-      },
-    ]);
-    prismaMock.project.count
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(5);
-
-    const result = await sendDailySummaryEmailsToOptedInUsers(
-      new Date('2026-08-29T03:00:00.000Z')
-    );
-
-    expect(result).toEqual({ recipientCount: 1 });
-    expect(prismaMock.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          roles: {
-            some: {
-              dept_id: 'DEPT-SUP-OPS',
-              role: {
-                in: [
-                  UserRole.HEAD_OF_UNIT,
-                  UserRole.DOCUMENT_STAFF,
-                  UserRole.FINANCE_STAFF,
-                  UserRole.GENERAL_STAFF,
-                ],
-              },
+  it.each(Object.values(UserRole))(
+    'sends the daily summary to an opted-in %s user',
+    async (role) => {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal('fetch', fetchMock);
+      prismaMock.user.findMany.mockResolvedValue([
+        {
+          id: 'super-admin-1',
+          username: 'super.admin',
+          email: 'super@example.com',
+          full_name: 'Super Admin',
+          roles: [
+            {
+              role,
+              department: { id: 'DEPT-OTHER', name: 'Other department' },
+              unit: null,
             },
+          ],
+        },
+      ]);
+      prismaMock.project.count
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(5);
+
+      const result = await sendDailySummaryEmailsToOptedInUsers(
+        new Date('2026-08-29T03:00:00.000Z')
+      );
+
+      expect(result).toEqual({ recipientCount: 1 });
+      expect(prismaMock.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            is_active: true,
+            daily_email: true,
+            email: { not: null },
           },
-        }),
-      })
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(getSentPayload(fetchMock, 0).to).toEqual(['super@example.com']);
-  });
+        })
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(getSentPayload(fetchMock, 0).to).toEqual(['super@example.com']);
+    }
+  );
   it('filters daily summaries to a normalized direct-mode allow-list', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);
@@ -582,5 +641,65 @@ describe('notification-email.service', () => {
 
     expect(result).toEqual({ recipientCount: 0 });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('records a direct provider delivery in notification_deliveries on success', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'resend_msg_123' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sendHelloTestEmail('test@chula.ac.th');
+
+    expect(prismaMock.notificationDelivery.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipient_email: 'test@chula.ac.th',
+          email_type: 'TEST',
+          status: NotificationDeliveryStatus.PENDING,
+          subject: 'NexusProcure test email',
+        }),
+      })
+    );
+
+    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'notification-delivery-1',
+          status: NotificationDeliveryStatus.PENDING,
+        },
+        data: expect.objectContaining({
+          status: NotificationDeliveryStatus.SENT,
+          provider_message_id: 'resend_msg_123',
+        }),
+      })
+    );
+  });
+
+  it('records a direct provider failure in notification_deliveries', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ message: 'Domain not verified' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sendHelloTestEmail('unverified@chula.ac.th')).rejects.toThrow(
+      'Domain not verified'
+    );
+
+    expect(prismaMock.notificationDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'notification-delivery-1',
+          status: NotificationDeliveryStatus.PENDING,
+        },
+        data: expect.objectContaining({
+          status: NotificationDeliveryStatus.FAILED,
+          error_message: 'Domain not verified',
+        }),
+      })
+    );
   });
 });
