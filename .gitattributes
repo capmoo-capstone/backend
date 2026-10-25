@@ -1,0 +1,4 @@
+# Cron files must work on Linux even when edited or checked out on Windows.
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf
