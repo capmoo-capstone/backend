@@ -791,4 +791,36 @@ describe('project-data.service', () => {
       })
     );
   });
+
+  it('cancelContractNumber returns already cancelled contract without error if already inactive', async () => {
+    txMock.projectContractNumber.findFirst.mockResolvedValue({
+      id: 'contract-1',
+      contract_no: '3/2569',
+      is_active: false,
+      cancellation_reason: 'Already cancelled reason',
+      project: { id: 'project-1' },
+    });
+
+    const result = await cancelContractNumber(user, 'contract-1', 'New reason');
+
+    expect(result).toEqual({
+      id: 'contract-1',
+      contract_no: '3/2569',
+      is_active: false,
+      cancellation_reason: 'Already cancelled reason',
+    });
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: { id: 'project-1' },
+      data: { contract_no_id: null },
+    });
+    expect(txMock.projectContractNumber.update).not.toHaveBeenCalled();
+  });
+
+  it('cancelContractNumber throws BadRequestError if contract does not exist', async () => {
+    txMock.projectContractNumber.findFirst.mockResolvedValue(null);
+
+    await expect(
+      cancelContractNumber(user, 'non-existent', 'reason')
+    ).rejects.toThrow(new BadRequestError('Active contract number not found'));
+  });
 });

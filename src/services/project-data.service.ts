@@ -31,7 +31,6 @@ import {
 import { nowUtc, toBangkokParts } from '../utils/date';
 import { assertInstallmentRoundsCanBeUpdated } from '../utils/project-installment';
 import { Capability, assertCapability } from '../utils/access-policy';
-import { activeContractNumberWhere } from '../utils/active-state';
 import { assertProjectCanBeDeleted } from '../utils/deletion-policy';
 
 const currentBangkokBudgetYear = (): number => {
@@ -555,10 +554,12 @@ export const cancelContractNumber = async (
   assertCapability(user, Capability.CONTRACT_MANAGE);
   return await prisma.$transaction(async (tx) => {
     const contract = await tx.projectContractNumber.findFirst({
-      where: { id: contractId, ...activeContractNumberWhere() },
+      where: { id: contractId },
       select: {
         id: true,
         contract_no: true,
+        is_active: true,
+        cancellation_reason: true,
         project: { select: { id: true } },
       },
     });
@@ -578,6 +579,15 @@ export const cancelContractNumber = async (
         newValue: { contract_no: null },
         changedBy: user,
       });
+    }
+
+    if (contract.is_active === false) {
+      return {
+        id: contract.id,
+        contract_no: contract.contract_no,
+        is_active: false,
+        cancellation_reason: contract.cancellation_reason ?? reason,
+      };
     }
 
     const updated = await tx.projectContractNumber.update({
