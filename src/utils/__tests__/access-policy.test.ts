@@ -49,6 +49,30 @@ describe('access policy', () => {
     ).toBe(false);
   });
 
+  it('allows supply heads of unit to create installments', () => {
+    const supplyHeadOfUnit = user([
+      {
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: OPS_DEPT_ID,
+        unit_id: 'unit-1',
+      },
+    ]);
+    const externalHeadOfUnit = user([
+      {
+        role: UserRole.HEAD_OF_UNIT,
+        dept_id: 'dept-1',
+        unit_id: 'unit-1',
+      },
+    ]);
+
+    expect(hasCapability(supplyHeadOfUnit, Capability.INSTALLMENT_CREATE)).toBe(
+      true
+    );
+    expect(
+      hasCapability(externalHeadOfUnit, Capability.INSTALLMENT_CREATE)
+    ).toBe(false);
+  });
+
   it('limits external users to projects requested by their departments', () => {
     const externalUser = user([
       { role: UserRole.REPRESENTATIVE, dept_id: 'dept-1', unit_id: 'unit-1' },
