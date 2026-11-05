@@ -395,6 +395,8 @@ describe('project-assignment.service', () => {
     txMock.project.findUnique.mockResolvedValue({
       status: ProjectStatus.IN_PROGRESS,
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      assignee_procurement: [],
+      assignee_contract: [{ id: user.id, full_name: user.full_name }],
     });
     txMock.projectSubmission.count.mockResolvedValue(0);
     txMock.project.update.mockResolvedValue({
@@ -418,10 +420,58 @@ describe('project-assignment.service', () => {
     );
   });
 
+  it('returnProject keeps the project in progress when another contract assignee remains', async () => {
+    txMock.project.findUnique.mockResolvedValue({
+      status: ProjectStatus.IN_PROGRESS,
+      current_workflow_type: UnitResponsibleType.CONTRACT,
+      assignee_procurement: [],
+      assignee_contract: [
+        { id: user.id, full_name: user.full_name },
+        { id: 'staff-2', full_name: 'Staff Two' },
+      ],
+    });
+    txMock.projectSubmission.count.mockResolvedValue(0);
+    txMock.project.update.mockResolvedValue({
+      id: 'project-1',
+      status: ProjectStatus.IN_PROGRESS,
+    });
+
+    const result = await returnProject(user, 'project-1');
+
+    expect(result.status).toBe(ProjectStatus.IN_PROGRESS);
+    expect(txMock.project.update).toHaveBeenCalledWith({
+      where: {
+        id: 'project-1',
+        status: ProjectStatus.IN_PROGRESS,
+        assignee_contract: { some: { id: user.id } },
+      },
+      data: {
+        assignee_contract: { disconnect: { id: user.id } },
+      },
+      select: { id: true, status: true },
+    });
+    expect(txMock.projectHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          old_value: {
+            status: ProjectStatus.IN_PROGRESS,
+            assignee_contract: [user.full_name, 'Staff Two'],
+          },
+          new_value: {
+            status: ProjectStatus.IN_PROGRESS,
+            assignee_contract: ['Staff Two'],
+          },
+        }),
+      })
+    );
+  });
+
   it('returnProject throws error when submissions exist in current workflow', async () => {
     txMock.project.findUnique.mockResolvedValue({
       status: ProjectStatus.IN_PROGRESS,
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      assignee_procurement: [],
+      assignee_contract: [{ id: user.id, full_name: user.full_name }],
     });
     txMock.projectSubmission.count.mockResolvedValue(1);
 
@@ -518,6 +568,8 @@ describe('project-assignment.service', () => {
       id: 'project-1',
       status: ProjectStatus.REVIEW_TOR,
       current_workflow_type: UnitResponsibleType.LT100K,
+      assignee_procurement: [{ id: user.id, full_name: user.full_name }],
+      assignee_contract: [],
     });
     txMock.projectSubmission.count.mockResolvedValue(0);
     txMock.projectSubmission.deleteMany.mockResolvedValue({ count: 1 });
@@ -567,6 +619,8 @@ describe('project-assignment.service', () => {
       id: 'project-1',
       status: ProjectStatus.IN_PROGRESS,
       current_workflow_type: UnitResponsibleType.LT100K,
+      assignee_procurement: [{ id: user.id, full_name: user.full_name }],
+      assignee_contract: [],
     });
 
     await expect(returnProject(user, 'project-1')).rejects.toThrow(
@@ -579,6 +633,8 @@ describe('project-assignment.service', () => {
       id: 'project-1',
       status: ProjectStatus.REVIEW_TOR,
       current_workflow_type: UnitResponsibleType.LT100K,
+      assignee_procurement: [{ id: user.id, full_name: user.full_name }],
+      assignee_contract: [],
     });
     txMock.projectSubmission.count.mockResolvedValue(1);
 
@@ -592,6 +648,8 @@ describe('project-assignment.service', () => {
       id: 'project-contract',
       status: ProjectStatus.IN_PROGRESS,
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      assignee_procurement: [],
+      assignee_contract: [{ id: user.id, full_name: user.full_name }],
     });
     txMock.projectSubmission.count.mockResolvedValue(0);
     txMock.project.update.mockResolvedValue({
@@ -628,6 +686,8 @@ describe('project-assignment.service', () => {
       id: 'project-contract',
       status: ProjectStatus.WAITING_ACCEPT,
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      assignee_procurement: [],
+      assignee_contract: [{ id: user.id, full_name: user.full_name }],
     });
 
     await expect(returnProject(user, 'project-contract')).rejects.toThrow(
@@ -638,6 +698,8 @@ describe('project-assignment.service', () => {
       id: 'project-contract',
       status: ProjectStatus.IN_PROGRESS,
       current_workflow_type: UnitResponsibleType.CONTRACT,
+      assignee_procurement: [],
+      assignee_contract: [{ id: user.id, full_name: user.full_name }],
     });
     txMock.projectSubmission.count.mockResolvedValue(1);
 

@@ -539,11 +539,20 @@ export const returnProject = async (
 ): Promise<ProjectIdStatusResponse> => {
   assertCapability(user, Capability.PROJECT_RETURN);
   const transactionResult = await prisma.$transaction(async (tx) => {
+    const lockKey = `project-assignment:${projectId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
     const project = await tx.project.findUnique({
       where: { id: projectId },
       select: {
         status: true,
         current_workflow_type: true,
+        assignee_contract: {
+          select: { id: true, full_name: true },
+        },
+        assignee_procurement: {
+          select: { id: true, full_name: true },
+        },
       },
     });
     if (!project) {
@@ -597,6 +606,19 @@ export const returnProject = async (
     }
 
     const assigneeField = resolveAssigneeField(project.current_workflow_type);
+    const currentAssignees = project[assigneeField];
+    const remainingAssignees = currentAssignees.filter(
+      (assignee) => assignee.id !== user.id
+    );
+    const isLastAssignee = remainingAssignees.length === 0;
+    const statusResetData = isLastAssignee
+      ? {
+          status: ProjectStatus.UNASSIGNED,
+          ...(isProcurement
+            ? { procurement_started_at: null }
+            : { contract_started_at: null }),
+        }
+      : {};
 
     const updated = await tx.project.update({
       where: {
@@ -607,13 +629,10 @@ export const returnProject = async (
         [assigneeField]: { some: { id: user.id } },
       },
       data: {
-        status: ProjectStatus.UNASSIGNED,
+        ...statusResetData,
         [assigneeField]: {
           disconnect: { id: user.id },
         },
-        ...(isProcurement
-          ? { procurement_started_at: null }
-          : { contract_started_at: null }),
       },
       select: { id: true, status: true },
     });
@@ -625,9 +644,14 @@ export const returnProject = async (
       action: ProjectActionType.ASSIGNEE_UPDATE,
       oldValue: {
         status: project.status,
-        [assigneeField]: [user.full_name],
+        [assigneeField]: currentAssignees.map((assignee) => assignee.full_name),
       },
-      newValue: { status: updated.status, [assigneeField]: [] },
+      newValue: {
+        status: updated.status,
+        [assigneeField]: remainingAssignees.map(
+          (assignee) => assignee.full_name
+        ),
+      },
       changedBy: user,
     });
     const notificationResults = await notifyResponsibleRemoved(tx, {
