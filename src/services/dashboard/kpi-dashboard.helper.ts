@@ -605,7 +605,14 @@ export const getUnitGroupProcurementDetails = async (
     };
 
     for (const p of typeProjects) {
-      if (p.status in statusCounts) {
+      if (
+        p.status === ProjectStatus.IN_PROGRESS ||
+        p.status === ProjectStatus.REVIEW_TOR ||
+        p.status === ProjectStatus.WAITING_CANCEL ||
+        p.status === ProjectStatus.WAITING_CLOSE
+      ) {
+        statusCounts[ProjectStatus.IN_PROGRESS] += 1;
+      } else if (p.status in statusCounts) {
         statusCounts[p.status] += 1;
       }
     }
@@ -664,11 +671,15 @@ export const getUnitGroupTopDelayedProjects = async (
     toBangkokParts(now).day
   );
 
-  const where: Prisma.ProjectWhereInput = {
+  const baseWhere: Prisma.ProjectWhereInput = {
     status: { not: ProjectStatus.CANCELLED },
     procurement_unit_id: unitId,
     procurement_type: query.procurementType,
   };
+  const where = projectRangeWhere(baseWhere, {
+    from: query.dateFrom,
+    to: query.dateTo,
+  });
 
   const projects = await prisma.project.findMany({
     where,

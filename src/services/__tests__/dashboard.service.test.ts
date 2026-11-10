@@ -564,6 +564,92 @@ describe('dashboard.service', () => {
       });
     });
 
+    it('combines REVIEW_TOR, WAITING_CANCEL, and WAITING_CLOSE into IN_PROGRESS in statusDistribution', async () => {
+      prismaMock.unit.findUnique.mockResolvedValue({
+        id: 'unit-proc',
+        type: [UnitResponsibleType.LT100K],
+      });
+      prismaMock.holiday.findMany.mockResolvedValue([]);
+      prismaMock.project.findMany.mockResolvedValueOnce([
+        {
+          id: 'p-in-prog',
+          procurement_type: ProcurementType.LT100K,
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: 'unit-proc',
+          status: ProjectStatus.IN_PROGRESS,
+          expected_approval_date: null,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: null,
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+        },
+        {
+          id: 'p-review-tor',
+          procurement_type: ProcurementType.LT100K,
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: 'unit-proc',
+          status: ProjectStatus.REVIEW_TOR,
+          expected_approval_date: null,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: null,
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+        },
+        {
+          id: 'p-waiting-cancel',
+          procurement_type: ProcurementType.LT100K,
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: 'unit-proc',
+          status: ProjectStatus.WAITING_CANCEL,
+          expected_approval_date: null,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: null,
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+        },
+        {
+          id: 'p-waiting-close',
+          procurement_type: ProcurementType.LT100K,
+          procurement_unit_id: 'unit-proc',
+          contract_unit_id: 'unit-proc',
+          status: ProjectStatus.WAITING_CLOSE,
+          expected_approval_date: null,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: new Date('2026-07-01T00:00:00.000Z'),
+          procurement_started_at: null,
+          procurement_completed_at: null,
+          contract_started_at: null,
+          contract_completed_at: null,
+        },
+      ]);
+
+      const result = await DashboardService.getUnitGroupProcurementDetails(
+        staffUser,
+        {
+          unitId: 'unit-proc',
+          dateFrom: new Date('2026-06-30T17:00:00.000Z'),
+          dateTo: new Date('2026-07-31T16:59:59.999Z'),
+        }
+      );
+
+      const lt100kMethod = result.methods.find(
+        (m) => m.procurementType === ProcurementType.LT100K
+      );
+      expect(lt100kMethod).toBeDefined();
+      expect(lt100kMethod?.totalCount).toBe(4);
+
+      const inProgressSegment = lt100kMethod?.statusDistribution.find(
+        (s) => s.status === ProjectStatus.IN_PROGRESS
+      );
+      expect(inProgressSegment?.count).toBe(4);
+    });
+
     it('returns top delayed projects stage breakdown', async () => {
       prismaMock.holiday.findMany.mockResolvedValue([]);
       prismaMock.project.findMany.mockResolvedValueOnce([
@@ -709,8 +795,12 @@ describe('dashboard.service', () => {
       expect(prismaMock.project.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            procurement_unit_id: 'unit-proc',
-            status: { not: ProjectStatus.CANCELLED },
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                procurement_unit_id: 'unit-proc',
+                status: { not: ProjectStatus.CANCELLED },
+              }),
+            ]),
           }),
         })
       );
